@@ -1,0 +1,27 @@
+{
+  "name": "simple-sns-gcp-functions",
+  "version": "1.0.0",
+  "description": "Cloud Functions for Simple SNS on GCP",
+  "main": "dist/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "deploy": "npm run build && gcloud functions deploy",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@dataconnect/admin-generated": "file:src/dataconnect-admin-generated",
+    "@google-cloud/firestore": "^7.10.0",
+    "@google-cloud/functions-framework": "^3.4.2",
+    "@google-cloud/storage": "^7.14.0",
+    "firebase-admin": "^13.0.3",
+    "nanoid": "^3.3.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.11",
+    "typescript": "^5.7.3"
+  }
+}

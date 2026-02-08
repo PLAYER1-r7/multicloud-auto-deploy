@@ -1,0 +1,20 @@
+[
+  {
+    "origin": [
+      "https://simple-sns-frontend-ylfdls.storage.googleapis.com",
+      "http://34.95.112.162",
+      "https://sns.gcp.ashnova.jp"
+    ],
+    "method": [
+      "GET",
+      "PUT",
+      "POST",
+      "HEAD",
+      "OPTIONS"
+    ],
+    "responseHeader": [
+      "Content-Type"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

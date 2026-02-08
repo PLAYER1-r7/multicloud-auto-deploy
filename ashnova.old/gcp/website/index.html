@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ashnova - Google Cloud Static Website</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #4285F4 0%, #34A853 50%, #FBBC04 75%, #EA4335 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 2rem;
+            padding: 3rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(66, 133, 244, 0.3);
+        }
+        
+        h1 {
+            color: #4285F4;
+            margin-bottom: 1rem;
+            font-size: 2.5rem;
+        }
+        
+        .badge {
+            display: inline-block;
+            background: linear-gradient(90deg, #4285F4 0%, #34A853 50%, #FBBC04 75%, #EA4335 100%);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        
+        p {
+            margin-bottom: 1rem;
+            color: #555;
+        }
+        
+        .info {
+            background: #F8F9FA;
+            padding: 1.5rem;
+            border-radius: 5px;
+            margin-top: 2rem;
+            border-left: 4px solid #4285F4;
+        }
+        
+        .info h2 {
+            color: #4285F4;
+            margin-bottom: 0.5rem;
+            font-size: 1.5rem;
+        }
+        
+        ul {
+            margin-left: 2rem;
+            margin-top: 1rem;
+        }
+        
+        li {
+            margin-bottom: 0.5rem;
+        }
+        
+        code {
+            background: #F8F9FA;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Roboto Mono', 'Consolas', monospace;
+            font-size: 0.9em;
+            color: #4285F4;
+        }
+
+        .security-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #34A853;
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <span class="badge">☁️ Google Cloud Platform</span>
+        <h1>🚀 Ashnova on GCP</h1>
+        <p>Cloud StorageとCloud CDNを使用してデプロイされた静的ウェブサイトへようこそ！</p>
+        
+        <div class="info">
+            <h2>📋 GCP構成情報</h2>
+            <ul>
+                <li><strong>ホスティング:</strong> Cloud Storage (静的ウェブサイト)</li>
+                <li><strong>CDN:</strong> Cloud CDN + Global Load Balancer</li>
+                <li><strong>IaC:</strong> OpenTofu</li>
+                <li><strong>リージョン:</strong> ASIA (マルチリージョン)</li>
+                <li><strong>セキュリティ:</strong> IAM + バージョニング</li>
+            </ul>
+        </div>
+        
+        <div class="info">
+            <h2>🔒 セキュリティ機能</h2>
+            <div>
+                <span class="security-badge">✓ バージョニング</span>
+                <span class="security-badge">✓ アクセスログ</span>
+                <span class="security-badge">✓ 暗号化</span>
+                <span class="security-badge">✓ IAM制御</span>
+            </div>
+            <ul style="margin-top: 1rem;">
+                <li>オブジェクトバージョニング（3世代保持）</li>
+                <li>アクセスログの自動記録</li>
+                <li>Google管理の暗号化キー</li>
+                <li>ライフサイクル管理（古いログの自動削除）</li>
+                <li>統一バケットレベルアクセス制御</li>
+            </ul>
+        </div>
+        
+        <div class="info">
+            <h2>✨ Google Cloudの特徴</h2>
+            <ul>
+                <li>グローバルなエッジキャッシュ</li>
+                <li>高速なコンテンツ配信</li>
+                <li>インテリジェントなキャッシング</li>
+                <li>自動スケーリング</li>
+                <li>99.95% SLA保証</li>
+            </ul>
+        </div>
+
+        <div class="info">
+            <h2>🌏 グローバル配信</h2>
+            <p>Cloud CDNはGoogleのグローバルネットワークを活用し、世界中のユーザーに低レイテンシーでコンテンツを配信します。</p>
+        </div>
+    </div>
+</body>
+</html>

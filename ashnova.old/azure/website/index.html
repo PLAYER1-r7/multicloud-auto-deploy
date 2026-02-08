@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ashnova - Azure Static Website</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #0078D4 0%, #50E6FF 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 2rem;
+            padding: 3rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 120, 212, 0.3);
+        }
+        
+        h1 {
+            color: #0078D4;
+            margin-bottom: 1rem;
+            font-size: 2.5rem;
+        }
+        
+        .badge {
+            display: inline-block;
+            background: #0078D4;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        
+        p {
+            margin-bottom: 1rem;
+            color: #555;
+        }
+        
+        .info {
+            background: #F3F2F1;
+            padding: 1.5rem;
+            border-radius: 5px;
+            margin-top: 2rem;
+            border-left: 4px solid #0078D4;
+        }
+        
+        .info h2 {
+            color: #0078D4;
+            margin-bottom: 0.5rem;
+            font-size: 1.5rem;
+        }
+        
+        ul {
+            margin-left: 2rem;
+            margin-top: 1rem;
+        }
+        
+        li {
+            margin-bottom: 0.5rem;
+        }
+        
+        code {
+            background: #F3F2F1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+            color: #0078D4;
+        }
+
+        .security-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #107C10;
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <span class="badge">☁️ Microsoft Azure</span>
+        <h1>🚀 Ashnova on Azure</h1>
+        <p>Azure Front DoorとStorage Accountを使用してデプロイされた静的ウェブサイトへようこそ！</p>
+        
+        <div class="info">
+            <h2>📋 Azure構成情報</h2>
+            <ul>
+                <li><strong>ホスティング:</strong> Azure Storage Account (静的ウェブサイト)</li>
+                <li><strong>CDN:</strong> Azure Front Door Standard</li>
+                <li><strong>IaC:</strong> OpenTofu</li>
+                <li><strong>リージョン:</strong> Japan East</li>
+                <li><strong>セキュリティ:</strong> WAF有効</li>
+            </ul>
+        </div>
+        
+        <div class="info">
+            <h2>🔒 セキュリティ機能</h2>
+            <div>
+                <span class="security-badge">✓ WAF保護</span>
+                <span class="security-badge">✓ レート制限</span>
+                <span class="security-badge">✓ TLS 1.2+</span>
+                <span class="security-badge">✓ HTTPS強制</span>
+            </div>
+            <ul style="margin-top: 1rem;">
+                <li>Web Application Firewall（WAF）による攻撃防御</li>
+                <li>カスタムレート制限（100リクエスト/分）</li>
+                <li>悪意あるUser-Agentのブロック</li>
+                <li>Blobバージョニングと削除保持（7日間）</li>
+                <li>最小TLSバージョン: 1.2</li>
+            </ul>
+        </div>
+        
+        <div class="info">
+            <h2>✨ Azure Front Doorの特徴</h2>
+            <ul>
+                <li>グローバルエッジネットワーク</li>
+                <li>インテリジェントルーティング</li>
+                <li>自動HTTPSリダイレクト</li>
+                <li>低レイテンシー配信</li>
+                <li>組み込みのセキュリティ保護</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

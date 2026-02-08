@@ -1,0 +1,22 @@
+aws_region  = "ap-northeast-1"
+aws_profile = "satoshi"
+
+serverless_app_domain = "sns.aws.ashnova.jp"
+project_name          = "simple-sns"
+cognito_domain_prefix = "simple-sns-2026-kr070001"
+
+serverless_app_cloudfront_aliases = ["sns.aws.ashnova.jp"]
+
+enable_serverless_app_cloudfront_security_headers = false
+enable_serverless_app_cloudfront_logging          = false
+
+serverless_app_api_execution_arn_override     = ""
+serverless_app_cloudfront_source_arn_override = ""
+
+static_site_project_name = "ashnova-static-site"
+static_site_domain_name  = ""
+
+static_site_use_custom_domain_in_cloudfront = false
+static_site_enable_cloudfront               = true
+static_site_enable_static_site              = true
+static_site_enable_access_analyzer          = false

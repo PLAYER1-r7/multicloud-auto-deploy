@@ -1,0 +1,9 @@
+node_modules/
+/dist-frontend/
+/functions/node_modules/
+/azure-functions/node_modules/
+/functions/dist/
+/azure-functions/dist/
+*.zip
+*.log
+.DS_Store

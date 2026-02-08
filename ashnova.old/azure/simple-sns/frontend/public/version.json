@@ -1,0 +1,10 @@
+{
+  "currentVersion": "azure-2026-01-31-1258",
+  "releaseDate": "2026-01-31",
+  "releaseNotesUrl": "",
+  "latestReleaseUrl": "",
+  "changes": [
+    "Add Azure Blob upload headers",
+    "Allow image-only posts when images uploaded"
+  ]
+}
