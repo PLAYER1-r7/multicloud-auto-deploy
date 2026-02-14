@@ -81,64 +81,15 @@ resource "google_storage_bucket_iam_member" "frontend_public" {
   member = "allUsers"
 }
 
-# Cloud Functions (Gen 2) - これがCloud Runベースの最新版
-resource "google_cloudfunctions2_function" "api" {
-  name     = "${local.resource_prefix}-api"
-  location = var.region
-
-  build_config {
-    runtime     = "python311"
-    entry_point = "handler" # function.py の関数名
-    source {
-      storage_source {
-        bucket = google_storage_bucket.function_source.name
-        object = "function-source.zip" # これは後でアップロード
-      }
-    }
-  }
-
-  service_config {
-    max_instance_count               = 10
-    min_instance_count               = 0
-    available_memory                 = "512M"
-    timeout_seconds                  = 60
-    max_instance_request_concurrency = 1
-    available_cpu                    = "1"
-
-    environment_variables = {
-      ENVIRONMENT = var.environment
-    }
-
-    ingress_settings               = "ALLOW_ALL"
-    all_traffic_on_latest_revision = true
-  }
-
-  labels = local.common_labels
-}
-
-# Cloud Functions Invoker permission (public access)
-resource "google_cloudfunctions2_function_iam_member" "invoker" {
-  project        = google_cloudfunctions2_function.api.project
-  location       = google_cloudfunctions2_function.api.location
-  cloud_function = google_cloudfunctions2_function.api.name
-  role           = "roles/cloudfunctions.invoker"
-  member         = "allUsers"
-}
+# 注意: Cloud Functions は Terraform では作成しません
+# 理由: Terraform が storage_source の ZIP ファイルを参照する前に、
+#       ZIP がアップロードされている必要があるため、
+#       GitHub Actions ワークフローで gcloud CLI を使用してデプロイします
 
 # Outputs
-output "function_name" {
-  description = "Cloud Function name"
-  value       = google_cloudfunctions2_function.api.name
-}
-
-output "function_uri" {
-  description = "Cloud Function URI"
-  value       = google_cloudfunctions2_function.api.service_config[0].uri
-}
-
-output "api_url" {
-  description = "API URL"
-  value       = google_cloudfunctions2_function.api.service_config[0].uri
+output "function_source_bucket" {
+  description = "Function source storage bucket"
+  value       = google_storage_bucket.function_source.name
 }
 
 output "frontend_storage_bucket" {
@@ -151,7 +102,3 @@ output "frontend_url" {
   value       = "https://storage.googleapis.com/${google_storage_bucket.frontend.name}/index.html"
 }
 
-output "function_source_bucket" {
-  description = "Function source storage bucket"
-  value       = google_storage_bucket.function_source.name
-}

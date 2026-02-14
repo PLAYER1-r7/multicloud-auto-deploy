@@ -89,10 +89,8 @@ jobs:
             -auto-approve
           
           # Extract Terraform outputs for later use
-          echo "function_name=$(terraform output -raw function_name)" >> $GITHUB_OUTPUT
           echo "function_source_bucket=$(terraform output -raw function_source_bucket)" >> $GITHUB_OUTPUT
           echo "storage_bucket=$(terraform output -raw frontend_storage_bucket)" >> $GITHUB_OUTPUT
-          echo "api_url=$(terraform output -raw api_url)" >> $GITHUB_OUTPUT
 
       - name: Package Cloud Function
         run: |
@@ -121,10 +119,11 @@ jobs:
           ls -lh function-source.zip
 
       - name: Deploy Cloud Function
+        id: deploy_function
         run: |
-          # Use values from Terraform output
+          # Use values from environment and Terraform output
           PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
-          FUNCTION_NAME="${{ steps.terraform.outputs.function_name }}"
+          FUNCTION_NAME="mcad-staging-api"  # 固定名
           FUNCTION_BUCKET="${{ steps.terraform.outputs.function_source_bucket }}"
           REGION=${{ env.GCP_REGION }}
           
@@ -136,7 +135,7 @@ jobs:
           # Upload source to GCS
           gsutil cp services/api/function-source.zip gs://$FUNCTION_BUCKET/function-source.zip
           
-          # Update function
+          # Deploy function (creates if not exists, updates if exists)
           gcloud functions deploy $FUNCTION_NAME \
             --gen2 \
             --region=$REGION \
@@ -147,14 +146,20 @@ jobs:
             --allow-unauthenticated \
             --max-instances=10 \
             --memory=512MB \
-            --timeout=60s
+            --timeout=60s \
+            --set-env-vars=ENVIRONMENT=staging
+          
+          # Get function URL
+          FUNCTION_URL=$(gcloud functions describe $FUNCTION_NAME --region=$REGION --gen2 --format="value(serviceConfig.uri)")
+          echo "api_url=$FUNCTION_URL" >> $GITHUB_OUTPUT
           
           echo "✅ Cloud Function deployed successfully"
+          echo "  URL: $FUNCTION_URL"
 
       - name: Build Frontend
         run: |
-          # Use API URL from Terraform output
-          API_URL="${{ steps.terraform.outputs.api_url }}"
+          # Use API URL from Cloud Functions deployment
+          API_URL="${{ steps.deploy_function.outputs.api_url }}"
           
           echo "Building frontend with API URL: $API_URL"
 
