@@ -35,7 +35,7 @@ export const messagesApi = {
 
   // Update an existing message
   async updateMessage(id: string, data: UpdateMessageInput): Promise<Message> {
-    const response = await apiClient.patch<Message>(`/api/messages/${id}`, data);
+    const response = await apiClient.put<Message>(`/api/messages/${id}`, data);
     return response.data;
   },
 
