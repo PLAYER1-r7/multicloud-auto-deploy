@@ -65,23 +65,43 @@ jobs:
             --target package --python-version 3.12 --implementation cp \
             fastapi==0.109.0 pydantic==2.5.3 python-dotenv==1.0.0 mangum==0.17.0
           cp -r src/* package/
-          cd package && zip -r ../lambda.zip . && cd ..
+          
+          # Remove unnecessary files to reduce package size
+          cd package
+          find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find . -type f -name "*.pyc" -delete
+          find . -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          find . -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          
+          # Create zip
+          zip -r ../lambda.zip . -q
+          cd ..
 
       - name: Update Lambda Function
         run: |
+          set -e  # Exit on error
           LAMBDA_FUNCTION=${{ secrets.AWS_LAMBDA_FUNCTION_NAME || 'multicloud-auto-deploy-staging-api' }}
           S3_BUCKET=${{ secrets.AWS_S3_BUCKET || 'multicloud-auto-deploy-staging-frontend' }}
           S3_KEY="lambda-deployments/lambda-$(date +%Y%m%d-%H%M%S).zip"
           
-          # Upload to S3 first (package is too large for direct upload)
-          aws s3 cp services/backend/lambda.zip s3://$S3_BUCKET/$S3_KEY --region ${{ env.AWS_REGION }}
+          # Debug: Check lambda.zip exists and show size
+          echo "📦 Checking lambda.zip..."
+          ls -lh services/backend/lambda.zip || { echo "❌ lambda.zip not found!"; exit 1; }
+          
+          # Upload to S3 first
+          echo "☁️  Uploading to S3: s3://$S3_BUCKET/$S3_KEY"
+          aws s3 cp services/backend/lambda.zip s3://$S3_BUCKET/$S3_KEY || { echo "❌ S3 upload failed!"; exit 1; }
           
           # Update Lambda from S3
+          echo "🚀 Updating Lambda function: $LAMBDA_FUNCTION"
           aws lambda update-function-code \
             --function-name $LAMBDA_FUNCTION \
             --region ${{ env.AWS_REGION }} \
             --s3-bucket $S3_BUCKET \
-            --s3-key $S3_KEY
+            --s3-key $S3_KEY \
+            --output json || { echo "❌ Lambda update failed!"; exit 1; }
+          
+          echo "✅ Lambda function updated successfully"
 
       - name: Deploy Frontend to S3
         run: |
