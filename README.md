@@ -10,9 +10,11 @@
 
 | Cloud Provider | API Endpoint | Frontend |
 |---------------|--------------|----------|
-| **AWS** (ap-northeast-1) | [API](https://52z731x570.execute-api.ap-northeast-1.amazonaws.com/) | [CloudFront](https://dx3l4mbwg1ade.cloudfront.net) |
-| **Azure** (japaneast) | [API](https://mcad-staging-api--0000003.livelycoast-fa9d3350.japaneast.azurecontainerapps.io/) | Coming Soon |
-| **GCP** (asia-northeast1) | [API](https://mcad-staging-api-son5b3ml7a-an.a.run.app/) | Coming Soon |
+| **AWS** (ap-northeast-1) | [API](https://52z731x570.execute-api.ap-northeast-1.amazonaws.com/) | [CloudFront](https://dx3l4mbwg1ade.cloudfront.net) ✅ |
+| **Azure** (japaneast) | [API](https://mcad-staging-api--0000004.livelycoast-fa9d3350.japaneast.azurecontainerapps.io/) | [Front Door](https://multicloud-auto-deploy-staging-endpoint-deezaegrhyfzgsav.z01.azurefd.net) ✅ |
+| **GCP** (asia-northeast1) | [API](https://mcad-staging-api-son5b3ml7a-an.a.run.app/) | [Load Balancer](http://34.117.111.182) ✅ |
+
+> 📋 詳細なエンドポイント情報は [docs/ENDPOINTS.md](docs/ENDPOINTS.md) を参照してください
 
 ## 🚀 特徴
 
@@ -108,15 +110,19 @@ cp .env.example .env
 
 ## 📚 ドキュメント
 
-### セットアップ・デプロイ
-- [セットアップガイド](docs/SETUP.md)
+### 必読ガイド
+- 📖 [セットアップガイド](docs/SETUP.md) - 初期セットアップ手順
+- 🚀 [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定
+- 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策 ⭐ NEW
+- 🌐 [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のエンドポイント情報 ⭐ NEW
+
+### プロバイダー別デプロイ
 - [AWS デプロイ](docs/AWS_DEPLOYMENT.md)
 - [Azure デプロイ](docs/AZURE_DEPLOYMENT.md)
 - [GCP デプロイ](docs/GCP_DEPLOYMENT.md)
 
-### アーキテクチャ・運用
-- [アーキテクチャ](docs/ARCHITECTURE.md) - 完全版システムアーキテクチャ
-- [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定
+### アーキテクチャ
+- [システムアーキテクチャ](docs/ARCHITECTURE.md) - 完全版システム設計
 
 ## 🔄 GitHub Actions 自動デプロイ
 
@@ -181,7 +187,28 @@ cp .env.example .env
 
 ## 🛠️ 開発ツール
 
-プロジェクトには便利な開発ツールが含まれています：
+### 便利なスクリプト
+
+プロジェクトには以下の便利なスクリプトが含まれています：
+
+```bash
+# エンドポイントテスト（全環境）
+./scripts/test-endpoints.sh
+
+# GitHub Secrets設定ガイド
+./scripts/setup-github-secrets.sh
+
+# GCPリソースインポート
+./scripts/import-gcp-resources.sh
+
+# システム診断
+./scripts/diagnostics.sh
+
+# デプロイスクリプト
+./scripts/deploy-aws.sh
+./scripts/deploy-azure.sh
+./scripts/deploy-gcp.sh
+```
 
 ### Makefile
 
@@ -196,18 +223,75 @@ make terraform-apply # Terraformリソースを適用
 make clean           # ビルド成果物を削除
 ```
 
+### Dev Container
+
+VS Codeの Dev Containerに対応しています：
+
+```bash
+# 必要なツールが全てプリインストール
+- Terraform 1.7.5
+- Node.js 18
+- Python 3.12
+- AWS CLI, Azure CLI, gcloud CLI
+- Docker in Docker
+
+# 便利なエイリアス
+tf              # terraform
+deploy-aws      # AWS環境にデプロイ
+deploy-azure    # Azure環境にデプロイ  
+deploy-gcp      # GCP環境にデプロイ
+test-all        # 全エンドポイントテスト
+```
+
 ### 診断スクリプト
+
+システムの健全性をチェック：
 
 ```bash
 ./scripts/diagnostics.sh
 ```
 
-システムの健全性をチェック：
-- インストール済みツールの確認（aws, az, gcloud, terraform, gh, node, python, docker, jq）
-- クラウドプロバイダー認証状態
-- デプロイメントエンドポイントのテスト
-- Terraformリソース状態（14リソース）
-- AWSリソースの確認
+- ✅ インストール済みツールの確認
+- ✅ クラウドプロバイダー認証状態
+- ✅ デプロイメントエンドポイントのテスト
+- ✅ Terraformリソース状態の確認
+
+## 🧪 テストとデバッグ
+
+### エンドポイントテスト
+
+```bash
+# すべてのクラウドプロバイダーをテスト
+./scripts/test-endpoints.sh
+
+# 個別テスト
+curl https://52z731x570.execute-api.ap-northeast-1.amazonaws.com/
+curl https://mcad-staging-api--0000004.livelycoast-fa9d3350.japaneast.azurecontainerapps.io/
+curl https://mcad-staging-api-son5b3ml7a-an.a.run.app/
+```
+
+### ローカル開発
+
+```bash
+# フロントエンド
+cd services/frontend
+npm install
+npm run dev
+
+# バックエンド（Python）
+cd services/backend
+pip install -r requirements.txt
+uvicorn src.main:app --reload
+```
+
+### トラブルシューティング
+
+問題が発生した場合は [トラブルシューティングガイド](docs/TROUBLESHOOTING.md) を参照してください：
+
+- Azure認証問題（Service Principal、Terraform Wrapper等）
+- GCPリソース競合（State管理、リソースインポート）
+- フロントエンドAPI接続問題（ビルド順序、API URL設定）
+- 権限エラー（IAM、RBAC設定）
 
 ## 🤝 貢献
 

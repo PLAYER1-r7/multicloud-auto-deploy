@@ -302,7 +302,17 @@ act -W .github/workflows/deploy-aws.yml \
 
 ## トラブルシューティング
 
-### AWS デプロイが失敗する
+> 💡 **詳細なトラブルシューティング情報は [TROUBLESHOOTING.md](TROUBLESHOOTING.md) を参照してください**
+> 
+> 以下の問題と解決策が記載されています：
+> - Azure認証問題（Service Principal、Terraform Wrapper、CLI認証競合）
+> - GCPリソース競合（GCS Backend、既存リソースインポート）
+> - フロントエンドAPI接続問題（ビルド順序、API URL設定）
+> - 権限エラー（IAM、RBAC、Service Account）
+
+### よくある問題（クイックリファレンス）
+
+#### AWS デプロイが失敗する
 
 **症状**: `Error: Could not load credentials from any providers`
 
@@ -316,7 +326,7 @@ aws iam list-attached-user-policies --user-name satoshi
 
 ---
 
-### Azure デプロイが失敗する
+#### Azure デプロイが失敗する
 
 **症状**: `Error: AuthenticationFailed`
 
@@ -334,9 +344,13 @@ az role assignment list \
   --output table
 ```
 
+**よくある問題**:
+- "Authenticating using the Azure CLI is only supported as a User" → [詳細](TROUBLESHOOTING.md#azure認証問題)
+- Terraform Wrapper による環境変数干渉 → [詳細](TROUBLESHOOTING.md#問題2-terraform-wrapper-による環境変数の干渉)
+
 ---
 
-### GCP デプロイが失敗する
+#### GCP デプロイが失敗する
 
 **症状**: `Error: google: could not find default credentials`
 
@@ -352,9 +366,25 @@ gcloud projects get-iam-policy YOUR_PROJECT_ID \
   --filter="bindings.members:serviceAccount:github-actions-deploy@*"
 ```
 
+**よくある問題**:
+- "Error 409: Resource already exists" → [詳細](TROUBLESHOOTING.md#gcpリソース競合)
+- GCS Backendの設定とリソースインポート → [詳細](TROUBLESHOOTING.md#解決策永続的なremote-state)
+
 ---
 
-### Docker イメージのプッシュが失敗する
+#### フロントエンドがAPIに接続できない
+
+**症状**: メッセージ送信が「送信中」のまま固まる
+
+**原因**: フロントエンドビルド時にAPI URLが正しく設定されていない
+
+**対処**: [詳細な解決策](TROUBLESHOOTING.md#フロントエンドapi接続問題)
+
+**重要**: フロントエンドは必ずインフラデプロイ**後**にビルドすること
+
+---
+
+#### Docker イメージのプッシュが失敗する
 
 **症状**: `denied: requested access to the resource is denied`
 
@@ -384,7 +414,7 @@ gcloud projects get-iam-policy YOUR_PROJECT_ID \
 
 ---
 
-### Terraform Apply が失敗する
+#### Terraform Apply が失敗する
 
 **症状**: `Error: Backend initialization required`
 
@@ -398,6 +428,24 @@ terraform init -upgrade
 terraform state pull > backup.tfstate
 terraform init -reconfigure
 ```
+
+#### GCP Terraform State が永続化されない
+
+**症状**: 毎回 "Resource already exists" エラーが発生
+
+**解決策**: GCS Backendを使用して永続的なStateを設定
+
+```bash
+# GCS Bucketの作成
+gcloud storage buckets create gs://multicloud-auto-deploy-tfstate-gcp \
+  --location=asia-northeast1 \
+  --uniform-bucket-level-access
+
+# 既存リソースのインポート
+./scripts/import-gcp-resources.sh
+```
+
+詳細は [TROUBLESHOOTING.md - GCPリソース競合](TROUBLESHOOTING.md#gcpリソース競合) を参照
 
 ---
 

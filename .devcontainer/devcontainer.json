@@ -1,0 +1,70 @@
+{
+  "name": "Multi-Cloud Auto Deploy",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12"
+    },
+    "ghcr.io/devcontainers/features/terraform:1": {
+      "version": "1.7.5"
+    },
+    "ghcr.io/devcontainers/features/aws-cli:1": {},
+    "ghcr.io/devcontainers/features/azure-cli:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "hashicorp.terraform",
+        "ms-azuretools.vscode-docker",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "redhat.vscode-yaml",
+        "github.vscode-github-actions",
+        "ms-vscode.azure-account",
+        "amazonwebservices.aws-toolkit-vscode",
+        "googlecloudtools.cloudcode"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "terraform.languageServer": {
+          "enabled": true,
+          "args": []
+        },
+        "files.associations": {
+          "*.tf": "terraform",
+          "*.tfvars": "terraform"
+        },
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
+        "[python]": {
+          "editor.tabSize": 4
+        },
+        "[markdown]": {
+          "editor.wordWrap": "on"
+        }
+      }
+    }
+  },
+  "forwardPorts": [3000, 8000, 8080],
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "remoteUser": "vscode",
+  "mounts": [
+    "source=${localEnv:HOME}/.aws,target=/home/vscode/.aws,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.azure,target=/home/vscode/.azure,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.config/gcloud,target=/home/vscode/.config/gcloud,type=bind,consistency=cached"
+  ]
+}
