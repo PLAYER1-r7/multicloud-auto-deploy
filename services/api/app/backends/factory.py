@@ -15,9 +15,10 @@ def get_backend() -> BaseBackend:
     elif settings.cloud_provider == CloudProvider.AWS:
         from app.backends.aws import AWSBackend
 
+        # Use region from settings, or let boto3 auto-detect (e.g., from AWS_REGION in Lambda)
         return AWSBackend(
             table_name=settings.dynamodb_table_name,
-            region=settings.aws_region,
+            region=settings.aws_region if settings.aws_region else None,
         )
 
     elif settings.cloud_provider == CloudProvider.AZURE:

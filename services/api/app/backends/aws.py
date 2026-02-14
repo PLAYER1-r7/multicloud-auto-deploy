@@ -29,11 +29,15 @@ def _decimals_to_floats(obj):
 class AWSBackend(BaseBackend):
     """AWS DynamoDB バックエンド"""
 
-    def __init__(self, table_name: str, region: str):
+    def __init__(self, table_name: str, region: str = None):
         if not boto3:
             raise ImportError("boto3 is required for AWS backend")
 
-        self.dynamodb = boto3.resource("dynamodb", region_name=region)
+        # If region is not provided, boto3 will use default region from environment
+        if region:
+            self.dynamodb = boto3.resource("dynamodb", region_name=region)
+        else:
+            self.dynamodb = boto3.resource("dynamodb")
         self.table = self.dynamodb.Table(table_name)
 
     async def create_message(self, message: MessageCreate) -> Message:
