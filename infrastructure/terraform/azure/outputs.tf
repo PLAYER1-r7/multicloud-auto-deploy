@@ -29,6 +29,16 @@ output "container_registry_url" {
   value       = azurerm_container_registry.main.login_server
 }
 
+output "container_registry_name" {
+  description = "Container Registry name"
+  value       = azurerm_container_registry.main.name
+}
+
+output "frontend_storage_account" {
+  description = "Frontend Storage Account name"
+  value       = azurerm_storage_account.frontend.name
+}
+
 output "cosmos_endpoint" {
   description = "Cosmos DB endpoint"
   value       = azurerm_cosmosdb_account.main.endpoint

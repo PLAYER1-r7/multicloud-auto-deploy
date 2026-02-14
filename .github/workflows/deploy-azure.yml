@@ -83,10 +83,23 @@ jobs:
           terraform apply -var="environment=${{ github.event.inputs.environment || 'staging' }}" -auto-approve
           
           # Extract Terraform outputs for later use
-          echo "acr_name=$(terraform output -raw container_registry_name)" >> $GITHUB_OUTPUT
-          echo "resource_group=$(terraform output -raw resource_group_name)" >> $GITHUB_OUTPUT
-          echo "container_app=$(terraform output -raw container_app_name)" >> $GITHUB_OUTPUT
-          echo "storage_account=$(terraform output -raw frontend_storage_account)" >> $GITHUB_OUTPUT
+          ACR_NAME=$(terraform output -raw container_registry_name)
+          RESOURCE_GROUP=$(terraform output -raw resource_group_name)
+          CONTAINER_APP=$(terraform output -raw container_app_name)
+          STORAGE_ACCOUNT=$(terraform output -raw frontend_storage_account)
+          
+          # Debug: Display outputs
+          echo "Terraform Outputs:"
+          echo "  ACR Name: $ACR_NAME"
+          echo "  Resource Group: $RESOURCE_GROUP"
+          echo "  Container App: $CONTAINER_APP"
+          echo "  Storage Account: $STORAGE_ACCOUNT"
+          
+          # Set outputs for GitHub Actions
+          echo "acr_name=$ACR_NAME" >> $GITHUB_OUTPUT
+          echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
+          echo "container_app=$CONTAINER_APP" >> $GITHUB_OUTPUT
+          echo "storage_account=$STORAGE_ACCOUNT" >> $GITHUB_OUTPUT
         env:
           ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
@@ -108,9 +121,17 @@ jobs:
         run: |
           # Use ACR name from Terraform output (stored in previous step)
           ACR_NAME="${{ steps.terraform.outputs.acr_name }}"
+          
+          # Debug: Display ACR name
+          echo "ACR Name: $ACR_NAME"
+          
+          if [ -z "$ACR_NAME" ]; then
+            echo "Error: ACR_NAME is empty"
+            exit 1
+          fi
 
           # Login to ACR
-          az acr login --name $ACR_NAME
+          az acr login --name "$ACR_NAME"
 
           # Build and push Docker image
           cd services/backend
