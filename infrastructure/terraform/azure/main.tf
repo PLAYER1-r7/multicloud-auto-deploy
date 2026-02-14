@@ -28,8 +28,10 @@ provider "azurerm" {
   }
 
   # Use environment variables for authentication (ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_SUBSCRIPTION_ID, ARM_TENANT_ID)
-  # Disable Azure CLI authentication in GitHub Actions
-  use_cli = false
+  # Explicitly disable all other authentication methods
+  use_cli  = false
+  use_msi  = false
+  use_oidc = false
 }
 
 # Variables

@@ -31,10 +31,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      # Skip initial Azure Login - use Service Principal env vars for Terraform only
+      # - name: Azure Login
+      #   uses: azure/login@v1
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -59,11 +60,11 @@ jobs:
         env:
           VITE_API_URL: ${{ secrets.AZURE_API_URL }}
 
-      - name: Logout from Azure CLI
-        run: |
-          # Logout from Azure CLI to prevent conflicts with Terraform authentication
-          az logout || true
-        continue-on-error: true
+      # No need to logout since we never logged in
+      # - name: Logout from Azure CLI
+      #   run: |
+      #     az logout || true
+      #   continue-on-error: true
 
       - name: Deploy Infrastructure
         run: |
@@ -82,7 +83,7 @@ jobs:
           ARM_USE_CLI: false
           ARM_USE_AZUREAD_AUTH: false
 
-      - name: Re-login to Azure CLI for ACR
+      - name: Login to Azure CLI for ACR
         run: |
           # Login with Service Principal for ACR operations
           az login --service-principal \
