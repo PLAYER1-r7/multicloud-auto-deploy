@@ -8,11 +8,11 @@ terraform {
     }
   }
 
-  # Use local backend for now to avoid GCS permission issues
-  # backend "gcs" {
-  #   bucket = "multicloud-auto-deploy-tfstate"
-  #   prefix = "terraform/state"
-  # }
+  # GCS backend for state persistence across GitHub Actions runs
+  backend "gcs" {
+    bucket = "multicloud-auto-deploy-tfstate-gcp"
+    prefix = "terraform/state"
+  }
 }
 
 provider "google" {

@@ -49,6 +49,16 @@ output "artifact_registry_repo" {
   value       = google_artifact_registry_repository.main.name
 }
 
+output "artifact_registry_location" {
+  description = "Artifact Registry location"
+  value       = google_artifact_registry_repository.main.location
+}
+
+output "frontend_storage_bucket" {
+  description = "Frontend storage bucket name (alias for frontend_bucket_name)"
+  value       = google_storage_bucket.frontend.name
+}
+
 output "firestore_database" {
   description = "Firestore database name"
   value       = google_firestore_database.main.name

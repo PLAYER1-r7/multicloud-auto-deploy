@@ -58,104 +58,60 @@ jobs:
           terraform_wrapper: false
 
       - name: Deploy Infrastructure
+        id: terraform
         run: |
           cd infrastructure/terraform/gcp
+          
+          echo "==========================================="
+          echo "Initializing Terraform with GCS backend..."
+          echo "==========================================="
           terraform init
           
-          # Try to import existing resources
-          echo "==========================================="
-          echo "Starting resource import phase..."
-          echo "==========================================="
-          
-          ENVIRONMENT="${{ github.event.inputs.environment || 'staging' }}"
-          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
-          REGION="asia-northeast1"
-          PREFIX="multicloud-auto-deploy-${ENVIRONMENT}"
-          
-          echo "Environment: $ENVIRONMENT"
-          echo "Project ID: $PROJECT_ID"
-          echo "Region: $REGION"
-          echo "Prefix: $PREFIX"
           echo ""
-          
-          # Function to import resource
-          import_resource() {
-            local resource_type=$1
-            local resource_name=$2
-            local resource_id=$3
-            
-            echo "-------------------------------------------"
-            echo "Processing: $resource_type.$resource_name"
-            echo "Resource ID: $resource_id"
-            
-            # Check if already in state
-            echo "Checking if resource is in state..."
-            if terraform state show "$resource_type.$resource_name" >/dev/null 2>&1; then
-              echo "✓ Resource already in state - skipping import"
-              return 0
-            fi
-            
-            echo "→ Resource not in state - attempting import..."
-            if terraform import \
-              -var="project_id=${PROJECT_ID}" \
-              -var="environment=${ENVIRONMENT}" \
-              "$resource_type.$resource_name" \
-              "$resource_id"; then
-              echo "✓ Successfully imported"
-              return 0
-            else
-              echo "✗ Import failed - resource may not exist yet (will be created)"
-              return 1
-            fi
-          }
-          
-          # Import existing resources
-          import_resource "google_artifact_registry_repository" "main" "projects/${PROJECT_ID}/locations/${REGION}/repositories/${PREFIX}-repo" || true
-          import_resource "google_firestore_database" "main" "projects/${PROJECT_ID}/databases/(default)" || true
-          import_resource "google_storage_bucket" "frontend" "${PREFIX}-frontend" || true
-          import_resource "google_compute_global_address" "frontend" "projects/${PROJECT_ID}/global/addresses/${PREFIX}-frontend-ip" || true
-          
-          echo ""
-          echo "==========================================="
-          echo "Import phase completed"
-          echo "==========================================="
-          echo ""
-          echo "Current terraform state:"
+          echo "Checking current state..."
           terraform state list || echo "No resources in state yet"
+          
           echo ""
           echo "==========================================="
-          echo "Starting terraform plan..."
+          echo "Planning infrastructure changes..."
           echo "==========================================="
-          
           terraform plan \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
             -var="environment=${{ github.event.inputs.environment || 'staging' }}"
           
           echo ""
           echo "==========================================="
-          echo "Starting terraform apply..."
+          echo "Applying infrastructure changes..."
           echo "==========================================="
-          
           terraform apply \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
             -var="environment=${{ github.event.inputs.environment || 'staging' }}" \
             -auto-approve
+          
+          # Extract Terraform outputs for later use
+          echo "repo_location=$(terraform output -raw artifact_registry_location)" >> $GITHUB_OUTPUT
+          echo "repo_name=$(terraform output -raw artifact_registry_repo)" >> $GITHUB_OUTPUT
+          echo "service_name=$(terraform output -raw cloud_run_service_name)" >> $GITHUB_OUTPUT
+          echo "storage_bucket=$(terraform output -raw frontend_storage_bucket)" >> $GITHUB_OUTPUT
+          echo "api_url=$(terraform output -raw api_url)" >> $GITHUB_OUTPUT
 
       - name: Build and Push Docker Image
         run: |
-          cd services/backend
-
-          # Get Artifact Registry repo from Terraform output
-          cd ../../infrastructure/terraform/gcp
+          # Use values from Terraform output (stored in previous step)
           PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
-          REPO_LOCATION=$(terraform output -raw artifact_registry_location || echo "asia-northeast1")
-          REPO_NAME=$(terraform output -raw artifact_registry_repo)
+          REPO_LOCATION="${{ steps.terraform.outputs.repo_location }}"
+          REPO_NAME="${{ steps.terraform.outputs.repo_name }}"
+
+          echo "Building and pushing Docker image..."
+          echo "  Project: $PROJECT_ID"
+          echo "  Location: $REPO_LOCATION"
+          echo "  Repository: $REPO_NAME"
 
           # Configure Docker for Artifact Registry
           gcloud auth configure-docker ${REPO_LOCATION}-docker.pkg.dev
 
           # Build and push Docker image
-          cd ../../../services/backend
+          cd services/backend
           IMAGE_URI="${REPO_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/multicloud-auto-deploy-api:latest"
           docker build --platform linux/amd64 \
             -t $IMAGE_URI \
@@ -164,16 +120,10 @@ jobs:
 
       - name: Deploy Cloud Run Service
         run: |
-          cd infrastructure/terraform/gcp
-
-          # Re-apply Terraform to update Cloud Run with new image
-          terraform apply \
-            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
-            -var="environment=${{ github.event.inputs.environment || 'staging' }}" \
-            -auto-approve
-
-          # Get Cloud Run service name
-          SERVICE_NAME=$(terraform output -raw cloud_run_service_name)
+          # Use service name from Terraform output
+          SERVICE_NAME="${{ steps.terraform.outputs.service_name }}"
+          
+          echo "Setting IAM policy for Cloud Run service: $SERVICE_NAME"
 
           # Set IAM policy for public access
           gcloud run services add-iam-policy-binding $SERVICE_NAME \
@@ -183,20 +133,24 @@ jobs:
 
       - name: Build Frontend
         run: |
-          cd infrastructure/terraform/gcp
-          API_URL=$(terraform output -raw api_url)
+          # Use API URL from Terraform output
+          API_URL="${{ steps.terraform.outputs.api_url }}"
+          
+          echo "Building frontend with API URL: $API_URL"
 
-          cd ../../services/frontend
+          cd services/frontend
           npm install
           VITE_API_URL=$API_URL npm run build
 
       - name: Deploy Frontend to Cloud Storage
         run: |
-          cd infrastructure/terraform/gcp
-          BUCKET_NAME=$(terraform output -raw frontend_bucket_name)
+          # Use bucket name from Terraform output
+          BUCKET_NAME="${{ steps.terraform.outputs.storage_bucket }}"
+          
+          echo "Deploying frontend to bucket: $BUCKET_NAME"
 
           # Upload frontend to Cloud Storage
-          gsutil -m cp -r ../../services/frontend/dist/* gs://$BUCKET_NAME/
+          gsutil -m cp -r services/frontend/dist/* gs://$BUCKET_NAME/
 
           # Make objects public
           gsutil -m acl ch -u AllUsers:R gs://$BUCKET_NAME/** || true
