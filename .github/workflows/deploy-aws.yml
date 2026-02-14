@@ -94,7 +94,7 @@ jobs:
           echo "📦 Installing dependencies..."
           pip install --platform manylinux2014_x86_64 --only-binary=:all: \
             --target package --python-version 3.12 --implementation cp \
-            fastapi==0.109.0 pydantic==2.5.3 pydantic-settings==2.5.2 python-dotenv==1.0.0 mangum==0.17.0
+            fastapi==0.115.0 pydantic==2.9.0 pydantic-settings==2.5.2 python-dotenv==1.0.0 mangum==0.17.0
           
           # Copy source code
           echo "📁 Copying source code..."
