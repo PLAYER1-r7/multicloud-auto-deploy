@@ -48,10 +48,39 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Deploy
+      - name: Build Frontend
         run: |
-          chmod +x scripts/deploy-aws.sh
-          ./scripts/deploy-aws.sh ${{ github.event.inputs.environment || 'staging' }}
+          cd services/frontend
+          npm install
+          npm run build
+        env:
+          VITE_API_URL: ${{ secrets.AWS_API_URL || 'https://rnvg3bwzea.execute-api.us-east-1.amazonaws.com/prod' }}
+
+      - name: Package Backend
+        run: |
+          cd services/backend
+          pip install -r requirements.txt -t package/
+          cp -r src/* package/
+          cd package && zip -r ../lambda.zip . && cd ..
+
+      - name: Update Lambda Function
+        run: |
+          LAMBDA_FUNCTION=${{ secrets.AWS_LAMBDA_FUNCTION_NAME || 'multicloud-auto-deploy-staging-api' }}
+          aws lambda update-function-code \
+            --function-name $LAMBDA_FUNCTION \
+            --zip-file fileb://services/backend/lambda.zip
+
+      - name: Deploy Frontend to S3
+        run: |
+          S3_BUCKET=${{ secrets.AWS_S3_BUCKET || 'multicloud-auto-deploy-staging-frontend' }}
+          aws s3 sync services/frontend/dist/ s3://$S3_BUCKET/ --delete
+
+      - name: Invalidate CloudFront Cache
+        run: |
+          CLOUDFRONT_ID=${{ secrets.AWS_CLOUDFRONT_ID || 'E3ICZFV7XKB5O9' }}
+          aws cloudfront create-invalidation \
+            --distribution-id $CLOUDFRONT_ID \
+            --paths "/*"
 
       - name: Notify Success
         if: success()
