@@ -6,7 +6,7 @@ set -e
 
 ENVIRONMENT=${1:-staging}
 PROJECT_NAME="multicloud-auto-deploy"
-AWS_REGION="us-east-1"
+AWS_REGION="ap-northeast-1"
 
 echo "🚀 Starting AWS deployment for environment: $ENVIRONMENT"
 

@@ -9,9 +9,9 @@ terraform {
   }
   
   backend "s3" {
-    bucket = "multicloud-auto-deploy-terraform-state"
+    bucket = "multicloud-auto-deploy-terraform-state-apne1"
     key    = "multicloud-auto-deploy/terraform.tfstate"
-    region = "us-east-1"
+    region = "ap-northeast-1"
   }
 }
 
