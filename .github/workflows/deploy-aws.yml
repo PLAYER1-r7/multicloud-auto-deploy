@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "services/**"
-      - "infrastructure/terraform/aws/**"
+      - "infrastructure/pulumi/aws/**"
       - ".github/workflows/deploy-aws.yml"
   workflow_dispatch:
     inputs:
@@ -48,6 +48,28 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Deploy Infrastructure with Pulumi
+        id: pulumi
+        uses: pulumi/actions@v5
+        with:
+          command: up
+          stack-name: staging
+          work-dir: infrastructure/pulumi/aws
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Get Pulumi Outputs
+        id: pulumi_outputs
+        run: |
+          cd infrastructure/pulumi/aws
+          echo "lambda_function_name=$(pulumi stack output lambda_function_name)" >> $GITHUB_OUTPUT
+          echo "api_gateway_endpoint=$(pulumi stack output api_gateway_endpoint)" >> $GITHUB_OUTPUT
+          echo "frontend_bucket_name=$(pulumi stack output frontend_bucket_name)" >> $GITHUB_OUTPUT
+
       - name: Package Backend
         run: |
           cd services/api
@@ -64,6 +86,14 @@ jobs:
           echo "📁 Copying source code..."
           cp -r app/* package/
           
+          # Create handler.py for Lambda entry point
+          cat > package/handler.py << 'EOF'
+          from mangum import Mangum
+          from app.main import app
+
+          handler = Mangum(app, lifespan="off")
+          EOF
+          
           # Create zip
           echo "🗜️  Creating lambda package..."
           cd package
@@ -78,8 +108,8 @@ jobs:
         id: update_lambda
         run: |
           set -e  # Exit on error
-          LAMBDA_FUNCTION=${{ secrets.AWS_LAMBDA_FUNCTION_NAME || 'multicloud-auto-deploy-staging-api' }}
-          S3_BUCKET=${{ secrets.AWS_S3_BUCKET || 'multicloud-auto-deploy-staging-frontend' }}
+          LAMBDA_FUNCTION="${{ steps.pulumi_outputs.outputs.lambda_function_name }}"
+          S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
           S3_KEY="lambda-deployments/lambda-$(date +%Y%m%d-%H%M%S).zip"
           
           # Debug: Check lambda.zip exists and show size
@@ -100,19 +130,7 @@ jobs:
             --output json || { echo "❌ Lambda update failed!"; exit 1; }
           
           echo "✅ Lambda function updated successfully"
-          
-          # Get API Gateway endpoint (continue even if this fails)
-          set +e  # Don't exit on error for optional API Gateway lookup
-          API_ID=$(aws apigatewayv2 get-apis --region ${{ env.AWS_REGION }} --query 'Items[?Name==`multicloud-auto-deploy-staging-api`].ApiId' --output text 2>/dev/null)
-          if [ -n "$API_ID" ] && [ "$API_ID" != "None" ]; then
-            API_ENDPOINT="https://${API_ID}.execute-api.${{ env.AWS_REGION }}.amazonaws.com"
-            echo "api_endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
-            echo "✅ API Endpoint: $API_ENDPOINT"
-          else
-            echo "⚠️  API Gateway lookup skipped (missing permissions) - using default"
-            echo "api_endpoint=https://52z731x570.execute-api.ap-northeast-1.amazonaws.com" >> $GITHUB_OUTPUT
-          fi
-          set -e  # Re-enable exit on error
+          echo "api_endpoint=${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}" >> $GITHUB_OUTPUT
 
       - name: Build Frontend
         run: |
@@ -124,19 +142,15 @@ jobs:
 
       - name: Deploy Frontend to S3
         run: |
-          S3_BUCKET=${{ secrets.AWS_S3_BUCKET || 'multicloud-auto-deploy-staging-frontend' }}
+          S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
           aws s3 sync services/frontend_react/dist/ s3://$S3_BUCKET/ --delete
-
-      - name: Invalidate CloudFront Cache
-        run: |
-          CLOUDFRONT_ID=${{ secrets.AWS_CLOUDFRONT_ID || 'E2GDU7Y7UGDV3S' }}
-          aws cloudfront create-invalidation \
-            --distribution-id $CLOUDFRONT_ID \
-            --paths "/*"
 
       - name: Notify Success
         if: success()
-        run: echo "✅ AWS deployment succeeded!"
+        run: |
+          echo "✅ AWS deployment succeeded!"
+          echo "📍 API Endpoint: ${{ steps.update_lambda.outputs.api_endpoint }}"
+          echo "🌐 Frontend: ${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
 
       - name: Notify Failure
         if: failure()

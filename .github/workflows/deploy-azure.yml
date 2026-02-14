@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "services/**"
-      - "infrastructure/terraform/azure/**"
+      - "infrastructure/pulumi/azure/**"
       - ".github/workflows/deploy-azure.yml"
   workflow_dispatch:
     inputs:
@@ -47,61 +47,41 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.7.5
-          terraform_wrapper: false  # Disable wrapper to pass env vars correctly
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
 
-      - name: Deploy Infrastructure
-        id: terraform
-        run: |
-          cd infrastructure/terraform/azure
-          
-          # Clear Azure CLI config to prevent conflicts
-          unset AZURE_CONFIG_DIR
-          az account clear 2>/dev/null || true
-          
-          # Initialize Terraform
-          terraform init
-          
-          terraform plan -var="environment=${{ github.event.inputs.environment || 'staging' }}"
-          terraform apply -var="environment=${{ github.event.inputs.environment || 'staging' }}" -auto-approve
-          
-          # Extract Terraform outputs for later use  
-          FUNCTION_APP=$(terraform output -raw function_app_name)
-          RESOURCE_GROUP=$(terraform output -raw resource_group_name)
-          STORAGE_ACCOUNT=$(terraform output -raw frontend_storage_account)
-          API_URL=$(terraform output -raw api_url)
-          
-          # Debug: Display outputs
-          echo "Terraform Outputs:"
-          echo "  Function App: $FUNCTION_APP"
-          echo "  Resource Group: $RESOURCE_GROUP"
-          echo "  Storage Account: $STORAGE_ACCOUNT"
-          echo "  API URL: $API_URL"
-          
-          # Set outputs for GitHub Actions
-          echo "function_app=$FUNCTION_APP" >> $GITHUB_OUTPUT
-          echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
-          echo "storage_account=$STORAGE_ACCOUNT" >> $GITHUB_OUTPUT
-          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+      - name: Deploy Infrastructure with Pulumi
+        id: pulumi
+        uses: pulumi/actions@v5
+        with:
+          command: up
+          stack-name: staging
+          work-dir: infrastructure/pulumi/azure
         env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_USE_CLI: false
-          ARM_USE_AZUREAD_AUTH: false
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+      - name: Get Pulumi Outputs
+        id: pulumi_outputs
+        run: |
+          cd infrastructure/pulumi/azure
+          echo "resource_group_name=$(pulumi stack output resource_group_name)" >> $GITHUB_OUTPUT
+          echo "function_app_name=$(pulumi stack output function_app_name)" >> $GITHUB_OUTPUT
+          echo "functions_storage_name=$(pulumi stack output functions_storage_name)" >> $GITHUB_OUTPUT
+          echo "frontend_storage_name=$(pulumi stack output frontend_storage_name)" >> $GITHUB_OUTPUT
+          echo "api_url=$(pulumi stack output api_url)" >> $GITHUB_OUTPUT
 
       - name: Login to Azure CLI
         run: |
           # Login with Service Principal
           az login --service-principal \
-            -u ${{ secrets.ARM_CLIENT_ID }} \
-            -p ${{ secrets.ARM_CLIENT_SECRET }} \
-            --tenant ${{ secrets.ARM_TENANT_ID }}
-          az account set --subscription ${{ secrets.ARM_SUBSCRIPTION_ID }}
+            -u ${{ secrets.AZURE_CLIENT_ID }} \
+            -p ${{ secrets.AZURE_CLIENT_SECRET }} \
+            --tenant ${{ secrets.AZURE_TENANT_ID }}
+          az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Package Function App
         run: |
@@ -132,8 +112,8 @@ jobs:
 
       - name: Deploy Function App
         run: | 
-          FUNCTION_APP="${{ steps.terraform.outputs.function_app }}"
-          RESOURCE_GROUP="${{ steps.terraform.outputs.resource_group }}"
+          FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
           
           echo "🚀 Deploying to Function App: $FUNCTION_APP"
           
@@ -148,12 +128,12 @@ jobs:
           npm install
           npm run build
         env:
-          VITE_API_URL: ${{ steps.terraform.outputs.api_url }}
+          VITE_API_URL: ${{ steps.pulumi_outputs.outputs.api_url }}
 
       - name: Deploy Frontend to Storage
         run: |
-          # Use storage account from Terraform output
-          STORAGE_ACCOUNT="${{ steps.terraform.outputs.storage_account }}"
+          # Use storage account from Pulumi output
+          STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
 
           # Upload frontend to blob storage
           az storage blob upload-batch \
@@ -164,7 +144,10 @@ jobs:
 
       - name: Notify Success
         if: success()
-        run: echo "✅ Azure deployment succeeded!"
+        run: |
+          echo "✅ Azure deployment succeeded!"
+          echo "📍 API URL: ${{ steps.pulumi_outputs.outputs.api_url }}"
+          echo "🌐 Frontend Storage: ${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
 
       - name: Notify Failure
         if: failure()

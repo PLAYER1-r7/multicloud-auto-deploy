@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "services/**"
-      - "infrastructure/terraform/gcp/**"
+      - "infrastructure/pulumi/gcp/**"
       - ".github/workflows/deploy-gcp.yml"
   workflow_dispatch:
     inputs:
@@ -51,46 +51,27 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.7.5
-          terraform_wrapper: false
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
 
-      - name: Deploy Infrastructure
-        id: terraform
+      - name: Deploy Infrastructure with Pulumi
+        id: pulumi
+        uses: pulumi/actions@v5
+        with:
+          command: up
+          stack-name: staging
+          work-dir: infrastructure/pulumi/gcp
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Get Pulumi Outputs
+        id: pulumi_outputs
         run: |
-          cd infrastructure/terraform/gcp
-          
-          echo "==========================================="
-          echo "Initializing Terraform with GCS backend..."
-          echo "==========================================="
-          terraform init
-          
-          echo ""
-          echo "Checking current state..."
-          terraform state list || echo "No resources in state yet"
-          
-          echo ""
-          echo "==========================================="
-          echo "Planning infrastructure changes..."
-          echo "==========================================="
-          terraform plan \
-            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
-            -var="environment=${{ github.event.inputs.environment || 'staging' }}"
-          
-          echo ""
-          echo "==========================================="
-          echo "Applying infrastructure changes..."
-          echo "==========================================="
-          terraform apply \
-            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
-            -var="environment=${{ github.event.inputs.environment || 'staging' }}" \
-            -auto-approve
-          
-          # Extract Terraform outputs for later use
-          echo "function_source_bucket=$(terraform output -raw function_source_bucket)" >> $GITHUB_OUTPUT
-          echo "storage_bucket=$(terraform output -raw frontend_storage_bucket)" >> $GITHUB_OUTPUT
+          cd infrastructure/pulumi/gcp
+          echo "function_source_bucket=$(pulumi stack output function_source_bucket)" >> $GITHUB_OUTPUT
+          echo "frontend_bucket=$(pulumi stack output frontend_bucket)" >> $GITHUB_OUTPUT
+          echo "function_name=$(pulumi stack output function_name)" >> $GITHUB_OUTPUT
 
       - name: Package Cloud Function
         run: |
@@ -121,10 +102,10 @@ jobs:
       - name: Deploy Cloud Function
         id: deploy_function
         run: |
-          # Use values from environment and Terraform output
+          # Use values from Pulumi outputs
           PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
-          FUNCTION_NAME="mcad-staging-api"  # 固定名
-          FUNCTION_BUCKET="${{ steps.terraform.outputs.function_source_bucket }}"
+          FUNCTION_NAME="${{ steps.pulumi_outputs.outputs.function_name }}"
+          FUNCTION_BUCKET="${{ steps.pulumi_outputs.outputs.function_source_bucket }}"
           REGION=${{ env.GCP_REGION }}
           
           echo "🚀 Deploying Cloud Function: $FUNCTION_NAME"
@@ -169,8 +150,8 @@ jobs:
 
       - name: Deploy Frontend to Cloud Storage
         run: |
-          # Use bucket name from Terraform output
-          BUCKET_NAME="${{ steps.terraform.outputs.storage_bucket }}"
+          # Use bucket name from Pulumi output
+          BUCKET_NAME="${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
           
           echo "Deploying frontend to bucket: $BUCKET_NAME"
 
@@ -182,7 +163,10 @@ jobs:
 
       - name: Notify Success
         if: success()
-        run: echo "✅ GCP deployment succeeded!"
+        run: |
+          echo "✅ GCP deployment succeeded!"
+          echo "📍 Function URL: ${{ steps.deploy_function.outputs.api_url }}"
+          echo "🌐 Frontend Bucket: ${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
 
       - name: Notify Failure
         if: failure()

@@ -1,0 +1,10 @@
+name: multicloud-auto-deploy-gcp
+description: Multi-Cloud Auto Deploy - GCP Infrastructure
+runtime: python
+
+config:
+  gcp:project:
+    description: GCP Project ID
+  gcp:region:
+    description: GCP Region
+    default: asia-northeast1
