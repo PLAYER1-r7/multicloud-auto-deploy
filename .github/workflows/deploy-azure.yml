@@ -144,6 +144,18 @@ jobs:
         env:
           VITE_API_URL: ${{ steps.pulumi_outputs.outputs.api_url }}
 
+      - name: Enable Static Website Hosting
+        run: |
+          STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+          
+          echo "🌐 Enabling static website hosting on $STORAGE_ACCOUNT..."
+          az storage blob service-properties update \
+            --account-name $STORAGE_ACCOUNT \
+            --static-website \
+            --index-document index.html \
+            --404-document index.html \
+            --auth-mode login
+
       - name: Deploy Frontend to Storage
         run: |
           # Use storage account from Pulumi output
@@ -154,6 +166,7 @@ jobs:
             --account-name $STORAGE_ACCOUNT \
             --source services/frontend_react/dist \
             --destination '$web' \
+            --auth-mode login \
             --overwrite
 
       - name: Notify Success
