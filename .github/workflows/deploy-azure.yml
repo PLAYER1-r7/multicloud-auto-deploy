@@ -68,6 +68,7 @@ jobs:
       #   continue-on-error: true
 
       - name: Deploy Infrastructure
+        id: terraform
         run: |
           cd infrastructure/terraform/azure
           
@@ -80,6 +81,12 @@ jobs:
           
           terraform plan -var="environment=${{ github.event.inputs.environment || 'staging' }}"
           terraform apply -var="environment=${{ github.event.inputs.environment || 'staging' }}" -auto-approve
+          
+          # Extract Terraform outputs for later use
+          echo "acr_name=$(terraform output -raw container_registry_name)" >> $GITHUB_OUTPUT
+          echo "resource_group=$(terraform output -raw resource_group_name)" >> $GITHUB_OUTPUT
+          echo "container_app=$(terraform output -raw container_app_name)" >> $GITHUB_OUTPUT
+          echo "storage_account=$(terraform output -raw frontend_storage_account)" >> $GITHUB_OUTPUT
         env:
           ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
@@ -99,17 +106,14 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          cd services/backend
-
-          # Get ACR name from Terraform output
-          cd ../../infrastructure/terraform/azure
-          ACR_NAME=$(terraform output -raw container_registry_name)
+          # Use ACR name from Terraform output (stored in previous step)
+          ACR_NAME="${{ steps.terraform.outputs.acr_name }}"
 
           # Login to ACR
           az acr login --name $ACR_NAME
 
           # Build and push Docker image
-          cd ../../../services/backend
+          cd services/backend
           docker build --platform linux/amd64 \
             -t $ACR_NAME.azurecr.io/multicloud-auto-deploy-api:latest \
             -f Dockerfile.azure .
@@ -117,10 +121,10 @@ jobs:
 
       - name: Deploy Container App
         run: |
-          cd infrastructure/terraform/azure
-          RESOURCE_GROUP=$(terraform output -raw resource_group_name)
-          CONTAINER_APP_NAME=$(terraform output -raw container_app_name)
-          ACR_NAME=$(terraform output -raw container_registry_name)
+          # Use values from Terraform output (stored in previous step)
+          RESOURCE_GROUP="${{ steps.terraform.outputs.resource_group }}"
+          CONTAINER_APP_NAME="${{ steps.terraform.outputs.container_app }}"
+          ACR_NAME="${{ steps.terraform.outputs.acr_name }}"
 
           # Update Container App with new image
           az containerapp update \
@@ -130,13 +134,13 @@ jobs:
 
       - name: Deploy Frontend to Storage
         run: |
-          cd infrastructure/terraform/azure
-          STORAGE_ACCOUNT=$(terraform output -raw frontend_storage_account)
+          # Use storage account from Terraform output
+          STORAGE_ACCOUNT="${{ steps.terraform.outputs.storage_account }}"
 
           # Upload frontend to blob storage
           az storage blob upload-batch \
             --account-name $STORAGE_ACCOUNT \
-            --source ../../services/frontend/dist \
+            --source services/frontend/dist \
             --destination '$web' \
             --overwrite
 
