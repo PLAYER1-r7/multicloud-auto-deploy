@@ -59,6 +59,12 @@ jobs:
         env:
           VITE_API_URL: ${{ secrets.AZURE_API_URL }}
 
+      - name: Logout from Azure CLI
+        run: |
+          # Logout from Azure CLI to prevent conflicts with Terraform authentication
+          az logout || true
+        continue-on-error: true
+
       - name: Deploy Infrastructure
         run: |
           cd infrastructure/terraform/azure
@@ -70,6 +76,15 @@ jobs:
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
           ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+
+      - name: Re-login to Azure CLI for ACR
+        run: |
+          # Login with Service Principal for ACR operations
+          az login --service-principal \
+            -u ${{ secrets.ARM_CLIENT_ID }} \
+            -p ${{ secrets.ARM_CLIENT_SECRET }} \
+            --tenant ${{ secrets.ARM_TENANT_ID }}
+          az account set --subscription ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
       - name: Build and Push Docker Image
         run: |
