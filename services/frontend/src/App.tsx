@@ -6,14 +6,24 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 interface Message {
   id: string
-  text: string
-  timestamp: string
-  cloud: string
+  content: string
+  author: string
+  image_url: string | null
+  created_at: string
+  updated_at: string | null
+}
+
+interface MessageListResponse {
+  messages: Message[]
+  total: number
+  page: number
+  page_size: number
 }
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
+  const [author, setAuthor] = useState('名無しさん')
   const [loading, setLoading] = useState(false)
   const [cloudProvider, setCloudProvider] = useState<string>('unknown')
 
@@ -24,8 +34,8 @@ function App() {
 
   const fetchMessages = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/messages`)
-      setMessages(response.data)
+      const response = await axios.get<MessageListResponse>(`${API_URL}/api/messages/`)
+      setMessages(response.data.messages)
     } catch (error) {
       console.error('Failed to fetch messages:', error)
     }
@@ -33,8 +43,8 @@ function App() {
 
   const detectCloudProvider = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/health`)
-      setCloudProvider(response.data.cloud || 'unknown')
+      const response = await axios.get(`${API_URL}/health`)
+      setCloudProvider(response.data.cloud_provider || 'unknown')
     } catch (error) {
       console.error('Failed to detect cloud provider:', error)
     }
@@ -42,12 +52,13 @@ function App() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newMessage.trim()) return
+    if (!newMessage.trim() || !author.trim()) return
 
     setLoading(true)
     try {
-      await axios.post(`${API_URL}/api/messages`, {
-        text: newMessage
+      await axios.post(`${API_URL}/api/messages/`, {
+        content: newMessage,
+        author: author
       })
       setNewMessage('')
       fetchMessages()
@@ -87,22 +98,32 @@ function App() {
 
         <div className="max-w-3xl mx-auto">
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-2xl font-semibold mb-4">メッセージを送信</h2>
-            <form onSubmit={handleSubmit} className="flex gap-2">
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="メッセージを入力..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={loading}
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
-              >
-                {loading ? '送信中...' : '送信'}
+            <h2 className="text-2xl font-semibold mb-space-y-3">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  placeholder="名前..."
+                  className="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                />
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="メッセージを入力..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                />
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
+                >
+                  {loading ? '送信中...' : '送信'}
+                </button>
+              </divng ? '送信中...' : '送信'}
               </button>
             </form>
           </div>
@@ -121,14 +142,17 @@ function App() {
                     className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <span className="text-gray-500 text-sm">
-                        {new Date(message.timestamp).toLocaleString('ja-JP')}
-                      </span>
+                      <div>
+                        <span className="font-semibold text-gray-700">{message.author}</span>
+                        <span className="text-gray-400 text-sm ml-2">
+                          {new Date(message.created_at).toLocaleString('ja-JP')}
+                        </span>
+                      </div>
                       <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        {getCloudIcon(message.cloud)} {message.cloud}
+                        {getCloudIcon(cloudProvider)} {cloudProvider}
                       </span>
                     </div>
-                    <p className="text-gray-800">{message.text}</p>
+                    <p className="text-gray-800">{message.content}</p>
                   </div>
                 ))}
               </div>
