@@ -53,20 +53,6 @@ jobs:
           terraform_version: 1.7.5
           terraform_wrapper: false  # Disable wrapper to pass env vars correctly
 
-      - name: Build Frontend
-        run: |
-          cd services/frontend
-          npm install
-          npm run build
-        env:
-          VITE_API_URL: ${{ secrets.AZURE_API_URL }}
-
-      # No need to logout since we never logged in
-      # - name: Logout from Azure CLI
-      #   run: |
-      #     az logout || true
-      #   continue-on-error: true
-
       - name: Deploy Infrastructure
         id: terraform
         run: |
@@ -87,6 +73,7 @@ jobs:
           RESOURCE_GROUP=$(terraform output -raw resource_group_name)
           CONTAINER_APP=$(terraform output -raw container_app_name)
           STORAGE_ACCOUNT=$(terraform output -raw frontend_storage_account)
+          API_URL=$(terraform output -raw api_url)
           
           # Debug: Display outputs
           echo "Terraform Outputs:"
@@ -94,12 +81,14 @@ jobs:
           echo "  Resource Group: $RESOURCE_GROUP"
           echo "  Container App: $CONTAINER_APP"
           echo "  Storage Account: $STORAGE_ACCOUNT"
+          echo "  API URL: $API_URL"
           
           # Set outputs for GitHub Actions
           echo "acr_name=$ACR_NAME" >> $GITHUB_OUTPUT
           echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
           echo "container_app=$CONTAINER_APP" >> $GITHUB_OUTPUT
           echo "storage_account=$STORAGE_ACCOUNT" >> $GITHUB_OUTPUT
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
         env:
           ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
@@ -152,6 +141,14 @@ jobs:
             --name $CONTAINER_APP_NAME \
             --resource-group $RESOURCE_GROUP \
             --image $ACR_NAME.azurecr.io/multicloud-auto-deploy-api:latest
+
+      - name: Build Frontend
+        run: |
+          cd services/frontend
+          npm install
+          npm run build
+        env:
+          VITE_API_URL: ${{ steps.terraform.outputs.api_url }}
 
       - name: Deploy Frontend to Storage
         run: |
