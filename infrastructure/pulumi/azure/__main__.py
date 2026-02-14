@@ -87,7 +87,7 @@ frontend_storage = azure.storage.StorageAccount(
 # ========================================
 app_insights = azure.insights.Component(
     "app-insights",
-    resource_name=f"{project_name}-{stack}-ai",
+    component_name=f"{project_name}-{stack}-ai",
     resource_group_name=resource_group.name,
     location=location,
     application_type="web",
