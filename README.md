@@ -6,6 +6,8 @@
 
 **マルチクラウド対応の自動デプロイシステム** - AWS/Azure/GCP対応のフルスタックアプリケーション自動デプロイプラットフォーム
 
+> 🐍 **NEW: Python Full Stack版が利用可能になりました！** Pulumi + FastAPI + Reflex による完全Python実装。詳細は [docs/PYTHON_MIGRATION.md](docs/PYTHON_MIGRATION.md) を参照。
+
 ## 🌐 Live Demos
 
 | Cloud Provider | API Endpoint | Frontend |
@@ -21,7 +23,8 @@
 - **マルチクラウド対応**: AWS、Azure、GCPに対応
 - **フルスタック**: フロントエンド、バックエンド、データベースの完全なスタック
 - **自動デプロイ**: GitHub Actionsによる完全自動化
-- **IaC統合**: TerraformとPulumiの両方に対応
+- **IaC統合**: TerraformとPulumiの両方に対応 🆕
+- **完全Python版**: Pulumi + FastAPI + Reflexによる統一スタック 🆕
 - **CI/CD**: プッシュやPRで自動的にビルド・デプロイ
 - **簡単セットアップ**: スクリプト一つで環境構築
 
@@ -32,32 +35,39 @@ multicloud-auto-deploy/
 ├── .github/workflows/     # GitHub Actionsワークフロー
 ├── infrastructure/        # インフラストラクチャコード
 │   ├── terraform/        # Terraformコード（AWS/Azure/GCP）
-│   └── pulumi/           # Pulumiコード（AWS/Azure/GCP）
+│   └── pulumi/           # 🆕 Pulumiコード（Python - AWS/Azure/GCP）
 ├── services/             # アプリケーションコード
-│   ├── frontend/         # Reactフロントエンド
-│   ├── backend/          # Node.js/Python バックエンドAPI
+│   ├── api/              # 🆕 FastAPI バックエンド（Python）
+│   ├── web/              # 🆕 Reflex フロントエンド（Python）
+│   ├── frontend/         # React フロントエンド（TypeScript）
+│   ├── backend/          # 既存バックエンド（Python）
 │   └── database/         # データベーススキーマ
 ├── scripts/              # デプロイスクリプト
 └── docs/                 # ドキュメント
+    └── PYTHON_MIGRATION.md  # 🆕 Python完全版移行ガイド
 ```
 
 ## 🛠️ セットアップ
 
 ### 前提条件
 
-- Node.js 18+ / Python 3.11+ or 3.12+
+- Node.js 18+ / Python 3.12+ 🆕
 - Docker & Docker Compose
-- Terraform 1.5+ または Pulumi 3.0+
+- Terraform 1.5+ または Pulumi 3.0+ 🆕
 - AWS CLI 2.x / Azure CLI 2.x / gcloud CLI 556.0+
 - GitHub アカウント
 
 ### 技術スタック
 
-**Frontend**
-- React 18
-- TypeScript 5
-- Vite 5
-- TailwindCSS 3
+**🐍 Python Full Stack版（新）**
+- **IaC**: Pulumi (Python)
+- **Backend**: FastAPI 0.115+ 
+- **Frontend**: Reflex 0.6+
+- **Database**: DynamoDB / Cosmos DB / Firestore
+- **Storage**: S3 / Azure Blob / Cloud Storage
+
+**TypeScript版（既存）**
+- **Frontend**: React 18 + TypeScript 5 + Vite 5 + TailwindCSS 3
 
 **Backend**
 - Python 3.12
@@ -78,6 +88,39 @@ multicloud-auto-deploy/
 - S3-based Lambda deployment
 
 ### クイックスタート
+
+#### 🐍 Python Full Stack版（推奨）
+
+1. **リポジトリをクローン**
+```bash
+git clone https://github.com/PLAYER1-r7/multicloud-auto-deploy.git
+cd multicloud-auto-deploy
+```
+
+2. **ローカル開発環境起動**
+```bash
+# Python版（FastAPI + Reflex + MinIO）
+docker-compose up api web minio
+
+# アクセス先:
+# - FastAPI Docs: http://localhost:8000/docs
+# - Reflex Web: http://localhost:3000
+# - MinIO Console: http://localhost:9001
+```
+
+3. **Pulumiでデプロイ**
+```bash
+# AWS例
+cd infrastructure/pulumi/aws/simple-sns
+pip install -r requirements.txt
+pulumi stack init staging
+pulumi config set aws:region ap-northeast-1
+pulumi up
+```
+
+> 📚 詳細な移行ガイドは [docs/PYTHON_MIGRATION.md](docs/PYTHON_MIGRATION.md) を参照
+
+#### TypeScript版（既存）
 
 1. **リポジトリをクローン**
 ```bash

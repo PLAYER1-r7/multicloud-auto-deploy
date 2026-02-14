@@ -1,0 +1,9 @@
+# Reflex Framework
+reflex==0.6.0
+
+# HTTP Client
+httpx==0.25.0
+aiohttp==3.9.0
+
+# Utilities
+python-dotenv==1.0.0
