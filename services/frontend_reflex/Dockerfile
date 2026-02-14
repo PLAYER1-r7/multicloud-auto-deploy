@@ -22,8 +22,8 @@ RUN reflex init
 
 # Set environment variables
 ENV API_URL=http://api:8000 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+  PYTHONUNBUFFERED=1 \
+  PYTHONDONTWRITEBYTECODE=1
 
 # Expose ports
 # 3002: Frontend

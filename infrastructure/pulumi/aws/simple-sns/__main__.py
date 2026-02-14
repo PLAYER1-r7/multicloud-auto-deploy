@@ -272,11 +272,80 @@ aws.lambda_.Permission(
 
 
 # ========================================
-# 5. Outputs
+# 6. ECR Repositories (for container deployments)
+# ========================================
+
+# ECR repository for API container images
+api_ecr_repo = aws.ecr.Repository(
+    "api-ecr-repo",
+    name=f"{project_name}-api-{environment}",
+    image_scanning_configuration=aws.ecr.RepositoryImageScanningConfigurationArgs(
+        scan_on_push=True,
+    ),
+    image_tag_mutability="MUTABLE",
+    tags=tags,
+)
+
+# Lifecycle policy to keep only recent images
+aws.ecr.LifecyclePolicy(
+    "api-ecr-lifecycle",
+    repository=api_ecr_repo.name,
+    policy=json.dumps({
+        "rules": [{
+            "rulePriority": 1,
+            "description": "Keep last 10 images",
+            "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 10
+            },
+            "action": {
+                "type": "expire"
+            }
+        }]
+    }),
+)
+
+# ECR repository for frontend container images
+frontend_ecr_repo = aws.ecr.Repository(
+    "frontend-ecr-repo",
+    name=f"{project_name}-frontend-{environment}",
+    image_scanning_configuration=aws.ecr.RepositoryImageScanningConfigurationArgs(
+        scan_on_push=True,
+    ),
+    image_tag_mutability="MUTABLE",
+    tags=tags,
+)
+
+# Lifecycle policy for frontend
+aws.ecr.LifecyclePolicy(
+    "frontend-ecr-lifecycle",
+    repository=frontend_ecr_repo.name,
+    policy=json.dumps({
+        "rules": [{
+            "rulePriority": 1,
+            "description": "Keep last 10 images",
+            "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 10
+            },
+            "action": {
+                "type": "expire"
+            }
+        }]
+    }),
+)
+
+
+# ========================================
+# 7. Outputs
 # ========================================
 
 pulumi.export("api_url", api.api_endpoint)
 pulumi.export("messages_table_name", messages_table.name)
 pulumi.export("images_bucket_name", images_bucket.bucket)
 pulumi.export("lambda_function_name", lambda_function.name)
+pulumi.export("api_ecr_repository", api_ecr_repo.repository_url)
+pulumi.export("frontend_ecr_repository", frontend_ecr_repo.repository_url)
 pulumi.export("region", aws_region)
