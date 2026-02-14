@@ -59,25 +59,27 @@ jobs:
       - name: Package Backend
         run: |
           cd services/backend
+          rm -rf package lambda.zip
           mkdir -p package
+          
           # AWS Lambda用の最小限の依存関係のみインストール（boto3はLambda環境に含まれている）
+          echo "📦 Installing dependencies..."
           pip install --platform manylinux2014_x86_64 --only-binary=:all: \
             --target package --python-version 3.12 --implementation cp \
             fastapi==0.109.0 pydantic==2.5.3 python-dotenv==1.0.0 mangum==0.17.0
+          
+          # Copy source code
+          echo "📁 Copying source code..."
           cp -r src/* package/
           
-          # Remove unnecessary files to reduce package size
-          cd package
-          find . -type f -name "*.pyc" -delete || true
-          find . -name "__pycache__" -type d | xargs rm -rf || true
-          rm -rf ./**/tests/ 2>/dev/null || true
-          rm -rf ./**/*.dist-info/ 2>/dev/null || true
-          
           # Create zip
-          zip -r ../lambda.zip . -q
+          echo "🗜️  Creating lambda package..."
+          cd package
+          zip -r9 ../lambda.zip . -q
           cd ..
           
-          # Show package size
+          # Show package info
+          echo "✅ Package created:"
           ls -lh lambda.zip
 
       - name: Update Lambda Function
