@@ -58,7 +58,7 @@ functions_storage = azure.storage.StorageAccount(
         name="Standard_LRS",  # Locally redundant storage
     ),
     kind="StorageV2",
-    min_tls_version="TLS1_2",
+    minimum_tls_version="TLS1_2",
     tags=common_tags,
 )
 
@@ -74,7 +74,7 @@ frontend_storage = azure.storage.StorageAccount(
         name="Standard_LRS",
     ),
     kind="StorageV2",
-    min_tls_version="TLS1_2",
+    minimum_tls_version="TLS1_2",
     tags=common_tags,
 )
 
