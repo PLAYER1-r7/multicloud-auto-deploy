@@ -72,7 +72,7 @@ services:
     ports:
       - "3001:3000"  # Changed port to avoid conflict
     environment:
-      - VITE_API_URL=http://backend:8000
+      - VITE_API_URL=http://api:8000
     volumes:
       - ./services/frontend:/app
       - /app/node_modules
