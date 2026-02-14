@@ -115,7 +115,7 @@ jobs:
           IMAGE_URI="${REPO_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/multicloud-auto-deploy-api:latest"
           docker build --platform linux/amd64 \
             -t $IMAGE_URI \
-            -f Dockerfile.gcp .
+            -f Dockerfile .
           docker push $IMAGE_URI
 
       - name: Deploy Cloud Run Service

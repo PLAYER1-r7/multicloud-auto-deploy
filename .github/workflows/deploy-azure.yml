@@ -126,7 +126,7 @@ jobs:
           cd services/api
           docker build --platform linux/amd64 \
             -t $ACR_NAME.azurecr.io/multicloud-auto-deploy-api:latest \
-            -f Dockerfile.azure .
+            -f Dockerfile .
           docker push $ACR_NAME.azurecr.io/multicloud-auto-deploy-api:latest
 
       - name: Deploy Container App

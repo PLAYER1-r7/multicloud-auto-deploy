@@ -62,7 +62,7 @@ jobs:
           
           # Copy source code
           echo "📁 Copying source code..."
-          cp -r src/* package/
+          cp -r app/* package/
           
           # Create zip
           echo "🗜️  Creating lambda package..."
