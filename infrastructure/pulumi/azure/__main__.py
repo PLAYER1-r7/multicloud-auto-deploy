@@ -15,7 +15,7 @@ import pulumi_random as random
 # Configuration
 config = pulumi.Config()
 azure_config = pulumi.Config("azure-native")
-location = azure_config.get("location") or "japaneast"
+location = azure_config.get("location") or "eastus"
 stack = pulumi.get_stack()
 project_name = "multicloud-auto-deploy"
 
