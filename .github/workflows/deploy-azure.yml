@@ -123,7 +123,7 @@ jobs:
           az acr login --name "$ACR_NAME"
 
           # Build and push Docker image
-          cd services/backend
+          cd services/api
           docker build --platform linux/amd64 \
             -t $ACR_NAME.azurecr.io/multicloud-auto-deploy-api:latest \
             -f Dockerfile.azure .
@@ -144,7 +144,7 @@ jobs:
 
       - name: Build Frontend
         run: |
-          cd services/frontend
+          cd services/frontend_react
           npm install
           npm run build
         env:
@@ -158,7 +158,7 @@ jobs:
           # Upload frontend to blob storage
           az storage blob upload-batch \
             --account-name $STORAGE_ACCOUNT \
-            --source services/frontend/dist \
+            --source services/frontend_react/dist \
             --destination '$web' \
             --overwrite
 

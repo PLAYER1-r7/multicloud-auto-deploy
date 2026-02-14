@@ -111,7 +111,7 @@ jobs:
           gcloud auth configure-docker ${REPO_LOCATION}-docker.pkg.dev
 
           # Build and push Docker image
-          cd services/backend
+          cd services/api
           IMAGE_URI="${REPO_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/multicloud-auto-deploy-api:latest"
           docker build --platform linux/amd64 \
             -t $IMAGE_URI \
@@ -138,7 +138,7 @@ jobs:
           
           echo "Building frontend with API URL: $API_URL"
 
-          cd services/frontend
+          cd services/frontend_react
           npm install
           VITE_API_URL=$API_URL npm run build
 
@@ -150,7 +150,7 @@ jobs:
           echo "Deploying frontend to bucket: $BUCKET_NAME"
 
           # Upload frontend to Cloud Storage
-          gsutil -m cp -r services/frontend/dist/* gs://$BUCKET_NAME/
+          gsutil -m cp -r services/frontend_react/dist/* gs://$BUCKET_NAME/
 
           # Make objects public
           gsutil -m acl ch -u AllUsers:R gs://$BUCKET_NAME/** || true
