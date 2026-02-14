@@ -68,14 +68,17 @@ jobs:
           
           # Remove unnecessary files to reduce package size
           cd package
-          find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-          find . -type f -name "*.pyc" -delete
-          find . -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
-          find . -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          find . -type f -name "*.pyc" -delete || true
+          find . -name "__pycache__" -type d | xargs rm -rf || true
+          rm -rf ./**/tests/ 2>/dev/null || true
+          rm -rf ./**/*.dist-info/ 2>/dev/null || true
           
           # Create zip
           zip -r ../lambda.zip . -q
           cd ..
+          
+          # Show package size
+          ls -lh lambda.zip
 
       - name: Update Lambda Function
         run: |
