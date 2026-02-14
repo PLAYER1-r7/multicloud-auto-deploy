@@ -1,0 +1,78 @@
+name: Deploy Frontend to GCP
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/frontend_react/**'
+      - '.github/workflows/deploy-frontend-gcp.yml'
+  workflow_dispatch:
+
+env:
+  GCP_PROJECT_ID: ashnova
+  GCP_REGION: asia-northeast1
+  BUCKET_NAME: ashnova-multicloud-auto-deploy-staging-frontend
+
+jobs:
+  deploy-frontend:
+    name: Deploy React Frontend to GCP Cloud Storage
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/frontend_react/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/frontend_react
+        run: npm ci
+
+      - name: Create .env file
+        working-directory: services/frontend_react
+        run: |
+          echo "VITE_API_URL=https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app" > .env
+
+      - name: Build React app
+        working-directory: services/frontend_react
+        run: npm run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Deploy to Cloud Storage
+        working-directory: services/frontend_react
+        run: |
+          gcloud storage rsync \
+            --recursive \
+            --delete-unmatched-destination-objects \
+            --cache-control="public, max-age=3600" \
+            dist/ gs://${{ env.BUCKET_NAME }}/
+
+      - name: Set Cache-Control for index.html
+        run: |
+          gcloud storage objects update gs://${{ env.BUCKET_NAME }}/index.html \
+            --cache-control="public, max-age=300, must-revalidate"
+
+      - name: Deployment Success
+        run: |
+          echo "✅ Frontend deployed successfully!"
+          echo "🌐 URL: https://storage.googleapis.com/${{ env.BUCKET_NAME }}/index.html"
