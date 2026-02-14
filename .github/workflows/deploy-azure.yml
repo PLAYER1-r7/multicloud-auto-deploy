@@ -64,13 +64,23 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
+      - name: Extract Azure Credentials
+        id: azure_creds
+        run: |
+          echo "${{ secrets.AZURE_CREDENTIALS }}" > /tmp/azure_creds.json
+          echo "client_id=$(jq -r '.clientId' /tmp/azure_creds.json)" >> $GITHUB_OUTPUT
+          echo "client_secret=$(jq -r '.clientSecret' /tmp/azure_creds.json)" >> $GITHUB_OUTPUT
+          echo "tenant_id=$(jq -r '.tenantId' /tmp/azure_creds.json)" >> $GITHUB_OUTPUT
+          echo "subscription_id=$(jq -r '.subscriptionId' /tmp/azure_creds.json)" >> $GITHUB_OUTPUT
+          rm /tmp/azure_creds.json
+
       - name: Azure CLI Login
         run: |
           az login --service-principal \
-            -u ${{ secrets.AZURE_CLIENT_ID }} \
-            -p ${{ secrets.AZURE_CLIENT_SECRET }} \
-            --tenant ${{ secrets.AZURE_TENANT_ID }}
-          az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            -u ${{ steps.azure_creds.outputs.client_id }} \
+            -p ${{ steps.azure_creds.outputs.client_secret }} \
+            --tenant ${{ steps.azure_creds.outputs.tenant_id }}
+          az account set --subscription ${{ steps.azure_creds.outputs.subscription_id }}
 
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
@@ -81,10 +91,10 @@ jobs:
           work-dir: infrastructure/pulumi/azure
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_CLIENT_ID: ${{ steps.azure_creds.outputs.client_id }}
+          ARM_CLIENT_SECRET: ${{ steps.azure_creds.outputs.client_secret }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.azure_creds.outputs.subscription_id }}
+          ARM_TENANT_ID: ${{ steps.azure_creds.outputs.tenant_id }}
 
       - name: Get Pulumi Outputs
         id: pulumi_outputs
@@ -100,10 +110,10 @@ jobs:
         run: |
           # Login with Service Principal
           az login --service-principal \
-            -u ${{ secrets.AZURE_CLIENT_ID }} \
-            -p ${{ secrets.AZURE_CLIENT_SECRET }} \
-            --tenant ${{ secrets.AZURE_TENANT_ID }}
-          az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            -u ${{ steps.azure_creds.outputs.client_id }} \
+            -p ${{ steps.azure_creds.outputs.client_secret }} \
+            --tenant ${{ steps.azure_creds.outputs.tenant_id }}
+          az account set --subscription ${{ steps.azure_creds.outputs.subscription_id }}
 
       - name: Package Function App
         run: |
