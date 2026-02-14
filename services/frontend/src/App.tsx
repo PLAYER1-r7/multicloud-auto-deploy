@@ -98,7 +98,8 @@ function App() {
 
         <div className="max-w-3xl mx-auto">
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-2xl font-semibold mb-space-y-3">
+            <h2 className="text-2xl font-semibold mb-4">メッセージを送信</h2>
+            <form onSubmit={handleSubmit} className="space-y-3">
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -123,8 +124,7 @@ function App() {
                 >
                   {loading ? '送信中...' : '送信'}
                 </button>
-              </divng ? '送信中...' : '送信'}
-              </button>
+              </div>
             </form>
           </div>
 
