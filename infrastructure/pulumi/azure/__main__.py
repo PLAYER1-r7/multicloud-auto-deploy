@@ -96,7 +96,7 @@ app_insights = azure.insights.Component(
 )
 
 # ========================================
-# App Service Plan (Flex Consumption Plan)
+# App Service Plan (Elastic Premium Plan)
 # ========================================
 app_service_plan = azure.web.AppServicePlan(
     "app-service-plan",
@@ -104,11 +104,12 @@ app_service_plan = azure.web.AppServicePlan(
     resource_group_name=resource_group.name,
     location=location,
     sku=azure.web.SkuDescriptionArgs(
-        name="FC1",  # Flex Consumption tier
-        tier="FlexConsumption",
+        name="EP1",  # Elastic Premium tier (supports scale-to-zero)
+        tier="ElasticPremium",
     ),
-    kind="FunctionApp",
+    kind="elastic",
     reserved=True,  # Linux
+    maximum_elastic_worker_count=20,
     tags=common_tags,
 )
 
