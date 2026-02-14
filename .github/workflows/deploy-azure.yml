@@ -64,23 +64,19 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
-      - name: Extract Azure Credentials
-        id: azure_creds
-        run: |
-          echo "${{ secrets.AZURE_CREDENTIALS }}" > /tmp/azure_creds.json
-          echo "client_id=$(jq -r '.clientId' /tmp/azure_creds.json)" >> $GITHUB_OUTPUT
-          echo "client_secret=$(jq -r '.clientSecret' /tmp/azure_creds.json)" >> $GITHUB_OUTPUT
-          echo "tenant_id=$(jq -r '.tenantId' /tmp/azure_creds.json)" >> $GITHUB_OUTPUT
-          echo "subscription_id=$(jq -r '.subscriptionId' /tmp/azure_creds.json)" >> $GITHUB_OUTPUT
-          rm /tmp/azure_creds.json
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Azure CLI Login
+      - name: Set Azure Environment Variables
+        id: azure_env
         run: |
-          az login --service-principal \
-            -u ${{ steps.azure_creds.outputs.client_id }} \
-            -p ${{ steps.azure_creds.outputs.client_secret }} \
-            --tenant ${{ steps.azure_creds.outputs.tenant_id }}
-          az account set --subscription ${{ steps.azure_creds.outputs.subscription_id }}
+          echo "subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_OUTPUT
+          CREDS='${{ secrets.AZURE_CREDENTIALS }}'
+          echo "client_id=$(echo $CREDS | jq -r '.clientId')" >> $GITHUB_OUTPUT
+          echo "client_secret=$(echo $CREDS | jq -r '.clientSecret')" >> $GITHUB_OUTPUT
+          echo "tenant_id=$(echo $CREDS | jq -r '.tenantId')" >> $GITHUB_OUTPUT
 
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
@@ -91,10 +87,10 @@ jobs:
           work-dir: infrastructure/pulumi/azure
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          ARM_CLIENT_ID: ${{ steps.azure_creds.outputs.client_id }}
-          ARM_CLIENT_SECRET: ${{ steps.azure_creds.outputs.client_secret }}
-          ARM_SUBSCRIPTION_ID: ${{ steps.azure_creds.outputs.subscription_id }}
-          ARM_TENANT_ID: ${{ steps.azure_creds.outputs.tenant_id }}
+          ARM_CLIENT_ID: ${{ steps.azure_env.outputs.client_id }}
+          ARM_CLIENT_SECRET: ${{ steps.azure_env.outputs.client_secret }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.azure_env.outputs.subscription_id }}
+          ARM_TENANT_ID: ${{ steps.azure_env.outputs.tenant_id }}
 
       - name: Get Pulumi Outputs
         id: pulumi_outputs
@@ -105,15 +101,6 @@ jobs:
           echo "functions_storage_name=$(pulumi stack output functions_storage_name)" >> $GITHUB_OUTPUT
           echo "frontend_storage_name=$(pulumi stack output frontend_storage_name)" >> $GITHUB_OUTPUT
           echo "api_url=$(pulumi stack output api_url)" >> $GITHUB_OUTPUT
-
-      - name: Login to Azure CLI
-        run: |
-          # Login with Service Principal
-          az login --service-principal \
-            -u ${{ steps.azure_creds.outputs.client_id }} \
-            -p ${{ steps.azure_creds.outputs.client_secret }} \
-            --tenant ${{ steps.azure_creds.outputs.tenant_id }}
-          az account set --subscription ${{ steps.azure_creds.outputs.subscription_id }}
 
       - name: Package Function App
         run: |
