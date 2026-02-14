@@ -17,6 +17,8 @@ terraform {
     storage_account_name = "mcadtfstate7701"
     container_name       = "tfstate"
     key                  = "terraform.tfstate"
+    use_cli              = false
+    use_azuread_auth     = false
   }
 }
 
@@ -26,7 +28,7 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
-  
+
   # Use environment variables for authentication (ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_SUBSCRIPTION_ID, ARM_TENANT_ID)
   # Disable Azure CLI authentication in GitHub Actions
   use_cli = false

@@ -68,7 +68,12 @@ jobs:
       - name: Deploy Infrastructure
         run: |
           cd infrastructure/terraform/azure
-          terraform init
+          
+          # Initialize Terraform with backend config using environment variables
+          terraform init \
+            -backend-config="use_azuread_auth=false" \
+            -backend-config="use_cli=false"
+          
           terraform plan -var="environment=${{ github.event.inputs.environment || 'staging' }}"
           terraform apply -var="environment=${{ github.event.inputs.environment || 'staging' }}" -auto-approve
         env:
@@ -76,6 +81,8 @@ jobs:
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
           ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          ARM_USE_CLI: false
+          ARM_USE_AZUREAD_AUTH: false
 
       - name: Re-login to Azure CLI for ACR
         run: |
