@@ -97,10 +97,11 @@ app_insights = azure.insights.Component(
 
 # ========================================
 # App Service Plan (Elastic Premium Plan)
+# Note: Using different resource name to force recreation (can't change FC1->EP1)
 # ========================================
 app_service_plan = azure.web.AppServicePlan(
-    "app-service-plan",
-    name=f"{project_name}-{stack}-asp",
+    "app-service-plan-ep1",  # Changed resource name to force new creation
+    name=f"{project_name}-{stack}-asp-ep1",  # Changed Azure name too
     resource_group_name=resource_group.name,
     location=location,
     sku=azure.web.SkuDescriptionArgs(
