@@ -17,8 +17,6 @@ terraform {
     storage_account_name = "mcadtfstate7701"
     container_name       = "tfstate"
     key                  = "terraform.tfstate"
-    use_cli              = false
-    use_azuread_auth     = false
   }
 }
 
