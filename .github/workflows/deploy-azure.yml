@@ -69,10 +69,8 @@ jobs:
         run: |
           cd infrastructure/terraform/azure
           
-          # Initialize Terraform with backend config using environment variables
-          terraform init \
-            -backend-config="use_azuread_auth=false" \
-            -backend-config="use_cli=false"
+          # Initialize Terraform
+          terraform init
           
           terraform plan -var="environment=${{ github.event.inputs.environment || 'staging' }}"
           terraform apply -var="environment=${{ github.event.inputs.environment || 'staging' }}" -auto-approve
