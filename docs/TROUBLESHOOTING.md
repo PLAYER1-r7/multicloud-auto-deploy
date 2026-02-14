@@ -430,6 +430,108 @@ gcloud compute addresses list --global
 
 ---
 
+## AWS Lambda + API Gateway統合問題
+
+### 問題: API Gateway経由でLambda呼び出し時に500エラー
+
+**症状**:
+```json
+{"message": "Internal Server Error"}
+```
+
+- Lambdaを直接呼び出すと成功する
+- API Gateway経由だと500エラーになる
+- CloudWatch LogsにLambdaの実行ログが記録されない
+- CloudWatch MetricsでLambda呼び出し回数が0のまま
+
+**原因**:
+Lambda関数のリソースポリシーでSourceArn形式が正しくない。
+
+#### HTTP API vs REST API の違い
+
+| API種類 | SourceArn形式 | 例 |
+|---------|--------------|-----|
+| **HTTP API** | `arn:aws:execute-api:{region}:{account-id}:{api-id}/*/*` | `arn:aws:execute-api:ap-northeast-1:123456789012:abc123def4/*/*` |
+| **REST API** | `arn:aws:execute-api:{region}:{account-id}:{api-id}/*/*/*` | `arn:aws:execute-api:ap-northeast-1:123456789012:abc123def4/*/*/*` |
+
+**重要**: HTTP APIは `/*/*` (2つのワイルドカード)、REST APIは `/*/*/*` (3つのワイルドカード)
+
+**解決策**:
+
+1. **現在の権限を確認**:
+```bash
+aws lambda get-policy --function-name YOUR_FUNCTION_NAME --query Policy --output text | jq .
+```
+
+2. **API Gatewayアクセスログを有効化**（エラー詳細を確認するため）:
+```bash
+# CloudWatch Logsグループ作成
+aws logs create-log-group --log-group-name /aws/apigateway/YOUR_API_NAME
+
+# アクセスログ有効化
+aws apigatewayv2 update-stage \
+  --api-id YOUR_API_ID \
+  --stage-name '$default' \
+  --access-log-settings "DestinationArn=arn:aws:logs:REGION:ACCOUNT_ID:log-group:/aws/apigateway/YOUR_API_NAME:*,Format=\$context.requestId \$context.error.message \$context.integrationErrorMessage \$context.status"
+
+# ログ確認
+aws logs tail /aws/apigateway/YOUR_API_NAME --follow
+```
+
+3. **正しい権限を設定**（HTTP API用）:
+```bash
+# 古い権限を削除
+aws lambda remove-permission \
+  --function-name YOUR_FUNCTION_NAME \
+  --statement-id OLD_STATEMENT_ID
+
+# 正しい権限を追加
+aws lambda add-permission \
+  --function-name YOUR_FUNCTION_NAME \
+  --statement-id apigateway-http-api \
+  --action lambda:InvokeFunction \
+  --principal apigateway.amazonaws.com \
+  --source-arn "arn:aws:execute-api:REGION:ACCOUNT_ID:API_ID/*/*"
+```
+
+4. **動作確認**:
+```bash
+curl https://YOUR_API_ID.execute-api.REGION.amazonaws.com/api/messages/
+```
+
+**デバッグ手順**:
+
+1. Lambda直接呼び出しテスト:
+```bash
+aws lambda invoke \
+  --function-name YOUR_FUNCTION_NAME \
+  --payload '{"version":"2.0","routeKey":"$default","rawPath":"/api/messages/","headers":{"accept":"application/json"},"requestContext":{"http":{"method":"GET","path":"/api/messages/"}}}' \
+  /tmp/response.json
+```
+
+2. CloudWatch Metricsで呼び出し回数確認:
+```bash
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/Lambda \
+  --metric-name Invocations \
+  --dimensions Name=FunctionName,Value=YOUR_FUNCTION_NAME \
+  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+  --period 60 \
+  --statistics Sum
+```
+
+3. API Gatewayアクセスログ確認（最も重要）:
+```bash
+aws logs tail /aws/apigateway/YOUR_API_NAME --since 5m
+```
+
+**参考リンク**:
+- [AWS Lambda リソースベースのポリシー](https://docs.aws.amazon.com/lambda/latest/dg/access-control-resource-based.html)
+- [API Gateway HTTP API と Lambda の統合](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html)
+
+---
+
 ## サポート
 
 問題が解決しない場合:

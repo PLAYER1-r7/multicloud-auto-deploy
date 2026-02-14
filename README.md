@@ -360,6 +360,199 @@ pip install -r requirements.txt
 uvicorn src.main:app --reload
 ```
 
+## 🛠️ デプロイツール
+
+### Lambda デプロイスクリプト
+
+Lambda + API Gatewayの完全自動デプロイメント:
+
+```bash
+# AWS Lambda デプロイ
+cd scripts
+./deploy-lambda-aws.sh
+
+# 環境変数でカスタマイズ可能
+PROJECT_NAME=myproject ENVIRONMENT=production ./deploy-lambda-aws.sh
+```
+
+スクリプトは以下を自動実行します:
+- 依存関係のインストール（manylinux2014_x86_64）
+- ZIPパッケージ作成とS3アップロード
+- Lambda関数の作成/更新
+- API Gateway統合設定
+- Lambda権限設定（HTTP API用の正しいSourceArn）
+- CloudWatch Logsアクセスログ有効化
+
+### API統合テスト
+
+エンドポイントの完全なCRUDテスト:
+
+```bash
+# テスト実行
+./scripts/test-api.sh -e https://YOUR_API_ID.execute-api.ap-northeast-1.amazonaws.com
+
+# 詳細モード
+./scripts/test-api.sh -e https://YOUR_API_ID.execute-api.ap-northeast-1.amazonaws.com --verbose
+```
+
+テスト項目:
+- ヘルスチェック
+- メッセージCRUD操作（作成、取得、更新、削除）
+- ページネーション
+- エラーハンドリング
+- バリデーション
+
+### CloudWatch監視設定
+
+包括的な監視とアラートを自動設定:
+
+```bash
+# 監視設定
+./scripts/setup-monitoring.sh
+
+# メール通知付き
+ALERT_EMAIL=your@email.com ./scripts/setup-monitoring.sh
+```
+
+設定内容:
+- SNSトピックとメール通知
+- Lambda エラー/スロットリング/実行時間/同時実行数アラーム
+- API Gateway 5XXエラー/レイテンシアラーム
+- DynamoDB スロットリングアラーム
+- CloudWatch Logs メトリクスフィルター
+- CloudWatch ダッシュボード自動作成
+
+### 推奨: 追加すべきAWSサービス
+
+本番運用のために以下のサービス追加を推奨します:
+
+#### 1. AWS X-Ray（分散トレーシング）
+
+Lambda関数のトレーシング有効化:
+```bash
+aws lambda update-function-configuration \
+  --function-name YOUR_FUNCTION_NAME \
+  --tracing-config Mode=Active
+```
+
+FastAPIにX-Ray統合:
+```python
+# requirements.txtに追加
+aws-xray-sdk==2.12.0
+
+# main.pyで有効化
+from aws_xray_sdk.core import xray_recorder
+from aws_xray_sdk.ext.fastapi.middleware import XRayMiddleware
+
+app.add_middleware(XRayMiddleware, recorder=xray_recorder)
+```
+
+#### 2. AWS WAF（セキュリティ）
+
+API Gatewayへの攻撃防御:
+```bash
+# WAF Web ACL作成
+aws wafv2 create-web-acl \
+  --name multicloud-auto-deploy-waf \
+  --scope REGIONAL \
+  --default-action Allow={} \
+  --rules file://waf-rules.json
+
+# API Gatewayに関連付け
+aws wafv2 associate-web-acl \
+  --web-acl-arn YOUR_WEB_ACL_ARN \
+  --resource-arn YOUR_API_GATEWAY_ARN
+```
+
+#### 3. Route 53 + カスタムドメイン
+
+プロダクション用ドメイン設定:
+```bash
+# ACM証明書作成
+aws acm request-certificate \
+  --domain-name api.yourdomain.com \
+  --validation-method DNS
+
+# API Gatewayカスタムドメイン
+aws apigatewayv2 create-domain-name \
+  --domain-name api.yourdomain.com \
+  --domain-name-configurations CertificateArn=YOUR_CERT_ARN
+
+# Route 53レコード作成
+aws route53 change-resource-record-sets \
+  --hosted-zone-id YOUR_ZONE_ID \
+  --change-batch file://route53-changes.json
+```
+
+#### 4. Parameter Store / Secrets Manager
+
+環境変数の安全な管理:
+```bash
+# Secrets Managerに保存
+aws secretsmanager create-secret \
+  --name multicloud-auto-deploy/staging/db-config \
+  --secret-string '{"host":"dynamodb","region":"ap-northeast-1"}'
+
+# Lambda関数で使用
+# requirements.txtに追加: boto3
+```
+
+```python
+import boto3
+import json
+
+def get_secret():
+    client = boto3.client('secretsmanager')
+    response = client.get_secret_value(SecretId='multicloud-auto-deploy/staging/db-config')
+    return json.loads(response['SecretString'])
+```
+
+#### 5. Lambda Layers（依存関係最適化）
+
+共通ライブラリの分離でコールドスタート改善:
+```bash
+# Lambda Layer作成
+mkdir python
+pip install -r requirements.txt -t python/
+zip -r layer.zip python/
+
+aws lambda publish-layer-version \
+  --layer-name multicloud-auto-deploy-dependencies \
+  --zip-file fileb://layer.zip \
+  --compatible-runtimes python3.12
+
+# Lambda関数に紐付け
+aws lambda update-function-configuration \
+  --function-name YOUR_FUNCTION_NAME \
+  --layers YOUR_LAYER_ARN
+```
+
+#### 6. CloudFront Functions（エッジ処理）
+
+リクエスト/レスポンスのエッジ処理:
+```javascript
+// CloudFront Function: セキュリティヘッダ追加
+function handler(event) {
+    var response = event.response;
+    response.headers['strict-transport-security'] = { value: 'max-age=31536000; includeSubdomains' };
+    response.headers['x-content-type-options'] = { value: 'nosniff' };
+    response.headers['x-frame-options'] = { value: 'DENY' };
+    return response;
+}
+```
+
+#### 7. AWS Backup（データ保護）
+
+DynamoDBの自動バックアップ:
+```bash
+aws backup create-backup-plan \
+  --backup-plan file://backup-plan.json
+
+aws backup create-backup-selection \
+  --backup-plan-id YOUR_PLAN_ID \
+  --backup-selection file://backup-selection.json
+```
+
 ### トラブルシューティング
 
 問題が発生した場合は [トラブルシューティングガイド](docs/TROUBLESHOOTING.md) を参照してください：
