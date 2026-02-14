@@ -5,7 +5,7 @@ from typing import List, Optional
 from decimal import Decimal
 
 from app.backends import BaseBackend
-from app.models import Message, MessageCreate
+from app.models import Message, MessageCreate, MessageUpdate
 
 try:
     import boto3
@@ -113,3 +113,64 @@ class AWSBackend(BaseBackend):
             return True
         except Exception:
             return False
+
+    async def update_message(
+        self, message_id: str, message: MessageUpdate
+    ) -> Optional[Message]:
+        """メッセージを更新"""
+        # 既存のメッセージを取得
+        existing_message = await self.get_message(message_id)
+        if not existing_message:
+            return None
+
+        # 更新データを準備（None以外のフィールドのみ）
+        update_data = message.model_dump(exclude_unset=True)
+        if not update_data:
+            # 何も更新するものがなければ既存のメッセージを返す
+            return existing_message
+
+        # DynamoDB用の更新式を構築
+        update_expression = "SET "
+        expression_attribute_values = {}
+        expression_attribute_names = {}
+        
+        for idx, (key, value) in enumerate(update_data.items()):
+            if idx > 0:
+                update_expression += ", "
+            # DynamoDBの予約語を避けるため属性名にプレースホルダを使用
+            attr_name = f"#{key}"
+            attr_value = f":val{idx}"
+            update_expression += f"{attr_name} = {attr_value}"
+            expression_attribute_names[attr_name] = key
+            expression_attribute_values[attr_value] = value
+        
+        # updated_atを追加
+        now = datetime.utcnow()
+        update_expression += ", #updated_at = :updated_at"
+        expression_attribute_names["#updated_at"] = "updated_at"
+        expression_attribute_values[":updated_at"] = now.isoformat()
+
+        # DynamoDBを更新
+        try:
+            response = self.table.update_item(
+                Key={"id": message_id},
+                UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
+                ExpressionAttributeValues=expression_attribute_values,
+                ReturnValues="ALL_NEW",
+            )
+            
+            item = _decimals_to_floats(response.get("Attributes", {}))
+            
+            return Message(
+                id=item["id"],
+                content=item["content"],
+                author=item["author"],
+                image_url=item.get("image_url"),
+                created_at=datetime.fromisoformat(item["created_at"]),
+                updated_at=datetime.fromisoformat(item["updated_at"]),
+            )
+        except Exception as e:
+            print(f"⚠️ Error updating message {message_id}: {e}")
+            return None
+
