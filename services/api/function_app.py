@@ -9,7 +9,9 @@ app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 @app.route(route="{*route}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def main(req: func.HttpRequest) -> func.HttpResponse:
     """Azure Functions HTTP trigger that forwards to FastAPI"""
-    logging.info('Python HTTP trigger function processed a request.')
+    logging.info(f'Python HTTP trigger function processed a request. URL: {req.url}')
+    logging.info(f'Route params: {req.route_params}')
+    logging.info(f'Method: {req.method}')
     
     # FastAPI ASGIアプリケーションをAzure Functionsで実行
     from fastapi import Request
@@ -19,6 +21,8 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
     route_path = req.route_params.get("route", "")
     path = "/" + route_path if route_path else "/"
     
+    logging.info(f'Converted path for FastAPI: {path}')
+    
     # クエリ文字列を正しく抽出
     from urllib.parse import urlparse, parse_qs
     parsed = urlparse(req.url)
@@ -26,10 +30,16 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
     
     scope = {
         "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
         "method": req.method,
+        "scheme": "https",
         "path": path,
         "query_string": query_string,
+        "root_path": "",
         "headers": [[k.encode(), v.encode()] for k, v in req.headers.items()],
+        "server": (parsed.hostname or "localhost", 443),
+        "client": ("127.0.0.1", 0),
     }
     
     # FastAPI を ASGI で実行
