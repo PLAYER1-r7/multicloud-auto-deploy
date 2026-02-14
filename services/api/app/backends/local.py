@@ -1,17 +1,46 @@
-"""ローカル開発環境用バックエンド（インメモリストレージ）"""
+"""ローカル開発環境用バックエンド（MinIO ストレージ）"""
+import json
 import uuid
 from datetime import datetime
 from typing import List, Optional
+from io import BytesIO
+
+from minio import Minio
+from minio.error import S3Error
 
 from app.backends import BaseBackend
 from app.models import Message, MessageCreate
+from app.config import settings
 
 
 class LocalBackend(BaseBackend):
-    """ローカル開発用インメモリバックエンド"""
+    """ローカル開発用 MinIO バックエンド"""
 
     def __init__(self):
-        self._messages: dict[str, Message] = {}
+        # MinIO クライアントの初期化
+        self.client = Minio(
+            settings.minio_endpoint,
+            access_key=settings.minio_access_key,
+            secret_key=settings.minio_secret_key,
+            secure=False,  # HTTP (非SSL)
+        )
+        self.bucket_name = settings.minio_bucket_name
+        
+        # バケットが存在しない場合は作成
+        self._ensure_bucket()
+
+    def _ensure_bucket(self):
+        """バケットの存在を確認し、なければ作成"""
+        try:
+            if not self.client.bucket_exists(self.bucket_name):
+                self.client.make_bucket(self.bucket_name)
+                print(f"✅ MinIO bucket '{self.bucket_name}' created")
+        except S3Error as e:
+            print(f"⚠️ Error checking/creating bucket: {e}")
+
+    def _get_object_key(self, message_id: str) -> str:
+        """メッセージIDからオブジェクトキーを生成"""
+        return f"messages/{message_id}.json"
 
     async def create_message(self, message: MessageCreate) -> Message:
         """メッセージを作成"""
@@ -26,31 +55,96 @@ class LocalBackend(BaseBackend):
             created_at=now,
         )
 
-        self._messages[message_id] = new_message
+        # MinIO に JSON として保存
+        object_key = self._get_object_key(message_id)
+        data = json.dumps(new_message.model_dump(mode='json'), ensure_ascii=False).encode('utf-8')
+        
+        self.client.put_object(
+            bucket_name=self.bucket_name,
+            object_name=object_key,
+            data=BytesIO(data),
+            length=len(data),
+            content_type="application/json",
+        )
+
         return new_message
 
     async def get_messages(
         self, limit: int = 20, offset: int = 0
     ) -> tuple[List[Message], int]:
         """メッセージ一覧を取得"""
-        all_messages = sorted(
-            self._messages.values(),
-            key=lambda m: m.created_at,
-            reverse=True,
-        )
-
-        total = len(all_messages)
-        messages = all_messages[offset : offset + limit]
-
-        return messages, total
+        messages = []
+        
+        try:
+            # messages/ プレフィックスのオブジェクトを一覧取得
+            objects = self.client.list_objects(
+                self.bucket_name,
+                prefix="messages/",
+                recursive=True,
+            )
+            
+            for obj in objects:
+                try:
+                    # オブジェクトの内容を取得
+                    response = self.client.get_object(self.bucket_name, obj.object_name)
+                    data = json.loads(response.read().decode('utf-8'))
+                    
+                    # datetime 文字列を datetime オブジェクトに変換
+                    if isinstance(data.get('created_at'), str):
+                        data['created_at'] = datetime.fromisoformat(data['created_at'].replace('Z', '+00:00'))
+                    if data.get('updated_at') and isinstance(data['updated_at'], str):
+                        data['updated_at'] = datetime.fromisoformat(data['updated_at'].replace('Z', '+00:00'))
+                    
+                    messages.append(Message(**data))
+                    response.close()
+                    response.release_conn()
+                except Exception as e:
+                    print(f"⚠️ Error reading message {obj.object_name}: {e}")
+                    continue
+            
+            # 作成日時の降順でソート
+            messages.sort(key=lambda m: m.created_at, reverse=True)
+            
+            total = len(messages)
+            paginated_messages = messages[offset : offset + limit]
+            
+            return paginated_messages, total
+            
+        except S3Error as e:
+            print(f"⚠️ Error listing messages: {e}")
+            return [], 0
 
     async def get_message(self, message_id: str) -> Optional[Message]:
         """メッセージを1件取得"""
-        return self._messages.get(message_id)
+        object_key = self._get_object_key(message_id)
+        
+        try:
+            response = self.client.get_object(self.bucket_name, object_key)
+            data = json.loads(response.read().decode('utf-8'))
+            response.close()
+            response.release_conn()
+            
+            # datetime 文字列を datetime オブジェクトに変換
+            if isinstance(data.get('created_at'), str):
+                data['created_at'] = datetime.fromisoformat(data['created_at'].replace('Z', '+00:00'))
+            if data.get('updated_at') and isinstance(data['updated_at'], str):
+                data['updated_at'] = datetime.fromisoformat(data['updated_at'].replace('Z', '+00:00'))
+            
+            return Message(**data)
+        except S3Error as e:
+            if e.code == "NoSuchKey":
+                return None
+            print(f"⚠️ Error getting message {message_id}: {e}")
+            return None
 
     async def delete_message(self, message_id: str) -> bool:
         """メッセージを削除"""
-        if message_id in self._messages:
-            del self._messages[message_id]
+        object_key = self._get_object_key(message_id)
+        
+        try:
+            self.client.remove_object(self.bucket_name, object_key)
             return True
-        return False
+        except S3Error as e:
+            print(f"⚠️ Error deleting message {message_id}: {e}")
+            return False
+
