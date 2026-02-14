@@ -62,13 +62,21 @@ jobs:
           cd infrastructure/terraform/gcp
           terraform init
           
-          # Try to import existing resources (fail silently if they don't exist or are already imported)
-          echo "Importing existing resources..."
+          # Try to import existing resources
+          echo "==========================================="
+          echo "Starting resource import phase..."
+          echo "==========================================="
           
           ENVIRONMENT="${{ github.event.inputs.environment || 'staging' }}"
           PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           REGION="asia-northeast1"
           PREFIX="multicloud-auto-deploy-${ENVIRONMENT}"
+          
+          echo "Environment: $ENVIRONMENT"
+          echo "Project ID: $PROJECT_ID"
+          echo "Region: $REGION"
+          echo "Prefix: $PREFIX"
+          echo ""
           
           # Function to import resource
           import_resource() {
@@ -76,33 +84,58 @@ jobs:
             local resource_name=$2
             local resource_id=$3
             
+            echo "-------------------------------------------"
+            echo "Processing: $resource_type.$resource_name"
+            echo "Resource ID: $resource_id"
+            
+            # Check if already in state
+            echo "Checking if resource is in state..."
             if terraform state show "$resource_type.$resource_name" >/dev/null 2>&1; then
-              echo "✓ $resource_type.$resource_name already in state"
+              echo "✓ Resource already in state - skipping import"
+              return 0
+            fi
+            
+            echo "→ Resource not in state - attempting import..."
+            if terraform import \
+              -var="project_id=${PROJECT_ID}" \
+              -var="environment=${ENVIRONMENT}" \
+              "$resource_type.$resource_name" \
+              "$resource_id"; then
+              echo "✓ Successfully imported"
+              return 0
             else
-              echo "→ Importing $resource_type.$resource_name..."
-              if terraform import \
-                -var="project_id=${PROJECT_ID}" \
-                -var="environment=${ENVIRONMENT}" \
-                "$resource_type.$resource_name" \
-                "$resource_id" 2>&1; then
-                echo "✓ Successfully imported $resource_type.$resource_name"
-              else
-                echo "○ Could not import $resource_type.$resource_name (may not exist yet)"
-              fi
+              echo "✗ Import failed - resource may not exist yet (will be created)"
+              return 1
             fi
           }
           
           # Import existing resources
-          import_resource "google_artifact_registry_repository" "main" "projects/${PROJECT_ID}/locations/${REGION}/repositories/${PREFIX}-repo"
-          import_resource "google_firestore_database" "main" "projects/${PROJECT_ID}/databases/(default)"
-          import_resource "google_storage_bucket" "frontend" "${PREFIX}-frontend"
-          import_resource "google_compute_global_address" "frontend" "projects/${PROJECT_ID}/global/addresses/${PREFIX}-frontend-ip"
+          import_resource "google_artifact_registry_repository" "main" "projects/${PROJECT_ID}/locations/${REGION}/repositories/${PREFIX}-repo" || true
+          import_resource "google_firestore_database" "main" "projects/${PROJECT_ID}/databases/(default)" || true
+          import_resource "google_storage_bucket" "frontend" "${PREFIX}-frontend" || true
+          import_resource "google_compute_global_address" "frontend" "projects/${PROJECT_ID}/global/addresses/${PREFIX}-frontend-ip" || true
           
-          echo "Import phase completed. Proceeding with plan and apply..."
+          echo ""
+          echo "==========================================="
+          echo "Import phase completed"
+          echo "==========================================="
+          echo ""
+          echo "Current terraform state:"
+          terraform state list || echo "No resources in state yet"
+          echo ""
+          echo "==========================================="
+          echo "Starting terraform plan..."
+          echo "==========================================="
           
           terraform plan \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
             -var="environment=${{ github.event.inputs.environment || 'staging' }}"
+          
+          echo ""
+          echo "==========================================="
+          echo "Starting terraform apply..."
+          echo "==========================================="
+          
           terraform apply \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
             -var="environment=${{ github.event.inputs.environment || 'staging' }}" \
