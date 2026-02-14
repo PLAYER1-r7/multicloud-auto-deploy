@@ -96,7 +96,7 @@ app_insights = azure.insights.Component(
 )
 
 # ========================================
-# App Service Plan (Basic Plan)
+# App Service Plan (Consumption Plan)
 # ========================================
 app_service_plan = azure.web.AppServicePlan(
     "app-service-plan",
@@ -104,8 +104,8 @@ app_service_plan = azure.web.AppServicePlan(
     resource_group_name=resource_group.name,
     location=location,
     sku=azure.web.SkuDescriptionArgs(
-        name="B1",  # Basic tier
-        tier="Basic",
+        name="Y1",  # Consumption tier
+        tier="Dynamic",
     ),
     kind="FunctionApp",
     reserved=True,  # Linux
