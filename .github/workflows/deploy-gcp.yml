@@ -62,41 +62,41 @@ jobs:
           cd infrastructure/terraform/gcp
           terraform init
           
-          # Import existing resources if they exist (ignore errors if already imported)
-          echo "Attempting to import existing resources..."
+          # Try to import existing resources (fail silently if they don't exist or are already imported)
+          echo "Importing existing resources..."
           
           ENVIRONMENT="${{ github.event.inputs.environment || 'staging' }}"
           PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           REGION="asia-northeast1"
           PREFIX="multicloud-auto-deploy-${ENVIRONMENT}"
           
-          # Import Artifact Registry repository
-          terraform import \
-            -var="project_id=${PROJECT_ID}" \
-            -var="environment=${ENVIRONMENT}" \
-            "google_artifact_registry_repository.main" \
-            "projects/${PROJECT_ID}/locations/${REGION}/repositories/${PREFIX}-repo" 2>/dev/null || echo "Repository already in state or does not exist"
+          # Function to import resource
+          import_resource() {
+            local resource_type=$1
+            local resource_name=$2
+            local resource_id=$3
+            
+            if terraform state show "$resource_type.$resource_name" >/dev/null 2>&1; then
+              echo "✓ $resource_type.$resource_name already in state"
+            else
+              echo "→ Importing $resource_type.$resource_name..."
+              if terraform import \
+                -var="project_id=${PROJECT_ID}" \
+                -var="environment=${ENVIRONMENT}" \
+                "$resource_type.$resource_name" \
+                "$resource_id" 2>&1; then
+                echo "✓ Successfully imported $resource_type.$resource_name"
+              else
+                echo "○ Could not import $resource_type.$resource_name (may not exist yet)"
+              fi
+            fi
+          }
           
-          # Import Firestore database
-          terraform import \
-            -var="project_id=${PROJECT_ID}" \
-            -var="environment=${ENVIRONMENT}" \
-            "google_firestore_database.main" \
-            "projects/${PROJECT_ID}/databases/(default)" 2>/dev/null || echo "Firestore database already in state or does not exist"
-          
-          # Import Storage bucket
-          terraform import \
-            -var="project_id=${PROJECT_ID}" \
-            -var="environment=${ENVIRONMENT}" \
-            "google_storage_bucket.frontend" \
-            "${PREFIX}-frontend" 2>/dev/null || echo "Storage bucket already in state or does not exist"
-          
-          # Import Global Address
-          terraform import \
-            -var="project_id=${PROJECT_ID}" \
-            -var="environment=${ENVIRONMENT}" \
-            "google_compute_global_address.frontend" \
-            "projects/${PROJECT_ID}/global/addresses/${PREFIX}-frontend-ip" 2>/dev/null || echo "Global address already in state or does not exist"
+          # Import existing resources
+          import_resource "google_artifact_registry_repository" "main" "projects/${PROJECT_ID}/locations/${REGION}/repositories/${PREFIX}-repo"
+          import_resource "google_firestore_database" "main" "projects/${PROJECT_ID}/databases/(default)"
+          import_resource "google_storage_bucket" "frontend" "${PREFIX}-frontend"
+          import_resource "google_compute_global_address" "frontend" "projects/${PROJECT_ID}/global/addresses/${PREFIX}-frontend-ip"
           
           echo "Import phase completed. Proceeding with plan and apply..."
           
