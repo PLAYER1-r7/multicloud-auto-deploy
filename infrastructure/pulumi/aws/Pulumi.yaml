@@ -1,8 +1,3 @@
 name: multicloud-auto-deploy-aws
 description: Multi-Cloud Auto Deploy - AWS Infrastructure
 runtime: python
-
-config:
-  aws:region:
-    description: AWS Region
-    default: ap-northeast-1
