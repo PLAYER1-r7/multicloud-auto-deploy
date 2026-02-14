@@ -103,7 +103,7 @@ jobs:
           # Create handler.py for Lambda entry point
           cat > package/handler.py << 'EOF'
           from mangum import Mangum
-          from app.main import app
+          from main import app
 
           handler = Mangum(app, lifespan="off")
           EOF
