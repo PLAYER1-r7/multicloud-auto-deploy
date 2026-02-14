@@ -21,7 +21,7 @@ on:
 env:
   AWS_REGION: ap-northeast-1
   NODE_VERSION: "18"
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.12"
 
 jobs:
   build-and-deploy:
