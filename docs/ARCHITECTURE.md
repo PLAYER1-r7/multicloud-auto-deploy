@@ -1,6 +1,16 @@
-# アーキテクチャ
+# アーキテクチャドキュメント
 
-Multi-Cloud Auto Deploy Platform のシステムアーキテクチャを説明します。
+Multi-Cloud Auto Deploy Platform の完全なシステムアーキテクチャドキュメント
+
+## 📋 目次
+
+- [システム概要](#システム概要)
+- [AWS アーキテクチャ](#aws-アーキテクチャ)
+- [Azure アーキテクチャ](#azure-アーキテクチャ)
+- [GCP アーキテクチャ](#gcp-アーキテクチャ)
+- [技術スタック](#技術スタック)
+- [セキュリティ](#セキュリティ)
+- [パフォーマンス](#パフォーマンス)
 
 ## システム概要
 
@@ -24,6 +34,471 @@ Multi-Cloud Auto Deploy Platform のシステムアーキテクチャを説明�
               │  Backend + DB) │
               └────────────────┘
 ```
+
+## AWS アーキテクチャ
+
+### 構成図
+
+```
+Internet
+    │
+    ├──→ CloudFront (CDN)
+    │       └──→ S3 (Frontend)
+    │              └──→ index.html, assets/
+    │
+    └──→ API Gateway (HTTP API)
+            └──→ Lambda (Backend)
+                    └──→ DynamoDB (Database)
+                            └──→ messages table
+```
+
+### リソース構成
+
+| リソース | 名前 | 目的 | リージョン |
+|---------|------|------|----------|
+| S3 Bucket | `multicloud-auto-deploy-staging-frontend` | フロントエンドホスティング | us-east-1 |
+| CloudFront | `E241KZLP132LO6` | CDN・HTTPS終端 | Global |
+| Lambda | `multicloud-auto-deploy-staging-api` | バックエンドAPI（45MB） | us-east-1 |
+| API Gateway | `i0w1fvqd85` | HTTP APIゲートウェイ | us-east-1 |
+| DynamoDB | `multicloud-auto-deploy-staging-messages` | NoSQLデータベース | us-east-1 |
+
+### アクセスフロー
+
+1. **フロントエンドアクセス**
+   ```
+   User → CloudFront → S3 Bucket → React App
+   ```
+
+2. **API呼び出し**
+   ```
+   React App → API Gateway → Lambda → DynamoDB
+                                    ↓
+                                Response
+   ```
+
+### 最小権限IAM
+
+**satoshiユーザー権限**:
+- S3: ListBucket, GetObject, PutObject, PutObjectAcl
+- CloudFront: CreateInvalidation
+- Lambda: CreateFunction, UpdateFunction, GetFunction
+- API Gateway: GET, POST, PUT, DELETE
+- DynamoDB: DescribeTable, GetItem, PutItem, DeleteItem, Scan
+- Terraform State: S3ベースのリモートステート管理
+
+## Azure アーキテクチャ
+
+### 構成図
+
+```
+Internet
+    │
+    ├──→ Azure Front Door
+    │       └──→ Storage Account (Frontend)
+    │              └──→ $web container
+    │
+    └──→ Container Apps
+            └──→ Backend API Container
+                    └──→ Cosmos DB (Database)
+                            └──→ messages database
+```
+
+### リソース構成
+
+| リソース | 名前 | 目的 | リージョン |
+|---------|------|------|----------|
+| Resource Group | `multicloud-auto-deploy-staging-rg` | すべてのリソース管理 | japaneast |
+| Storage Account | `mcadfestaging` | フロントエンドホスティング | japaneast |
+| Container Registry | `mcadstagingacr` | Dockerイメージ保存 | japaneast |
+| Container Apps Env | `mcad-staging-env` | Container Apps環境 | japaneast |
+| Container App | `mcad-staging-api` | バックエンドAPI | japaneast |
+| Cosmos DB | `multicloud-auto-deploy-staging-cosmos` | NoSQLデータベース | japaneast |
+| Front Door | `multicloud-auto-deploy-staging-endpoint` | CDN・WAF | Global |
+
+### アクセスフロー
+
+1. **フロントエンドアクセス**
+   ```
+   User → Front Door → Storage Account ($web) → React App
+   ```
+
+2. **API呼び出し**
+   ```
+   React App → Container App → Cosmos DB
+                          ↓
+                      Response
+   ```
+
+### Azure AD統合
+
+**Service Principal権限**:
+- Contributor: リソースの作成・管理
+- Storage Blob Data Contributor: ストレージへのデータ書き込み
+- AcrPush: Container Registryへのイメージプッシュ
+
+## GCP アーキテクチャ
+
+### 構成図
+
+```
+Internet
+    │
+    ├──→ Cloud Load Balancer (34.117.111.182)
+    │       └──→ Backend Bucket
+    │              └──→ Cloud Storage (Frontend)
+    │
+    └──→ Cloud Run (Backend)
+            └──→ Firestore (Database)
+                    └──→ messages collection
+```
+
+### リソース構成
+
+| リソース | 名前 | 目的 | リージョン |
+|---------|------|------|----------|
+| Cloud Storage | `mcad-staging-frontend` | フロントエンドホスティング | asia-northeast1 |
+| Artifact Registry | `mcad-staging-repo` | Dockerイメージ保存 | asia-northeast1 |
+| Cloud Run | `mcad-staging-api` | バックエンドAPI | asia-northeast1 |
+| Firestore | `(default)` | NoSQLデータベース | asia-northeast1 |
+| Backend Bucket | `mcad-staging-backend` | CDN統合 | Global |
+| Global IP | `mcad-staging-frontend-ip` | 固定IPアドレス | Global |
+| URL Map | `mcad-staging-urlmap` | ルーティング | Global |
+| HTTP Proxy | `mcad-staging-http-proxy` | HTTP終端 | Global |
+| Forwarding Rule | `mcad-staging-http-rule` | トラフィック転送 | Global |
+
+### アクセスフロー
+
+1. **フロントエンドアクセス（CDN経由）**
+   ```
+   User → Load Balancer (34.117.111.182) → Backend Bucket → Cloud Storage → React App
+   ```
+
+2. **フロントエンドアクセス（直接）**
+   ```
+   User → Cloud Storage → React App
+   ```
+
+3. **API呼び出し**
+   ```
+   React App → Cloud Run → Firestore
+                      ↓
+                  Response
+   ```
+
+### IAM権限
+
+**Editorロール保持者**:
+- sat0sh1kawada00@gmail.com
+- sat0sh1kawada01@gmail.com
+
+**権限範囲**:
+- Cloud Run: デプロイ・管理
+- Artifact Registry: イメージ管理
+- Firestore: データベース管理
+- Cloud Storage: ストレージ管理
+- Compute Engine: Load Balancer管理
+
+## 技術スタック
+
+### フロントエンド
+
+| 技術 | バージョン | 用途 |
+|------|----------|------|
+| React | 18.2.0 | UIライブラリ |
+| TypeScript | 5.0.2 | 型安全性 |
+| Vite | 5.0.8 | ビルドツール・開発サーバー |
+| Tailwind CSS | 3.4.0 | スタイリング |
+| Axios | 1.6.5 | HTTP クライアント |
+
+**主要機能**:
+- メッセージCRUD操作
+- クラウドプロバイダー自動検出表示
+- レスポンシブデザイン
+- リアルタイム更新
+
+### バックエンド
+
+| 技術 | バージョン | 用途 |
+|------|----------|------|
+| Python | 3.11 | ランタイム |
+| FastAPI | 0.109.0 | Webフレームワーク |
+| Uvicorn | 0.27.0 | ASGI サーバー |
+| Pydantic | 2.5.3 | データバリデーション |
+| boto3 | 1.34.22 | AWS SDK |
+| azure-cosmos | 4.5.1 | Azure Cosmos DB SDK |
+| google-cloud-firestore | 2.14.0 | GCP Firestore SDK |
+
+**API エンドポイント**:
+```
+GET  /                     - ルート（クラウド情報）
+GET  /api/health          - ヘルスチェック
+GET  /api/messages        - メッセージ一覧取得
+POST /api/messages        - メッセージ作成
+DELETE /api/messages/{id} - メッセージ削除
+```
+
+**クラウド自動検出ロジック**:
+```python
+# 環境変数による検出
+AWS_EXECUTION_ENV → "AWS"
+WEBSITE_INSTANCE_ID → "Azure"
+K_SERVICE → "GCP"
+その他 → "Local"
+```
+
+### インフラストラクチャ
+
+| ツール | バージョン | 用途 |
+|-------|----------|------|
+| Terraform | 1.7.5 | IaC（Infrastructure as Code） |
+| Docker | 24.0+ | コンテナ化 |
+| GitHub Actions | - | CI/CD |
+
+### データベース
+
+| クラウド | サービス | タイプ | スキーマ |
+|---------|---------|-------|---------|
+| AWS | DynamoDB | NoSQL | `messages` テーブル |
+| Azure | Cosmos DB | NoSQL | `messages` データベース |
+| GCP | Firestore | NoSQL | `messages` コレクション |
+
+**共通データモデル**:
+```json
+{
+  "id": "uuid-string",
+  "text": "message content",
+  "timestamp": "ISO 8601 datetime",
+  "cloud": "AWS|Azure|GCP"
+}
+```
+
+## セキュリティ
+
+### 認証・認可
+
+#### AWS
+- **IAM User**: satoshi（最小権限原則）
+- **Lambda Execution Role**: DynamoDBアクセス権限
+- **S3 Bucket**: パブリック読み取り（静的サイト）
+- **API Gateway**: パブリックアクセス（認証なし）
+
+#### Azure
+- **Service Principal**: terraform-deploy（Contributorロール）
+- **Container App**: マネージドID
+- **Storage Account**: パブリック読み取り（静的サイト）
+
+#### GCP
+- **User Accounts**: Editor ロール
+- **Cloud Run**: allUsers invoker 権限
+- **Cloud Storage**: allUsers objectViewer 権限
+
+### ネットワークセキュリティ
+
+#### AWS
+- CloudFront HTTPS強制
+- API Gateway CORS設定
+- Lambda VPC統合（オプション）
+
+#### Azure
+- Azure Front Door HTTPS強制
+- Container Apps Ingress制御
+- Private Endpoint（オプション）
+
+#### GCP
+- HTTPS Load Balancer（計画中）
+- Cloud Armor WAF（計画中）
+- VPC Service Controls（オプション）
+
+### データ保護
+
+- **送信中の暗号化**: HTTPS/TLS 1.2+
+- **保存時の暗号化**: 
+  - AWS: S3/DynamoDB標準暗号化
+  - Azure: Storage/Cosmos DB標準暗号化
+  - GCP: Cloud Storage/Firestore標準暗号化
+
+## パフォーマンス
+
+### フロントエンド最適化
+
+| 項目 | AWS | Azure | GCP |
+|-----|-----|-------|-----|
+| CDN | CloudFront | Azure Front Door | Cloud CDN |
+| キャッシュTTL | 86400秒 | デフォルト | 3600秒 |
+| Gzip圧縮 | ✅ | ✅ | ✅ |
+| HTTP/2 | ✅ | ✅ | ✅ |
+| 静的アセット最適化 | ✅ | ✅ | ✅ |
+
+### バックエンド最適化
+
+| 項目 | AWS Lambda | Azure Container Apps | GCP Cloud Run |
+|-----|-----------|---------------------|---------------|
+| コールドスタート | 〜500ms | 〜1s | 〜500ms |
+| メモリ | 512 MB | 0.5 Gi | 512 MiB |
+| タイムアウト | 30s | 300s | 300s |
+| 同時実行数 | 1000 | 10 | 80 |
+| オートスケール | ✅ | ✅ | ✅ |
+
+### データベース最適化
+
+| 項目 | DynamoDB | Cosmos DB | Firestore |
+|-----|----------|-----------|-----------|
+| 読み込み待機時間 | <10ms | <10ms | <10ms |
+| インデックス | id (primary key) | id (partition key) | id (document ID) |
+| 整合性 | 結果的整合性 | セッション整合性 | 強整合性オプション |
+| バックアップ | 自動 | 自動 | 自動 |
+
+### パフォーマンス指標
+
+**目標値**:
+- ページ読み込み時間: < 2秒
+- API レスポンス時間: < 200ms
+- スループット: 1000 req/s以上
+- 可用性: 99.9%以上
+
+## スケーラビリティ
+
+### 自動スケーリング
+
+#### AWS
+- Lambda: 同時実行数に応じて自動スケール
+- DynamoDB: オンデマンドキャパシティ
+- CloudFront: 自動グローバルスケール
+
+#### Azure
+- Container Apps: 0-10レプリカで自動スケール
+- Cosmos DB: サーバーレスモード
+- Front Door: 自動グローバルスケール
+
+#### GCP
+- Cloud Run: 0-1000インスタンスで自動スケール
+- Firestore: 自動スケール
+- Cloud CDN: 自動グローバルスケール
+
+### 負荷分散
+
+| クラウド | ロードバランサー | ヘルスチェック |
+|---------|----------------|-------------|
+| AWS | API Gateway | Lambda自動 |
+| Azure | Container Apps Ingress | HTTP /api/health |
+| GCP | Cloud Run Internal LB | HTTP / |
+
+## モニタリング・ログ
+
+### メトリクス収集
+
+#### AWS
+- CloudWatch Metrics: Lambda実行時間、エラー率
+- CloudWatch Logs: Lambda実行ログ
+- X-Ray: 分散トレーシング（オプション）
+
+#### Azure
+- Azure Monitor: Container Appsメトリクス
+- Application Insights: APM
+- Log Analytics: 集約ログ
+
+#### GCP
+- Cloud Monitoring: Cloud Runメトリクス
+- Cloud Logging: 実行ログ
+- Cloud Trace: 分散トレーシング
+
+### アラート設定（推奨）
+
+- エラー率 > 5%
+- レスポンスタイム > 1秒
+- 可用性 < 99%
+- コスト異常検知
+
+## ディザスタリカバリ
+
+### バックアップ戦略
+
+| データ | AWS | Azure | GCP |
+|-------|-----|-------|-----|
+| DynamoDB/Cosmos/Firestore | 継続的バックアップ | 自動バックアップ | 日次自動 |
+| 復旧時間目標（RTO） | < 1時間 | < 1時間 | < 1時間 |
+| 復旧ポイント目標（RPO） | < 5分 | < 5分 | < 5分 |
+
+### 可用性設計
+
+- **マルチリージョン**: 各クラウドで異なるリージョン使用
+- **フェイルオーバー**: DNS/CDNレベルでの切り替え
+- **データレプリケーション**: データベース自動レプリケーション
+
+## コスト最適化
+
+### 月間コスト見積もり（低トラフィック想定）
+
+| クラウド | サービス | 月額コスト（USD） |
+|---------|---------|-----------------|
+| **AWS** | CloudFront | $1-5 |
+| | S3 | $0.5-2 |
+| | Lambda | $0-5（無料枠内） |
+| | API Gateway | $3.5-10 |
+| | DynamoDB | $0-5（オンデマンド） |
+| | **合計** | **$5-27** |
+| **Azure** | Front Door | $35-50 |
+| | Storage | $0.5-2 |
+| | Container Apps | $0-10（無料枠） |
+| | Cosmos DB | $0-25（サーバーレス） |
+| | **合計** | **$35-87** |
+| **GCP** | Cloud CDN | $0-5 |
+| | Cloud Storage | $0.5-2 |
+| | Cloud Run | $0-5（無料枠） |
+| | Firestore | $0-5（無料枠） |
+| | **合計** | **$0.5-17** |
+
+**注**: トラフィック量、データ容量、実行時間により変動
+
+### コスト削減策
+
+1. **無料枠の活用**
+   - AWS: Lambda 100万リクエスト/月
+   - Azure: Container Apps 180,000 vCPU秒/月
+   - GCP: Cloud Run 200万リクエスト/月
+
+2. **リソースの最適化**
+   - Lambda/Cloud Run: メモリサイズの最適化
+   - Container Apps: レプリカ数の調整
+   - データベース: 使用量モニタリング
+
+3. **予約インスタンス**（本番環境）
+   - AWS: Savings Plans
+   - Azure: Reserved Instances
+   - GCP: Committed Use Discounts
+
+## 今後の改善計画
+
+### フェーズ1: セキュリティ強化
+- [ ] 認証・認可の実装（Cognito/Azure AD/Firebase Auth）
+- [ ] WAF の設定
+- [ ] HTTPS完全対応（GCP）
+- [ ] シークレット管理の統一
+
+### フェーズ2: 監視・運用
+- [ ] 統合ダッシュボード構築
+- [ ] アラート設定
+- [ ] ログ集約
+- [ ] エラートラッキング（Sentry等）
+
+### フェーズ3: CI/CD完全自動化
+- [ ] GitHub Actions有効化
+- [ ] 自動テストの拡充
+- [ ] ブルー・グリーンデプロイ
+- [ ] カナリアリリース
+
+### フェーズ4: 機能拡張
+- [ ] ユーザー認証
+- [ ] ファイルアップロード
+- [ ] リアルタイム通信（WebSocket）
+- [ ] 検索機能
+
+## 参考資料
+
+- [AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/)
+- [Azure Architecture Center](https://learn.microsoft.com/azure/architecture/)
+- [Google Cloud Architecture Framework](https://cloud.google.com/architecture/framework)
+
 
 ## フロントエンド
 

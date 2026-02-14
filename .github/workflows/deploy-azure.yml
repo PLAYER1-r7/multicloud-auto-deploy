@@ -1,0 +1,123 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "infrastructure/terraform/azure/**"
+      - ".github/workflows/deploy-azure.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  AZURE_REGION: japaneast
+  NODE_VERSION: "18"
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Build Frontend
+        run: |
+          cd services/frontend
+          npm install
+          npm run build
+        env:
+          VITE_API_URL: ${{ secrets.AZURE_API_URL }}
+
+      - name: Deploy Infrastructure
+        run: |
+          cd infrastructure/terraform/azure
+          terraform init
+          terraform plan -var="environment=${{ github.event.inputs.environment || 'staging' }}"
+          terraform apply -var="environment=${{ github.event.inputs.environment || 'staging' }}" -auto-approve
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+
+      - name: Build and Push Docker Image
+        run: |
+          cd services/backend
+
+          # Get ACR name from Terraform output
+          cd ../../infrastructure/terraform/azure
+          ACR_NAME=$(terraform output -raw container_registry_name)
+
+          # Login to ACR
+          az acr login --name $ACR_NAME
+
+          # Build and push Docker image
+          cd ../../../services/backend
+          docker build --platform linux/amd64 \
+            -t $ACR_NAME.azurecr.io/multicloud-auto-deploy-api:latest \
+            -f Dockerfile.azure .
+          docker push $ACR_NAME.azurecr.io/multicloud-auto-deploy-api:latest
+
+      - name: Deploy Container App
+        run: |
+          cd infrastructure/terraform/azure
+          RESOURCE_GROUP=$(terraform output -raw resource_group_name)
+          CONTAINER_APP_NAME=$(terraform output -raw container_app_name)
+          ACR_NAME=$(terraform output -raw container_registry_name)
+
+          # Update Container App with new image
+          az containerapp update \
+            --name $CONTAINER_APP_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --image $ACR_NAME.azurecr.io/multicloud-auto-deploy-api:latest
+
+      - name: Deploy Frontend to Storage
+        run: |
+          cd infrastructure/terraform/azure
+          STORAGE_ACCOUNT=$(terraform output -raw frontend_storage_account)
+
+          # Upload frontend to blob storage
+          az storage blob upload-batch \
+            --account-name $STORAGE_ACCOUNT \
+            --source ../../services/frontend/dist \
+            --destination '$web' \
+            --overwrite
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ Azure deployment succeeded!"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ Azure deployment failed!"

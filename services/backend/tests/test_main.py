@@ -1,10 +1,21 @@
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient, ASGITransport
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from src.main import app
 
-client = TestClient(app)
+@pytest.fixture
+def client():
+    """テスト用クライアントのフィクスチャ"""
+    from fastapi.testclient import TestClient
+    with TestClient(app) as test_client:
+        yield test_client
 
-def test_read_root():
+def test_read_root(client):
     """ルートエンドポイントのテスト"""
     response = client.get("/")
     assert response.status_code == 200
@@ -13,7 +24,7 @@ def test_read_root():
     assert "cloud" in data
     assert "status" in data
 
-def test_health_check():
+def test_health_check(client):
     """ヘルスチェックのテスト"""
     response = client.get("/api/health")
     assert response.status_code == 200
@@ -22,7 +33,7 @@ def test_health_check():
     assert "cloud" in data
     assert "timestamp" in data
 
-def test_create_message():
+def test_create_message(client):
     """メッセージ作成のテスト"""
     message_data = {"text": "Test message"}
     response = client.post("/api/messages", json=message_data)
@@ -33,19 +44,19 @@ def test_create_message():
     assert "timestamp" in data
     assert "cloud" in data
 
-def test_get_messages():
+def test_get_messages(client):
     """メッセージ一覧取得のテスト"""
     response = client.get("/api/messages")
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
 
-def test_get_message_not_found():
+def test_get_message_not_found(client):
     """存在しないメッセージの取得テスト"""
     response = client.get("/api/messages/nonexistent-id")
     assert response.status_code == 404
 
-def test_delete_message():
+def test_delete_message(client):
     """メッセージ削除のテスト"""
     # まずメッセージを作成
     message_data = {"text": "Message to delete"}

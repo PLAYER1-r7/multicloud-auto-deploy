@@ -1,0 +1,138 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "infrastructure/terraform/gcp/**"
+      - ".github/workflows/deploy-gcp.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  GCP_REGION: asia-northeast1
+  NODE_VERSION: "18"
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+          terraform_wrapper: false
+
+      - name: Deploy Infrastructure
+        run: |
+          cd infrastructure/terraform/gcp
+          terraform init
+          terraform plan \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="environment=${{ github.event.inputs.environment || 'staging' }}"
+          terraform apply \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="environment=${{ github.event.inputs.environment || 'staging' }}" \
+            -auto-approve
+
+      - name: Build and Push Docker Image
+        run: |
+          cd services/backend
+
+          # Get Artifact Registry repo from Terraform output
+          cd ../../infrastructure/terraform/gcp
+          PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+          REPO_LOCATION=$(terraform output -raw artifact_registry_location || echo "asia-northeast1")
+          REPO_NAME=$(terraform output -raw artifact_registry_repo)
+
+          # Configure Docker for Artifact Registry
+          gcloud auth configure-docker ${REPO_LOCATION}-docker.pkg.dev
+
+          # Build and push Docker image
+          cd ../../../services/backend
+          IMAGE_URI="${REPO_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/multicloud-auto-deploy-api:latest"
+          docker build --platform linux/amd64 \
+            -t $IMAGE_URI \
+            -f Dockerfile.gcp .
+          docker push $IMAGE_URI
+
+      - name: Deploy Cloud Run Service
+        run: |
+          cd infrastructure/terraform/gcp
+
+          # Re-apply Terraform to update Cloud Run with new image
+          terraform apply \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="environment=${{ github.event.inputs.environment || 'staging' }}" \
+            -auto-approve
+
+          # Get Cloud Run service name
+          SERVICE_NAME=$(terraform output -raw cloud_run_service_name)
+
+          # Set IAM policy for public access
+          gcloud run services add-iam-policy-binding $SERVICE_NAME \
+            --region=${{ env.GCP_REGION }} \
+            --member="allUsers" \
+            --role="roles/run.invoker" || true
+
+      - name: Build Frontend
+        run: |
+          cd infrastructure/terraform/gcp
+          API_URL=$(terraform output -raw api_url)
+
+          cd ../../services/frontend
+          npm install
+          VITE_API_URL=$API_URL npm run build
+
+      - name: Deploy Frontend to Cloud Storage
+        run: |
+          cd infrastructure/terraform/gcp
+          BUCKET_NAME=$(terraform output -raw frontend_bucket_name)
+
+          # Upload frontend to Cloud Storage
+          gsutil -m cp -r ../../services/frontend/dist/* gs://$BUCKET_NAME/
+
+          # Make objects public
+          gsutil -m acl ch -u AllUsers:R gs://$BUCKET_NAME/** || true
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ GCP deployment succeeded!"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ GCP deployment failed!"

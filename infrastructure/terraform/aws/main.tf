@@ -9,10 +9,9 @@ terraform {
   }
   
   backend "s3" {
-    # バケット名、リージョンは変数または環境変数で指定
-    # bucket = "your-terraform-state-bucket"
-    # key    = "multicloud-auto-deploy/terraform.tfstate"
-    # region = "us-east-1"
+    bucket = "multicloud-auto-deploy-terraform-state"
+    key    = "multicloud-auto-deploy/terraform.tfstate"
+    region = "us-east-1"
   }
 }
 

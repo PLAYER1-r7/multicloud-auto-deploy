@@ -10,9 +10,9 @@ import json
 # クラウドプロバイダーの検出
 def detect_cloud_provider():
     """実行環境からクラウドプロバイダーを検出"""
-    if os.environ.get('AWS_LAMBDA_FUNCTION_NAME'):
+    if os.environ.get('AWS_LAMBDA_FUNCTION_NAME') or os.environ.get('AWS_EXECUTION_ENV'):
         return 'AWS'
-    elif os.environ.get('AZURE_FUNCTIONS_ENVIRONMENT'):
+    elif os.environ.get('WEBSITE_INSTANCE_ID') or os.environ.get('AZURE_FUNCTIONS_ENVIRONMENT'):
         return 'Azure'
     elif os.environ.get('K_SERVICE'):  # Cloud Run
         return 'GCP'
@@ -71,6 +71,20 @@ def health_check():
         cloud=CLOUD_PROVIDER,
         timestamp=datetime.utcnow().isoformat()
     )
+
+@app.get("/api/debug/env")
+def debug_environment():
+    """環境変数デバッグ用エンドポイント"""
+    return {
+        "AWS_LAMBDA_FUNCTION_NAME": os.environ.get('AWS_LAMBDA_FUNCTION_NAME'),
+        "AWS_EXECUTION_ENV": os.environ.get('AWS_EXECUTION_ENV'),
+        "WEBSITE_INSTANCE_ID": os.environ.get('WEBSITE_INSTANCE_ID'),
+        "AZURE_FUNCTIONS_ENVIRONMENT": os.environ.get('AZURE_FUNCTIONS_ENVIRONMENT'),
+        "K_SERVICE": os.environ.get('K_SERVICE'),
+        "FUNCTION_NAME": os.environ.get('FUNCTION_NAME'),
+        "CLOUD_PROVIDER": CLOUD_PROVIDER,
+        "detected_cloud": detect_cloud_provider()
+    }
 
 @app.get("/api/messages", response_model=List[Message])
 def get_messages():

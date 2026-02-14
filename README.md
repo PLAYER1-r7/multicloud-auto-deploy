@@ -70,11 +70,15 @@ cp .env.example .env
 
 ## 📚 ドキュメント
 
+### セットアップ・デプロイ
 - [セットアップガイド](docs/SETUP.md)
 - [AWS デプロイ](docs/AWS_DEPLOYMENT.md)
 - [Azure デプロイ](docs/AZURE_DEPLOYMENT.md)
 - [GCP デプロイ](docs/GCP_DEPLOYMENT.md)
-- [アーキテクチャ](docs/ARCHITECTURE.md)
+
+### アーキテクチャ・運用
+- [アーキテクチャ](docs/ARCHITECTURE.md) - 完全版システムアーキテクチャ
+- [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定
 
 ## 🔄 GitHub Actions 自動デプロイ
 

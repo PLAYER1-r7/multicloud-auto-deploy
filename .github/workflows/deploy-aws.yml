@@ -4,15 +4,15 @@ on:
   push:
     branches: [main]
     paths:
-      - 'services/**'
-      - 'infrastructure/terraform/aws/**'
-      - '.github/workflows/deploy-aws.yml'
+      - "services/**"
+      - "infrastructure/terraform/aws/**"
+      - ".github/workflows/deploy-aws.yml"
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deployment environment'
+        description: "Deployment environment"
         required: true
-        default: 'staging'
+        default: "staging"
         type: choice
         options:
           - staging
@@ -20,43 +20,43 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  NODE_VERSION: '18'
-  PYTHON_VERSION: '3.11'
+  NODE_VERSION: "18"
+  PYTHON_VERSION: "3.11"
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment || 'staging' }}
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
+
       - name: Deploy
         run: |
           chmod +x scripts/deploy-aws.sh
           ./scripts/deploy-aws.sh ${{ github.event.inputs.environment || 'staging' }}
-      
+
       - name: Notify Success
         if: success()
         run: echo "✅ AWS deployment succeeded!"
-      
+
       - name: Notify Failure
         if: failure()
         run: echo "❌ AWS deployment failed!"
