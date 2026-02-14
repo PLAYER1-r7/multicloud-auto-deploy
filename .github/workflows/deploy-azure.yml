@@ -149,24 +149,37 @@ jobs:
           STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
           
           echo "🌐 Enabling static website hosting on $STORAGE_ACCOUNT..."
+          
+          # Get storage account key
+          STORAGE_KEY=$(az storage account keys list \
+            --resource-group multicloud-auto-deploy-staging-rg \
+            --account-name $STORAGE_ACCOUNT \
+            --query '[0].value' -o tsv)
+          
           az storage blob service-properties update \
             --account-name $STORAGE_ACCOUNT \
+            --account-key $STORAGE_KEY \
             --static-website \
             --index-document index.html \
-            --404-document index.html \
-            --auth-mode login
+            --404-document index.html
 
       - name: Deploy Frontend to Storage
         run: |
           # Use storage account from Pulumi output
           STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+          
+          # Get storage account key
+          STORAGE_KEY=$(az storage account keys list \
+            --resource-group multicloud-auto-deploy-staging-rg \
+            --account-name $STORAGE_ACCOUNT \
+            --query '[0].value' -o tsv)
 
           # Upload frontend to blob storage
           az storage blob upload-batch \
             --account-name $STORAGE_ACCOUNT \
+            --account-key $STORAGE_KEY \
             --source services/frontend_react/dist \
             --destination '$web' \
-            --auth-mode login \
             --overwrite
 
       - name: Notify Success
