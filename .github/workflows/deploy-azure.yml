@@ -78,6 +78,19 @@ jobs:
           echo "client_secret=$(echo $CREDS | jq -r '.clientSecret')" >> $GITHUB_OUTPUT
           echo "tenant_id=$(echo $CREDS | jq -r '.tenantId')" >> $GITHUB_OUTPUT
 
+      - name: Refresh Pulumi State
+        uses: pulumi/actions@v5
+        with:
+          command: refresh
+          stack-name: staging
+          work-dir: infrastructure/pulumi/azure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ARM_CLIENT_ID: ${{ steps.azure_env.outputs.client_id }}
+          ARM_CLIENT_SECRET: ${{ steps.azure_env.outputs.client_secret }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.azure_env.outputs.subscription_id }}
+          ARM_TENANT_ID: ${{ steps.azure_env.outputs.tenant_id }}
+
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5
