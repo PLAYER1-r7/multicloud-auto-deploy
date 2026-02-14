@@ -103,7 +103,8 @@ jobs:
           
           # Copy application code
           cp -r app .deployment/
-          cp function.py .deployment/
+          # Rename function.py to main.py for Cloud Functions
+          cp function.py .deployment/main.py
           cp requirements.txt .deployment/
           
           # Create ZIP package
