@@ -27,8 +27,9 @@ provider "azurerm" {
     }
   }
 
-  # Use environment variables for authentication (ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_SUBSCRIPTION_ID, ARM_TENANT_ID)
-  # Explicitly disable all other authentication methods
+  # Service Principal authentication via environment variables
+  # ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_SUBSCRIPTION_ID, ARM_TENANT_ID
+  # These are automatically picked up when other methods are disabled
   use_cli  = false
   use_msi  = false
   use_oidc = false

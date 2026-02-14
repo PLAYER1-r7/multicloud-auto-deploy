@@ -51,6 +51,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.5
+          terraform_wrapper: false  # Disable wrapper to pass env vars correctly
 
       - name: Build Frontend
         run: |
@@ -69,6 +70,10 @@ jobs:
       - name: Deploy Infrastructure
         run: |
           cd infrastructure/terraform/azure
+          
+          # Clear Azure CLI config to prevent conflicts
+          unset AZURE_CONFIG_DIR
+          az account clear 2>/dev/null || true
           
           # Initialize Terraform
           terraform init
