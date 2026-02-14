@@ -26,6 +26,9 @@ function App() {
   const [author, setAuthor] = useState('名無しさん')
   const [loading, setLoading] = useState(false)
   const [cloudProvider, setCloudProvider] = useState<string>('unknown')
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     fetchMessages()
@@ -50,17 +53,85 @@ function App() {
     }
   }
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // ファイルサイズチェック (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('ファイルサイズが大きすぎます（最大10MB）')
+        return
+      }
+
+      // 画像タイプチェック
+      if (!file.type.startsWith('image/')) {
+        alert('画像ファイルを選択してください')
+        return
+      }
+
+      setSelectedImage(file)
+      
+      // プレビュー用のURLを生成
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null)
+    setImagePreview(null)
+  }
+
+  const uploadImage = async (file: File): Promise<string | null> => {
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await axios.post(`${API_URL}/api/uploads/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+
+      return response.data.url
+    } catch (error) {
+      console.error('Failed to upload image:', error)
+      alert('画像のアップロードに失敗しました')
+      return null
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMessage.trim() || !author.trim()) return
 
     setLoading(true)
     try {
+      let imageUrl: string | null = null
+
+      // 画像がある場合はアップロード
+      if (selectedImage) {
+        imageUrl = await uploadImage(selectedImage)
+        if (!imageUrl) {
+          setLoading(false)
+          return
+        }
+      }
+
       await axios.post(`${API_URL}/api/messages/`, {
         content: newMessage,
-        author: author
+        author: author,
+        image_url: imageUrl,
       })
+      
       setNewMessage('')
+      setSelectedImage(null)
+      setImagePreview(null)
       fetchMessages()
     } catch (error) {
       console.error('Failed to send message:', error)
@@ -119,11 +190,48 @@ function App() {
                 />
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || uploading}
                   className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
                 >
-                  {loading ? '送信中...' : '送信'}
+                  {uploading ? 'アップロード中...' : loading ? '送信中...' : '送信'}
                 </button>
+              </div>
+
+              {/* 画像アップロードセクション */}
+              <div className="border-t pt-3">
+                <label className="flex items-center gap-2 cursor-pointer text-gray-600 hover:text-blue-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                  </svg>
+                  <span className="text-sm">画像を選択</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                    disabled={loading}
+                  />
+                </label>
+
+                {imagePreview && (
+                  <div className="mt-3 relative inline-block">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="max-w-xs max-h-48 rounded-lg border border-gray-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                      disabled={loading}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </div>
             </form>
           </div>
@@ -152,7 +260,17 @@ function App() {
                         {getCloudIcon(cloudProvider)} {cloudProvider}
                       </span>
                     </div>
-                    <p className="text-gray-800">{message.content}</p>
+                    <p className="text-gray-800 mb-2">{message.content}</p>
+                    {message.image_url && (
+                      <div className="mt-3">
+                        <img
+                          src={message.image_url}
+                          alt="Attached image"
+                          className="max-w-md max-h-96 rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => window.open(message.image_url!, '_blank')}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
