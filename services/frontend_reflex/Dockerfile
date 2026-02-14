@@ -5,6 +5,7 @@ WORKDIR /app
 # Install system dependencies (minimal)
 RUN apt-get update && apt-get install -y --no-install-recommends \
   curl \
+  unzip \
   && rm -rf /var/lib/apt/lists/* \
   && apt-get clean
 
@@ -16,9 +17,11 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # Copy application code
 COPY simple_sns/ ./simple_sns/
 COPY rxconfig.py .
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
 
-# Initialize Reflex (generate necessary files)
-RUN reflex init
+# Initialize and export Reflex (build for production)
+RUN reflex init && reflex export
 
 # Set environment variables
 ENV API_URL=http://api:8000 \
@@ -26,9 +29,9 @@ ENV API_URL=http://api:8000 \
   PYTHONDONTWRITEBYTECODE=1
 
 # Expose ports
-# 3002: Frontend
-# 3003: Reflex backend (WebSocket)
+# 3002: Frontend (in prod mode, built static files)
+# 3003: Backend (WebSocket and API)
 EXPOSE 3002 3003
 
 # Run Reflex application
-CMD ["reflex", "run", "--loglevel", "warning", "--backend-port", "3003", "--frontend-port", "3002", "--backend-host", "0.0.0.0"]
+CMD ["./entrypoint.sh"]
