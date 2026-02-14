@@ -1,0 +1,45 @@
+name: Deploy Landing Page to AWS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'static-site/**'
+      - '.github/workflows/deploy-landing-aws.yml'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-1
+  S3_BUCKET: multicloud-auto-deploy-staging-landing
+
+jobs:
+  deploy-landing:
+    name: Deploy Landing Page to AWS S3
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync static-site/ s3://${{ env.S3_BUCKET }}/ \
+            --cache-control "public, max-age=3600" \
+            --exclude "*" \
+            --include "*.html"
+
+      - name: Deployment Success
+        run: |
+          echo "✅ Landing page deployed successfully!"
+          echo "🌐 URL: http://${{ env.S3_BUCKET }}.s3-website-${{ env.AWS_REGION }}.amazonaws.com/"
