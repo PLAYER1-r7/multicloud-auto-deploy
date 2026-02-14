@@ -70,10 +70,18 @@ jobs:
       - name: Update Lambda Function
         run: |
           LAMBDA_FUNCTION=${{ secrets.AWS_LAMBDA_FUNCTION_NAME || 'multicloud-auto-deploy-staging-api' }}
+          S3_BUCKET=${{ secrets.AWS_S3_BUCKET || 'multicloud-auto-deploy-staging-frontend' }}
+          S3_KEY="lambda-deployments/lambda-$(date +%Y%m%d-%H%M%S).zip"
+          
+          # Upload to S3 first (package is too large for direct upload)
+          aws s3 cp services/backend/lambda.zip s3://$S3_BUCKET/$S3_KEY --region ${{ env.AWS_REGION }}
+          
+          # Update Lambda from S3
           aws lambda update-function-code \
             --function-name $LAMBDA_FUNCTION \
             --region ${{ env.AWS_REGION }} \
-            --zip-file fileb://services/backend/lambda.zip
+            --s3-bucket $S3_BUCKET \
+            --s3-key $S3_KEY
 
       - name: Deploy Frontend to S3
         run: |
