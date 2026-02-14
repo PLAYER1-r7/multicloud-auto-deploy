@@ -101,16 +101,18 @@ jobs:
           
           echo "✅ Lambda function updated successfully"
           
-          # Get API Gateway endpoint
-          API_ID=$(aws apigatewayv2 get-apis --region ${{ env.AWS_REGION }} --query 'Items[?Name==`multicloud-auto-deploy-staging-api`].ApiId' --output text)
-          if [ -n "$API_ID" ]; then
+          # Get API Gateway endpoint (continue even if this fails)
+          set +e  # Don't exit on error for optional API Gateway lookup
+          API_ID=$(aws apigatewayv2 get-apis --region ${{ env.AWS_REGION }} --query 'Items[?Name==`multicloud-auto-deploy-staging-api`].ApiId' --output text 2>/dev/null)
+          if [ -n "$API_ID" ] && [ "$API_ID" != "None" ]; then
             API_ENDPOINT="https://${API_ID}.execute-api.${{ env.AWS_REGION }}.amazonaws.com"
             echo "api_endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
             echo "✅ API Endpoint: $API_ENDPOINT"
           else
-            echo "⚠️  API Gateway not found, using default"
+            echo "⚠️  API Gateway lookup skipped (missing permissions) - using default"
             echo "api_endpoint=https://52z731x570.execute-api.ap-northeast-1.amazonaws.com" >> $GITHUB_OUTPUT
           fi
+          set -e  # Re-enable exit on error
 
       - name: Build Frontend
         run: |
