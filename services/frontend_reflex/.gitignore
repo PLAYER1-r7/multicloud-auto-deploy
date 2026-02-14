@@ -1,0 +1,12 @@
+.web
+assets/external/
+.states
+*.py[cod]
+__pycache__/
+*.so
+.Python
+.reflex/
+.web/
+assets/uploaded_files/
+*.db
+.env

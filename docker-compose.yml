@@ -28,17 +28,18 @@ services:
   # ========================================
   # Reflex Web Frontend (New Python implementation)
   # ========================================
-  web:
+  frontend_reflex:
     build:
-      context: ./services/web
+      context: ./services/frontend_reflex
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
-      - "8001:8001"  # Reflex backend port
+      - "3002:3002"  # Frontend
+      - "3003:3003"  # Reflex backend (WebSocket)
     environment:
       - API_URL=http://api:8000
     volumes:
-      - ./services/web:/app
+      - ./services/frontend_reflex:/app
+      - /app/.web
     depends_on:
       - api
 
@@ -65,19 +66,6 @@ services:
   # ========================================
   # Legacy Services (for backward compatibility)
   # ========================================
-  frontend:
-    build:
-      context: ./services/frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3001:3000"  # Changed port to avoid conflict
-    environment:
-      - VITE_API_URL=http://localhost:8000
-    volumes:
-      - ./services/frontend:/app
-      - /app/node_modules
-    command: npm run dev
-
   backend:
     build:
       context: ./services/backend
