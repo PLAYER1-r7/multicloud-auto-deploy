@@ -89,47 +89,67 @@ jobs:
             -auto-approve
           
           # Extract Terraform outputs for later use
-          echo "repo_location=$(terraform output -raw artifact_registry_location)" >> $GITHUB_OUTPUT
-          echo "repo_name=$(terraform output -raw artifact_registry_repo)" >> $GITHUB_OUTPUT
-          echo "service_name=$(terraform output -raw cloud_run_service_name)" >> $GITHUB_OUTPUT
+          echo "function_name=$(terraform output -raw function_name)" >> $GITHUB_OUTPUT
+          echo "function_source_bucket=$(terraform output -raw function_source_bucket)" >> $GITHUB_OUTPUT
           echo "storage_bucket=$(terraform output -raw frontend_storage_bucket)" >> $GITHUB_OUTPUT
           echo "api_url=$(terraform output -raw api_url)" >> $GITHUB_OUTPUT
 
-      - name: Build and Push Docker Image
+      - name: Package Cloud Function
         run: |
-          # Use values from Terraform output (stored in previous step)
-          PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
-          REPO_LOCATION="${{ steps.terraform.outputs.repo_location }}"
-          REPO_NAME="${{ steps.terraform.outputs.repo_name }}"
-
-          echo "Building and pushing Docker image..."
-          echo "  Project: $PROJECT_ID"
-          echo "  Location: $REPO_LOCATION"
-          echo "  Repository: $REPO_NAME"
-
-          # Configure Docker for Artifact Registry
-          gcloud auth configure-docker ${REPO_LOCATION}-docker.pkg.dev
-
-          # Build and push Docker image
           cd services/api
-          IMAGE_URI="${REPO_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/multicloud-auto-deploy-api:latest"
-          docker build --platform linux/amd64 \
-            -t $IMAGE_URI \
-            -f Dockerfile .
-          docker push $IMAGE_URI
-
-      - name: Deploy Cloud Run Service
-        run: |
-          # Use service name from Terraform output
-          SERVICE_NAME="${{ steps.terraform.outputs.service_name }}"
           
-          echo "Setting IAM policy for Cloud Run service: $SERVICE_NAME"
+          echo "📦 Creating deployment package..."
+          
+          # Create deployment directory
+          rm -rf .deployment
+          mkdir -p .deployment
+          
+          # Install dependencies
+          pip install --target .deployment -r requirements.txt
+          
+          # Copy application code
+          cp -r app .deployment/
+          cp function.py .deployment/
+          cp requirements.txt .deployment/
+          
+          # Create ZIP package
+          cd .deployment
+          zip -r ../function-source.zip .
+          cd ..
+          
+          echo "✅ Package created:"
+          ls -lh function-source.zip
 
-          # Set IAM policy for public access
-          gcloud run services add-iam-policy-binding $SERVICE_NAME \
-            --region=${{ env.GCP_REGION }} \
-            --member="allUsers" \
-            --role="roles/run.invoker" || true
+      - name: Deploy Cloud Function
+        run: |
+          # Use values from Terraform output
+          PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+          FUNCTION_NAME="${{ steps.terraform.outputs.function_name }}"
+          FUNCTION_BUCKET="${{ steps.terraform.outputs.function_source_bucket }}"
+          REGION=${{ env.GCP_REGION }}
+          
+          echo "🚀 Deploying Cloud Function: $FUNCTION_NAME"
+          echo "  Project: $PROJECT_ID"
+          echo "  Bucket: $FUNCTION_BUCKET"
+          echo "  Region: $REGION"
+          
+          # Upload source to GCS
+          gsutil cp services/api/function-source.zip gs://$FUNCTION_BUCKET/function-source.zip
+          
+          # Update function
+          gcloud functions deploy $FUNCTION_NAME \
+            --gen2 \
+            --region=$REGION \
+            --runtime=python311 \
+            --source=gs://$FUNCTION_BUCKET/function-source.zip \
+            --entry-point=handler \
+            --trigger-http \
+            --allow-unauthenticated \
+            --max-instances=10 \
+            --memory=512MB \
+            --timeout=60s
+          
+          echo "✅ Cloud Function deployed successfully"
 
       - name: Build Frontend
         run: |

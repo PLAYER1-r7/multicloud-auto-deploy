@@ -1,0 +1,59 @@
+import azure.functions as func
+import logging
+from app.main import app as fastapi_app
+
+# Azure Functions のエントリーポイント
+app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
+
+@app.function_name(name="HttpTrigger")
+@app.route(route="{*route}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+async def main(req: func.HttpRequest) -> func.HttpResponse:
+    """Azure Functions HTTP trigger that forwards to FastAPI"""
+    logging.info('Python HTTP trigger function processed a request.')
+    
+    # FastAPI ASGIアプリケーションをAzure Functionsで実行
+    from fastapi import Request
+    from starlette.responses import Response
+    
+    # Azure Functions Request → FastAPI Request 変換
+    scope = {
+        "type": "http",
+        "method": req.method,
+        "path": "/" + req.route_params.get("route", ""),
+        "query_string": req.url.encode("utf-8"),
+        "headers": [[k.encode(), v.encode()] for k, v in req.headers.items()],
+    }
+    
+    # FastAPI を ASGI で実行
+    from io import BytesIO
+    
+    async def receive():
+        return {"type": "http.request", "body": req.get_body()}
+    
+    response_started = False
+    status_code = 200
+    headers = []
+    body_parts = []
+    
+    async def send(message):
+        nonlocal response_started, status_code, headers, body_parts
+        
+        if message["type"] == "http.response.start":
+            response_started = True
+            status_code = message["status"]
+            headers = message.get("headers", [])
+        elif message["type"] == "http.response.body":
+            body_parts.append(message.get("body", b""))
+    
+    # FastAPI アプリケーション実行
+    await fastapi_app(scope, receive, send)
+    
+    # レスポンス構築
+    response_body = b"".join(body_parts)
+    response_headers = {k.decode(): v.decode() for k, v in headers}
+    
+    return func.HttpResponse(
+        body=response_body,
+        status_code=status_code,
+        headers=response_headers
+    )

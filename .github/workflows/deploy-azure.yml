@@ -68,25 +68,22 @@ jobs:
           terraform plan -var="environment=${{ github.event.inputs.environment || 'staging' }}"
           terraform apply -var="environment=${{ github.event.inputs.environment || 'staging' }}" -auto-approve
           
-          # Extract Terraform outputs for later use
-          ACR_NAME=$(terraform output -raw container_registry_name)
+          # Extract Terraform outputs for later use  
+          FUNCTION_APP=$(terraform output -raw function_app_name)
           RESOURCE_GROUP=$(terraform output -raw resource_group_name)
-          CONTAINER_APP=$(terraform output -raw container_app_name)
           STORAGE_ACCOUNT=$(terraform output -raw frontend_storage_account)
           API_URL=$(terraform output -raw api_url)
           
           # Debug: Display outputs
           echo "Terraform Outputs:"
-          echo "  ACR Name: $ACR_NAME"
+          echo "  Function App: $FUNCTION_APP"
           echo "  Resource Group: $RESOURCE_GROUP"
-          echo "  Container App: $CONTAINER_APP"
           echo "  Storage Account: $STORAGE_ACCOUNT"
           echo "  API URL: $API_URL"
           
           # Set outputs for GitHub Actions
-          echo "acr_name=$ACR_NAME" >> $GITHUB_OUTPUT
+          echo "function_app=$FUNCTION_APP" >> $GITHUB_OUTPUT
           echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
-          echo "container_app=$CONTAINER_APP" >> $GITHUB_OUTPUT
           echo "storage_account=$STORAGE_ACCOUNT" >> $GITHUB_OUTPUT
           echo "api_url=$API_URL" >> $GITHUB_OUTPUT
         env:
@@ -97,50 +94,53 @@ jobs:
           ARM_USE_CLI: false
           ARM_USE_AZUREAD_AUTH: false
 
-      - name: Login to Azure CLI for ACR
+      - name: Login to Azure CLI
         run: |
-          # Login with Service Principal for ACR operations
+          # Login with Service Principal
           az login --service-principal \
             -u ${{ secrets.ARM_CLIENT_ID }} \
             -p ${{ secrets.ARM_CLIENT_SECRET }} \
             --tenant ${{ secrets.ARM_TENANT_ID }}
           az account set --subscription ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
-      - name: Build and Push Docker Image
+      - name: Package Function App
         run: |
-          # Use ACR name from Terraform output (stored in previous step)
-          ACR_NAME="${{ steps.terraform.outputs.acr_name }}"
-          
-          # Debug: Display ACR name
-          echo "ACR Name: $ACR_NAME"
-          
-          if [ -z "$ACR_NAME" ]; then
-            echo "Error: ACR_NAME is empty"
-            exit 1
-          fi
-
-          # Login to ACR
-          az acr login --name "$ACR_NAME"
-
-          # Build and push Docker image
           cd services/api
-          docker build --platform linux/amd64 \
-            -t $ACR_NAME.azurecr.io/multicloud-auto-deploy-api:latest \
-            -f Dockerfile .
-          docker push $ACR_NAME.azurecr.io/multicloud-auto-deploy-api:latest
+          
+          echo "📦 Creating deployment package..."
+          
+          # Create deployment directory
+          rm -rf .deployment
+          mkdir -p .deployment
+          
+          # Install dependencies to deployment directory
+          pip install --target .deployment -r requirements.txt
+          
+          # Copy application code
+          cp -r app .deployment/
+          cp function_app.py .deployment/
+          cp host.json .deployment/
+          cp requirements.txt .deployment/
+          
+          # Create ZIP package
+          cd .deployment
+          zip -r ../function-app.zip .
+          cd ..
+          
+          echo "✅ Package created:"
+          ls -lh function-app.zip
 
-      - name: Deploy Container App
-        run: |
-          # Use values from Terraform output (stored in previous step)
+      - name: Deploy Function App
+        run: | 
+          FUNCTION_APP="${{ steps.terraform.outputs.function_app }}"
           RESOURCE_GROUP="${{ steps.terraform.outputs.resource_group }}"
-          CONTAINER_APP_NAME="${{ steps.terraform.outputs.container_app }}"
-          ACR_NAME="${{ steps.terraform.outputs.acr_name }}"
-
-          # Update Container App with new image
-          az containerapp update \
-            --name $CONTAINER_APP_NAME \
+          
+          echo "🚀 Deploying to Function App: $FUNCTION_APP"
+          
+          az functionapp deployment source config-zip \
             --resource-group $RESOURCE_GROUP \
-            --image $ACR_NAME.azurecr.io/multicloud-auto-deploy-api:latest
+            --name $FUNCTION_APP \
+            --src services/api/function-app.zip
 
       - name: Build Frontend
         run: |
