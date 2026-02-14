@@ -61,6 +61,45 @@ jobs:
         run: |
           cd infrastructure/terraform/gcp
           terraform init
+          
+          # Import existing resources if they exist (ignore errors if already imported)
+          echo "Attempting to import existing resources..."
+          
+          ENVIRONMENT="${{ github.event.inputs.environment || 'staging' }}"
+          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          REGION="asia-northeast1"
+          PREFIX="multicloud-auto-deploy-${ENVIRONMENT}"
+          
+          # Import Artifact Registry repository
+          terraform import \
+            -var="project_id=${PROJECT_ID}" \
+            -var="environment=${ENVIRONMENT}" \
+            "google_artifact_registry_repository.main" \
+            "projects/${PROJECT_ID}/locations/${REGION}/repositories/${PREFIX}-repo" 2>/dev/null || echo "Repository already in state or does not exist"
+          
+          # Import Firestore database
+          terraform import \
+            -var="project_id=${PROJECT_ID}" \
+            -var="environment=${ENVIRONMENT}" \
+            "google_firestore_database.main" \
+            "projects/${PROJECT_ID}/databases/(default)" 2>/dev/null || echo "Firestore database already in state or does not exist"
+          
+          # Import Storage bucket
+          terraform import \
+            -var="project_id=${PROJECT_ID}" \
+            -var="environment=${ENVIRONMENT}" \
+            "google_storage_bucket.frontend" \
+            "${PREFIX}-frontend" 2>/dev/null || echo "Storage bucket already in state or does not exist"
+          
+          # Import Global Address
+          terraform import \
+            -var="project_id=${PROJECT_ID}" \
+            -var="environment=${ENVIRONMENT}" \
+            "google_compute_global_address.frontend" \
+            "projects/${PROJECT_ID}/global/addresses/${PREFIX}-frontend-ip" 2>/dev/null || echo "Global address already in state or does not exist"
+          
+          echo "Import phase completed. Proceeding with plan and apply..."
+          
           terraform plan \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
             -var="environment=${{ github.event.inputs.environment || 'staging' }}"
