@@ -160,7 +160,17 @@ frontend_bucket = aws.s3.Bucket(
     tags=common_tags,
 )
 
-# Make bucket public for static website hosting
+# Disable block public access FIRST (before adding public policy)
+frontend_public_access = aws.s3.BucketPublicAccessBlock(
+    "frontend-public-access",
+    bucket=frontend_bucket.id,
+    block_public_acls=False,
+    block_public_policy=False,
+    ignore_public_acls=False,
+    restrict_public_buckets=False,
+)
+
+# Make bucket public for static website hosting (after disabling public access block)
 frontend_bucket_policy = aws.s3.BucketPolicy(
     "frontend-bucket-policy",
     bucket=frontend_bucket.id,
@@ -173,7 +183,8 @@ frontend_bucket_policy = aws.s3.BucketPolicy(
             "Action": "s3:GetObject",
             "Resource": f"{arn}/*"
         }]
-    }))
+    })),
+    opts=pulumi.ResourceOptions(depends_on=[frontend_public_access]),
 )
 
 # Configure bucket for website hosting
@@ -188,15 +199,6 @@ aws.s3.BucketWebsiteConfigurationV2(
     },
 )
 
-# Disable block public access
-aws.s3.BucketPublicAccessBlock(
-    "frontend-public-access",
-    bucket=frontend_bucket.id,
-    block_public_acls=False,
-    block_public_policy=False,
-    ignore_public_acls=False,
-    restrict_public_buckets=False,
-)
 
 # ========================================
 # Outputs
