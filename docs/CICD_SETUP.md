@@ -67,19 +67,30 @@ aws iam create-access-key --user-name satoshi
 | `ARM_SUBSCRIPTION_ID` | AzureサブスクリプションID | `az account show` |
 | `ARM_TENANT_ID` | AzureテナントID | `az account show` |
 | `AZURE_API_URL` | バックエンドAPI URL（オプション） | デプロイ後に設定 |
+| `AZURE_ACR_LOGIN_SERVER` | Container RegistryのログインサーバーURL（オプション） | `az acr list` |
 
 **取得手順**:
 
 ```bash
+# 現在のAzureアカウント情報を確認
+az account show --query "{SubscriptionId:id, TenantId:tenantId, Name:name}" --output table
+
+# サブスクリプションIDを環境変数に設定
+SUBSCRIPTION_ID=$(az account show --query id --output tsv)
+
 # Service Principalの作成
 az ad sp create-for-rbac \
   --name "github-actions-deploy" \
   --role Contributor \
-  --scopes /subscriptions/YOUR_SUBSCRIPTION_ID \
+  --scopes /subscriptions/$SUBSCRIPTION_ID \
   --sdk-auth
 
 # 出力されるJSON全体を AZURE_CREDENTIALS に設定
-# 出力から個別の値も取得して設定
+# 出力から個別の値も取得して設定:
+# - clientId → ARM_CLIENT_ID
+# - clientSecret → ARM_CLIENT_SECRET
+# - subscriptionId → ARM_SUBSCRIPTION_ID
+# - tenantId → ARM_TENANT_ID
 ```
 
 **AZURE_CREDENTIALS の形式**:
@@ -92,19 +103,54 @@ az ad sp create-for-rbac \
 }
 ```
 
+**AZURE_ACR_LOGIN_SERVER の取得**:
+```bash
+# Container RegistryのログインサーバーURLを取得
+az acr list --query "[].{Name:name, LoginServer:loginServer}" --output table
+
+# 出力例: mcadstagingacr.azurecr.io
+# このLoginServer値をGitHub Secretsに設定
+```
+
+**Service PrincipalにACRアクセス権を付与**:
+```bash
+# ACRのリソースIDを取得
+ACR_RESOURCE_ID=$(az acr show --name YOUR_ACR_NAME --query id --output tsv)
+
+# Service PrincipalにAcrPushロールを付与（Dockerイメージのプッシュに必要）
+az role assignment create \
+  --assignee YOUR_CLIENT_ID \
+  --role AcrPush \
+  --scope $ACR_RESOURCE_ID
+
+# 例:
+# az role assignment create \
+#   --assignee $(az ad sp show --id $ARM_CLIENT_ID --query id -o tsv) \
+#   --role AcrPush \
+#   --scope $(az acr show --name mcadstagingacr --query id --output tsv)
+```
+
+**注意**: 現在のワークフローでは、ACRの名前はTerraform出力から自動的に取得されるため、`AZURE_ACR_LOGIN_SERVER`は必須ではありません。直接ACRを指定したい場合のオプションです。
+
 ---
 
 ### GCP Secrets
 
 | Secret名 | 説明 | 取得方法 |
 |---------|------|---------|
-| `GCP_CREDENTIALS` | GCPサービスアカウントキー（JSON） | サービスアカウントから取得 |
+| `GCP_CREDENTIALS` (旧称: `GCP_SA_KEY`) | GCPサービスアカウントキー（JSON） | サービスアカウントから取得 |
 | `GCP_PROJECT_ID` | GCPプロジェクトID | `gcloud config get-value project` |
 
 **取得手順**:
 
 ```bash
-# サービスアカウントの作成
+# 現在のプロジェクトIDを確認
+gcloud config get-value project
+
+# 既存のサービスアカウントを確認
+gcloud iam service-accounts list
+
+# 新規サービスアカウントの作成
 gcloud iam service-accounts create github-actions-deploy \
   --display-name="GitHub Actions Deploy"
 
@@ -113,7 +159,7 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
   --member="serviceAccount:github-actions-deploy@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
   --role="roles/editor"
 
-# キーファイルの作成
+# キーファイルの作成（このJSON全体をGitHub Secretsに設定）
 gcloud iam service-accounts keys create key.json \
   --iam-account=github-actions-deploy@YOUR_PROJECT_ID.iam.gserviceaccount.com
 
@@ -122,6 +168,36 @@ cat key.json
 
 # セキュリティのため、ローカルのキーファイルを削除
 rm key.json
+```
+
+**GCP_CREDENTIALS (GCP_SA_KEY) の形式**:
+```json
+{
+  "type": "service_account",
+  "project_id": "your-project-id",
+  "private_key_id": "key-id",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+  "client_email": "github-actions-deploy@your-project-id.iam.gserviceaccount.com",
+  "client_id": "123456789",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/..."
+}
+```
+
+**既存のサービスアカウントから新しいキーを作成する場合**:
+```bash
+# サービスアカウントの一覧を取得
+gcloud iam service-accounts list
+
+# 特定のサービスアカウントに新しいキーを作成
+gcloud iam service-accounts keys create key.json \
+  --iam-account=YOUR_SERVICE_ACCOUNT_EMAIL
+
+# 例: 
+# gcloud iam service-accounts keys create key.json \
+#   --iam-account=github-actions-deploy@ashnova.iam.gserviceaccount.com
 ```
 
 **必要な権限**:
