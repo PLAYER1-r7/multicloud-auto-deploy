@@ -38,9 +38,11 @@ app.add_middleware(
 # Gzip圧縮
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# TODO: ルーター登録
-# app.include_router(messages.router)
-# app.include_router(uploads.router)
+# ルーター登録
+from app.routes import messages
+
+app.include_router(messages.router)
+# TODO: app.include_router(uploads.router)
 
 
 @app.on_event("startup")
