@@ -15,7 +15,7 @@ import pulumi_random as random
 # Configuration
 config = pulumi.Config()
 azure_config = pulumi.Config("azure-native")
-location = azure_config.get("location") or "malaysiawest"
+location = azure_config.get("location") or "japaneast"
 stack = pulumi.get_stack()
 project_name = "multicloud-auto-deploy"
 
@@ -96,7 +96,7 @@ app_insights = azure.insights.Component(
 )
 
 # ========================================
-# App Service Plan (Consumption Plan)
+# App Service Plan (Flex Consumption Plan)
 # ========================================
 app_service_plan = azure.web.AppServicePlan(
     "app-service-plan",
@@ -104,8 +104,8 @@ app_service_plan = azure.web.AppServicePlan(
     resource_group_name=resource_group.name,
     location=location,
     sku=azure.web.SkuDescriptionArgs(
-        name="Y1",  # Consumption tier
-        tier="Dynamic",
+        name="FC1",  # Flex Consumption tier
+        tier="FlexConsumption",
     ),
     kind="FunctionApp",
     reserved=True,  # Linux
