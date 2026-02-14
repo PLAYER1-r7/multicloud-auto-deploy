@@ -148,8 +148,10 @@ cp .env.example .env
 ### 必読ガイド
 - 📖 [セットアップガイド](docs/SETUP.md) - 初期セットアップ手順
 - 🚀 [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定
-- 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策 ⭐ NEW
-- 🌐 [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のエンドポイント情報 ⭐ NEW
+- ✅ [CI/CDテスト結果](docs/CICD_TEST_RESULTS.md) - パイプライン検証レポート ⭐ NEW
+- 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策
+- 🌐 [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のエンドポイント情報
+- 📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集 ⭐ NEW
 
 ### プロバイダー別デプロイ
 - [AWS デプロイ](docs/AWS_DEPLOYMENT.md)
