@@ -69,9 +69,16 @@ resource "azurerm_resource_group" "main" {
   tags     = local.common_tags
 }
 
-# Storage Account for Functions
+# Random string for unique storage account names
+resource "random_string" "storage_suffix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
+# Storage Account for Functions (max 24 chars: lowercase + numbers only)
 resource "azurerm_storage_account" "functions" {
-  name                     = replace("${var.project_name}${var.environment}func", "-", "")
+  name                     = "mcadstgfunc${random_string.storage_suffix.result}"
   resource_group_name      = azurerm_resource_group.main.name
   location                 = azurerm_resource_group.main.location
   account_tier             = "Standard"
@@ -81,9 +88,9 @@ resource "azurerm_storage_account" "functions" {
   tags = local.common_tags
 }
 
-# Storage Account for Frontend (Static Website)
+# Storage Account for Frontend (Static Website, max 24 chars)
 resource "azurerm_storage_account" "frontend" {
-  name                     = replace("${var.project_name}${var.environment}web", "-", "")
+  name                     = "mcadstgweb${random_string.storage_suffix.result}"
   resource_group_name      = azurerm_resource_group.main.name
   location                 = azurerm_resource_group.main.location
   account_tier             = "Standard"
