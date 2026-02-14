@@ -4,10 +4,15 @@ WORKDIR /app
 
 # Install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+  && find /usr/local -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 # Copy application
 COPY app/ ./app/
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 # Expose port
 EXPOSE 8000
