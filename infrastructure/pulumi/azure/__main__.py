@@ -91,6 +91,7 @@ app_insights = azure.insights.Component(
     location=location,
     application_type="web",
     kind="web",
+    ingestion_mode="ApplicationInsights",  # Use ApplicationInsights instead of LogAnalytics
     tags=common_tags,
 )
 
