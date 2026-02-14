@@ -13,9 +13,11 @@
 | Cloud Provider | API Endpoint | Frontend |
 |---------------|--------------|----------|
 | **AWS** (ap-northeast-1) | [API](https://52z731x570.execute-api.ap-northeast-1.amazonaws.com/) | [CloudFront](https://dx3l4mbwg1ade.cloudfront.net) ✅ |
-| **Azure** (japaneast) | [API](https://mcad-staging-api--0000004.livelycoast-fa9d3350.japaneast.azurecontainerapps.io/) | [Front Door](https://multicloud-auto-deploy-staging-endpoint-deezaegrhyfzgsav.z01.azurefd.net) ✅ |
-| **GCP** (asia-northeast1) | [API](https://mcad-staging-api-son5b3ml7a-an.a.run.app/) | [Load Balancer](http://34.117.111.182) ✅ |
+| **Azure** (japaneast) | [Container Apps API](https://mcad-staging-api.livelycoast-fa9d3350.japaneast.azurecontainerapps.io) 🆕 | [Container Apps Frontend](https://mcad-staging-frontend.livelycoast-fa9d3350.japaneast.azurecontainerapps.io) ✅ 🆕 |
+| **GCP** (asia-northeast1) | [Cloud Run API](https://mcad-staging-api-son5b3ml7a-an.a.run.app) 🆕 | [Cloud Run Frontend](https://mcad-staging-frontend-son5b3ml7a-an.a.run.app) ✅ 🆕 |
 
+> 🐍 **Azure & GCP**: Pure Python Full Stack（FastAPI + Reflex）がContainer AppsとCloud Runで稼働中！
+> 
 > 📋 詳細なエンドポイント情報は [docs/ENDPOINTS.md](docs/ENDPOINTS.md) を参照してください
 
 ## 🚀 特徴
@@ -165,32 +167,69 @@ cp .env.example .env
 - PRの作成/更新 → ビルド検証
 - 手動トリガー → 任意の環境へデプロイ
 
-### デプロイフロー
+### ワークフロー
 
-1. **Build Frontend**: React アプリケーションをビルド
-2. **Package Backend**: Lambda パッケージを作成（x86_64、~4.3MB）
-3. **Update Lambda**: S3経由でLambda関数を更新
-4. **Deploy Frontend**: S3にフロントエンドをアップロード
-5. **Invalidate Cache**: CloudFront キャッシュを無効化
+| ワークフロー | トリガー | デプロイ先 | 説明 |
+|------------|---------|-----------|------|
+| **deploy-multicloud.yml** | `main`へのpush / 手動 | Azure + GCP | Container Apps/Cloud Runへの統合デプロイ 🆕 |
+| **deploy-aws.yml** | `main`へのpush / 手動 | AWS Lambda | Lambda関数の更新 |
+| **deploy-azure.yml** | `main`へのpush / 手動 | Azure | Terraform使用 |
+| **deploy-gcp.yml** | `main`へのpush / 手動 | GCP | Terraform使用 |
+
+### マルチクラウドデプロイフロー 🆕
+
+1. **Build Images**: 
+   - APIとFrontendのDockerイメージをビルド（linux/amd64）
+   - Azure ACRとGCP Artifact Registryにプッシュ
+
+2. **Deploy Azure** (並列実行):
+   - Container Apps（API + Frontend）を更新
+
+3. **Deploy GCP** (並列実行):
+   - Cloud Run（API + Frontend）を更新
+
+4. **Health Check**:
+   - デプロイされたAPIのヘルスチェック
 
 ### 必要なGitHub Secrets
 
-以下のシークレットを設定してください（詳細は [CI/CD設定ガイド](docs/CICD_SETUP.md) 参照）：
+以下のシークレットを設定してください（詳細は [CI/CD設定ガイド](docs/CI_CD_SETUP.md) 参照）：
 
-**AWS**
+**Azure Container Apps** 🆕
+- `AZURE_CREDENTIALS` - Service Principal認証情報
+- `AZURE_CONTAINER_REGISTRY` - ACRログインサーバー
+- `AZURE_CONTAINER_REGISTRY_USERNAME/PASSWORD` - ACR認証情報
+- `AZURE_RESOURCE_GROUP` - リソースグループ名
+- `AZURE_CONTAINER_APP_API` - APIのContainer App名
+- `AZURE_CONTAINER_APP_FRONTEND` - FrontendのContainer App名
+
+**GCP Cloud Run** 🆕
+- `GCP_CREDENTIALS` - サービスアカウントキー（JSON）
+- `GCP_PROJECT_ID` - プロジェクトID
+- `GCP_ARTIFACT_REGISTRY_REPO` - Artifact Registryリポジトリ名
+- `GCP_CLOUD_RUN_API` - APIのCloud Runサービス名
+- `GCP_CLOUD_RUN_FRONTEND` - FrontendのCloud Runサービス名
+
+**AWS Lambda**
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
-
-**Azure**
-- `AZURE_CREDENTIALS`
-- `AZURE_ACR_LOGIN_SERVER`
-
-**GCP**
-- `GCP_CREDENTIALS`
 
 ### デプロイ状況
 
 最新のデプロイ状況は[GitHub Actions](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions)で確認できます。
+
+### 手動デプロイ
+
+GitHub Actionsページから手動でワークフローを実行：
+
+```bash
+# GitHub上で
+Actions > Deploy to Multi-Cloud > Run workflow
+
+# オプション:
+- environment: staging / production
+- deploy_target: all / azure / gcp
+```
 
 ## 🏗️ サポートされるアーキテクチャ
 
@@ -203,20 +242,24 @@ cp .env.example .env
 - **Deployment**: GitHub Actions (S3-based Lambda deployment)
 
 ### Azure (japaneast) ✅ 運用中
-- **Frontend**: Static Web Apps / Storage Account
-- **Backend**: Container Apps
+- **Frontend**: Container Apps (Reflex - Pure Python) 🆕
+- **Backend**: Container Apps (FastAPI) 🆕
 - **Database**: Cosmos DB / Azure SQL
+- **Storage**: Azure Blob Storage
 - **Auth**: Azure AD B2C (予定)
-- **Infrastructure**: Pulumi
+- **Infrastructure**: Pulumi / Terraform
 - **Deployment**: GitHub Actions (Azure Container Registry)
+- **Container Registry**: Azure Container Registry (ACR)
 
 ### GCP (asia-northeast1) ✅ 運用中
-- **Frontend**: Cloud Storage + Cloud CDN
-- **Backend**: Cloud Run
+- **Frontend**: Cloud Run (Reflex - Pure Python) 🆕
+- **Backend**: Cloud Run (FastAPI) 🆕
 - **Database**: Firestore / Cloud SQL
+- **Storage**: Cloud Storage
 - **Auth**: Firebase Auth (予定)
-- **Infrastructure**: Pulumi
+- **Infrastructure**: Pulumi / Terraform
 - **Deployment**: GitHub Actions (Artifact Registry)
+- **Container Registry**: Artifact Registry
 
 ## 🛠️ 開発ツール
 
