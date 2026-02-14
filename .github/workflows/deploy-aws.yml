@@ -59,6 +59,7 @@ jobs:
       - name: Package Backend
         run: |
           cd services/backend
+          mkdir -p package
           pip install -r requirements.txt -t package/
           cp -r src/* package/
           cd package && zip -r ../lambda.zip . && cd ..
@@ -68,6 +69,7 @@ jobs:
           LAMBDA_FUNCTION=${{ secrets.AWS_LAMBDA_FUNCTION_NAME || 'multicloud-auto-deploy-staging-api' }}
           aws lambda update-function-code \
             --function-name $LAMBDA_FUNCTION \
+            --region ${{ env.AWS_REGION }} \
             --zip-file fileb://services/backend/lambda.zip
 
       - name: Deploy Frontend to S3
