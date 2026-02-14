@@ -75,7 +75,7 @@ jobs:
           # Create zip
           echo "🗜️  Creating lambda package..."
           cd package
-          zip -r9 ../lambda.zip . -q
+          zip -r ../lambda.zip .
           cd ..
           
           # Show package info
