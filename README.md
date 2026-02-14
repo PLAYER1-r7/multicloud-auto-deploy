@@ -38,10 +38,8 @@ multicloud-auto-deploy/
 │   └── pulumi/           # 🆕 Pulumiコード（Python - AWS/Azure/GCP）
 ├── services/             # アプリケーションコード
 │   ├── api/              # 🆕 FastAPI バックエンド（Python）
-│   ├── web/              # 🆕 Reflex フロントエンド（Python）
-│   ├── frontend/         # React フロントエンド（TypeScript）
-│   ├── backend/          # 既存バックエンド（Python）
-│   └── database/         # データベーススキーマ
+│   ├── frontend_reflex/  # ✨ Reflex フロントエンド（Python）
+│   └── backend/          # Legacy バックエンド（Python）
 ├── scripts/              # デプロイスクリプト
 └── docs/                 # ドキュメント
     └── PYTHON_MIGRATION.md  # 🆕 Python完全版移行ガイド
@@ -51,33 +49,24 @@ multicloud-auto-deploy/
 
 ### 前提条件
 
-- Node.js 18+ / Python 3.12+ 🆕
+- Python 3.12+
 - Docker & Docker Compose
-- Terraform 1.5+ または Pulumi 3.0+ 🆕
+- Pulumi 3.0+ または Terraform 1.5+
 - AWS CLI 2.x / Azure CLI 2.x / gcloud CLI 556.0+
 - GitHub アカウント
 
 ### 技術スタック
 
-**🐍 Python Full Stack版（新）**
-- **IaC**: Pulumi (Python)
-- **Backend**: FastAPI 0.115+ 
-- **Frontend**: Reflex 0.6+
+**🐍 Python Full Stack**
+- **IaC**: Pulumi (Python) / Terraform (HCL)
+- **Backend**: FastAPI 1.0+ 
+- **Frontend**: Reflex 0.8+ (Pure Python, no JavaScript/React)
 - **Database**: DynamoDB / Cosmos DB / Firestore
-- **Storage**: S3 / Azure Blob / Cloud Storage
-
-**TypeScript版（既存）**
-- **Frontend**: React 18 + TypeScript 5 + Vite 5 + TailwindCSS 3
-
-**Backend**
-- Python 3.12
-- FastAPI 0.109
-- Pydantic 2.5
-- Mangum (AWS Lambda adapter)
+- **Storage**: S3 / Azure Blob / Cloud Storage / MinIO (local)
 
 **Infrastructure**
-- Terraform 1.14.5
-- AWS Lambda (x86_64)
+- Pulumi 3.0+ / Terraform 1.14+
+- AWS Lambda (x86_64) / Azure Container Apps / Cloud Run
 - API Gateway v2 (HTTP)
 - S3 + CloudFront
 - DynamoDB
@@ -85,6 +74,7 @@ multicloud-auto-deploy/
 **CI/CD**
 - GitHub Actions
 - Automated builds and deployments
+- Docker-based deployments
 - S3-based Lambda deployment
 
 ### クイックスタート
@@ -99,13 +89,13 @@ cd multicloud-auto-deploy
 
 2. **ローカル開発環境起動**
 ```bash
-# Python版（FastAPI + Reflex + MinIO）
-docker-compose up api web minio
+# Python Full Stack（FastAPI + Reflex + MinIO）
+docker-compose up -d api frontend_reflex minio
 
 # アクセス先:
-# - FastAPI Docs: http://localhost:8000/docs
-# - Reflex Web: http://localhost:3000
-# - MinIO Console: http://localhost:9001
+# - Reflex Frontend: http://localhost:3002
+# - FastAPI API Docs: http://localhost:8000/docs
+# - MinIO Console: http://localhost:9001 (admin/minioadmin)
 ```
 
 3. **Pulumiでデプロイ**
@@ -120,7 +110,7 @@ pulumi up
 
 > 📚 詳細な移行ガイドは [docs/PYTHON_MIGRATION.md](docs/PYTHON_MIGRATION.md) を参照
 
-#### TypeScript版（既存）
+#### Terraform版
 
 1. **リポジトリをクローン**
 ```bash
