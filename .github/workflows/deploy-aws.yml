@@ -48,14 +48,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build Frontend
-        run: |
-          cd services/frontend
-          npm install
-          npm run build
-        env:
-          VITE_API_URL: ${{ secrets.AWS_API_URL || 'https://rnvg3bwzea.execute-api.us-east-1.amazonaws.com/prod' }}
-
       - name: Package Backend
         run: |
           cd services/backend
@@ -83,6 +75,7 @@ jobs:
           ls -lh lambda.zip
 
       - name: Update Lambda Function
+        id: update_lambda
         run: |
           set -e  # Exit on error
           LAMBDA_FUNCTION=${{ secrets.AWS_LAMBDA_FUNCTION_NAME || 'multicloud-auto-deploy-staging-api' }}
@@ -107,6 +100,25 @@ jobs:
             --output json || { echo "❌ Lambda update failed!"; exit 1; }
           
           echo "✅ Lambda function updated successfully"
+          
+          # Get API Gateway endpoint
+          API_ID=$(aws apigatewayv2 get-apis --region ${{ env.AWS_REGION }} --query 'Items[?Name==`multicloud-auto-deploy-staging-api`].ApiId' --output text)
+          if [ -n "$API_ID" ]; then
+            API_ENDPOINT="https://${API_ID}.execute-api.${{ env.AWS_REGION }}.amazonaws.com"
+            echo "api_endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
+            echo "✅ API Endpoint: $API_ENDPOINT"
+          else
+            echo "⚠️  API Gateway not found, using default"
+            echo "api_endpoint=https://52z731x570.execute-api.ap-northeast-1.amazonaws.com" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Frontend
+        run: |
+          cd services/frontend
+          npm install
+          npm run build
+        env:
+          VITE_API_URL: ${{ steps.update_lambda.outputs.api_endpoint }}
 
       - name: Deploy Frontend to S3
         run: |
@@ -115,7 +127,7 @@ jobs:
 
       - name: Invalidate CloudFront Cache
         run: |
-          CLOUDFRONT_ID=${{ secrets.AWS_CLOUDFRONT_ID || 'E3ICZFV7XKB5O9' }}
+          CLOUDFRONT_ID=${{ secrets.AWS_CLOUDFRONT_ID || 'E2GDU7Y7UGDV3S' }}
           aws cloudfront create-invalidation \
             --distribution-id $CLOUDFRONT_ID \
             --paths "/*"
