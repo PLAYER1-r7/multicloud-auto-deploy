@@ -16,11 +16,19 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
     from starlette.responses import Response
     
     # Azure Functions Request → FastAPI Request 変換
+    route_path = req.route_params.get("route", "")
+    path = "/" + route_path if route_path else "/"
+    
+    # クエリ文字列を正しく抽出
+    from urllib.parse import urlparse, parse_qs
+    parsed = urlparse(req.url)
+    query_string = parsed.query.encode("utf-8") if parsed.query else b""
+    
     scope = {
         "type": "http",
         "method": req.method,
-        "path": "/" + req.route_params.get("route", ""),
-        "query_string": req.url.encode("utf-8"),
+        "path": path,
+        "query_string": query_string,
         "headers": [[k.encode(), v.encode()] for k, v in req.headers.items()],
     }
     
