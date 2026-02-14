@@ -78,42 +78,24 @@ jobs:
           echo "client_secret=$(echo $CREDS | jq -r '.clientSecret')" >> $GITHUB_OUTPUT
           echo "tenant_id=$(echo $CREDS | jq -r '.tenantId')" >> $GITHUB_OUTPUT
 
-      - name: Refresh Pulumi State
-        uses: pulumi/actions@v5
-        with:
-          command: refresh
-          stack-name: staging
-          work-dir: infrastructure/pulumi/azure
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          ARM_CLIENT_ID: ${{ steps.azure_env.outputs.client_id }}
-          ARM_CLIENT_SECRET: ${{ steps.azure_env.outputs.client_secret }}
-          ARM_SUBSCRIPTION_ID: ${{ steps.azure_env.outputs.subscription_id }}
-          ARM_TENANT_ID: ${{ steps.azure_env.outputs.tenant_id }}
+      # Pulumi Infrastructure deployment is skipped - using Portal-created resources
+      # Azure Portal quota limitations prevent IaC-based App Service Plan creation
+      # Resources created manually: multicloud-auto-deploy-staging-func (FC1 Flex Consumption)
 
-      - name: Deploy Infrastructure with Pulumi
-        id: pulumi
-        uses: pulumi/actions@v5
-        with:
-          command: up
-          stack-name: staging
-          work-dir: infrastructure/pulumi/azure
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          ARM_CLIENT_ID: ${{ steps.azure_env.outputs.client_id }}
-          ARM_CLIENT_SECRET: ${{ steps.azure_env.outputs.client_secret }}
-          ARM_SUBSCRIPTION_ID: ${{ steps.azure_env.outputs.subscription_id }}
-          ARM_TENANT_ID: ${{ steps.azure_env.outputs.tenant_id }}
-
-      - name: Get Pulumi Outputs
+      - name: Use Portal-Created Resources
         id: pulumi_outputs
         run: |
-          cd infrastructure/pulumi/azure
-          echo "resource_group_name=$(pulumi stack output resource_group_name)" >> $GITHUB_OUTPUT
-          echo "function_app_name=$(pulumi stack output function_app_name)" >> $GITHUB_OUTPUT
-          echo "functions_storage_name=$(pulumi stack output functions_storage_name)" >> $GITHUB_OUTPUT
-          echo "frontend_storage_name=$(pulumi stack output frontend_storage_name)" >> $GITHUB_OUTPUT
-          echo "api_url=$(pulumi stack output api_url)" >> $GITHUB_OUTPUT
+          echo "resource_group_name=multicloud-auto-deploy-staging-rg" >> $GITHUB_OUTPUT
+          echo "function_app_name=multicloud-auto-deploy-staging-func" >> $GITHUB_OUTPUT
+          
+          # Get storage account name dynamically
+          STORAGE_NAME=$(az storage account list --resource-group multicloud-auto-deploy-staging-rg --query "[?starts_with(name, 'multicloud')].name | [0]" -o tsv)
+          echo "functions_storage_name=${STORAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "frontend_storage_name=mcadwebd45ihd" >> $GITHUB_OUTPUT
+          
+          # Get Function App URL
+          FUNC_HOSTNAME=$(az functionapp show --name multicloud-auto-deploy-staging-func --resource-group multicloud-auto-deploy-staging-rg --query defaultHostName -o tsv)
+          echo "api_url=https://${FUNC_HOSTNAME}" >> $GITHUB_OUTPUT
 
       - name: Package Function App
         run: |
