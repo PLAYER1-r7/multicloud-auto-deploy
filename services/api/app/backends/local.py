@@ -148,3 +148,40 @@ class LocalBackend(BaseBackend):
             print(f"⚠️ Error deleting message {message_id}: {e}")
             return False
 
+    async def update_message(
+        self, message_id: str, message: "MessageUpdate"
+    ) -> Optional[Message]:
+        """メッセージを更新"""
+        # 既存のメッセージを取得
+        existing_message = await self.get_message(message_id)
+        if not existing_message:
+            return None
+        
+        # 更新データをマージ（None以外のフィールドのみ更新）
+        update_data = message.model_dump(exclude_unset=True)
+        updated_message_data = existing_message.model_dump()
+        updated_message_data.update(update_data)
+        updated_message_data["updated_at"] = datetime.utcnow()
+        
+        # MinIOに保存
+        updated_message = Message(**updated_message_data)
+        object_key = self._get_object_key(message_id)
+        
+        try:
+            data = json.dumps(
+                updated_message.model_dump(mode='json'), ensure_ascii=False
+            ).encode('utf-8')
+            
+            self.client.put_object(
+                bucket_name=self.bucket_name,
+                object_name=object_key,
+                data=BytesIO(data),
+                length=len(data),
+                content_type="application/json",
+            )
+            
+            return updated_message
+        except S3Error as e:
+            print(f"⚠️ Error updating message {message_id}: {e}")
+            return None
+

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.backends import BaseBackend
 from app.backends.factory import get_backend
-from app.models import Message, MessageCreate, MessageListResponse
+from app.models import Message, MessageCreate, MessageUpdate, MessageListResponse
 
 router = APIRouter(prefix="/api/messages", tags=["messages"])
 
@@ -52,6 +52,24 @@ async def get_message(
         )
 
     return message
+
+
+@router.put("/{message_id}", response_model=Message)
+async def update_message(
+    message_id: str,
+    message: MessageUpdate,
+    backend: Annotated[BaseBackend, Depends(get_backend)],
+):
+    """メッセージを更新"""
+    updated_message = await backend.update_message(message_id, message)
+
+    if not updated_message:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Message {message_id} not found",
+        )
+
+    return updated_message
 
 
 @router.delete("/{message_id}", status_code=status.HTTP_204_NO_CONTENT)

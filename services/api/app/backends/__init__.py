@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 from datetime import datetime
 
-from app.models import Message, MessageCreate
+from app.models import Message, MessageCreate, MessageUpdate
 
 
 class BaseBackend(ABC):
@@ -24,6 +24,13 @@ class BaseBackend(ABC):
     @abstractmethod
     async def get_message(self, message_id: str) -> Optional[Message]:
         """メッセージを1件取得"""
+        pass
+
+    @abstractmethod
+    async def update_message(
+        self, message_id: str, message: MessageUpdate
+    ) -> Optional[Message]:
+        """メッセージを更新"""
         pass
 
     @abstractmethod

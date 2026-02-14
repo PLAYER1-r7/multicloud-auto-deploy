@@ -28,6 +28,14 @@ class MessageCreate(MessageBase):
     pass
 
 
+class MessageUpdate(BaseModel):
+    """メッセージ更新"""
+
+    content: Optional[str] = Field(None, min_length=1, max_length=1000)
+    author: Optional[str] = Field(None, min_length=1, max_length=100)
+    image_url: Optional[str] = None
+
+
 class Message(MessageBase):
     """メッセージ（レスポンス）"""
 
