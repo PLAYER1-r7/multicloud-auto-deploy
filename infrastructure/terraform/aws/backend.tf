@@ -31,7 +31,7 @@ resource "aws_lambda_function" "api" {
   runtime         = "python3.12"
   timeout         = 60
   memory_size     = 512
-  architectures    = ["arm64"]
+  architectures    = ["x86_64"]
 }
 
 # API Gateway

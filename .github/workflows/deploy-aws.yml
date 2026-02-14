@@ -60,7 +60,10 @@ jobs:
         run: |
           cd services/backend
           mkdir -p package
-          pip install -r requirements.txt -t package/
+          # AWS Lambda用の最小限の依存関係のみインストール（boto3はLambda環境に含まれている）
+          pip install --platform manylinux2014_x86_64 --only-binary=:all: \
+            --target package --python-version 3.12 --implementation cp \
+            fastapi==0.109.0 pydantic==2.5.3 python-dotenv==1.0.0 mangum==0.17.0
           cp -r src/* package/
           cd package && zip -r ../lambda.zip . && cd ..
 
