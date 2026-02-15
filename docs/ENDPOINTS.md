@@ -67,8 +67,7 @@ curl -I https://mcadwebd45ihd.z11.web.core.windows.net/
 | **Frontend Storage** | `https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html` |
 | **Region** | asia-northeast1 (東京) |
 | **Project ID** | ashnova |
-| **Cloud Run Service** | multicloud-auto-deploy-staging-api |
-| **Cloud Run Service (Frontend)** | mcad-staging-frontend |
+| **Cloud Function** | multicloud-auto-deploy-staging-api |
 | **Storage Bucket** | ashnova-multicloud-auto-deploy-staging-frontend |
 | **Global IP Address** | 34.117.111.182 (multicloud-frontend-ip) |
 | **Backend Bucket** | multicloud-frontend-backend |
@@ -194,9 +193,8 @@ gcloud compute addresses describe multicloud-auto-deploy-staging-cdn-ip --global
 - **Cosmos DB**: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.DocumentDB%2FdatabaseAccounts
 
 ### GCP
-- **Cloud Run**: https://console.cloud.google.com/run?project=ashnova
+- **Cloud Functions**: https://console.cloud.google.com/functions/list?project=ashnova
 - **Cloud Storage**: https://console.cloud.google.com/storage/browser?project=ashnova
-- **Artifact Registry**: https://console.cloud.google.com/artifacts?project=ashnova
 - **Firestore**: https://console.cloud.google.com/firestore/data?project=ashnova
 
 ---
@@ -310,7 +308,7 @@ curl -X POST https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app/
 | 2026-02-15 | **大型更新**: 全エンドポイント情報を実際の値に更新 |
 | 2026-02-15 | CDN情報追加 - CloudFront, Front Door, Cloud CDN |
 | 2026-02-15 | Azure: Container Apps → Functionsに変更 |
-| 2026-02-15 | GCP: Cloud Run APIエンドポイント更新 |
+| 2026-02-15 | GCP: Cloud Functions APIエンドポイント更新 |
 | 2026-02-15 | **Pulumi管理環境追加** - 全3クラウドでInfrastructure as Code導入 🎉 |
 | 2026-02-15 | **全環境デプロイ成功** - AWS/GCP/Azure統合完了、エンドポイント最新化 |
 

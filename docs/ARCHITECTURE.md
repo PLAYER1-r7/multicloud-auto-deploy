@@ -198,17 +198,17 @@ graph LR
     Internet((🌐 Internet))
     
     Internet --> CDN[☁️ Cloud CDN<br/>34.120.43.83]
-    Internet --> CloudRun[🏃 Cloud Run<br/>FastAPI/Docker]
+    Internet --> CloudFunctions[⚡ Cloud Functions<br/>Python 3.11]
     
     CDN --> BackendBucket[📦 Backend Bucket]
     BackendBucket --> CloudStorage[☁️ Cloud Storage<br/>Frontend]
     CloudStorage --> React[⚛️ React App]
     
-    CloudRun --> Firestore[(🗄️ Firestore<br/>messages/posts)]
+    CloudFunctions --> Firestore[(🗄️ Firestore<br/>messages/posts)]
     
     style Internet fill:#e1f5ff
     style CDN fill:#4285f4
-    style CloudRun fill:#4285f4
+    style CloudFunctions fill:#4285f4
     style BackendBucket fill:#4285f4
     style CloudStorage fill:#4285f4
     style Firestore fill:#4285f4
@@ -220,7 +220,7 @@ graph LR
 | リソース | 名前 | 目的 | リージョン |
 |---------|------|------|----------|
 | Cloud Storage | `ashnova-multicloud-auto-deploy-staging-frontend` | フロントエンドホスティング | asia-northeast1 |
-| Cloud Run | `multicloud-auto-deploy-staging-api` | バックエンドAPI（Docker） | asia-northeast1 |
+| Cloud Functions | `multicloud-auto-deploy-staging-api` | バックエンドAPI（Python 3.11） | asia-northeast1 |
 | Firestore | `(default)` | NoSQLデータベース | asia-northeast1 |
 | Backend Bucket | `multicloud-frontend-backend` | CDN統合 | Global |
 | Global IP | `multicloud-frontend-ip` | 固定IPアドレス（34.120.43.83） | Global |
@@ -254,13 +254,13 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant React as ⚛️ React App
-    participant CR as 🏃 Cloud Run
+    participant CF as ⚡ Cloud Functions
     participant FS as 🗄️ Firestore
     
-    React->>CR: POST /api/messages
-    CR->>FS: Add Document
-    FS-->>CR: Document ID
-    CR-->>React: 201 Created
+    React->>CF: POST /api/messages/
+    CF->>FS: Add Document
+    FS-->>CF: Document ID
+    CF-->>React: 201 Created
 ```
 
 ### IAM権限
@@ -270,7 +270,7 @@ sequenceDiagram
 - sat0sh1kawada01@gmail.com
 
 **権限範囲**:
-- Cloud Run: デプロイ・管理
+- Cloud Functions: デプロイ・管理
 - Artifact Registry: イメージ管理
 - Firestore: データベース管理
 - Cloud Storage: ストレージ管理
@@ -409,12 +409,12 @@ K_SERVICE → "GCP"
 
 ### バックエンド最適化
 
-| 項目 | AWS Lambda | Azure Container Apps | GCP Cloud Run |
-|-----|-----------|---------------------|---------------|
+| 項目 | AWS Lambda | Azure Functions | GCP Cloud Functions |
+|-----|-----------|-----------------|---------------------|
 | コールドスタート | 〜500ms | 〜1s | 〜500ms |
-| メモリ | 512 MB | 0.5 Gi | 512 MiB |
-| タイムアウト | 30s | 300s | 300s |
-| 同時実行数 | 1000 | 10 | 80 |
+| メモリ | 512 MB | 512 MB | 512 MiB |
+| タイムアウト | 30s | 60s | 60s |
+| 同時実行数 | 1000 | 200 | 10 |
 | オートスケール | ✅ | ✅ | ✅ |
 
 ### データベース最適化
@@ -459,7 +459,7 @@ K_SERVICE → "GCP"
 |---------|----------------|-------------|
 | AWS | API Gateway | Lambda自動 |
 | Azure | Container Apps Ingress | HTTP /api/health |
-| GCP | Cloud Run Internal LB | HTTP / |
+| GCP | Cloud Functions Internal LB | HTTP / |
 
 ## モニタリング・ログ
 
@@ -522,7 +522,7 @@ K_SERVICE → "GCP"
 | | **合計** | **$35-87** |
 | **GCP** | Cloud CDN | $0-5 |
 | | Cloud Storage | $0.5-2 |
-| | Cloud Run | $0-5（無料枠） |
+| | Cloud Functions | $0-5（無料枠） |
 | | Firestore | $0-5（無料枠） |
 | | **合計** | **$0.5-17** |
 
@@ -622,7 +622,7 @@ DELETE /api/messages/{id} - メッセージ削除
 |---------|---------|------|
 | AWS | Lambda + API Gateway | サーバーレス、オートスケール |
 | Azure | Azure Functions | サーバーレス、統合認証 |
-| GCP | Cloud Functions/Run | サーバーレス、コンテナ対応 |
+| GCP | Cloud Functions | サーバーレス、HTTPトリガー |
 
 ## データベース
 

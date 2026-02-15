@@ -165,20 +165,6 @@ cat key.json
 rm key.json
 ```
 
-**GCP Artifact RegistryとCloud Run名の取得**:
-```bash
-# Artifact Registryリポジトリ名
-gcloud artifacts repositories list --format="table(name, location)"
-
-# Cloud Runサービス名
-gcloud run services list --format="table(name, region)"
-
-# 確認した値をSecretsに設定:
-# GCP_ARTIFACT_REGISTRY_REPO: mcad-staging-repo
-# GCP_CLOUD_RUN_API: multicloud-auto-deploy-staging-api
-# GCP_CLOUD_RUN_FRONTEND: multicloud-auto-deploy-staging-frontend
-```
-
 **GCP_CREDENTIALS の形式**:
 ```json
 {
@@ -210,8 +196,7 @@ gcloud iam service-accounts keys create key.json \
 ```
 
 **必要な権限**:
-- Cloud Run: 管理者
-- Artifact Registry: 管理者
+- Cloud Functions: 管理者
 - Cloud Storage: 管理者
 - Firestore: 管理者
 - Compute Engine: 管理者（Load Balancer用）
@@ -266,8 +251,8 @@ gcloud iam service-accounts keys create key.json \
 1. GCP認証
 2. Node.js・Python・Pulumiのセットアップ
 3. Pulumiでインフラデプロイ
-4. Dockerイメージのビルドとプッシュ
-5. Cloud Runサービスのデプロイ
+4. Cloud Functionsパッケージのビルド
+5. Cloud Functionsのデプロイ
 6. IAMポリシーの設定
 7. フロントエンドのビルドとデプロイ
 8. Cloud Storageへのアップロード
