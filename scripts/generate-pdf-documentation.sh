@@ -395,10 +395,12 @@ if [ ! -f "$LATEX_HEADER" ]; then
     exit 3
 fi
 
-# Generate PDF using Pandoc directly
+# Generate PDF using Pandoc directly with Lua filter for table columns
+LUA_FILTER="$PROJECT_ROOT/scripts/table-columns.lua"
 if pandoc "$MERGED_MD" \
     -o "$OUTPUT_FILE" \
     --pdf-engine=xelatex \
+    --lua-filter="$LUA_FILTER" \
     --toc \
     --toc-depth=3 \
     --number-sections \
