@@ -17,6 +17,7 @@
 % Code listing improvements
 \usepackage{listings}
 \usepackage{xcolor}
+\usepackage{seqsplit}
 
 % Better font setup for CJK
 \usepackage{xeCJK}
@@ -71,8 +72,18 @@
 \setlength{\LTpre}{0.5\baselineskip}
 \setlength{\LTpost}{0.5\baselineskip}
 
-% Reduce table font size for better fit
-\AtBeginEnvironment{longtable}{\small}
+% Allow breaking long words and URLs in tables
+\emergencystretch=3em
+\tolerance=9999
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+
+% Reduce table font size and allow sloppy line breaking
+\AtBeginEnvironment{longtable}{%
+  \small
+  \sloppy
+  \setlength{\emergencystretch}{3em}%
+}
 
 % Page layout is handled by pandoc's geometry variable
 % Do not set geometry here to avoid conflicts
@@ -114,7 +125,12 @@
 % Code block improvements for inline code
 \let\oldtexttt\texttt
 \renewcommand{\texttt}[1]{%
-  \colorbox{gray!10}{\oldtexttt{#1}}%
+  \colorbox{gray!10}{%
+    \begingroup
+    \small
+    \oldtexttt{\seqsplit{#1}}%
+    \endgroup
+  }%
 }
 
 % Better list spacing
