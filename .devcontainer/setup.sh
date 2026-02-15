@@ -1,5 +1,11 @@
 #!/bin/bash
 # Dev Container初期化スクリプト
+#
+# Note: Core tools (AWS CLI, Azure CLI, GitHub CLI, Pulumi, Node.js, Python, Git, Docker)
+#       are provided by devcontainer features and Dockerfile. This script handles:
+#       - Node.js/Python project dependencies installation
+#       - Pulumi Python dependencies (requirements.txt)
+#       - Script permissions and project-specific setup
 
 set -e
 
@@ -38,21 +44,11 @@ if [ -f "services/backend/requirements.txt" ]; then
     echo -e "${GREEN}✓ Python dependencies installed${NC}"
 fi
 
-# Pulumiの初期化
-if ! command -v pulumi &> /dev/null; then
-    echo -e "${BLUE}Installing Pulumi...${NC}"
-    curl -fsSL https://get.pulumi.com | sh
-    export PATH=$PATH:$HOME/.pulumi/bin
-    echo -e "${GREEN}✓ Pulumi installed${NC}"
-else
-    echo -e "${GREEN}✓ Pulumi already installed${NC}"
-fi
-
-# Pulumi環境のセットアップ
+# Pulumi環境のセットアップ（requirements.txtのインストールのみ）
 for cloud in aws azure gcp; do
     pulumi_dir="infrastructure/pulumi/$cloud"
     if [ -d "$pulumi_dir" ]; then
-        echo -e "${BLUE}Setting up Pulumi for $cloud...${NC}"
+        echo -e "${BLUE}Setting up Pulumi dependencies for $cloud...${NC}"
         (cd "$pulumi_dir" && [ -f requirements.txt ] && pip install -q -r requirements.txt) || true
         echo -e "${GREEN}✓ Pulumi $cloud dependencies installed${NC}"
     fi
