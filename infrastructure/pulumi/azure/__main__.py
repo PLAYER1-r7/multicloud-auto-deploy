@@ -134,9 +134,7 @@ app_secret = azure.keyvault.Secret(
     resource_group_name=resource_group.name,
     vault_name=key_vault.name,
     properties=azure.keyvault.SecretPropertiesArgs(
-        value=pulumi.Output.secret(
-            '{\"database_url\":\"changeme\",\"api_key\":\"changeme\"}'
-        ),
+        value=pulumi.Output.secret('{"database_url":"changeme","api_key":"changeme"}'),
     ),
     tags=common_tags,
 )
@@ -163,6 +161,8 @@ frontdoor_profile = azure.cdn.Profile(
         name="Standard_AzureFrontDoor",
     ),
     tags=common_tags,
+    # Force replacement when SKU changes (Premium -> Standard not supported)
+    opts=pulumi.ResourceOptions(replace_on_changes=["sku"]),
 )
 
 # Front Door Endpoint

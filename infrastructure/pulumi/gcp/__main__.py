@@ -11,6 +11,7 @@ because Pulumi requires the ZIP file to exist before creating the function.
 
 Cost: ~$2-5/month for low traffic
 """
+
 import pulumi
 import pulumi_gcp as gcp
 
@@ -74,7 +75,7 @@ app_secret_version = gcp.secretmanager.SecretVersion(
     "app-secret-version",
     secret=app_secret.id,
     secret_data=pulumi.Output.secret(
-        '{\"database_url\":\"changeme\",\"api_key\":\"changeme\"}'
+        '{"database_url":"changeme","api_key":"changeme"}'
     ),
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
@@ -101,20 +102,19 @@ frontend_bucket = gcp.storage.Bucket(
     location=region.upper(),
     storage_class="STANDARD",
     uniform_bucket_level_access=True,
-    
     website=gcp.storage.BucketWebsiteArgs(
         main_page_suffix="index.html",
         not_found_page="index.html",  # For SPA routing
     ),
-    
     # CORS configuration
-    cors=[gcp.storage.BucketCorArgs(
-        origins=allowed_origins_list,
-        methods=["GET", "HEAD", "OPTIONS"],
-        response_headers=["Content-Type", "Authorization", "X-Requested-With"],
-        max_age_seconds=3600,
-    )],
-    
+    cors=[
+        gcp.storage.BucketCorArgs(
+            origins=allowed_origins_list,
+            methods=["GET", "HEAD", "OPTIONS"],
+            response_headers=["Content-Type", "Authorization", "X-Requested-With"],
+            max_age_seconds=3600,
+        )
+    ],
     labels=common_labels,
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
@@ -135,7 +135,6 @@ armor_security_policy = gcp.compute.SecurityPolicy(
     name=f"{project_name}-{stack}-armor",
     project=project,
     description="Cloud Armor security policy for DDoS protection and rate limiting",
-    
     # Rate limiting rule: max 1000 requests per minute per IP
     rules=[
         gcp.compute.SecurityPolicyRuleArgs(
@@ -172,14 +171,12 @@ armor_security_policy = gcp.compute.SecurityPolicy(
             description="Block known bad IP ranges",
         ),
     ],
-    
     # Default rule: allow all
     adaptive_protection_config=gcp.compute.SecurityPolicyAdaptiveProtectionConfigArgs(
         layer7_ddos_defense_config=gcp.compute.SecurityPolicyAdaptiveProtectionConfigLayer7DdosDefenseConfigArgs(
             enable=True,
         ),
     ),
-    
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
 
@@ -202,7 +199,6 @@ backend_bucket = gcp.compute.BackendBucket(
     bucket_name=frontend_bucket.name,
     enable_cdn=True,
     project=project,
-    
     cdn_policy=gcp.compute.BackendBucketCdnPolicyArgs(
         cache_mode="CACHE_ALL_STATIC",
         default_ttl=3600,  # 1 hour
@@ -211,10 +207,8 @@ backend_bucket = gcp.compute.BackendBucket(
         negative_caching=True,
         serve_while_stale=86400,
     ),
-    
     # Attach Cloud Armor security policy
     edge_security_policy=armor_security_policy.self_link,
-    
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
 
@@ -294,7 +288,7 @@ forwarding_rule = gcp.compute.GlobalForwardingRule(
 # ========================================
 # Cloud Functions Gen 2 will be deployed via gcloud CLI in the GitHub Actions workflow
 # because Pulumi requires the source ZIP to exist before creating the function.
-# 
+#
 # The workflow will:
 # 1. Use Pulumi to create buckets and IAM settings (this file)
 # 2. Build and package the function code
@@ -309,16 +303,15 @@ pulumi.export("region", region)
 pulumi.export("function_source_bucket", function_source_bucket.name)
 pulumi.export("frontend_bucket", frontend_bucket.name)
 pulumi.export("secret_name", app_secret.secret_id)
-pulumi.export("frontend_url", frontend_bucket.name.apply(
-    lambda name: f"https://storage.googleapis.com/{name}/index.html"
-))
+pulumi.export(
+    "frontend_url",
+    frontend_bucket.name.apply(
+        lambda name: f"https://storage.googleapis.com/{name}/index.html"
+    ),
+)
 pulumi.export("cdn_ip_address", cdn_ip_address.address)
-pulumi.export("cdn_url", cdn_ip_address.address.apply(
-    lambda ip: f"http://{ip}"
-))
-pulumi.export("cdn_https_url", cdn_ip_address.address.apply(
-    lambda ip: f"https://{ip}"
-))
+pulumi.export("cdn_url", cdn_ip_address.address.apply(lambda ip: f"http://{ip}"))
+pulumi.export("cdn_https_url", cdn_ip_address.address.apply(lambda ip: f"https://{ip}"))
 pulumi.export("backend_bucket_name", backend_bucket.name)
 pulumi.export("url_map_name", url_map.name)
 pulumi.export("cloud_armor_policy_name", armor_security_policy.name)
@@ -328,7 +321,8 @@ pulumi.export("ssl_certificate_name", managed_ssl_cert.name)
 pulumi.export("function_name", f"{project_name}-{stack}-api")
 
 # Cost estimation
-pulumi.export("cost_estimate",
+pulumi.export(
+    "cost_estimate",
     "Cloud Functions: 2M free invocations/month, then $0.40 per 1M. "
     "Cloud Storage: $0.02/GB/month. "
     "Cloud CDN: $0.02-0.08/GB depending on region. "
@@ -336,5 +330,5 @@ pulumi.export("cost_estimate",
     "Managed SSL Certificate: Free. "
     "Secret Manager: $0.06 per month per secret + $0.03 per 10,000 access operations. "
     "External IP: $0.01/hour (~$7.30/month). "
-    "Estimated: $15-25/month for low traffic with security features."
+    "Estimated: $15-25/month for low traffic with security features.",
 )

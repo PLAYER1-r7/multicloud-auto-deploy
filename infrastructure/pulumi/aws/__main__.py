@@ -83,7 +83,7 @@ app_secret_version = aws.secretsmanager.SecretVersion(
     "app-secret-version",
     secret_id=app_secret.id,
     secret_string=pulumi.Output.secret(
-        '{\"database_url\":\"changeme\",\"api_key\":\"changeme\"}'
+        '{"database_url":"changeme","api_key":"changeme"}'
     ),
 )
 
