@@ -13,8 +13,9 @@ function Table(tbl)
   local widths = {}
   if ncols == 4 then
     -- Typical: Resource, Name, Purpose, Region
-    -- Give more space to Name column for very long identifiers (up to 47 chars)
-    widths = {0.16, 0.44, 0.25, 0.15}  -- Name column gets 44% (was 40%)
+    -- Give maximum space to Name column for very long identifiers (up to 47 chars)
+    -- 'ashnova-multicloud-auto-deploy-staging-frontend' needs extra space
+    widths = {0.15, 0.48, 0.22, 0.15}  -- Name column gets 48% (was 44%)
   else
     -- Equal distribution for other tables
     local col_width = 0.9 / ncols
