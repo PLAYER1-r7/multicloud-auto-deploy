@@ -380,6 +380,49 @@ ALERT_EMAIL=your@email.com ./scripts/setup-monitoring.sh
 
 ## ユーティリティ
 
+### generate-changelog.sh
+
+**用途**: Git履歴からCHANGELOG.md自動生成
+
+**使用方法**:
+```bash
+./scripts/generate-changelog.sh [output-file]
+```
+
+**パラメータ**:
+- `output-file`: 出力ファイルパス（デフォルト: CHANGELOG.md）
+
+**機能**:
+- Gitコミット履歴を解析
+- Conventional Commitsフォーマットで分類
+- 日付ごとにグループ化
+- Markdown形式で出力
+
+**カテゴリ分類**:
+- ✨ **feat**: 新機能
+- 🐛 **fix**: バグ修正
+- 📚 **docs**: ドキュメント変更
+- ♻️ **refactor**: リファクタリング
+- ⚡ **perf**: パフォーマンス改善
+- 🧪 **test**: テスト追加・変更
+- 💄 **style**: コードスタイル変更
+- 🔧 **chore**: ビルド/ツール変更
+
+**生成例**:
+```bash
+# デフォルト出力（CHANGELOG.md）
+./scripts/generate-changelog.sh
+
+# カスタム出力
+./scripts/generate-changelog.sh docs/HISTORY.md
+```
+
+**前提条件**:
+- Gitリポジトリ
+- Conventional Commits形式のコミットメッセージ
+
+---
+
 ### diagnostics.sh
 
 **用途**: システム診断・ヘルスチェック
