@@ -1,5 +1,33 @@
 #!/bin/bash
-# エンドポイントテストスクリプト
+# ========================================
+# Script Name: test-endpoints.sh
+# Description: Multi-Cloud Endpoint Testing
+# Author: PLAYER1-r7
+# Created: 2026-01-15
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/test-endpoints.sh
+#
+# Description:
+#   Tests connectivity and basic health of all deployed endpoints
+#   across AWS, Azure, and GCP environments.
+#
+# Test Targets:
+#   - AWS: API + CloudFront Frontend
+#   - Azure: Functions API + Front Door Frontend
+#   - GCP: Cloud Run API + Cloud CDN Frontend
+#
+# Prerequisites:
+#   - curl command available
+#   - Active deployments on all clouds
+#
+# Exit Codes:
+#   0 - All endpoints responding
+#   1 - One or more endpoints failed
+#
+# ========================================
 
 set -e
 

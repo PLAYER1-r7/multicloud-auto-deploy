@@ -1,8 +1,41 @@
 #!/bin/bash
-set -e
+# ========================================
+# Script Name: test-deployments.sh
+# Description: Multi-Cloud Deployment Integration Test
+# Author: PLAYER1-r7
+# Created: 2026-01-15
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/test-deployments.sh
+#
+# Description:
+#   Tests all cloud deployments (API and Frontend) for connectivity
+#   and basic functionality across AWS, Azure, and GCP.
+#
+# Test Targets:
+#   AWS:
+#     - API: Lambda + API Gateway
+#     - Frontend: S3 + CloudFront
+#   Azure:
+#     - API: Functions + Flex Consumption
+#     - Frontend: Blob Storage + Front Door
+#   GCP:
+#     - API: Cloud Run
+#     - Frontend: Cloud Storage + Load Balancer
+#
+# Prerequisites:
+#   - curl command available
+#   - Active deployments on all clouds
+#
+# Exit Codes:
+#   0 - All deployments responding
+#   1 - One or more deployments failed
+#
+# ========================================
 
-# マルチクラウドデプロイメントテストスクリプト
-# 全てのクラウド環境のAPIとフロントエンドをテスト
+set -e
 
 echo "🧪 Multi-Cloud Deployment Testing"
 echo "=================================="

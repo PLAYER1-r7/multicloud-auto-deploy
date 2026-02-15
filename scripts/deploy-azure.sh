@@ -1,8 +1,40 @@
 #!/bin/bash
-set -e
+# ========================================
+# Script Name: deploy-azure.sh
+# Description: Azure Deployment Script
+# Author: PLAYER1-r7
+# Created: 2025-12-15
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/deploy-azure.sh [environment]
+#
+# Description:
+#   Deploys infrastructure to Azure.
+#   Creates Functions, Cosmos DB, Blob Storage, and Front Door.
+#
+# Parameters:
+#   $1 - Environment name (default: staging)
+#
+# Deployment Components:
+#   - Azure Functions (Flex Consumption, Python 3.12)
+#   - Cosmos DB (Serverless)
+#   - Blob Storage ($web container)
+#   - Azure Front Door (Standard)
+#
+# Prerequisites:
+#   - Azure CLI installed and authenticated
+#   - Resource group created
+#   - Valid Azure subscription
+#
+# Exit Codes:
+#   0 - Deployment successful
+#   1 - Deployment failed
+#
+# ========================================
 
-# Azure自動デプロイスクリプト
-# Usage: ./deploy-azure.sh [environment]
+set -e
 
 ENVIRONMENT=${1:-staging}
 PROJECT_NAME="multicloud-auto-deploy"

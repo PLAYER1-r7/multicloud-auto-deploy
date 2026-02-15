@@ -1,4 +1,44 @@
 #!/bin/bash
+# ========================================
+# Script Name: test-e2e.sh
+# Description: Multi-Cloud E2E Test Suite
+# Author: PLAYER1-r7
+# Created: 2026-02-14
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/test-e2e.sh
+#
+# Description:
+#   Comprehensive end-to-end testing for all cloud environments.
+#   Tests health checks and full CRUD operations across AWS, GCP, and Azure.
+#
+# Test Coverage:
+#   - Total: 18 tests (3 clouds × 6 tests each)
+#   - AWS: Lambda + API Gateway + DynamoDB
+#   - GCP: Cloud Run + Firestore
+#   - Azure: Functions Flex Consumption + Cosmos DB
+#
+# Test Operations:
+#   1. Health Check
+#   2. Create Message
+#   3. List Messages
+#   4. Get Message by ID
+#   5. Update Message
+#   6. Delete Message
+#
+# Prerequisites:
+#   - curl command available
+#   - jq command available
+#   - Active deployments on all three clouds
+#
+# Exit Codes:
+#   0 - All tests passed
+#   1 - One or more tests failed
+#
+# ========================================
+
 set -e
 
 # Colors for output

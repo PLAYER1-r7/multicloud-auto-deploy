@@ -1,7 +1,40 @@
 #!/bin/bash
-
-# CI/CDワークフローテストスクリプト
-# GitHub Actionsワークフローをローカルで検証
+# ========================================
+# Script Name: test-cicd.sh
+# Description: CI/CD Workflow Local Validator
+# Author: PLAYER1-r7
+# Created: 2026-01-15
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/test-cicd.sh
+#
+# Description:
+#   Validates GitHub Actions workflows locally before deployment.
+#   Tests build processes, packaging, and configuration.
+#
+# Validation Steps:
+#   1. Environment verification (Terraform, Node.js, Python)
+#   2. Workflow file syntax check
+#   3. AWS Lambda packaging test
+#   4. Frontend build test
+#   5. AWS credentials check
+#   6. GitHub Secrets check
+#   7. Deploy target verification
+#
+# Prerequisites:
+#   - Terraform 1.5+
+#   - Node.js 18+
+#   - Python 3.12+
+#   - AWS CLI
+#   - GitHub CLI (for secrets check)
+#
+# Exit Codes:
+#   0 - All validations passed
+#   1 - One or more validations failed
+#
+# ========================================
 
 set -e
 

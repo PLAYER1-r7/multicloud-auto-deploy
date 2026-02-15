@@ -1,7 +1,37 @@
 #!/bin/bash
-
-# GitHub Actionsワークフロー実行トリガー
-# 手動でワークフローをトリガーして実行結果を確認
+# ========================================
+# Script Name: trigger-workflow.sh
+# Description: GitHub Actions Workflow Trigger
+# Author: PLAYER1-r7
+# Created: 2026-01-15
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/trigger-workflow.sh <workflow> [environment]
+#
+# Description:
+#   Manually triggers GitHub Actions workflows and monitors execution.
+#
+# Parameters:
+#   workflow     - Workflow name: aws|azure|gcp|multicloud
+#   environment  - Target environment: staging (default)|production
+#
+# Examples:
+#   ./scripts/trigger-workflow.sh aws
+#   ./scripts/trigger-workflow.sh azure production
+#   ./scripts/trigger-workflow.sh multicloud staging
+#
+# Prerequisites:
+#   - GitHub CLI (gh) installed and authenticated
+#   - Repository write access
+#   - Valid workflow files in .github/workflows/
+#
+# Exit Codes:
+#   0 - Workflow triggered successfully
+#   1 - Invalid arguments or trigger failed
+#
+# ========================================
 
 set -e
 

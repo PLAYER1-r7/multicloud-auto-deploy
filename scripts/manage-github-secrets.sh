@@ -1,7 +1,42 @@
 #!/bin/bash
-
-# GitHub Secrets管理スクリプト（統合版）
-# 自動設定とガイド表示の両方をサポート
+# ========================================
+# Script Name: manage-github-secrets.sh
+# Description: GitHub Secrets Management Tool (Unified)
+# Author: PLAYER1-r7
+# Created: 2026-01-10
+# Last Modified: 2026-02-15
+# Version: 2.0.0
+# ========================================
+#
+# Usage: ./scripts/manage-github-secrets.sh [--auto|--guide]
+#
+# Description:
+#   Manages GitHub Actions secrets for multi-cloud deployment.
+#   Supports both automated setup and guided manual setup modes.
+#
+# Modes:
+#   --guide (default) - Display manual setup commands
+#   --auto            - Automatically set secrets from local environment
+#
+# Supported Secrets:
+#   AWS: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+#   Azure: AZURE_CREDENTIALS, AZURE_*
+#   GCP: GCP_CREDENTIALS, GCP_PROJECT_ID
+#
+# Prerequisites:
+#   - GitHub CLI (gh) installed and authenticated
+#   - Repository write access
+#   - For --auto mode: Local environment variables set
+#
+# Examples:
+#   ./scripts/manage-github-secrets.sh          # Guide mode
+#   ./scripts/manage-github-secrets.sh --auto   # Auto setup
+#
+# Exit Codes:
+#   0 - Success
+#   1 - Missing prerequisites or setup failed
+#
+# ========================================
 
 set -e
 

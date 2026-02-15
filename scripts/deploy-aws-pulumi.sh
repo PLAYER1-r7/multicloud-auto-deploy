@@ -1,13 +1,45 @@
 #!/bin/bash
+# ========================================
+# Script Name: deploy-aws-pulumi.sh
+# Description: AWS Pulumi Deployment Script (Python Full Stack)
+# Author: PLAYER1-r7
+# Created: 2026-01-20
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/deploy-aws-pulumi.sh [staging|production]
+#
+# Description:
+#   Deploys Python Full Stack application to AWS using Pulumi.
+#   Includes CloudFront, Lambda, API Gateway, and DynamoDB.
+#
+# Parameters:
+#   $1 - Environment name (default: staging)
+#
+# Environment Variables:
+#   AWS_REGION - AWS region (default: ap-northeast-1)
+#
+# Prerequisites:
+#   - Pulumi 3.0+ installed
+#   - Python 3.12+
+#   - Node.js 18+
+#   - AWS CLI configured
+#
+# Deployment Components:
+#   - CloudFront Distribution
+#   - Lambda Functions (Python 3.12)
+#   - API Gateway v2 (HTTP)
+#   - DynamoDB (PAY_PER_REQUEST)
+#   - S3 Static Website
+#
+# Exit Codes:
+#   0 - Deployment successful
+#   1 - Deployment failed
+#
+# ========================================
+
 set -e
-
-# ===========================================
-# AWS Pulumi Deployment Script
-# Python Full Stack Edition
-# ===========================================
-
-echo "🚀 Deploying Python Full Stack to AWS (Pulumi)"
-echo "==============================================="
 
 # Configuration
 ENVIRONMENT="${1:-staging}"

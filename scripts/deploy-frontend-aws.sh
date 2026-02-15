@@ -1,7 +1,39 @@
 #!/bin/bash
-
-# Deploy React Static Site to AWS S3 + CloudFront
-# Usage: ./deploy-frontend-aws.sh [staging|production]
+# ========================================
+# Script Name: deploy-frontend-aws.sh
+# Description: AWS Frontend Deployment Script
+# Author: PLAYER1-r7
+# Created: 2026-01-20
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/deploy-frontend-aws.sh [staging|production]
+#
+# Description:
+#   Deploys React frontend to AWS S3 + CloudFront.
+#   Builds, uploads, and invalidates cache.
+#
+# Parameters:
+#   $1 - Environment name (default: staging)
+#
+# Deployment Steps:
+#   1. Build React application (Vite)
+#   2. Upload to S3 bucket
+#   3. Invalidate CloudFront cache
+#   4. Verify deployment
+#
+# Prerequisites:
+#   - Node.js 18+ installed
+#   - AWS CLI configured
+#   - S3 bucket created
+#   - CloudFront distribution created
+#
+# Exit Codes:
+#   0 - Deployment successful
+#   1 - Deployment failed
+#
+# ========================================
 
 set -e
 

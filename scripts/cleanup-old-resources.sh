@@ -1,7 +1,32 @@
 #!/bin/bash
-
-# Cleanup old us-east-1 resources
-# This script monitors and deletes the old CloudFront distribution
+# ========================================
+# Script Name: cleanup-old-resources.sh
+# Description: Old CloudFront Distribution Cleanup Monitor
+# Author: PLAYER1-r7
+# Created: 2025-12-20
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/cleanup-old-resources.sh
+#
+# Description:
+#   Monitors and automatically deletes old CloudFront distribution
+#   once it is disabled and ready for deletion.
+#
+# Configuration:
+#   DIST_ID         - CloudFront Distribution ID to delete
+#   CHECK_INTERVAL  - Status check interval in seconds (default: 30)
+#
+# Prerequisites:
+#   - AWS CLI installed and configured
+#   - CloudFront distribution already disabled
+#
+# Exit Codes:
+#   0 - Distribution deleted successfully
+#   1 - Deletion failed
+#
+# ========================================
 
 set -e
 

@@ -1,4 +1,45 @@
 #!/bin/bash
+# ========================================
+# Script Name: setup-monitoring.sh
+# Description: CloudWatch Monitoring Setup for AWS
+# Author: PLAYER1-r7
+# Created: 2026-01-15
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/setup-monitoring.sh
+#        ALERT_EMAIL=your@email.com ./scripts/setup-monitoring.sh
+#
+# Description:
+#   Sets up comprehensive CloudWatch monitoring and alerting
+#   for Lambda, API Gateway, and DynamoDB resources.
+#
+# Environment Variables:
+#   ALERT_EMAIL   - Email for SNS notifications (optional)
+#   AWS_REGION    - AWS region (default: ap-northeast-1)
+#   PROJECT_NAME  - Project name (default: multicloud-auto-deploy)
+#   ENVIRONMENT   - Environment (default: staging)
+#
+# Monitoring Components:
+#   - SNS Topic for alerts
+#   - Lambda: Error, Throttle, Duration, Concurrent Execution alarms
+#   - API Gateway: 5XX error, Latency alarms
+#   - DynamoDB: Throttle alarms
+#   - CloudWatch Logs: Error log metrics
+#   - CloudWatch Dashboard
+#
+# Prerequisites:
+#   - AWS CLI installed and configured
+#   - Valid Lambda function deployed
+#   - Valid API Gateway deployed
+#   - Valid DynamoDB table deployed
+#
+# Exit Codes:
+#   0 - Setup successful
+#   1 - Setup failed or missing prerequisites
+#
+# ========================================
 
 # CloudWatch監視設定スクリプト
 # Lambda + API Gatewayの包括的な監視とアラートを設定

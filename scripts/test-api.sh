@@ -1,7 +1,52 @@
 #!/bin/bash
-
-# API統合テストスクリプト
-# Lambda + API Gateway + DynamoDB の完全な動作テスト
+# ========================================
+# Script Name: test-api.sh
+# Description: API Integration Test Suite
+# Author: PLAYER1-r7
+# Created: 2026-01-15
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/test-api.sh -e <API_ENDPOINT> [--verbose]
+#
+# Description:
+#   Comprehensive API testing for single cloud environment.
+#   Tests health, CRUD operations, pagination, and error handling.
+#
+# Parameters:
+#   -e, --endpoint <URL>  - API endpoint URL (required)
+#   --verbose             - Enable detailed output
+#   -h, --help            - Show help message
+#
+# Test Cases:
+#   1. Health check
+#   2. List messages (initial)
+#   3. Create message
+#   4. List messages (after create)
+#   5. Get specific message
+#   6. Update message
+#   7. Verify update
+#   8. Delete message
+#   9. Verify deletion (404 expected)
+#   10. Pagination test
+#   11. Invalid message ID (error handling)
+#   12. Empty content validation
+#
+# Prerequisites:
+#   - curl command available
+#   - jq command available
+#   - Valid API endpoint
+#
+# Examples:
+#   ./scripts/test-api.sh -e https://api.example.com
+#   ./scripts/test-api.sh -e https://api.example.com --verbose
+#
+# Exit Codes:
+#   0 - All tests passed
+#   1 - One or more tests failed
+#
+# ========================================
 
 set -e
 

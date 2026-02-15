@@ -1,8 +1,41 @@
 #!/bin/bash
-set -e
+# ========================================
+# Script Name: deploy-gcp.sh
+# Description: GCP Deployment Script
+# Author: PLAYER1-r7
+# Created: 2025-12-15
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/deploy-gcp.sh [environment] [project_id]
+#
+# Description:
+#   Deploys infrastructure to GCP.
+#   Creates Cloud Run, Firestore, Cloud Storage, and Cloud CDN.
+#
+# Parameters:
+#   $1 - Environment name (default: staging)
+#   $2 - GCP Project ID (required for first run)
+#
+# Deployment Components:
+#   - Cloud Run (Containerized FastAPI)
+#   - Firestore (Native Mode)
+#   - Cloud Storage (Static Website)
+#   - Cloud CDN (via Load Balancer)
+#
+# Prerequisites:
+#   - gcloud CLI installed and authenticated
+#   - Valid GCP project with billing enabled
+#   - Required APIs enabled
+#
+# Exit Codes:
+#   0 - Deployment successful
+#   1 - Deployment failed
+#
+# ========================================
 
-# GCP自動デプロイスクリプト
-# Usage: ./deploy-gcp.sh [environment] [project_id]
+set -e
 
 ENVIRONMENT=${1:-staging}
 GCP_PROJECT_ID=${2:-your-gcp-project-id}

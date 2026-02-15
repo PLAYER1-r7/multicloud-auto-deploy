@@ -1,8 +1,41 @@
 #!/bin/bash
-set -e
+# ========================================
+# Script Name: deploy-aws.sh
+# Description: AWS Terraform Deployment Script
+# Author: PLAYER1-r7
+# Created: 2025-12-15
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/deploy-aws.sh [environment]
+#
+# Description:
+#   Deploys infrastructure to AWS using Terraform.
+#   Creates Lambda, API Gateway, DynamoDB, and S3 resources.
+#
+# Parameters:
+#   $1 - Environment name (default: staging)
+#
+# Deployment Components:
+#   - Lambda Functions (Python 3.12)
+#   - API Gateway v2 (HTTP)
+#   - DynamoDB (PAY_PER_REQUEST)
+#   - S3 Static Website
+#   - CloudFront Distribution
+#
+# Prerequisites:
+#   - Terraform 1.5+ installed
+#   - AWS CLI configured
+#   - Valid AWS credentials
+#
+# Exit Codes:
+#   0 - Deployment successful
+#   1 - Deployment failed
+#
+# ========================================
 
-# AWS自動デプロイスクリプト
-# Usage: ./deploy-aws.sh [environment]
+set -e
 
 ENVIRONMENT=${1:-staging}
 PROJECT_NAME="multicloud-auto-deploy"

@@ -1,5 +1,41 @@
 #!/bin/bash
-# GCP既存リソースをTerraform Stateにインポートするスクリプト
+# ========================================
+# Script Name: import-gcp-resources.sh
+# Description: GCP Resources Terraform State Importer
+# Author: PLAYER1-r7
+# Created: 2026-01-10
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/import-gcp-resources.sh
+#
+# Description:
+#   Imports existing GCP resources into Terraform state.
+#   Required when adopting existing infrastructure.
+#
+# Imported Resources:
+#   - Artifact Registry
+#   - Cloud Storage Bucket
+#   - Global Address
+#   - Firestore Database
+#   - Cloud Run Service
+#   - Backend Bucket
+#   - URL Map
+#   - HTTP Proxy
+#   - Forwarding Rule
+#   - Storage Bucket ACL
+#
+# Prerequisites:
+#   - Terraform initialized
+#   - gcloud CLI authenticated
+#   - Resources already exist in GCP
+#
+# Exit Codes:
+#   0 - Import successful
+#   1 - Import failed
+#
+# ========================================
 
 set -e
 

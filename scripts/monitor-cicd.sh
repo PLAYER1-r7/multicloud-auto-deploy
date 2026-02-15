@@ -1,7 +1,38 @@
 #!/bin/bash
-
-# CI/CD パイプライン状態監視スクリプト
-# GitHub Actionsの実行状態を継続的に監視
+# ========================================
+# Script Name: monitor-cicd.sh
+# Description: CI/CD Pipeline Status Monitor
+# Author: PLAYER1-r7
+# Created: 2026-01-15
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/monitor-cicd.sh [--workflow=NAME]
+#
+# Description:
+#   Continuously monitors GitHub Actions workflow execution status.
+#   Displays real-time updates with color-coded status indicators.
+#
+# Options:
+#   --workflow=NAME  - Monitor specific workflow only
+#   -h, --help       - Show help message
+#
+# Prerequisites:
+#   - GitHub CLI (gh) installed and authenticated
+#   - Repository access
+#
+# Status Indicators:
+#   - Green: Success
+#   - Red: Failure
+#   - Yellow: In Progress
+#   - Blue: Queued
+#
+# Exit Codes:
+#   0 - Normal exit
+#   1 - Missing prerequisites
+#
+# ========================================
 
 set -e
 

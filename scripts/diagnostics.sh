@@ -1,5 +1,34 @@
 #!/bin/bash
-# Troubleshooting script for multi-cloud deployments
+# ========================================
+# Script Name: diagnostics.sh
+# Description: System Diagnostics & Health Check
+# Author: PLAYER1-r7
+# Created: 2026-01-10
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/diagnostics.sh
+#
+# Description:
+#   Comprehensive system diagnostics for multi-cloud deployment.
+#   Checks tools, authentication, endpoints, and resource status.
+#
+# Diagnostic Checks:
+#   1. Required tools (Terraform, AWS CLI, etc.)
+#   2. Cloud provider authentication status
+#   3. Deployment endpoint connectivity
+#   4. Terraform resource state
+#   5. Environment variable configuration
+#
+# Prerequisites:
+#   - None (diagnostic script)
+#
+# Exit Codes:
+#   0 - All checks passed
+#   1 - One or more checks failed
+#
+# ========================================
 
 set -e
 
