@@ -38,6 +38,7 @@ GitHub Actionsによる自動デプロイの設定ガイド
 |---------|------|---------|
 | `AWS_ACCESS_KEY_ID` | AWSアクセスキーID | IAMユーザーから取得 |
 | `AWS_SECRET_ACCESS_KEY` | AWSシークレットアクセスキー | IAMユーザーから取得 |
+| `AWS_ROLE_ARN` | IAMロールARN（オプション） | OIDC認証用 |
 
 **取得手順**:
 ```bash
@@ -57,17 +58,35 @@ aws iam create-access-key --user-name satoshi
 
 ---
 
+### Pulumi Secrets
+
+| Secret名 | 説明 | 取得方法 |
+|---------|------|---------|
+| `PULUMI_ACCESS_TOKEN` | Pulumiアクセストークン | Pulumi Cloudから取得 |
+
+**取得手順**:
+
+1. [Pulumi Cloud](https://app.pulumi.com/)にログイン
+2. **Settings** → **Access Tokens** をクリック
+3. **Create token** をクリックして新しいトークンを作成
+4. トークンをコピーして`PULUMI_ACCESS_TOKEN`に設定
+
+**注意**: このトークンはすべてのPulumiベースのデプロイワークフローで必須です。
+
+---
+
 ### Azure Secrets
 
 | Secret名 | 説明 | 取得方法 |
 |---------|------|---------|
 | `AZURE_CREDENTIALS` | Azure認証情報（JSON） | Service Principalから取得 |
-| `ARM_CLIENT_ID` | Service PrincipalのクライアントID | Service Principalから取得 |
-| `ARM_CLIENT_SECRET` | Service Principalのシークレット | Service Principalから取得 |
-| `ARM_SUBSCRIPTION_ID` | AzureサブスクリプションID | `az account show` |
-| `ARM_TENANT_ID` | AzureテナントID | `az account show` |
-| `AZURE_API_URL` | バックエンドAPI URL（オプション） | デプロイ後に設定 |
-| `AZURE_ACR_LOGIN_SERVER` | Container RegistryのログインサーバーURL（オプション） | `az acr list` |
+| `AZURE_SUBSCRIPTION_ID` | AzureサブスクリプションID | `az account show` |
+| `AZURE_RESOURCE_GROUP` | リソースグループ名 | デプロイ後に設定 |
+| `AZURE_CONTAINER_REGISTRY` | Container Registryドメイン | `az acr list --query "[].loginServer"` |
+| `AZURE_CONTAINER_REGISTRY_USERNAME` | ACRユーザー名 | Service PrincipalのclientId |
+| `AZURE_CONTAINER_REGISTRY_PASSWORD` | ACRパスワード | Service PrincipalのclientSecret |
+| `AZURE_CONTAINER_APP_API` | Container App名（API） | デプロイ後に設定 |
+| `AZURE_CONTAINER_APP_FRONTEND` | Container App名（Frontend） | デプロイ後に設定 |
 
 **取得手順**:
 
@@ -86,30 +105,37 @@ az ad sp create-for-rbac \
   --sdk-auth
 
 # 出力されるJSON全体を AZURE_CREDENTIALS に設定
-# 出力から個別の値も取得して設定:
-# - clientId → ARM_CLIENT_ID
-# - clientSecret → ARM_CLIENT_SECRET
-# - subscriptionId → ARM_SUBSCRIPTION_ID
-# - tenantId → ARM_TENANT_ID
+# 出力から個別の値も取得:
+# - subscriptionId → AZURE_SUBSCRIPTION_ID
 ```
 
-**AZURE_CREDENTIALS の形式**:
-```json
-{
-  "clientId": "00000000-0000-0000-0000-000000000000",
-  "clientSecret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "subscriptionId": "00000000-0000-0000-0000-000000000000",
-  "tenantId": "00000000-0000-0000-0000-000000000000"
-}
-```
-
-**AZURE_ACR_LOGIN_SERVER の取得**:
+**Container Registry情報の取得**:
 ```bash
-# Container RegistryのログインサーバーURLを取得
+# Container Registryのログインサーバーを取得
 az acr list --query "[].{Name:name, LoginServer:loginServer}" --output table
 
-# 出力例: mcadstagingacr.azurecr.io
-# このLoginServer値をGitHub Secretsに設定
+# 出力例:
+# Name: mcadstagingacr
+# LoginServer: mcadstagingacr.azurecr.io
+
+# 以下をSecretsに設定:
+# AZURE_CONTAINER_REGISTRY: mcadstagingacr.azurecr.io
+# AZURE_CONTAINER_REGISTRY_USERNAME: Service PrincipalのclientId
+# AZURE_CONTAINER_REGISTRY_PASSWORD: Service PrincipalのclientSecret
+```
+
+**リソース名の取得**:
+```bash
+# リソースグループ名
+az group list --query "[?contains(name, 'multicloud')].name" -o table
+
+# Container App名
+az containerapp list --query "[].{Name:name, ResourceGroup:resourceGroup}" -o table
+
+# 確認した値をSecretsに設定:
+# AZURE_RESOURCE_GROUP: multicloud-auto-deploy-staging-rg
+# AZURE_CONTAINER_APP_API: multicloud-auto-deploy-staging-api
+# AZURE_CONTAINER_APP_FRONTEND: multicloud-auto-deploy-staging-frontend
 ```
 
 **Service PrincipalにACRアクセス権を付与**:
@@ -122,15 +148,9 @@ az role assignment create \
   --assignee YOUR_CLIENT_ID \
   --role AcrPush \
   --scope $ACR_RESOURCE_ID
-
-# 例:
-# az role assignment create \
-#   --assignee $(az ad sp show --id $ARM_CLIENT_ID --query id -o tsv) \
-#   --role AcrPush \
-#   --scope $(az acr show --name mcadstagingacr --query id --output tsv)
 ```
 
-**注意**: 現在のワークフローでは、ACRの名前はPulumi出力から自動的に取得されるため、`AZURE_ACR_LOGIN_SERVER`は必須ではありません。直接ACRを指定したい場合のオプションです。
+**注意**: 現在のワークフローでは、ACRの名前はPulumi出力から自動的に取得されますが、一部のワークフロー（deploy-multicloud.yml）では明示的な設定が必要です。
 
 ---
 
@@ -138,8 +158,13 @@ az role assignment create \
 
 | Secret名 | 説明 | 取得方法 |
 |---------|------|---------|
-| `GCP_CREDENTIALS` (旧称: `GCP_SA_KEY`) | GCPサービスアカウントキー（JSON） | サービスアカウントから取得 |
+| `GCP_CREDENTIALS` | GCPサービスアカウントキー（JSON） | サービスアカウントから取得 |
 | `GCP_PROJECT_ID` | GCPプロジェクトID | `gcloud config get-value project` |
+| `GCP_ARTIFACT_REGISTRY_REPO` | Artifact Registryリポジトリ名 | デプロイ後に設定 |
+| `GCP_CLOUD_RUN_API` | Cloud Runサービス名（API） | デプロイ後に設定 |
+| `GCP_CLOUD_RUN_FRONTEND` | Cloud Runサービス名（Frontend） | デプロイ後に設定 |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Workload Identity Provider（オプション） | OIDC認証用 |
+| `GCP_SERVICE_ACCOUNT` | サービスアカウントメール（オプション） | Workload Identity用 |
 
 **取得手順**:
 
@@ -170,7 +195,21 @@ cat key.json
 rm key.json
 ```
 
-**GCP_CREDENTIALS (GCP_SA_KEY) の形式**:
+**GCP Artifact RegistryとCloud Run名の取得**:
+```bash
+# Artifact Registryリポジトリ名
+gcloud artifacts repositories list --format="table(name, location)"
+
+# Cloud Runサービス名
+gcloud run services list --format="table(name, region)"
+
+# 確認した値をSecretsに設定:
+# GCP_ARTIFACT_REGISTRY_REPO: mcad-staging-repo
+# GCP_CLOUD_RUN_API: multicloud-auto-deploy-staging-api
+# GCP_CLOUD_RUN_FRONTEND: multicloud-auto-deploy-staging-frontend
+```
+
+**GCP_CREDENTIALS の形式**:
 ```json
 {
   "type": "service_account",
