@@ -487,6 +487,68 @@ ALERT_EMAIL=your@email.com ./scripts/setup-monitoring.sh
 
 ---
 
+### generate-pdf-documentation.sh
+
+**用途**: 全Markdownドキュメントから包括的なPDFドキュメント生成
+
+**使用方法**:
+```bash
+./scripts/generate-pdf-documentation.sh [output-filename]
+```
+
+**パラメータ**:
+- `output-filename`: 出力PDFファイル名（デフォルト: multicloud-auto-deploy-documentation.pdf）
+
+**機能**:
+- 全Markdownファイルを章立てで結合
+- 目次自動生成
+- 日本語フォント対応（Noto CJK）
+- 絵文字をテキスト表現に変換
+- XeLaTeXによるPDF生成
+
+**含まれるドキュメント**:
+1. プロジェクト概要（README.md）
+2. システムアーキテクチャ
+3. セットアップガイド
+4. デプロイメントガイド（AWS/Azure/GCP）
+5. CI/CD設定
+6. ツールリファレンス
+7. APIエンドポイント
+8. トラブルシューティング
+9. サービス情報
+10. コントリビューションガイド
+11. 変更履歴（CHANGELOG.md）
+
+**生成例**:
+```bash
+# デフォルト出力
+./scripts/generate-pdf-documentation.sh
+
+# カスタムファイル名
+./scripts/generate-pdf-documentation.sh my-docs.pdf
+```
+
+**前提条件**:
+- pandoc
+- texlive-xetex
+- texlive-lang-cjk
+- fonts-noto-cjk
+- librsvg2-bin
+
+**インストールコマンド**:
+```bash
+sudo apt-get install -y pandoc texlive-xetex texlive-lang-cjk \
+  fonts-noto-cjk fonts-noto-color-emoji librsvg2-bin
+```
+
+**終了コード**:
+- 0: 成功
+- 1: pandoc未インストール
+- 2: ソースファイル不足
+- 3: PDF生成失敗
+
+---
+
 ## 推奨ワークフロー
 
 ### 初回セットアップ

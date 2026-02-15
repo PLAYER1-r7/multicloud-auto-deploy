@@ -1,0 +1,273 @@
+#!/bin/bash
+
+# ========================================
+# Script Name: generate-pdf-documentation.sh
+# Description: Generate comprehensive PDF documentation from all Markdown files
+# Author: PLAYER1-r7
+# Created: 2026-02-15
+# Last Modified: 2026-02-15
+# Version: 1.0.0
+# ========================================
+#
+# Usage: ./scripts/generate-pdf-documentation.sh [output_filename]
+#
+# Parameters:
+#   output_filename (optional) : Name of the output PDF file (default: multicloud-auto-deploy-documentation.pdf)
+#
+# Examples:
+#   ./scripts/generate-pdf-documentation.sh
+#   ./scripts/generate-pdf-documentation.sh my-documentation.pdf
+#
+# Prerequisites:
+#   - pandoc (for Markdown to PDF conversion)
+#   - texlive-xetex (LaTeX engine for PDF generation)
+#   - texlive-fonts-recommended (fonts)
+#
+# Exit Codes:
+#   0 : Success
+#   1 : pandoc not found
+#   2 : Source files not found
+#   3 : PDF generation failed
+# ========================================
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configuration
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+OUTPUT_FILE="${1:-multicloud-auto-deploy-documentation.pdf}"
+TEMP_DIR=$(mktemp -d)
+MERGED_MD="$TEMP_DIR/merged-documentation.md"
+
+# Check if pandoc is installed
+if ! command -v pandoc &> /dev/null; then
+    echo -e "${RED}✗ Error: pandoc is not installed${NC}"
+    echo "Install with: sudo apt-get install pandoc texlive-xetex texlive-fonts-recommended"
+    exit 1
+fi
+
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}  Generating PDF Documentation${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo ""
+
+# Create temporary merged Markdown file
+cat > "$MERGED_MD" << 'HEADER'
+---
+title: "Multi-Cloud Auto-Deploy Platform"
+subtitle: "Complete Documentation"
+author: "PLAYER1-r7"
+date: "2026-02-15"
+geometry: margin=2.5cm
+fontsize: 11pt
+documentclass: report
+toc: true
+toc-depth: 3
+numbersections: true
+colorlinks: true
+linkcolor: blue
+urlcolor: blue
+---
+
+\newpage
+
+HEADER
+
+echo -e "${YELLOW}📝 Merging Markdown files...${NC}"
+
+# Function to convert emojis to text equivalents
+convert_emojis() {
+    local file=$1
+    sed -i \
+        -e 's/✨/[NEW]/g' \
+        -e 's/🐛/[FIX]/g' \
+        -e 's/📚/[DOCS]/g' \
+        -e 's/♻️/[REFACTOR]/g' \
+        -e 's/⚡/[PERF]/g' \
+        -e 's/🧪/[TEST]/g' \
+        -e 's/💄/[STYLE]/g' \
+        -e 's/🔧/[CHORE]/g' \
+        -e 's/💥/[BREAKING]/g' \
+        -e 's/✅/[OK]/g' \
+        -e 's/❌/[ERROR]/g' \
+        -e 's/⚠️/[WARNING]/g' \
+        -e 's/📝/[NOTE]/g' \
+        -e 's/🚀/[DEPLOY]/g' \
+        -e 's/📦/[PACKAGE]/g' \
+        -e 's/🔒/[SECURITY]/g' \
+        -e 's/🌐/[WEB]/g' \
+        -e 's/🔗/[LINK]/g' \
+        -e 's/📊/[STATS]/g' \
+        -e 's/📈/[CHART]/g' \
+        -e 's/📅/[DATE]/g' \
+        -e 's/📁/[FILES]/g' \
+        -e 's/🛠️/[TOOLS]/g' \
+        -e 's/💡/[TIP]/g' \
+        -e 's/⏱️/[TIME]/g' \
+        -e 's/🔄/[SYNC]/g' \
+        -e 's/📌/[PIN]/g' \
+        -e 's/🎯/[TARGET]/g' \
+        -e 's/🔍/[SEARCH]/g' \
+        -e 's/✔️/[CHECK]/g' \
+        -e 's/🗑️/[DELETE]/g' \
+        -e 's/⏳/[WAIT]/g' \
+        -e 's/♾️/[INFINITY]/g' \
+        -e 's/➕/[PLUS]/g' \
+        -e 's/➖/[MINUS]/g' \
+        -e 's/🔑/[KEY]/g' \
+        -e 's/🌟/[STAR]/g' \
+        -e 's/🎉/[CELEBRATE]/g' \
+        -e 's/📋/[LIST]/g' \
+        -e 's/📄/[DOCUMENT]/g' \
+        -e 's/🖥️/[COMPUTER]/g' \
+        -e 's/☁️/[CLOUD]/g' \
+        -e 's/🔐/[SECURE]/g' \
+        "$file"
+}
+
+# Function to add chapter to merged file
+add_chapter() {
+    local file=$1
+    local title=$2
+    local level=$3
+    
+    if [ -f "$file" ]; then
+        echo -e "${GREEN}  ✓ Adding: $title${NC}"
+        echo "" >> "$MERGED_MD"
+        echo "$(printf '#%.0s' $(seq 1 $level)) $title" >> "$MERGED_MD"
+        echo "" >> "$MERGED_MD"
+        
+        # Remove the first heading from the file if it exists (we already added our own)
+        tail -n +2 "$file" | sed '/^#/,1d' >> "$MERGED_MD"
+        
+        echo "" >> "$MERGED_MD"
+        echo '\newpage' >> "$MERGED_MD"
+        echo "" >> "$MERGED_MD"
+    else
+        echo -e "${YELLOW}  ⚠ Warning: $file not found, skipping${NC}"
+    fi
+}
+
+# Part 1: Project Overview
+echo -e "\n${BLUE}Part 1: Project Overview${NC}"
+add_chapter "$PROJECT_ROOT/README.md" "Project Overview" 1
+
+# Part 2: Architecture
+echo -e "\n${BLUE}Part 2: Architecture${NC}"
+add_chapter "$PROJECT_ROOT/docs/ARCHITECTURE.md" "System Architecture" 1
+
+# Part 3: Setup and Configuration
+echo -e "\n${BLUE}Part 3: Setup and Configuration${NC}"
+add_chapter "$PROJECT_ROOT/docs/SETUP.md" "Initial Setup" 1
+add_chapter "$PROJECT_ROOT/docs/QUICK_REFERENCE.md" "Quick Reference Guide" 2
+
+# Part 4: Deployment Guides
+echo -e "\n${BLUE}Part 4: Deployment Guides${NC}"
+echo -e '\n# Deployment Guides\n' >> "$MERGED_MD"
+add_chapter "$PROJECT_ROOT/docs/AWS_DEPLOYMENT.md" "AWS Deployment" 2
+add_chapter "$PROJECT_ROOT/docs/AZURE_DEPLOYMENT.md" "Azure Deployment" 2
+add_chapter "$PROJECT_ROOT/docs/GCP_DEPLOYMENT.md" "GCP Deployment" 2
+add_chapter "$PROJECT_ROOT/docs/PRODUCTION_DEPLOYMENT.md" "Production Deployment" 2
+add_chapter "$PROJECT_ROOT/docs/CDN_SETUP.md" "CDN Setup" 2
+
+# Part 5: CI/CD
+echo -e "\n${BLUE}Part 5: CI/CD${NC}"
+add_chapter "$PROJECT_ROOT/docs/CICD_SETUP.md" "CI/CD Setup" 1
+add_chapter "$PROJECT_ROOT/docs/CICD_TEST_RESULTS.md" "CI/CD Test Results" 2
+
+# Part 6: Tools and Utilities
+echo -e "\n${BLUE}Part 6: Tools and Utilities${NC}"
+add_chapter "$PROJECT_ROOT/docs/TOOLS_REFERENCE.md" "Tools Reference" 1
+
+# Part 7: API Reference
+echo -e "\n${BLUE}Part 7: API Reference${NC}"
+add_chapter "$PROJECT_ROOT/docs/ENDPOINTS.md" "API Endpoints" 1
+
+# Part 8: Troubleshooting
+echo -e "\n${BLUE}Part 8: Troubleshooting${NC}"
+add_chapter "$PROJECT_ROOT/docs/TROUBLESHOOTING.md" "Troubleshooting Guide" 1
+
+# Part 9: Services and Infrastructure
+echo -e "\n${BLUE}Part 9: Services and Infrastructure${NC}"
+echo -e '\n# Services and Infrastructure\n' >> "$MERGED_MD"
+
+if [ -f "$PROJECT_ROOT/services/api/README.md" ]; then
+    add_chapter "$PROJECT_ROOT/services/api/README.md" "Backend API Service" 2
+fi
+
+if [ -f "$PROJECT_ROOT/services/frontend_react/README.md" ]; then
+    add_chapter "$PROJECT_ROOT/services/frontend_react/README.md" "Frontend (React) Service" 2
+fi
+
+if [ -f "$PROJECT_ROOT/services/frontend_reflex/README.md" ]; then
+    add_chapter "$PROJECT_ROOT/services/frontend_reflex/README.md" "Frontend (Reflex) Service" 2
+fi
+
+if [ -f "$PROJECT_ROOT/infrastructure/pulumi/aws/simple-sns/README.md" ]; then
+    add_chapter "$PROJECT_ROOT/infrastructure/pulumi/aws/simple-sns/README.md" "Pulumi Infrastructure (AWS)" 2
+fi
+
+# Part 10: Contributing
+echo -e "\n${BLUE}Part 10: Contributing${NC}"
+add_chapter "$PROJECT_ROOT/CONTRIBUTING.md" "Contributing Guidelines" 1
+
+# Part 11: Changelog
+echo -e "\n${BLUE}Part 11: Changelog${NC}"
+add_chapter "$PROJECT_ROOT/CHANGELOG.md" "Changelog" 1
+
+echo ""
+echo -e "${YELLOW}� Converting emojis to text...${NC}"
+convert_emojis "$MERGED_MD"
+
+echo ""
+echo -e "${YELLOW}�📄 Generating PDF with pandoc...${NC}"
+echo ""
+
+# Generate PDF using pandoc
+cd "$PROJECT_ROOT"
+
+if pandoc "$MERGED_MD" \
+    -o "$OUTPUT_FILE" \
+    --pdf-engine=xelatex \
+    --toc \
+    --toc-depth=3 \
+    --number-sections \
+    --highlight-style=tango \
+    --variable mainfont="Noto Serif CJK JP" \
+    --variable sansfont="Noto Sans CJK JP" \
+    --variable monofont="Noto Sans Mono CJK JP" \
+    --variable CJKmainfont="Noto Serif CJK JP" \
+    --variable fontsize=11pt \
+    --variable geometry:margin=2.5cm \
+    --variable linkcolor=blue \
+    --variable urlcolor=blue \
+    --variable toccolor=black \
+    2>&1; then
+    
+    echo ""
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}  ✓ PDF Generated Successfully!${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
+    echo "Output file: $OUTPUT_FILE"
+    echo "File size: $(du -h "$OUTPUT_FILE" | cut -f1)"
+    echo "Location: $(realpath "$OUTPUT_FILE")"
+    echo ""
+    
+    # Cleanup
+    rm -rf "$TEMP_DIR"
+    
+    exit 0
+else
+    echo ""
+    echo -e "${RED}✗ Error: PDF generation failed${NC}"
+    echo -e "${YELLOW}Merged Markdown file saved at: $MERGED_MD${NC}"
+    echo -e "${YELLOW}You can inspect this file or try generating PDF manually.${NC}"
+    exit 3
+fi
