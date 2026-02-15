@@ -95,7 +95,10 @@ jobs:
           
           # Get Function App URL
           FUNC_HOSTNAME=$(az functionapp show --name multicloud-auto-deploy-staging-func --resource-group multicloud-auto-deploy-staging-rg --query defaultHostName -o tsv)
-          echo "api_url=https://${FUNC_HOSTNAME}/api/HttpTrigger" >> $GITHUB_OUTPUT
+          API_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
+          echo "api_url=${API_URL}" >> $GITHUB_OUTPUT
+          
+          echo "📍 Configured API URL: ${API_URL}"
 
       - name: Package Function App
         run: |
@@ -162,8 +165,16 @@ jobs:
       - name: Build Frontend
         run: |
           cd services/frontend_react
+          
+          API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
+          echo "🔧 Building frontend with API_URL: $API_URL"
+          
           npm install
           npm run build
+          
+          # Verify the API URL was embedded
+          echo "🔍 Verifying built assets..."
+          grep -r "multicloud-auto-deploy-staging-func" dist/ || echo "⚠️ API URL not found in build - check VITE_API_URL"
         env:
           VITE_API_URL: ${{ steps.pulumi_outputs.outputs.api_url }}
 
