@@ -15,7 +15,8 @@ function Table(tbl)
     -- Typical: Resource, Name, Purpose, Region
     -- Give maximum space to Name column for very long identifiers (up to 47 chars)
     -- 'ashnova-multicloud-auto-deploy-staging-frontend' needs extra space
-    widths = {0.15, 0.48, 0.22, 0.15}  -- Name column gets 48% (was 44%)
+    -- Region needs 16% for 'ap-northeast-1' (16 chars)
+    widths = {0.14, 0.43, 0.27, 0.16}  -- Region:16% to prevent hyphen breaks
   else
     -- Equal distribution for other tables
     local col_width = 0.9 / ncols
