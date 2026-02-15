@@ -786,6 +786,268 @@ curl https://YOUR_FUNCTION_APP.azurewebsites.net/api/HttpTrigger/health
 
 ---
 
+## Azure Functions Flex Consumption Plan
+
+### 問題1: Deployment shows "Partially Successful" but function works
+
+**症状**:
+```
+ERROR: Deployment was partially successful. These are the deployment logs:
+[***"message": "The logs you are looking for were not found. In flex consumption plans,
+the instance will be recycled and logs will not be persisted after that..."***]
+
+⚠️  Deployment status unclear, retrying...
+```
+
+しかし、Function Appは実際には正常に動作している。
+
+**原因**:
+- Azure Flex Consumption プランではインスタンスがリサイクルされ、デプロイログが保持されない
+- `az functionapp deployment source config-zip` が "partially successful" を返すが、実際にはデプロイは成功している
+- 詳細なステップログ（`UploadPackageStep`, `OryxBuildStep`等）が出力されない
+
+**解決策**:
+
+1. **"Deployment was successful" メッセージを検出**:
+```yaml
+# Check for successful deployment (in order of reliability)
+# 1. Explicit success message (most reliable for Flex Consumption)
+if grep -q "Deployment was successful" deploy_log.txt; then
+  echo "✅ Deployment successful!"
+  DEPLOY_SUCCESS=true
+  break
+# 2. Deployment steps completed (for other plan types)
+elif grep -q "UploadPackageStep.*completed" deploy_log.txt || \
+     grep -q "SyncTriggerStep" deploy_log.txt; then
+  echo "✅ Deployment steps completed!"
+  DEPLOY_SUCCESS=true
+  break
+fi
+```
+
+2. **"partially successful" を無視**:
+```yaml
+# Critical error (but not "partially successful")
+elif grep -q "ERROR:" deploy_log.txt && ! grep -q "partially successful" deploy_log.txt; then
+  echo "❌ Critical deployment error"
+  cat deploy_log.txt
+  exit 1
+fi
+```
+
+3. **ヘルスチェックを必須検証に**:
+```yaml
+- name: Verify Deployment
+  run: |
+    # ... ヘルスチェック実行 ...
+    
+    if [ "$health_check_passed" = true ]; then
+      echo "✅ Azure Function deployment verified successfully!"
+    else
+      echo "❌ Health check failed"
+      exit 1  # 失敗として扱う
+    fi
+```
+
+### 問題2: defaultHostName returns null for Flex Consumption
+
+**症状**:
+```
+Testing: https:///api/HttpTrigger/health
+❌ Health check failed
+```
+
+`az functionapp show --query defaultHostName` がnullを返し、URLが空になる。
+
+**原因**:
+- Flex Consumption プランでは `defaultHostName` フィールドがnullまたは未設定
+- 標準的な `az functionapp show` コマンドでホスト名を取得できない
+
+**解決策**:
+
+**`az functionapp config hostname list` を使用**:
+```yaml
+# Get hostname - for Flex Consumption plan, use config hostname list
+# (defaultHostName is not reliable for Flex Consumption SKU)
+FUNC_HOSTNAME=$(az functionapp config hostname list \
+  --webapp-name $FUNCTION_APP \
+  --resource-group $RESOURCE_GROUP \
+  --query '[0].name' -o tsv)
+
+if [ -n "$FUNC_HOSTNAME" ] && [ "$FUNC_HOSTNAME" != "None" ]; then
+  echo "✅ Got hostname: $FUNC_HOSTNAME"
+  FUNC_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
+else
+  echo "❌ Failed to get Function App hostname"
+  exit 1
+fi
+```
+
+**検証例**:
+```bash
+# ❌ 動作しない（Flex Consumptionでnull）
+az functionapp show --name multicloud-auto-deploy-staging-func \
+  --resource-group multicloud-auto-deploy-staging-rg \
+  --query defaultHostName -o tsv
+
+# ✅ 動作する
+az functionapp config hostname list \
+  --webapp-name multicloud-auto-deploy-staging-func \
+  --resource-group multicloud-auto-deploy-staging-rg \
+  --query '[0].name' -o tsv
+
+# Output: multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
+```
+
+### 問題3: Kudu restart during deployment causes failures
+
+**症状**:
+```
+🔄 Kudu restart detected, retrying...
+Attempt 2/3...
+```
+
+大きなデプロイパッケージでKuduが再起動し、デプロイが中断される。
+
+**解決策**:
+
+1. **パッケージサイズの最適化**:
+```yaml
+- name: Package Function App
+  run: |
+    cd services/api
+    
+    echo "📦 Creating optimized deployment package..."
+    
+    # Install dependencies
+    pip install --target .deployment --no-cache-dir -r requirements.txt
+    
+    # Clean up unnecessary files from dependencies
+    find .deployment -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
+    find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
+    find .deployment -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+    find .deployment -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+    
+    # Copy application code
+    cp -r app .deployment/
+    cp function_app.py .deployment/
+    cp host.json .deployment/
+    
+    # Create ZIP package
+    cd .deployment
+    zip -r -q ../function-app.zip .
+    
+    echo "✅ Package size: $(du -h ../function-app.zip | cut -f1)"
+```
+
+2. **リトライロジックの実装**:
+```yaml
+# Retry deployment up to 3 times to handle Kudu restarts
+MAX_RETRIES=3
+RETRY_COUNT=0
+DEPLOY_SUCCESS=false
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  echo "Attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
+  
+  # Run deployment
+  az functionapp deployment source config-zip \
+    --resource-group $RESOURCE_GROUP \
+    --name $FUNCTION_APP \
+    --src services/api/function-app.zip \
+    --timeout 600 \
+    2>&1 | tee deploy_log.txt || true
+  
+  # Check for Kudu restart
+  if grep -q "Kudu has been restarted" deploy_log.txt; then
+    echo "🔄 Kudu restart detected, retrying..."
+    RETRY_COUNT=$((RETRY_COUNT+1))
+    sleep 30
+    continue
+  fi
+  
+  # Check for success
+  if grep -q "Deployment was successful" deploy_log.txt; then
+    DEPLOY_SUCCESS=true
+    break
+  fi
+  
+  RETRY_COUNT=$((RETRY_COUNT+1))
+  sleep 30
+done
+```
+
+---
+
+## フロントエンドワークフロー認証エラー
+
+### 問題: Frontend deployment fails with credentials error
+
+**症状**:
+
+**AWS**:
+```
+##[error]Credentials could not be loaded, please check your action inputs: 
+Could not load credentials from any providers
+```
+
+**GCP**:
+```
+##[error]google-github-actions/auth failed with: the GitHub Action workflow 
+must specify exactly one of "workload_identity_provider" or "credentials_json"!
+```
+
+**原因**:
+- フロントエンドデプロイワークフローがOIDC/Workload Identityを使用
+- メインデプロイワークフローは静的認証情報（Access Keys / Service Account JSON）を使用
+- 認証方法の不一致により、シークレットが見つからない
+
+**解決策**:
+
+**フロントエンドワークフローを静的認証情報に統一**:
+
+1. **AWS**:
+```yaml
+# Before (OIDC - 失敗)
+- name: Configure AWS credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: ${{ secrets.AWS_ROLE_ARN }}  # ❌ 設定されていない
+    aws-region: ${{ env.AWS_REGION }}
+
+# After (Static credentials - 成功)
+- name: Configure AWS credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}  # ✅
+    aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}  # ✅
+    aws-region: ${{ env.AWS_REGION }}
+```
+
+2. **GCP**:
+```yaml
+# Before (Workload Identity - 失敗)
+- name: Authenticate to Google Cloud
+  uses: google-github-actions/auth@v2
+  with:
+    workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}  # ❌
+    service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}  # ❌
+
+# After (Service Account JSON - 成功)
+- name: Authenticate to Google Cloud
+  uses: google-github-actions/auth@v2
+  with:
+    credentials_json: ${{ secrets.GCP_CREDENTIALS }}  # ✅
+
+- name: Set up Cloud SDK
+  uses: google-github-actions/setup-gcloud@v2
+  with:
+    project_id: ${{ secrets.GCP_PROJECT_ID }}  # ✅
+```
+
+---
+
 ## サポート
 
 問題が解決しない場合:
@@ -798,3 +1060,5 @@ curl https://YOUR_FUNCTION_APP.azurewebsites.net/api/HttpTrigger/health
 - 2026-02-15: AWS Lambda ImportModuleError解決方法追加
 - 2026-02-15: GCP Cloud Run 500エラー（環境変数・型エラー）解決方法追加
 - 2026-02-15: Azure Functions 500エラー（Cosmos DB）解決方法追加
+- 2026-02-15: Azure Functions Flex Consumption Plan特有の問題と解決策追加
+- 2026-02-15: フロントエンドワークフロー認証エラー解決方法追加

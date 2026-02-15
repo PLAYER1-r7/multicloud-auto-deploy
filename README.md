@@ -299,6 +299,9 @@ Actions > Deploy to Multi-Cloud > Run workflow
 # エンドポイントテスト（全環境）
 ./scripts/test-endpoints.sh
 
+# E2Eテスト（全環境CRUD動作検証）
+./scripts/test-e2e.sh
+
 # GitHub Secrets設定ガイド
 ./scripts/setup-github-secrets.sh
 
@@ -429,6 +432,60 @@ PROJECT_NAME=myproject ENVIRONMENT=production ./deploy-lambda-aws.sh
 - ページネーション
 - エラーハンドリング
 - バリデーション
+
+### E2Eテストスイート
+
+全環境（AWS/GCP/Azure）のエンドツーエンドCRUD動作を検証:
+
+```bash
+# E2Eテスト実行
+./scripts/test-e2e.sh
+```
+
+**テストカバレッジ**:
+- **Total**: 18テスト（3環境 × 6テスト）
+- **Health Checks**: 各環境のヘルスエンドポイント検証
+- **CRUD Operations**: 
+  - ✅ Create: メッセージ作成
+  - ✅ List: 全メッセージ取得
+  - ✅ Get: 特定メッセージ取得
+  - ✅ Update: メッセージ更新
+  - ✅ Delete: メッセージ削除
+
+**クラウド固有のパス処理**:
+- AWS/GCP: `/api/messages/`
+- Azure: `/api/HttpTrigger/api/messages/`（Flex Consumption対応）
+
+**期待される出力例**:
+```
+═══════════════════════════════════════════════════════
+        Multi-Cloud E2E Test Suite
+═══════════════════════════════════════════════════════
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Testing: AWS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✓ Health check returned 'ok'
+✓ Create message (ID: abc123...)
+✓ List messages (found 5)
+✓ Get message by ID
+✓ Update message
+✓ Delete message
+
+[GCP/Azure: 同様]
+
+═══════════════════════════════════════════════════════
+        Test Summary
+═══════════════════════════════════════════════════════
+Total Tests:  18
+Passed:       18
+All tests passed! ✓
+```
+
+**データ永続性検証**:
+- AWS: DynamoDB (PAY_PER_REQUEST)
+- GCP: Firestore (Native Mode)
+- Azure: Cosmos DB (Serverless)
 
 ### CloudWatch監視設定
 
