@@ -1,12 +1,20 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu
 
-# Install additional tools
+# Install additional tools and PDF generation dependencies
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   && apt-get -y install --no-install-recommends \
   jq \
   httpie \
   tree \
   vim \
+  poppler-utils \
+  imagemagick \
+  pandoc \
+  texlive-xetex \
+  texlive-fonts-extra \
+  texlive-lang-cjk \
+  fonts-noto-cjk \
+  librsvg2-bin \
   && apt-get autoremove -y && apt-get clean -y
 
 # Install Google Cloud SDK

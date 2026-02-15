@@ -198,9 +198,10 @@ convert_mermaid() {
         
         if [ "$in_mermaid" -eq 1 ]; then
             if [[ "$line" =~ ^\`\`\` ]]; then
-                # End of mermaid block, convert to SVG
+                # End of mermaid block, convert to SVG then to PNG
                 diagram_counter=$((diagram_counter + 1))
                 local svg_file="$TEMP_DIR/diagram_${diagram_counter}.svg"
+                local png_file="$TEMP_DIR/diagram_${diagram_counter}.png"
                 
                 # Use mermaid.ink API (ARM-compatible, no browser needed)
                 local encoded=$(base64 -w 0 < "$mermaid_file" | sed 's/+/-/g; s/\//_/g; s/=//g')
@@ -208,8 +209,15 @@ convert_mermaid() {
                 
                 # Download SVG from mermaid.ink
                 if curl -s -f -o "$svg_file" "$mermaid_url" 2>/dev/null && [ -s "$svg_file" ]; then
-                    echo -e "${GREEN}    ✓ Converted diagram $diagram_counter to SVG${NC}"
-                    echo "![Diagram $diagram_counter]($svg_file)" >> "$temp_file"
+                    # Convert SVG to PNG for better PDF compatibility
+                    if convert -density 300 -background white -alpha remove "$svg_file" "$png_file" 2>/dev/null && [ -s "$png_file" ]; then
+                        echo -e "${GREEN}    ✓ Converted diagram $diagram_counter to PNG${NC}"
+                        echo "![Diagram $diagram_counter]($png_file)" >> "$temp_file"
+                    else
+                        # Fallback to SVG if PNG conversion fails
+                        echo -e "${YELLOW}    ⚠ PNG conversion failed, using SVG for diagram $diagram_counter${NC}"
+                        echo "![Diagram $diagram_counter]($svg_file)" >> "$temp_file"
+                    fi
                     echo "" >> "$temp_file"
                 else
                     echo -e "${YELLOW}    ⚠ Failed to convert diagram $diagram_counter, keeping as code block${NC}"
