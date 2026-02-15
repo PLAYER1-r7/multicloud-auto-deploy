@@ -34,11 +34,11 @@ GitHub Actionsによる自動デプロイの設定ガイド
 
 ### AWS Secrets
 
-| Secret名                | 説明                        | 取得方法            |
-| ----------------------- | --------------------------- | ------------------- |
-| `AWS_ACCESS_KEY_ID`     | AWSアクセスキーID           | IAMユーザーから取得 |
-| `AWS_SECRET_ACCESS_KEY` | AWSシークレットアクセスキー | IAMユーザーから取得 |
-| `AWS_ROLE_ARN`          | IAMロールARN（オプション）  | OIDC認証用          |
+| Secret名                | 説明                                              | 取得方法            |
+| ----------------------- | ------------------------------------------------- | ------------------- |
+| `AWS_ACCESS_KEY_ID`     | AWSアクセスキーID                                 | IAMユーザーから取得 |
+| `AWS_SECRET_ACCESS_KEY` | AWSシークレットアクセスキー                       | IAMユーザーから取得 |
+| `AWS_ROLE_ARN`          | IAMロールARN（Landing pageデプロイ用・オプション）| OIDC認証で使用      |
 
 **取得手順**:
 ```bash
@@ -201,6 +201,52 @@ gcloud iam service-accounts keys create key.json \
 - Firestore: 管理者
 - Compute Engine: 管理者（Load Balancer用）
 - IAM: Service Account Admin
+
+---
+
+### GCP OIDC Secrets（Landing Page用・オプション）
+
+| Secret名                         | 説明                            | 取得方法                          |
+| -------------------------------- | ------------------------------- | --------------------------------- |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Workload Identity ProviderのID  | GCPコンソールから取得             |
+| `GCP_SERVICE_ACCOUNT`            | サービスアカウントのメールアドレス | サービスアカウントから取得        |
+
+**取得手順**:
+
+```bash
+# Workload Identity Poolの作成
+gcloud iam workload-identity-pools create "github-actions" \
+  --project="${PROJECT_ID}" \
+  --location="global" \
+  --display-name="GitHub Actions Pool"
+
+# Workload Identity Providerの作成
+gcloud iam workload-identity-pools providers create-oidc "github" \
+  --project="${PROJECT_ID}" \
+  --location="global" \
+  --workload-identity-pool="github-actions" \
+  --display-name="GitHub Provider" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
+  --issuer-uri="https://token.actions.githubusercontent.com"
+
+# Workload Identity Providerのフルネームを取得（これをGCP_WORKLOAD_IDENTITY_PROVIDERに設定）
+gcloud iam workload-identity-pools providers describe "github" \
+  --project="${PROJECT_ID}" \
+  --location="global" \
+  --workload-identity-pool="github-actions" \
+  --format="value(name)"
+
+# サービスアカウントに権限を付与
+gcloud iam service-accounts add-iam-policy-binding "github-actions-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --project="${PROJECT_ID}" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions/attribute.repository/YOUR_GITHUB_ORG/YOUR_REPO"
+
+# サービスアカウントのメールアドレスを GCP_SERVICE_ACCOUNT に設定
+echo "github-actions-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
+```
+
+**注意**: これらのSecretsは `deploy-landing-gcp.yml` ワークフローでのみ使用されます。メインのGCPデプロイ（`deploy-gcp.yml`）では `GCP_CREDENTIALS` を使用します。
 
 ---
 
