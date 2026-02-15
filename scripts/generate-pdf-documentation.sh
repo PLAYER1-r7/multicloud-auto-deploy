@@ -180,6 +180,54 @@ convert_emojis() {
         "$file"
 }
 
+# Function to analyze Mermaid diagram complexity and determine optimal width
+analyze_mermaid_complexity() {
+    local mermaid_content="$1"
+    local lines=$(echo "$mermaid_content" | wc -l)
+    local nodes=0
+    local edges=0
+    local participants=0
+    
+    # Count graph elements (use grep with -- to avoid option confusion)
+    nodes=$(echo "$mermaid_content" | grep -cE '^\s*[A-Za-z0-9_]+[\[\(]' || echo "0")
+    edges=$(echo "$mermaid_content" | grep -c -- '-->' || echo "0")
+    edges=$((edges + $(echo "$mermaid_content" | grep -c -- '---' || echo "0")))
+    edges=$((edges + $(echo "$mermaid_content" | grep -c -- '==>' || echo "0")))
+    participants=$(echo "$mermaid_content" | grep -cE '^\s*participant' || echo "0")
+    
+    # Determine diagram type and calculate complexity score
+    local complexity=0
+    if echo "$mermaid_content" | grep -q "sequenceDiagram"; then
+        # Sequence diagrams: vertical layout, needs moderate width
+        complexity=$((participants * 10 + edges * 2))
+    elif echo "$mermaid_content" | grep -qE "graph TB|graph TD"; then
+        # Top-bottom graphs: compact, can be smaller
+        complexity=$((nodes * 8 + edges * 2))
+    elif echo "$mermaid_content" | grep -qE "graph LR|graph RL"; then
+        # Left-right graphs: horizontal, needs more width
+        complexity=$((nodes * 12 + edges * 3))
+    else
+        # Default based on line count
+        complexity=$((lines * 5))
+    fi
+    
+    # Map complexity to width (50% - 90%)
+    local width=70
+    if [ "$complexity" -lt 50 ]; then
+        width=50
+    elif [ "$complexity" -lt 100 ]; then
+        width=60
+    elif [ "$complexity" -lt 150 ]; then
+        width=70
+    elif [ "$complexity" -lt 200 ]; then
+        width=80
+    else
+        width=90
+    fi
+    
+    echo "$width"
+}
+
 # Function to convert Mermaid diagrams to SVG using mermaid.ink API
 convert_mermaid() {
     local input_file=$1
@@ -198,10 +246,14 @@ convert_mermaid() {
         
         if [ "$in_mermaid" -eq 1 ]; then
             if [[ "$line" =~ ^\`\`\` ]]; then
-                # End of mermaid block, convert to SVG then to PNG
+                # End of mermaid block, analyze complexity
                 diagram_counter=$((diagram_counter + 1))
                 local svg_file="$TEMP_DIR/diagram_${diagram_counter}.svg"
                 local png_file="$TEMP_DIR/diagram_${diagram_counter}.png"
+                
+                # Analyze Mermaid content to determine optimal width
+                local mermaid_content=$(cat "$mermaid_file")
+                local optimal_width=$(analyze_mermaid_complexity "$mermaid_content")
                 
                 # Use mermaid.ink API (ARM-compatible, no browser needed)
                 local encoded=$(base64 -w 0 < "$mermaid_file" | sed 's/+/-/g; s/\//_/g; s/=//g')
@@ -227,12 +279,12 @@ HTMLEOF
                     echo "</body></html>" >> "$html_wrapper"
                     
                     if timeout 15 chromium --headless=new --disable-gpu --screenshot="$png_file" --window-size=2400,1600 --hide-scrollbars "file://$html_wrapper" >/dev/null 2>&1 && [ -s "$png_file" ]; then
-                        echo -e "${GREEN}    ✓ Converted diagram $diagram_counter to PNG${NC}"
-                        echo "![Diagram $diagram_counter]($png_file)" >> "$temp_file"
+                        echo -e "${GREEN}    ✓ Converted diagram $diagram_counter to PNG (width=${optimal_width}%)${NC}"
+                        echo "![Diagram $diagram_counter]($png_file){width=${optimal_width}%}" >> "$temp_file"
                     else
                         # Fallback to SVG if PNG conversion fails
                         echo -e "${YELLOW}    ⚠ PNG conversion failed, using SVG for diagram $diagram_counter${NC}"
-                        echo "![Diagram $diagram_counter]($svg_file)" >> "$temp_file"
+                        echo "![Diagram $diagram_counter]($svg_file){width=${optimal_width}%}" >> "$temp_file"
                     fi
                     echo "" >> "$temp_file"
                 else
