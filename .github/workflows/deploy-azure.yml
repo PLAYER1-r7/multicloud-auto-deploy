@@ -208,12 +208,19 @@ jobs:
               continue
             fi
             
-            # Check if deployment steps completed (even if "partially successful")
-            if grep -q "UploadPackageStep.*completed" deploy_log.txt || \
-               grep -q "SyncTriggerStep" deploy_log.txt; then
+            # Check for successful deployment (in order of reliability)
+            # 1. Explicit success message (most reliable for Flex Consumption)
+            if grep -q "Deployment was successful" deploy_log.txt; then
+              echo "✅ Deployment successful!"
+              DEPLOY_SUCCESS=true
+              break
+            # 2. Deployment steps completed (for other plan types)
+            elif grep -q "UploadPackageStep.*completed" deploy_log.txt || \
+                 grep -q "SyncTriggerStep" deploy_log.txt; then
               echo "✅ Deployment steps completed!"
               DEPLOY_SUCCESS=true
               break
+            # 3. Critical error (but not "partially successful")
             elif grep -q "ERROR:" deploy_log.txt && ! grep -q "partially successful" deploy_log.txt; then
               echo "❌ Critical deployment error"
               cat deploy_log.txt
