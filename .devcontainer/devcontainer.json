@@ -19,6 +19,7 @@
     "ghcr.io/devcontainers/features/aws-cli:1": {},
     "ghcr.io/devcontainers/features/azure-cli:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/github-copilot-cli:1": {},
     "ghcr.io/devcontainers-extra/features/pulumi:1": {
       "version": "latest"
     }
