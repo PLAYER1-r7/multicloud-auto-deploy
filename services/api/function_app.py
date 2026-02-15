@@ -14,6 +14,20 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info(f"Route params: {req.route_params}")
     logging.info(f"Method: {req.method}")
 
+    # CORS Preflight (OPTIONS) リクエストを直接処理
+    if req.method == "OPTIONS":
+        logging.info("Handling CORS preflight request")
+        return func.HttpResponse(
+            body="",
+            status_code=204,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+                "Access-Control-Max-Age": "86400",
+            },
+        )
+
     # FastAPI ASGIアプリケーションをAzure Functionsで実行
     from fastapi import Request
     from starlette.responses import Response
@@ -88,5 +102,11 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
     # レスポンス構築
     response_body = b"".join(body_parts)
     response_headers = {k.decode(): v.decode() for k, v in headers}
+
+    # CORSヘッダーを追加（FastAPIのミドルウェアからのヘッダーがない場合）
+    if "Access-Control-Allow-Origin" not in response_headers:
+        response_headers["Access-Control-Allow-Origin"] = "*"
+        response_headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+        response_headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
 
     return func.HttpResponse(body=response_body, status_code=status_code, headers=response_headers)
