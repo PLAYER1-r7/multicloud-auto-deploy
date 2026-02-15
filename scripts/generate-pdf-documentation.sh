@@ -193,7 +193,9 @@ add_chapter() {
         echo "" >> "$MERGED_MD"
         
         # Remove the first heading from the file if it exists (we already added our own)
-        tail -n +2 "$file" | sed '/^#/,1d' >> "$MERGED_MD"
+        # And fix relative image paths to be absolute
+        local file_dir=$(dirname "$file")
+        tail -n +2 "$file" | sed '/^#/,1d' | sed "s|!\[\([^]]*\)\](images/|\![\1]($file_dir/images/|g" >> "$MERGED_MD"
         
         echo "" >> "$MERGED_MD"
         echo '\newpage' >> "$MERGED_MD"

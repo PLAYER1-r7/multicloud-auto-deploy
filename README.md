@@ -1,10 +1,20 @@
 # Multi-Cloud Auto Deploy Platform
 
+![Multi-Cloud](docs/images/icons/multicloud.svg)
+
 [![Deploy to AWS](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions/workflows/deploy-aws.yml/badge.svg)](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions/workflows/deploy-aws.yml)
 [![Deploy to Azure](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions/workflows/deploy-azure.yml/badge.svg)](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions/workflows/deploy-azure.yml)
 [![Deploy to GCP](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions/workflows/deploy-gcp.yml/badge.svg)](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions/workflows/deploy-gcp.yml)
 
 **マルチクラウド対応の自動デプロイシステム** - AWS/Azure/GCP対応のフルスタックアプリケーション自動デプロイプラットフォーム
+
+## 🌐 Supported Cloud Providers
+
+<p align="center">
+  <img src="docs/images/icons/aws.svg" alt="AWS" width="150" />
+  <img src="docs/images/icons/azure.svg" alt="Azure" width="150" />
+  <img src="docs/images/icons/gcp.svg" alt="GCP" width="150" />
+</p>
 
 ## 🌐 Live Demos
 

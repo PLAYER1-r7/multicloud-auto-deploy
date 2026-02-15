@@ -1,5 +1,7 @@
 # GCP Deployment Guide
 
+
+![GCP](images/icons/gcp.svg)
 Cloud Runを使用したマルチクラウド自動デプロイシステムのデプロイガイド
 
 ## 📋 目次

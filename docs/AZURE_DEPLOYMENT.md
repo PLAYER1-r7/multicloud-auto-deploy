@@ -1,5 +1,7 @@
 # Azure Deployment Guide
 
+
+![Azure](images/icons/azure.svg)
 Azure Container Appsを使用したマルチクラウド自動デプロイシステムのデプロイガイド
 
 ## 📋 目次
