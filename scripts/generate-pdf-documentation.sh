@@ -189,11 +189,20 @@ analyze_mermaid_complexity() {
     local participants=0
     
     # Count graph elements (use grep with -- to avoid option confusion)
-    nodes=$(echo "$mermaid_content" | grep -cE '^\s*[A-Za-z0-9_]+[\[\(]' || echo "0")
-    edges=$(echo "$mermaid_content" | grep -c -- '-->' || echo "0")
-    edges=$((edges + $(echo "$mermaid_content" | grep -c -- '---' || echo "0")))
-    edges=$((edges + $(echo "$mermaid_content" | grep -c -- '==>' || echo "0")))
-    participants=$(echo "$mermaid_content" | grep -cE '^\s*participant' || echo "0")
+    # grep -c returns 0 when no match, but with exit status 1, so we need to handle it carefully
+    nodes=$(echo "$mermaid_content" | grep -cE '^\s*[A-Za-z0-9_]+[\[\(]' 2>/dev/null || true)
+    nodes=${nodes:-0}
+    
+    local edge1=$(echo "$mermaid_content" | grep -c -- '-->' 2>/dev/null || true)
+    edge1=${edge1:-0}
+    local edge2=$(echo "$mermaid_content" | grep -c -- '---' 2>/dev/null || true)
+    edge2=${edge2:-0}
+    local edge3=$(echo "$mermaid_content" | grep -c -- '==>' 2>/dev/null || true)
+    edge3=${edge3:-0}
+    edges=$((edge1 + edge2 + edge3))
+    
+    participants=$(echo "$mermaid_content" | grep -cE '^\s*participant' 2>/dev/null || true)
+    participants=${participants:-0}
     
     # Determine diagram type and calculate complexity score
     local complexity=0
@@ -439,14 +448,6 @@ perl -i -pe 'if (/\|.*\|/) { s/`([^`]+)`/$1/g }' "$MERGED_MD"
 AFTER_COUNT=$(grep '|' "$MERGED_MD" | grep -o '`[^`]*`' | wc -l)
 echo "  Removed backticks from $((BEFORE_COUNT - AFTER_COUNT)) table cells"
 echo "  Unified font across all tables"
-
-echo ""
-echo "🔧 Adding page breaks before figures..."
-
-# Add page break before each figure to prevent overflow
-# This ensures figures start on a new page
-perl -i -pe 's/^(!\[)/\\clearpage\n\n$1/g' "$MERGED_MD"
-echo "  Added page breaks before figures"
 
 echo ""
 echo -e "${YELLOW}📄 Generating PDF with pandoc...${NC}"
