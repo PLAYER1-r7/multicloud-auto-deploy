@@ -370,6 +370,10 @@ echo -e "${YELLOW}🔧 Fixing list formatting...${NC}"
 # This ensures Pandoc treats them as separate blocks
 perl -i -pe 'BEGIN{undef $/;} s/(\*\*[^\*]+\*\*[^\n]*)\n(- )/$1\n\n$2/g' "$MERGED_MD"
 
+# Fix nested lists after colons (both half-width : and full-width ：)
+# Add blank line after colon when followed by a list item  
+perl -i -pe 'BEGIN{undef $/;} s/([^#\n][：:]\s*)\n(- )/$1\n\n$2/g' "$MERGED_MD"
+
 echo ""
 echo "🔧 Fixing table formatting..."
 

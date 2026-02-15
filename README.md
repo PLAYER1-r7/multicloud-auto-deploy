@@ -380,7 +380,8 @@ cd scripts
 PROJECT_NAME=myproject ENVIRONMENT=production ./deploy-lambda-aws.sh
 ```
 
-スクリプトは以下を自動実行します:
+スクリプトは以下を自動実行します：
+
 - 依存関係のインストール（manylinux2014_x86_64）
 - ZIPパッケージ作成とS3アップロード
 - Lambda関数の作成/更新
@@ -400,7 +401,8 @@ PROJECT_NAME=myproject ENVIRONMENT=production ./deploy-lambda-aws.sh
 ./scripts/test-api.sh -e https://YOUR_API_ID.execute-api.ap-northeast-1.amazonaws.com --verbose
 ```
 
-テスト項目:
+テスト項目：
+
 - ヘルスチェック
 - メッセージCRUD操作（作成、取得、更新、削除）
 - ページネーション
@@ -473,7 +475,8 @@ All tests passed! ✓
 ALERT_EMAIL=your@email.com ./scripts/setup-monitoring.sh
 ```
 
-設定内容:
+設定内容：
+
 - SNSトピックとメール通知
 - Lambda エラー/スロットリング/実行時間/同時実行数アラーム
 - API Gateway 5XXエラー/レイテンシアラーム
