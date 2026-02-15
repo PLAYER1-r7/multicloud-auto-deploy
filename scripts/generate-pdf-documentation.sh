@@ -180,6 +180,56 @@ convert_emojis() {
         "$file"
 }
 
+# Function to convert Mermaid diagrams to SVG using mermaid.ink API
+convert_mermaid() {
+    local input_file=$1
+    local output_file=$2
+    local diagram_counter=0
+    local temp_file=$(mktemp)
+    local in_mermaid=0
+    local mermaid_file=$(mktemp)
+    
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^\`\`\`mermaid ]]; then
+            in_mermaid=1
+            > "$mermaid_file"  # Clear file
+            continue
+        fi
+        
+        if [ "$in_mermaid" -eq 1 ]; then
+            if [[ "$line" =~ ^\`\`\` ]]; then
+                # End of mermaid block, convert to SVG
+                diagram_counter=$((diagram_counter + 1))
+                local svg_file="$TEMP_DIR/diagram_${diagram_counter}.svg"
+                
+                # Use mermaid.ink API (ARM-compatible, no browser needed)
+                local encoded=$(base64 -w 0 < "$mermaid_file" | sed 's/+/-/g; s/\//_/g; s/=//g')
+                local mermaid_url="https://mermaid.ink/svg/${encoded}"
+                
+                # Download SVG from mermaid.ink
+                if curl -s -f -o "$svg_file" "$mermaid_url" 2>/dev/null && [ -s "$svg_file" ]; then
+                    echo -e "${GREEN}    ✓ Converted diagram $diagram_counter to SVG${NC}"
+                    echo "![Diagram $diagram_counter]($svg_file){width=80%}" >> "$temp_file"
+                else
+                    echo -e "${YELLOW}    ⚠ Failed to convert diagram $diagram_counter, keeping as code block${NC}"
+                    echo '```mermaid' >> "$temp_file"
+                    cat "$mermaid_file" >> "$temp_file"
+                    echo '```' >> "$temp_file"
+                fi
+                
+                in_mermaid=0
+            else
+                echo "$line" >> "$mermaid_file"
+            fi
+        else
+            echo "$line" >> "$temp_file"
+        fi
+    done < "$input_file"
+    
+    rm -f "$mermaid_file"
+    mv "$temp_file" "$output_file"
+}
+
 # Function to add chapter to merged file
 add_chapter() {
     local file=$1
@@ -192,10 +242,23 @@ add_chapter() {
         echo "$(printf '#%.0s' $(seq 1 $level)) $title" >> "$MERGED_MD"
         echo "" >> "$MERGED_MD"
         
+        # Create temporary file for processing
+        local temp_chapter=$(mktemp)
+        local file_dir=$(dirname "$file")
+        
         # Remove the first heading from the file if it exists (we already added our own)
         # And fix relative image paths to be absolute
-        local file_dir=$(dirname "$file")
-        tail -n +2 "$file" | sed '/^#/,1d' | sed "s|!\[\([^]]*\)\](images/|\![\1]($file_dir/images/|g" >> "$MERGED_MD"
+        tail -n +2 "$file" | sed '/^#/,1d' | sed "s|!\[\([^]]*\)\](images/|\![\1]($file_dir/images/|g" > "$temp_chapter"
+        
+        # Convert Mermaid diagrams to SVG if any exist
+        if grep -q '^```mermaid' "$temp_chapter"; then
+            echo -e "${YELLOW}    Converting Mermaid diagrams...${NC}"
+            convert_mermaid "$temp_chapter" "$temp_chapter"
+        fi
+        
+        # Add to merged document
+        cat "$temp_chapter" >> "$MERGED_MD"
+        rm "$temp_chapter"
         
         echo "" >> "$MERGED_MD"
         echo '\newpage' >> "$MERGED_MD"
