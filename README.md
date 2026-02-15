@@ -235,13 +235,18 @@ cp .env.example .env
 
 ### 必要なGitHub Secrets
 
-以下のシークレットを設定してください（詳細は [CI/CD設定ガイド](docs/CI_CD_SETUP.md) 参照）：
+以下のシークレットを設定してください（詳細は [CI/CD設定ガイド](docs/CICD_SETUP.md) 参照）：
+
+**Pulumi（必須）**
+- `PULUMI_ACCESS_TOKEN` - Pulumi Cloud認証トークン（すべてのデプロイで必須）
 
 **Azure Container Apps** 🆕
-- `AZURE_CREDENTIALS` - Service Principal認証情報
-- `AZURE_CONTAINER_REGISTRY` - ACRログインサーバー
-- `AZURE_CONTAINER_REGISTRY_USERNAME/PASSWORD` - ACR認証情報
+- `AZURE_CREDENTIALS` - Service Principal認証情報（JSON）
+- `AZURE_SUBSCRIPTION_ID` - Azure Subscription ID
 - `AZURE_RESOURCE_GROUP` - リソースグループ名
+- `AZURE_CONTAINER_REGISTRY` - ACRログインサーバー
+- `AZURE_CONTAINER_REGISTRY_USERNAME` - ACR認証ユーザー名
+- `AZURE_CONTAINER_REGISTRY_PASSWORD` - ACR認証パスワード
 - `AZURE_CONTAINER_APP_API` - APIのContainer App名
 - `AZURE_CONTAINER_APP_FRONTEND` - FrontendのContainer App名
 
@@ -253,8 +258,8 @@ cp .env.example .env
 - `GCP_CLOUD_RUN_FRONTEND` - FrontendのCloud Runサービス名
 
 **AWS Lambda**
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
+- `AWS_ACCESS_KEY_ID` - AWS認証キーID
+- `AWS_SECRET_ACCESS_KEY` - AWS認証シークレットキー
 
 ### デプロイ状況
 

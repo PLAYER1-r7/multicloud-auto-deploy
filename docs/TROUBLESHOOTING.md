@@ -413,9 +413,9 @@ Lambda関数のリソースポリシーでSourceArn形式が正しくない。
 
 #### HTTP API vs REST API の違い
 
-| API種類 | SourceArn形式 | 例 |
-|---------|--------------|-----|
-| **HTTP API** | `arn:aws:execute-api:{region}:{account-id}:{api-id}/*/*` | `arn:aws:execute-api:ap-northeast-1:123456789012:abc123def4/*/*` |
+| API種類      | SourceArn形式                                              | 例                                                                 |
+| ------------ | ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| **HTTP API** | `arn:aws:execute-api:{region}:{account-id}:{api-id}/*/*`   | `arn:aws:execute-api:ap-northeast-1:123456789012:abc123def4/*/*`   |
 | **REST API** | `arn:aws:execute-api:{region}:{account-id}:{api-id}/*/*/*` | `arn:aws:execute-api:ap-northeast-1:123456789012:abc123def4/*/*/*` |
 
 **重要**: HTTP APIは `/*/*` (2つのワイルドカード)、REST APIは `/*/*/*` (3つのワイルドカード)

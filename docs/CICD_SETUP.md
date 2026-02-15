@@ -34,11 +34,11 @@ GitHub Actionsによる自動デプロイの設定ガイド
 
 ### AWS Secrets
 
-| Secret名 | 説明 | 取得方法 |
-|---------|------|---------|
-| `AWS_ACCESS_KEY_ID` | AWSアクセスキーID | IAMユーザーから取得 |
+| Secret名                | 説明                        | 取得方法            |
+| ----------------------- | --------------------------- | ------------------- |
+| `AWS_ACCESS_KEY_ID`     | AWSアクセスキーID           | IAMユーザーから取得 |
 | `AWS_SECRET_ACCESS_KEY` | AWSシークレットアクセスキー | IAMユーザーから取得 |
-| `AWS_ROLE_ARN` | IAMロールARN（オプション） | OIDC認証用 |
+| `AWS_ROLE_ARN`          | IAMロールARN（オプション）  | OIDC認証用          |
 
 **取得手順**:
 ```bash
@@ -60,8 +60,8 @@ aws iam create-access-key --user-name satoshi
 
 ### Pulumi Secrets
 
-| Secret名 | 説明 | 取得方法 |
-|---------|------|---------|
+| Secret名              | 説明                   | 取得方法             |
+| --------------------- | ---------------------- | -------------------- |
 | `PULUMI_ACCESS_TOKEN` | Pulumiアクセストークン | Pulumi Cloudから取得 |
 
 **取得手順**:
@@ -77,16 +77,16 @@ aws iam create-access-key --user-name satoshi
 
 ### Azure Secrets
 
-| Secret名 | 説明 | 取得方法 |
-|---------|------|---------|
-| `AZURE_CREDENTIALS` | Azure認証情報（JSON） | Service Principalから取得 |
-| `AZURE_SUBSCRIPTION_ID` | AzureサブスクリプションID | `az account show` |
-| `AZURE_RESOURCE_GROUP` | リソースグループ名 | デプロイ後に設定 |
-| `AZURE_CONTAINER_REGISTRY` | Container Registryドメイン | `az acr list --query "[].loginServer"` |
-| `AZURE_CONTAINER_REGISTRY_USERNAME` | ACRユーザー名 | Service PrincipalのclientId |
-| `AZURE_CONTAINER_REGISTRY_PASSWORD` | ACRパスワード | Service PrincipalのclientSecret |
-| `AZURE_CONTAINER_APP_API` | Container App名（API） | デプロイ後に設定 |
-| `AZURE_CONTAINER_APP_FRONTEND` | Container App名（Frontend） | デプロイ後に設定 |
+| Secret名                            | 説明                        | 取得方法                               |
+| ----------------------------------- | --------------------------- | -------------------------------------- |
+| `AZURE_CREDENTIALS`                 | Azure認証情報（JSON）       | Service Principalから取得              |
+| `AZURE_SUBSCRIPTION_ID`             | AzureサブスクリプションID   | `az account show`                      |
+| `AZURE_RESOURCE_GROUP`              | リソースグループ名          | デプロイ後に設定                       |
+| `AZURE_CONTAINER_REGISTRY`          | Container Registryドメイン  | `az acr list --query "[].loginServer"` |
+| `AZURE_CONTAINER_REGISTRY_USERNAME` | ACRユーザー名               | Service PrincipalのclientId            |
+| `AZURE_CONTAINER_REGISTRY_PASSWORD` | ACRパスワード               | Service PrincipalのclientSecret        |
+| `AZURE_CONTAINER_APP_API`           | Container App名（API）      | デプロイ後に設定                       |
+| `AZURE_CONTAINER_APP_FRONTEND`      | Container App名（Frontend） | デプロイ後に設定                       |
 
 **取得手順**:
 
@@ -156,15 +156,15 @@ az role assignment create \
 
 ### GCP Secrets
 
-| Secret名 | 説明 | 取得方法 |
-|---------|------|---------|
-| `GCP_CREDENTIALS` | GCPサービスアカウントキー（JSON） | サービスアカウントから取得 |
-| `GCP_PROJECT_ID` | GCPプロジェクトID | `gcloud config get-value project` |
-| `GCP_ARTIFACT_REGISTRY_REPO` | Artifact Registryリポジトリ名 | デプロイ後に設定 |
-| `GCP_CLOUD_RUN_API` | Cloud Runサービス名（API） | デプロイ後に設定 |
-| `GCP_CLOUD_RUN_FRONTEND` | Cloud Runサービス名（Frontend） | デプロイ後に設定 |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Workload Identity Provider（オプション） | OIDC認証用 |
-| `GCP_SERVICE_ACCOUNT` | サービスアカウントメール（オプション） | Workload Identity用 |
+| Secret名                         | 説明                                     | 取得方法                          |
+| -------------------------------- | ---------------------------------------- | --------------------------------- |
+| `GCP_CREDENTIALS`                | GCPサービスアカウントキー（JSON）        | サービスアカウントから取得        |
+| `GCP_PROJECT_ID`                 | GCPプロジェクトID                        | `gcloud config get-value project` |
+| `GCP_ARTIFACT_REGISTRY_REPO`     | Artifact Registryリポジトリ名            | デプロイ後に設定                  |
+| `GCP_CLOUD_RUN_API`              | Cloud Runサービス名（API）               | デプロイ後に設定                  |
+| `GCP_CLOUD_RUN_FRONTEND`         | Cloud Runサービス名（Frontend）          | デプロイ後に設定                  |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Workload Identity Provider（オプション） | OIDC認証用                        |
+| `GCP_SERVICE_ACCOUNT`            | サービスアカウントメール（オプション）   | Workload Identity用               |
 
 **取得手順**:
 
