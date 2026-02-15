@@ -2,15 +2,13 @@
 set -e
 
 echo "🚀 Starting Ashnova project setup..."
-
-# Install Pulumi
-if ! command -v pulumi &> /dev/null; then
-    echo "📦 Installing Pulumi..."
-    curl -fsSL https://get.pulumi.com | sh
-    export PATH=$PATH:$HOME/.pulumi/bin
-else
-    echo "✅ Pulumi is already installed."
-fi
+echo ""
+echo "Note: Core tools (AWS CLI, Azure CLI, GitHub CLI, Pulumi, Node.js, Python, Git, Docker)"
+echo "      are provided by devcontainer features. This script handles:"
+echo "      - Google Cloud CLI (no official feature available)"
+echo "      - Project-specific tools (PostgreSQL, MinIO, dnsutils, jq)"
+echo "      - Python virtual environments and dependencies"
+echo ""
 
 # Fix for yarn list issue if it exists (inherited from previous config)
 if [ -f "/etc/apt/sources.list.d/yarn.list" ]; then
