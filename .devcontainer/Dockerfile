@@ -15,6 +15,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   texlive-lang-cjk \
   fonts-noto-cjk \
   librsvg2-bin \
+  chromium \
   && apt-get autoremove -y && apt-get clean -y
 
 # Install Google Cloud SDK
