@@ -209,8 +209,24 @@ convert_mermaid() {
                 
                 # Download SVG from mermaid.ink
                 if curl -s -f -o "$svg_file" "$mermaid_url" 2>/dev/null && [ -s "$svg_file" ]; then
-                    # Convert SVG to PNG using rsvg-convert (handles foreignObject elements correctly)
-                    if rsvg-convert -f png -w 2400 -b white "$svg_file" -o "$png_file" 2>/dev/null && [ -s "$png_file" ]; then
+                    # Convert SVG to PNG using Chromium headless (handles foreignObject correctly)
+                    local html_wrapper="$TEMP_DIR/diagram_${diagram_counter}.html"
+                    cat > "$html_wrapper" << 'HTMLEOF'
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body { margin: 0; padding: 0; background: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+img { max-width: 100%; height: auto; }
+</style>
+</head>
+<body>
+HTMLEOF
+                    echo "<img src=\"diagram_${diagram_counter}.svg\">" >> "$html_wrapper"
+                    echo "</body></html>" >> "$html_wrapper"
+                    
+                    if timeout 15 chromium --headless=new --disable-gpu --screenshot="$png_file" --window-size=2400,1600 --hide-scrollbars "file://$html_wrapper" >/dev/null 2>&1 && [ -s "$png_file" ]; then
                         echo -e "${GREEN}    ✓ Converted diagram $diagram_counter to PNG${NC}"
                         echo "![Diagram $diagram_counter]($png_file)" >> "$temp_file"
                     else
