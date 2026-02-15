@@ -144,7 +144,7 @@ jobs:
             --max-instances=10 \
             --memory=512MB \
             --timeout=60s \
-            --set-env-vars=ENVIRONMENT=staging
+            --set-env-vars=ENVIRONMENT=staging,CLOUD_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,FIRESTORE_COLLECTION=messages
           
           # Get function URL
           FUNCTION_URL=$(gcloud functions describe $FUNCTION_NAME --region=$REGION --gen2 --format="value(serviceConfig.uri)")

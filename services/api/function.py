@@ -16,7 +16,7 @@ def handler(request):
         "method": request.method,
         "scheme": "https",
         "path": request.path,
-        "query_string": request.query_string.encode() if request.query_string else b"",
+        "query_string": request.query_string if request.query_string else b"",
         "headers": [[k.lower().encode(), v.encode()] for k, v in request.headers.items()],
         "server": (request.host.split(":")[0], int(request.host.split(":")[1]) if ":" in request.host else 443),
     }
