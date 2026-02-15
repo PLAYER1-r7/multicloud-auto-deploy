@@ -294,9 +294,40 @@ jobs:
 
       - name: Verify Deployment
         run: |
-          FUNC_URL="https://$(az functionapp show --name multicloud-auto-deploy-staging-func --resource-group multicloud-auto-deploy-staging-rg --query defaultHostName -o tsv)/api/HttpTrigger"
+          FUNCTION_APP="multicloud-auto-deploy-staging-func"
+          RESOURCE_GROUP="multicloud-auto-deploy-staging-rg"
           
           echo "🔍 Verifying API deployment..."
+          echo "Getting Function App hostname..."
+          
+          # Get hostname with retry (Function App might not be fully ready)
+          max_hostname_attempts=10
+          hostname_attempt=0
+          FUNC_HOSTNAME=""
+          
+          while [ $hostname_attempt -lt $max_hostname_attempts ]; do
+            FUNC_HOSTNAME=$(az functionapp show \
+              --name $FUNCTION_APP \
+              --resource-group $RESOURCE_GROUP \
+              --query defaultHostName -o tsv 2>/dev/null || echo "")
+            
+            if [ -n "$FUNC_HOSTNAME" ] && [ "$FUNC_HOSTNAME" != "None" ]; then
+              echo "✅ Got hostname: $FUNC_HOSTNAME"
+              break
+            else
+              echo "⏳ Waiting for Function App to be ready... (attempt $((hostname_attempt+1))/$max_hostname_attempts)"
+              sleep 10
+              hostname_attempt=$((hostname_attempt+1))
+            fi
+          done
+          
+          if [ -z "$FUNC_HOSTNAME" ] || [ "$FUNC_HOSTNAME" = "None" ]; then
+            echo "❌ Failed to get Function App hostname after waiting"
+            echo "Try checking manually: az functionapp show --name $FUNCTION_APP --resource-group $RESOURCE_GROUP"
+            exit 1
+          fi
+          
+          FUNC_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
           echo "Testing: ${FUNC_URL}/health"
           
           # Wait for function to be ready (max 3 minutes)
