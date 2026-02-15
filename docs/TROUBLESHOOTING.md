@@ -30,21 +30,21 @@ Authenticating using the Azure CLI is only supported as a User (not a Service Pr
 
 **解決策**:
 
-1. **環境変数で認証**:
-```yaml
-env:
-  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+1. **AZURE_CREDENTIALSから認証情報を抽出**:
+```bash
+# GitHub SecretsからAZURE_CREDENTIALSを取得し、環境変数に設定
+export AZURE_CLIENT_ID=$(echo $AZURE_CREDENTIALS | jq -r '.clientId')
+export AZURE_CLIENT_SECRET=$(echo $AZURE_CREDENTIALS | jq -r '.clientSecret')
+export AZURE_SUBSCRIPTION_ID=$(echo $AZURE_CREDENTIALS | jq -r '.subscriptionId')
+export AZURE_TENANT_ID=$(echo $AZURE_CREDENTIALS | jq -r '.tenantId')
 ```
 
 2. **Pulumi設定で明示的に指定**:
 ```bash
-pulumi config set azure-native:clientId $ARM_CLIENT_ID --secret
-pulumi config set azure-native:clientSecret $ARM_CLIENT_SECRET --secret
-pulumi config set azure-native:subscriptionId $ARM_SUBSCRIPTION_ID
-pulumi config set azure-native:tenantId $ARM_TENANT_ID
+pulumi config set azure-native:clientId $AZURE_CLIENT_ID --secret
+pulumi config set azure-native:clientSecret $AZURE_CLIENT_SECRET --secret
+pulumi config set azure-native:subscriptionId $AZURE_SUBSCRIPTION_ID
+pulumi config set azure-native:tenantId $AZURE_TENANT_ID
 ```
 
 ### 問題2: Azure CLI認証後のPulumi実行エラー
@@ -358,13 +358,12 @@ terraform destroy -target=google_cloud_run_v2_service.api
 
 ```bash
 # 環境変数を設定
-export ARM_CLIENT_ID="..."
+export AZURE_CLIENT_ID="..."
 export AWS_ACCESS_KEY_ID="..."
 
-# Terraformコマンドを実行
-cd infrastructure/terraform/azure
-terraform init
-terraform plan
+# Pulumiコマンドを実行
+cd infrastructure/pulumi/azure
+pulumi preview
 ```
 
 ### 2. GitHub Actions ログの確認

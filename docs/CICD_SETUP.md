@@ -370,15 +370,20 @@ aws iam list-attached-user-policies --user-name satoshi
 
 **対処**:
 ```bash
-# Service Principalの認証情報を確認
+# AZURE_CREDENTIALSから認証情報を抽出
+export AZURE_CLIENT_ID=$(echo $AZURE_CREDENTIALS | jq -r '.clientId')
+export AZURE_CLIENT_SECRET=$(echo $AZURE_CREDENTIALS | jq -r '.clientSecret')
+export AZURE_TENANT_ID=$(echo $AZURE_CREDENTIALS | jq -r '.tenantId')
+
+# Service Principalで認証
 az login --service-principal \
-  -u $ARM_CLIENT_ID \
-  -p $ARM_CLIENT_SECRET \
-  --tenant $ARM_TENANT_ID
+  -u $AZURE_CLIENT_ID \
+  -p $AZURE_CLIENT_SECRET \
+  --tenant $AZURE_TENANT_ID
 
 # Contributorロールがあるか確認
 az role assignment list \
-  --assignee $ARM_CLIENT_ID \
+  --assignee $AZURE_CLIENT_ID \
   --output table
 ```
 
@@ -434,8 +439,8 @@ az acr login --name <ACR_NAME>
 
 # Service PrincipalにAcrPushロールがあるか確認
 az role assignment list \
-  --assignee $ARM_CLIENT_ID \
-  --scope /subscriptions/$ARM_SUBSCRIPTION_ID/resourceGroups/*/providers/Microsoft.ContainerRegistry/registries/*
+  --assignee $AZURE_CLIENT_ID \
+  --scope /subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/*/providers/Microsoft.ContainerRegistry/registries/*
 ```
 
 **GCP**:
