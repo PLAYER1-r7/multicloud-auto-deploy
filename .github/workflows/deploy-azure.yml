@@ -131,21 +131,32 @@ jobs:
         run: | 
           FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
           RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
+          COSMOS_ACCOUNT="multicloud-auto-deploy-staging"
           
           echo "🚀 Deploying to Function App: $FUNCTION_APP"
           
-          # Get existing Cosmos DB settings
-          COSMOS_ENDPOINT=$(az functionapp config appsettings list \
-            --name $FUNCTION_APP \
+          # Get Cosmos DB endpoint and keys directly from the resource
+          echo "🔑 Getting Cosmos DB credentials..."
+          COSMOS_ENDPOINT=$(az cosmosdb show \
+            --name $COSMOS_ACCOUNT \
             --resource-group $RESOURCE_GROUP \
-            --query "[?name=='COSMOS_DB_ENDPOINT'].value | [0]" -o tsv)
+            --query documentEndpoint -o tsv)
           
-          COSMOS_KEY=$(az functionapp config appsettings list \
-            --name $FUNCTION_APP \
+          COSMOS_KEY=$(az cosmosdb keys list \
+            --name $COSMOS_ACCOUNT \
             --resource-group $RESOURCE_GROUP \
-            --query "[?name=='COSMOS_DB_KEY'].value | [0]" -o tsv)
+            --type keys \
+            --query primaryMasterKey -o tsv)
+          
+          if [ -z "$COSMOS_ENDPOINT" ] || [ -z "$COSMOS_KEY" ]; then
+            echo "❌ Failed to retrieve Cosmos DB credentials"
+            exit 1
+          fi
+          
+          echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
           
           # Set environment variables
+          echo "⚙️  Setting environment variables..."
           az functionapp config appsettings set \
             --name $FUNCTION_APP \
             --resource-group $RESOURCE_GROUP \
@@ -155,12 +166,15 @@ jobs:
               AZURE_COSMOS_ENDPOINT="${COSMOS_ENDPOINT}" \
               AZURE_COSMOS_KEY="${COSMOS_KEY}" \
               AZURE_COSMOS_DATABASE=multicloud-db \
-              AZURE_COSMOS_CONTAINER=messages
+              AZURE_COSMOS_CONTAINER=messages \
+            > /dev/null
           
+          echo "📦 Deploying function app package..."
           az functionapp deployment source config-zip \
             --resource-group $RESOURCE_GROUP \
             --name $FUNCTION_APP \
-            --src services/api/function-app.zip
+            --src services/api/function-app.zip \
+            --timeout 600
 
       - name: Build Frontend
         run: |
@@ -215,6 +229,34 @@ jobs:
             --source services/frontend_react/dist \
             --destination '$web' \
             --overwrite
+
+      - name: Verify Deployment
+        run: |
+          FUNC_URL="https://$(az functionapp show --name multicloud-auto-deploy-staging-func --resource-group multicloud-auto-deploy-staging-rg --query defaultHostName -o tsv)/api/HttpTrigger"
+          
+          echo "🔍 Verifying API deployment..."
+          echo "Testing: ${FUNC_URL}/health"
+          
+          # Wait for function to be ready (max 2 minutes)
+          max_attempts=24
+          attempt=0
+          
+          while [ $attempt -lt $max_attempts ]; do
+            if curl -sf "${FUNC_URL}/health" > /dev/null 2>&1; then
+              echo "✅ API is responding"
+              curl -s "${FUNC_URL}/health" | jq .
+              break
+            else
+              echo "⏳ Waiting for function to be ready... (attempt $((attempt+1))/$max_attempts)"
+              sleep 5
+              attempt=$((attempt+1))
+            fi
+          done
+          
+          if [ $attempt -eq $max_attempts ]; then
+            echo "⚠️  API did not respond within timeout, but deployment may still succeed"
+            echo "Check manually: ${FUNC_URL}/health"
+          fi
 
       - name: Notify Success
         if: success()
