@@ -77,16 +77,11 @@ aws iam create-access-key --user-name satoshi
 
 ### Azure Secrets
 
-| Secret名                            | 説明                        | 取得方法                               |
-| ----------------------------------- | --------------------------- | -------------------------------------- |
-| `AZURE_CREDENTIALS`                 | Azure認証情報（JSON）       | Service Principalから取得              |
-| `AZURE_SUBSCRIPTION_ID`             | AzureサブスクリプションID   | `az account show`                      |
-| `AZURE_RESOURCE_GROUP`              | リソースグループ名          | デプロイ後に設定                       |
-| `AZURE_CONTAINER_REGISTRY`          | Container Registryドメイン  | `az acr list --query "[].loginServer"` |
-| `AZURE_CONTAINER_REGISTRY_USERNAME` | ACRユーザー名               | Service PrincipalのclientId            |
-| `AZURE_CONTAINER_REGISTRY_PASSWORD` | ACRパスワード               | Service PrincipalのclientSecret        |
-| `AZURE_CONTAINER_APP_API`           | Container App名（API）      | デプロイ後に設定                       |
-| `AZURE_CONTAINER_APP_FRONTEND`      | Container App名（Frontend） | デプロイ後に設定                       |
+| Secret名                | 説明                  | 取得方法          |
+| ------------------------ | ----------------------- | -------------------------- |
+| `AZURE_CREDENTIALS`      | Azure認証情報（JSON） | Service Principalから取得 |
+| `AZURE_SUBSCRIPTION_ID`  | AzureサブスクリプションID | `az account show`          |
+| `AZURE_RESOURCE_GROUP`   | リソースグループ名    | デプロイ後に設定         |
 
 **取得手順**:
 
@@ -109,33 +104,13 @@ az ad sp create-for-rbac \
 # - subscriptionId → AZURE_SUBSCRIPTION_ID
 ```
 
-**Container Registry情報の取得**:
-```bash
-# Container Registryのログインサーバーを取得
-az acr list --query "[].{Name:name, LoginServer:loginServer}" --output table
-
-# 出力例:
-# Name: mcadstagingacr
-# LoginServer: mcadstagingacr.azurecr.io
-
-# 以下をSecretsに設定:
-# AZURE_CONTAINER_REGISTRY: mcadstagingacr.azurecr.io
-# AZURE_CONTAINER_REGISTRY_USERNAME: Service PrincipalのclientId
-# AZURE_CONTAINER_REGISTRY_PASSWORD: Service PrincipalのclientSecret
-```
-
 **リソース名の取得**:
 ```bash
 # リソースグループ名
 az group list --query "[?contains(name, 'multicloud')].name" -o table
 
-# Container App名
-az containerapp list --query "[].{Name:name, ResourceGroup:resourceGroup}" -o table
-
 # 確認した値をSecretsに設定:
 # AZURE_RESOURCE_GROUP: multicloud-auto-deploy-staging-rg
-# AZURE_CONTAINER_APP_API: multicloud-auto-deploy-staging-api
-# AZURE_CONTAINER_APP_FRONTEND: multicloud-auto-deploy-staging-frontend
 ```
 
 **Service PrincipalにACRアクセス権を付与**:
@@ -156,15 +131,10 @@ az role assignment create \
 
 ### GCP Secrets
 
-| Secret名                         | 説明                                     | 取得方法                          |
-| -------------------------------- | ---------------------------------------- | --------------------------------- |
-| `GCP_CREDENTIALS`                | GCPサービスアカウントキー（JSON）        | サービスアカウントから取得        |
-| `GCP_PROJECT_ID`                 | GCPプロジェクトID                        | `gcloud config get-value project` |
-| `GCP_ARTIFACT_REGISTRY_REPO`     | Artifact Registryリポジトリ名            | デプロイ後に設定                  |
-| `GCP_CLOUD_RUN_API`              | Cloud Runサービス名（API）               | デプロイ後に設定                  |
-| `GCP_CLOUD_RUN_FRONTEND`         | Cloud Runサービス名（Frontend）          | デプロイ後に設定                  |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Workload Identity Provider（オプション） | OIDC認証用                        |
-| `GCP_SERVICE_ACCOUNT`            | サービスアカウントメール（オプション）   | Workload Identity用               |
+| Secret名          | 説明                              | 取得方法                          |
+| ----------------- | --------------------------------- | --------------------------------- |
+| `GCP_CREDENTIALS` | GCPサービスアカウントキー（JSON） | サービスアカウントから取得        |
+| `GCP_PROJECT_ID`  | GCPプロジェクトID                 | `gcloud config get-value project` |
 
 **取得手順**:
 

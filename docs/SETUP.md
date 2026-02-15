@@ -126,18 +126,10 @@ GitHubリポジトリの Settings → Secrets and variables → Actions で以�
 - `AZURE_CREDENTIALS` (JSON format)
 - `AZURE_SUBSCRIPTION_ID`
 - `AZURE_RESOURCE_GROUP`
-- `AZURE_CONTAINER_REGISTRY`
-- `AZURE_CONTAINER_REGISTRY_USERNAME`
-- `AZURE_CONTAINER_REGISTRY_PASSWORD`
-- `AZURE_CONTAINER_APP_API`
-- `AZURE_CONTAINER_APP_FRONTEND`
 
 #### GCP
 - `GCP_CREDENTIALS` (Service Account JSON)
 - `GCP_PROJECT_ID`
-- `GCP_BUCKET_NAME`
-- `GCP_FUNCTION_NAME`
-- `GCP_API_URL`
 
 ### ワークフローのトリガー
 

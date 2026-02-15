@@ -240,22 +240,14 @@ cp .env.example .env
 **Pulumi（必須）**
 - `PULUMI_ACCESS_TOKEN` - Pulumi Cloud認証トークン（すべてのデプロイで必須）
 
-**Azure Container Apps** 🆕
+**Azure Functions**
 - `AZURE_CREDENTIALS` - Service Principal認証情報（JSON）
 - `AZURE_SUBSCRIPTION_ID` - Azure Subscription ID
 - `AZURE_RESOURCE_GROUP` - リソースグループ名
-- `AZURE_CONTAINER_REGISTRY` - ACRログインサーバー
-- `AZURE_CONTAINER_REGISTRY_USERNAME` - ACR認証ユーザー名
-- `AZURE_CONTAINER_REGISTRY_PASSWORD` - ACR認証パスワード
-- `AZURE_CONTAINER_APP_API` - APIのContainer App名
-- `AZURE_CONTAINER_APP_FRONTEND` - FrontendのContainer App名
 
-**GCP Cloud Run** 🆕
+**GCP Cloud Functions**
 - `GCP_CREDENTIALS` - サービスアカウントキー（JSON）
 - `GCP_PROJECT_ID` - プロジェクトID
-- `GCP_ARTIFACT_REGISTRY_REPO` - Artifact Registryリポジトリ名
-- `GCP_CLOUD_RUN_API` - APIのCloud Runサービス名
-- `GCP_CLOUD_RUN_FRONTEND` - FrontendのCloud Runサービス名
 
 **AWS Lambda**
 - `AWS_ACCESS_KEY_ID` - AWS認証キーID
