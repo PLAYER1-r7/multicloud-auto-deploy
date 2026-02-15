@@ -82,6 +82,7 @@ echo -e "${GREEN}✅ 依存関係インストール完了${NC}"
 # アプリケーションコードのコピー
 echo -e "${YELLOW}4. アプリケーションコードのコピー...${NC}"
 cp -r app "$BUILD_DIR/package/"
+cp index.py "$BUILD_DIR/package/"
 echo -e "${GREEN}✅ コピー完了${NC}"
 
 # ZIPパッケージの作成
