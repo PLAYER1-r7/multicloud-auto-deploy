@@ -97,6 +97,51 @@ app_insights = azure.insights.Component(
 )
 
 # ========================================
+# Azure Key Vault for Secret Management
+# ========================================
+# Get current Azure client configuration for tenant ID
+current = azure.authorization.get_client_config()
+
+key_vault = azure.keyvault.Vault(
+    "key-vault",
+    vault_name=storage_suffix.result.apply(lambda suffix: f"mcad-kv-{suffix}"),
+    resource_group_name=resource_group.name,
+    location=location,
+    properties=azure.keyvault.VaultPropertiesArgs(
+        tenant_id=current.tenant_id,
+        sku=azure.keyvault.SkuArgs(
+            family="A",
+            name="standard",
+        ),
+        enable_rbac_authorization=True,  # Use RBAC instead of access policies
+        enable_soft_delete=True,
+        soft_delete_retention_in_days=7,
+        enabled_for_deployment=False,
+        enabled_for_disk_encryption=False,
+        enabled_for_template_deployment=True,
+        network_acls=azure.keyvault.NetworkRuleSetArgs(
+            bypass="AzureServices",
+            default_action="Allow",  # Change to "Deny" for production with specific IP rules
+        ),
+    ),
+    tags=common_tags,
+)
+
+# Store example secret (should be updated with actual values)
+app_secret = azure.keyvault.Secret(
+    "app-secret",
+    secret_name="app-config",
+    resource_group_name=resource_group.name,
+    vault_name=key_vault.name,
+    properties=azure.keyvault.SecretPropertiesArgs(
+        value=pulumi.Output.secret(
+            '{\"database_url\":\"changeme\",\"api_key\":\"changeme\"}'
+        ),
+    ),
+    tags=common_tags,
+)
+
+# ========================================
 # Note: Function App is managed manually
 # ========================================
 # Function App and App Service Plan are created and managed manually
@@ -106,16 +151,68 @@ app_insights = azure.insights.Component(
 # - API URL: https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
 
 # ========================================
-# Azure Front Door for Frontend CDN
+# Azure Front Door for Frontend CDN with WAF
 # ========================================
-# Front Door Profile
+# Front Door Profile (Premium SKU for WAF support)
 frontdoor_profile = azure.cdn.Profile(
     "frontdoor-profile",
     profile_name=f"{project_name}-{stack}-fd",
     resource_group_name=resource_group.name,
     location="Global",  # Front Door is global
     sku=azure.cdn.SkuArgs(
-        name="Standard_AzureFrontDoor",
+        name="Premium_AzureFrontDoor",  # Premium required for WAF
+    ),
+    tags=common_tags,
+)
+
+# WAF Policy for Front Door
+waf_policy = azure.cdn.Policy(
+    "frontdoor-waf-policy",
+    policy_name=f"{project_name}{stack}wafpolicy",  # Must be alphanumeric
+    resource_group_name=resource_group.name,
+    location="Global",
+    sku=azure.cdn.SkuArgs(
+        name="Premium_AzureFrontDoor",
+    ),
+    policy_settings=azure.cdn.PolicySettingsArgs(
+        enabled_state="Enabled",
+        mode="Prevention",  # Prevention mode (blocks threats)
+        request_body_check="Enabled",
+    ),
+    managed_rules=azure.cdn.ManagedRuleSetListArgs(
+        managed_rule_sets=[
+            # Microsoft Default Rule Set
+            azure.cdn.ManagedRuleSetArgs(
+                rule_set_type="Microsoft_DefaultRuleSet",
+                rule_set_version="2.1",
+            ),
+            # Bot Manager Rule Set
+            azure.cdn.ManagedRuleSetArgs(
+                rule_set_type="Microsoft_BotManagerRuleSet",
+                rule_set_version="1.0",
+            ),
+        ],
+    ),
+    custom_rules=azure.cdn.CustomRuleListArgs(
+        rules=[
+            # Rate limiting: max 1000 requests per minute per IP
+            azure.cdn.CustomRuleArgs(
+                name="RateLimitRule",
+                priority=100,
+                enabled_state="Enabled",
+                rule_type="RateLimitRule",
+                rate_limit_duration_in_minutes=1,
+                rate_limit_threshold=1000,
+                match_conditions=[
+                    azure.cdn.MatchConditionArgs(
+                        match_variable="RemoteAddr",
+                        operator="IPMatch",
+                        match_value=["0.0.0.0/0", "::/0"],  # All IPs
+                    ),
+                ],
+                action="Block",
+            ),
+        ],
     ),
     tags=common_tags,
 )
@@ -178,7 +275,7 @@ frontdoor_origin = azure.cdn.AFDOrigin(
     enabled_state="Enabled",
 )
 
-# Front Door Route
+# Front Door Route with WAF Policy
 frontdoor_route = azure.cdn.Route(
     "frontdoor-route",
     route_name=f"{project_name}-{stack}-route",
@@ -194,6 +291,31 @@ frontdoor_route = azure.cdn.Route(
     link_to_default_domain="Enabled",
     https_redirect="Enabled",
     opts=pulumi.ResourceOptions(depends_on=[frontdoor_origin]),
+)
+
+# Associate WAF Policy with Front Door Endpoint
+frontdoor_security_policy = azure.cdn.SecurityPolicy(
+    "frontdoor-security-policy",
+    security_policy_name=f"{project_name}-{stack}-security-policy",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    parameters=azure.cdn.SecurityPolicyWebApplicationFirewallParametersArgs(
+        type="WebApplicationFirewall",
+        waf_policy=azure.cdn.ResourceReferenceArgs(
+            id=waf_policy.id,
+        ),
+        associations=[
+            azure.cdn.SecurityPolicyWebApplicationFirewallAssociationArgs(
+                domains=[
+                    azure.cdn.ActivatedResourceReferenceArgs(
+                        id=frontdoor_endpoint.id,
+                    ),
+                ],
+                patterns_to_match=["/*"],
+            ),
+        ],
+    ),
+    opts=pulumi.ResourceOptions(depends_on=[frontdoor_route]),
 )
 
 # ========================================
@@ -223,6 +345,8 @@ pulumi.export(
     frontdoor_endpoint.host_name.apply(lambda hostname: f"https://{hostname}"),
 )
 pulumi.export("app_insights_instrumentation_key", app_insights.instrumentation_key)
+pulumi.export("key_vault_name", key_vault.name)
+pulumi.export("key_vault_uri", key_vault.properties.vault_uri)
 
 # Cost estimation
 pulumi.export(
@@ -230,6 +354,7 @@ pulumi.export(
     "Azure Functions FlexConsumption: Pay-as-you-go. "
     "Storage: $0.02/GB/month. "
     "Application Insights: 5GB free/month. "
-    "Azure Front Door Standard: $35/month + $0.01/GB. "
-    "Estimated: $35-50/month with Front Door.",
+    "Azure Front Door Premium: $330/month + $0.01/GB + $0.02/10,000 requests. "
+    "Key Vault: $0.03 per 10,000 operations (secrets are free). "
+    "Estimated: $330-350/month with Front Door Premium and WAF.",
 )

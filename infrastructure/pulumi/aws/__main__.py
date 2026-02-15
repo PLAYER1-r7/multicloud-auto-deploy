@@ -21,6 +21,10 @@ region = aws_config.get("region") or "us-east-1"
 stack = pulumi.get_stack()
 project_name = "multicloud-auto-deploy"
 
+# CORS allowed origins (configurable per environment)
+allowed_origins = config.get("allowedOrigins") or "*"
+allowed_origins_list = allowed_origins.split(",") if allowed_origins != "*" else ["*"]
+
 # Common tags
 common_tags = {
     "Project": project_name,
@@ -54,6 +58,33 @@ aws.iam.RolePolicyAttachment(
     "lambda-basic-execution",
     role=lambda_role.name,
     policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+)
+
+# Attach Secrets Manager read policy for Lambda
+aws.iam.RolePolicyAttachment(
+    "lambda-secrets-manager",
+    role=lambda_role.name,
+    policy_arn="arn:aws:iam::aws:policy/SecretsManagerReadWrite",
+)
+
+# ========================================
+# AWS Secrets Manager
+# ========================================
+# Create a secret for database credentials or API keys
+app_secret = aws.secretsmanager.Secret(
+    "app-secret",
+    name=f"{project_name}/{stack}/app-config",
+    description=f"Application secrets for {project_name} {stack} environment",
+    tags=common_tags,
+)
+
+# Store initial secret value (example - should be updated with actual values)
+app_secret_version = aws.secretsmanager.SecretVersion(
+    "app-secret-version",
+    secret_id=app_secret.id,
+    secret_string=pulumi.Output.secret(
+        '{\"database_url\":\"changeme\",\"api_key\":\"changeme\"}'
+    ),
 )
 
 # ========================================
@@ -93,6 +124,7 @@ lambda_function = aws.lambda_.Function(
         "variables": {
             "ENVIRONMENT": stack,
             "CLOUD_PROVIDER": "aws",
+            "SECRET_NAME": app_secret.name,
         }
     },
     tags=common_tags,
@@ -104,9 +136,9 @@ lambda_url = aws.lambda_.FunctionUrl(
     function_name=lambda_function.name,
     authorization_type="NONE",  # Public access
     cors={
-        "allow_origins": ["*"],
-        "allow_methods": ["*"],
-        "allow_headers": ["*"],
+        "allow_origins": allowed_origins_list,
+        "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
         "max_age": 3600,
     },
 )
@@ -117,9 +149,9 @@ api_gateway = aws.apigatewayv2.Api(
     name=f"{project_name}-{stack}-api",
     protocol_type="HTTP",
     cors_configuration={
-        "allow_origins": ["*"],
-        "allow_methods": ["*"],
-        "allow_headers": ["*"],
+        "allow_origins": allowed_origins_list,
+        "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
         "max_age": 3600,
     },
     tags=common_tags,
@@ -259,13 +291,96 @@ cloudfront_bucket_policy = aws.s3.BucketPolicy(
     ),
 )
 
-# CloudFront Distribution
+# ========================================
+# AWS WAF for CloudFront
+# ========================================
+# WAF Web ACL for DDoS protection and rate limiting
+waf_web_acl = aws.wafv2.WebAcl(
+    "cloudfront-waf",
+    name=f"{project_name}-{stack}-cloudfront-waf",
+    scope="CLOUDFRONT",  # Must be CLOUDFRONT for CloudFront distributions
+    default_action=aws.wafv2.WebAclDefaultActionArgs(
+        allow={},
+    ),
+    rules=[
+        # AWS Managed Rule: Core Rule Set (CRS)
+        aws.wafv2.WebAclRuleArgs(
+            name="AWS-AWSManagedRulesCommonRuleSet",
+            priority=1,
+            override_action=aws.wafv2.WebAclRuleOverrideActionArgs(
+                none={},
+            ),
+            statement=aws.wafv2.WebAclRuleStatementArgs(
+                managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
+                    vendor_name="AWS",
+                    name="AWSManagedRulesCommonRuleSet",
+                ),
+            ),
+            visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
+                cloudwatch_metrics_enabled=True,
+                metric_name="AWSManagedRulesCommonRuleSetMetric",
+                sampled_requests_enabled=True,
+            ),
+        ),
+        # AWS Managed Rule: Known Bad Inputs
+        aws.wafv2.WebAclRuleArgs(
+            name="AWS-AWSManagedRulesKnownBadInputsRuleSet",
+            priority=2,
+            override_action=aws.wafv2.WebAclRuleOverrideActionArgs(
+                none={},
+            ),
+            statement=aws.wafv2.WebAclRuleStatementArgs(
+                managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
+                    vendor_name="AWS",
+                    name="AWSManagedRulesKnownBadInputsRuleSet",
+                ),
+            ),
+            visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
+                cloudwatch_metrics_enabled=True,
+                metric_name="AWSManagedRulesKnownBadInputsRuleSetMetric",
+                sampled_requests_enabled=True,
+            ),
+        ),
+        # Rate limiting: max 2000 requests per 5 minutes per IP
+        aws.wafv2.WebAclRuleArgs(
+            name="RateLimitRule",
+            priority=3,
+            action=aws.wafv2.WebAclRuleActionArgs(
+                block={},
+            ),
+            statement=aws.wafv2.WebAclRuleStatementArgs(
+                rate_based_statement=aws.wafv2.WebAclRuleStatementRateBasedStatementArgs(
+                    limit=2000,
+                    aggregate_key_type="IP",
+                ),
+            ),
+            visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
+                cloudwatch_metrics_enabled=True,
+                metric_name="RateLimitRuleMetric",
+                sampled_requests_enabled=True,
+            ),
+        ),
+    ],
+    visibility_config=aws.wafv2.WebAclVisibilityConfigArgs(
+        cloudwatch_metrics_enabled=True,
+        metric_name=f"{project_name}-{stack}-waf-metrics",
+        sampled_requests_enabled=True,
+    ),
+    tags=common_tags,
+    # WAF for CloudFront must be created in us-east-1
+    opts=pulumi.ResourceOptions(
+        provider=aws.Provider("us-east-1-provider", region="us-east-1")
+    ),
+)
+
+# CloudFront Distribution with WAF
 cloudfront_distribution = aws.cloudfront.Distribution(
     "cloudfront-distribution",
     enabled=True,
     is_ipv6_enabled=True,
     comment=f"{project_name}-{stack} Frontend Distribution",
     default_root_object="index.html",
+    web_acl_id=waf_web_acl.arn,  # Attach WAF
     origins=[
         aws.cloudfront.DistributionOriginArgs(
             origin_id=frontend_bucket.bucket_regional_domain_name,
@@ -335,6 +450,10 @@ pulumi.export(
     "cloudfront_url",
     cloudfront_distribution.domain_name.apply(lambda domain: f"https://{domain}"),
 )
+pulumi.export("waf_web_acl_id", waf_web_acl.id)
+pulumi.export("waf_web_acl_arn", waf_web_acl.arn)
+pulumi.export("secret_name", app_secret.name)
+pulumi.export("secret_arn", app_secret.arn)
 
 # Cost estimation
 pulumi.export(
@@ -343,5 +462,7 @@ pulumi.export(
     "API Gateway: $1 per million requests. "
     "S3: $0.023/GB/month. "
     "CloudFront: $0.085/GB for first 10TB/month (free tier: 1TB/month for 12 months). "
-    "Estimated: $2-10/month for low traffic.",
+    "AWS WAF: $5/month per web ACL + $1/month per rule + $0.60 per 1M requests. "
+    "Secrets Manager: $0.40/month per secret + $0.05 per 10,000 API calls. "
+    "Estimated: $10-20/month for low traffic with WAF and security features.",
 )
