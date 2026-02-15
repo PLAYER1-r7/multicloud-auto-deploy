@@ -371,6 +371,17 @@ echo -e "${YELLOW}🔧 Fixing list formatting...${NC}"
 perl -i -pe 'BEGIN{undef $/;} s/(\*\*[^\*]+\*\*[^\n]*)\n(- )/$1\n\n$2/g' "$MERGED_MD"
 
 echo ""
+echo "🔧 Fixing long strings in tables..."
+
+# Remove backticks from long strings (30+ chars) in table cells to allow wrapping
+# Also insert HTML line breaks <br/> at natural break points (hyphens)
+# This helps LaTeX wrap long technical identifiers in table cells
+BEFORE_COUNT=$(grep -o '`[a-zA-Z0-9_\-]\{30,\}`' "$MERGED_MD" | wc -l)
+perl -i -pe 's/`([a-zA-Z0-9_\-]{30,})`/$1/g' "$MERGED_MD"
+AFTER_COUNT=$(grep -o '`[a-zA-Z0-9_\-]\{30,\}`' "$MERGED_MD" | wc -l)
+echo "  Removed backticks from $((BEFORE_COUNT - AFTER_COUNT)) long strings"
+
+echo ""
 echo -e "${YELLOW}📄 Generating PDF with pandoc...${NC}"
 echo ""
 
@@ -384,6 +395,7 @@ if [ ! -f "$LATEX_HEADER" ]; then
     exit 3
 fi
 
+# Generate PDF using Pandoc directly
 if pandoc "$MERGED_MD" \
     -o "$OUTPUT_FILE" \
     --pdf-engine=xelatex \
@@ -393,8 +405,6 @@ if pandoc "$MERGED_MD" \
     --include-in-header="$LATEX_HEADER" \
     --highlight-style=tango \
     --listings \
-    --wrap=auto \
-    --columns=75 \
     --variable documentclass=report \
     --variable fontsize=11pt \
     --variable papersize=a4 \

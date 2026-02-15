@@ -6,6 +6,8 @@
 \usepackage{array}
 \usepackage{multirow}
 \usepackage{tabularx}
+\usepackage{ltablex}  % Combine longtable with tabularx for better column handling
+\keepXColumns  % Preserve X column widths across pages
 \usepackage{ragged2e}
 \usepackage{etoolbox}
 
@@ -128,6 +130,11 @@
   \colorbox{gray!10}{%
     \begingroup
     \small
+    \RaggedRight
+    \hyphenchar\font=`\-% Allow hyphenation at hyphens
+    \exhyphenpenalty=0% No penalty for breaking at existing hyphens
+    \binoppenalty=10000% Don't break at binary operators
+    \relpenalty=10000% Don't break at relations
     \oldtexttt{\seqsplit{#1}}%
     \endgroup
   }%
