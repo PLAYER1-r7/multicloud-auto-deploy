@@ -373,6 +373,9 @@ perl -i -pe 'BEGIN{undef $/;} s/(\*\*[^\*]+\*\*[^\n]*)\n(- )/$1\n\n$2/g' "$MERGE
 echo ""
 echo "🔧 Fixing long strings in tables..."
 
+# Remove any zero-width spaces (U+200B) that may have been inserted
+perl -i -pe 's/\x{200b}//g' "$MERGED_MD"
+
 # Remove backticks from long strings (30+ chars) in table cells to allow wrapping
 # Also insert HTML line breaks <br/> at natural break points (hyphens)
 # This helps LaTeX wrap long technical identifiers in table cells

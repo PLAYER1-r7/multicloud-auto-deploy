@@ -13,7 +13,8 @@ function Table(tbl)
   local widths = {}
   if ncols == 4 then
     -- Typical: Resource, Name, Purpose, Region
-    widths = {0.20, 0.35, 0.30, 0.15}  -- Name column gets more space
+    -- Give more space to Name column for very long identifiers (up to 47 chars)
+    widths = {0.16, 0.44, 0.25, 0.15}  -- Name column gets 44% (was 40%)
   else
     -- Equal distribution for other tables
     local col_width = 0.9 / ncols
