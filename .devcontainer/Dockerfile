@@ -25,16 +25,15 @@ RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.
   && apt-get autoremove -y && apt-get clean -y
 
 # Set up bash aliases for convenience
-RUN echo 'alias tf="terraform"' >> /home/vscode/.bashrc \
-  && echo 'alias k="kubectl"' >> /home/vscode/.bashrc \
+RUN echo 'alias k="kubectl"' >> /home/vscode/.bashrc \
   && echo 'alias ll="ls -lah"' >> /home/vscode/.bashrc \
   && echo 'alias gs="git status"' >> /home/vscode/.bashrc \
   && echo 'alias gp="git pull"' >> /home/vscode/.bashrc
 
 # Add helpful functions
 RUN echo 'test-all() { ./scripts/test-endpoints.sh; }' >> /home/vscode/.bashrc \
-  && echo 'deploy-aws() { cd infrastructure/terraform/aws && terraform apply; }' >> /home/vscode/.bashrc \
-  && echo 'deploy-azure() { cd infrastructure/terraform/azure && terraform apply; }' >> /home/vscode/.bashrc \
-  && echo 'deploy-gcp() { cd infrastructure/terraform/gcp && terraform apply; }' >> /home/vscode/.bashrc
+  && echo 'deploy-aws() { cd infrastructure/pulumi/aws && pulumi up; }' >> /home/vscode/.bashrc \
+  && echo 'deploy-azure() { cd infrastructure/pulumi/azure && pulumi up; }' >> /home/vscode/.bashrc \
+  && echo 'deploy-gcp() { cd infrastructure/pulumi/gcp && pulumi up; }' >> /home/vscode/.bashrc
 
 WORKDIR /workspace

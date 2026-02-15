@@ -5,24 +5,28 @@
     "context": "."
   },
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "dockerDashComposeVersion": "v2",
+      "moby": false
+    },
     "ghcr.io/devcontainers/features/node:1": {
       "version": "22"
     },
     "ghcr.io/devcontainers/features/python:1": {
       "version": "3.12"
     },
-    "ghcr.io/devcontainers/features/terraform:1": {
-      "version": "1.7.5"
-    },
     "ghcr.io/devcontainers/features/aws-cli:1": {},
     "ghcr.io/devcontainers/features/azure-cli:1": {},
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers-extra/features/pulumi:1": {
+      "version": "latest"
+    }
   },
   "customizations": {
     "vscode": {
       "extensions": [
-        "hashicorp.terraform",
+        "pulumi.pulumi-lsp-client",
         "ms-azuretools.vscode-docker",
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
@@ -39,14 +43,6 @@
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
           "source.fixAll.eslint": "explicit"
-        },
-        "terraform.languageServer": {
-          "enabled": true,
-          "args": []
-        },
-        "files.associations": {
-          "*.tf": "terraform",
-          "*.tfvars": "terraform"
         },
         "editor.tabSize": 2,
         "editor.insertSpaces": true,

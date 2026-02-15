@@ -38,13 +38,23 @@ if [ -f "services/backend/requirements.txt" ]; then
     echo -e "${GREEN}✓ Python dependencies installed${NC}"
 fi
 
-# Terraformの初期化
+# Pulumiの初期化
+if ! command -v pulumi &> /dev/null; then
+    echo -e "${BLUE}Installing Pulumi...${NC}"
+    curl -fsSL https://get.pulumi.com | sh
+    export PATH=$PATH:$HOME/.pulumi/bin
+    echo -e "${GREEN}✓ Pulumi installed${NC}"
+else
+    echo -e "${GREEN}✓ Pulumi already installed${NC}"
+fi
+
+# Pulumi環境のセットアップ
 for cloud in aws azure gcp; do
-    tf_dir="infrastructure/terraform/$cloud"
-    if [ -d "$tf_dir" ]; then
-        echo -e "${BLUE}Initializing Terraform for $cloud...${NC}"
-        (cd "$tf_dir" && terraform init -backend=false &>/dev/null) || true
-        echo -e "${GREEN}✓ Terraform $cloud initialized${NC}"
+    pulumi_dir="infrastructure/pulumi/$cloud"
+    if [ -d "$pulumi_dir" ]; then
+        echo -e "${BLUE}Setting up Pulumi for $cloud...${NC}"
+        (cd "$pulumi_dir" && [ -f requirements.txt ] && pip install -q -r requirements.txt) || true
+        echo -e "${GREEN}✓ Pulumi $cloud dependencies installed${NC}"
     fi
 done
 
@@ -59,11 +69,10 @@ echo -e "${YELLOW}=========================================${NC}"
 echo -e "${YELLOW}  Available Commands${NC}"
 echo -e "${YELLOW}=========================================${NC}"
 echo ""
-echo "Terraform shortcuts:"
-echo "  tf             - terraform コマンド"
-echo "  deploy-aws     - AWS環境にデプロイ"
-echo "  deploy-azure   - Azure環境にデプロイ"
-echo "  deploy-gcp     - GCP環境にデプロイ"
+echo "Pulumi shortcuts:"
+echo "  pulumi preview - 変更内容プレビュー"
+echo "  pulumi up      - インフラストラクチャをデプロイ"
+echo "  pulumi stack   - スタック管理"
 echo ""
 echo "Testing:"
 echo "  test-all                   - 全エンドポイントテスト"
