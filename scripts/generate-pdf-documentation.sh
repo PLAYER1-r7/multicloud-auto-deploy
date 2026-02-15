@@ -89,35 +89,46 @@ convert_emojis() {
         -e 's/🐛/[FIX]/g' \
         -e 's/📚/[DOCS]/g' \
         -e 's/♻️/[REFACTOR]/g' \
+        -e 's/♻/[REFACTOR]/g' \
         -e 's/⚡/[PERF]/g' \
         -e 's/🧪/[TEST]/g' \
         -e 's/💄/[STYLE]/g' \
         -e 's/🔧/[CHORE]/g' \
         -e 's/💥/[BREAKING]/g' \
         -e 's/✅/[OK]/g' \
+        -e 's/✓/[OK]/g' \
         -e 's/❌/[ERROR]/g' \
         -e 's/⚠️/[WARNING]/g' \
+        -e 's/⚠/[WARNING]/g' \
         -e 's/📝/[NOTE]/g' \
         -e 's/🚀/[DEPLOY]/g' \
         -e 's/📦/[PACKAGE]/g' \
         -e 's/🔒/[SECURITY]/g' \
+        -e 's/🔐/[SECURE]/g' \
         -e 's/🌐/[WEB]/g' \
         -e 's/🔗/[LINK]/g' \
         -e 's/📊/[STATS]/g' \
         -e 's/📈/[CHART]/g' \
         -e 's/📅/[DATE]/g' \
         -e 's/📁/[FILES]/g' \
+        -e 's/🗄️/[STORAGE]/g' \
+        -e 's/🗄/[STORAGE]/g' \
         -e 's/🛠️/[TOOLS]/g' \
+        -e 's/🛠/[TOOLS]/g' \
         -e 's/💡/[TIP]/g' \
         -e 's/⏱️/[TIME]/g' \
+        -e 's/⏱/[TIME]/g' \
         -e 's/🔄/[SYNC]/g' \
         -e 's/📌/[PIN]/g' \
         -e 's/🎯/[TARGET]/g' \
         -e 's/🔍/[SEARCH]/g' \
         -e 's/✔️/[CHECK]/g' \
+        -e 's/✔/[CHECK]/g' \
         -e 's/🗑️/[DELETE]/g' \
+        -e 's/🗑/[DELETE]/g' \
         -e 's/⏳/[WAIT]/g' \
         -e 's/♾️/[INFINITY]/g' \
+        -e 's/♾/[INFINITY]/g' \
         -e 's/➕/[PLUS]/g' \
         -e 's/➖/[MINUS]/g' \
         -e 's/🔑/[KEY]/g' \
@@ -126,8 +137,46 @@ convert_emojis() {
         -e 's/📋/[LIST]/g' \
         -e 's/📄/[DOCUMENT]/g' \
         -e 's/🖥️/[COMPUTER]/g' \
+        -e 's/🖥/[COMPUTER]/g' \
         -e 's/☁️/[CLOUD]/g' \
-        -e 's/🔐/[SECURE]/g' \
+        -e 's/☁/[CLOUD]/g' \
+        -e 's/👤/[USER]/g' \
+        -e 's/👥/[USERS]/g' \
+        -e 's/🏃/[RUN]/g' \
+        -e 's/🆕/[NEW]/g' \
+        -e 's/🚪/[DOOR]/g' \
+        -e 's/🏆/[TROPHY]/g' \
+        -e 's/○/[O]/g' \
+        -e 's/●/[*]/g' \
+        -e 's/◯/[O]/g' \
+        -e 's/◉/[*]/g' \
+        -e 's/💻/[PC]/g' \
+        -e 's/📂/[FOLDER]/g' \
+        -e 's/⚙️/[SETTINGS]/g' \
+        -e 's/⚙/[SETTINGS]/g' \
+        -e 's/🔔/[BELL]/g' \
+        -e 's/📧/[EMAIL]/g' \
+        -e 's/📬/[MAILBOX]/g' \
+        -e 's/🏗️/[BUILDING]/g' \
+        -e 's/🏗/[BUILDING]/g' \
+        -e 's/🎨/[ART]/g' \
+        -e 's/🔀/[SHUFFLE]/g' \
+        -e 's/🔁/[REPEAT]/g' \
+        -e 's/🔂/[REPEAT_ONE]/g' \
+        -e 's/▶️/[PLAY]/g' \
+        -e 's/▶/[PLAY]/g' \
+        -e 's/⏸️/[PAUSE]/g' \
+        -e 's/⏸/[PAUSE]/g' \
+        -e 's/⏹️/[STOP]/g' \
+        -e 's/⏹/[STOP]/g' \
+        -e 's/⏺️/[RECORD]/g' \
+        -e 's/⏺/[RECORD]/g' \
+        -e 's/📖/[BOOK]/g' \
+        -e 's/🌍/[EARTH]/g' \
+        -e 's/🌎/[EARTH]/g' \
+        -e 's/🌏/[EARTH]/g' \
+        -e 's/📱/[MOBILE]/g' \
+        -e 's/️//g' \
         "$file"
 }
 
@@ -229,8 +278,15 @@ echo ""
 echo -e "${YELLOW}�📄 Generating PDF with pandoc...${NC}"
 echo ""
 
-# Generate PDF using pandoc
+# Generate PDF using pandoc with custom LaTeX settings
 cd "$PROJECT_ROOT"
+
+# Check if LaTeX header exists
+LATEX_HEADER="$PROJECT_ROOT/scripts/latex-header.tex"
+if [ ! -f "$LATEX_HEADER" ]; then
+    echo -e "${RED}✗ Error: LaTeX header not found at $LATEX_HEADER${NC}"
+    exit 3
+fi
 
 if pandoc "$MERGED_MD" \
     -o "$OUTPUT_FILE" \
@@ -238,16 +294,16 @@ if pandoc "$MERGED_MD" \
     --toc \
     --toc-depth=3 \
     --number-sections \
+    --include-in-header="$LATEX_HEADER" \
     --highlight-style=tango \
-    --variable mainfont="Noto Serif CJK JP" \
-    --variable sansfont="Noto Sans CJK JP" \
-    --variable monofont="Noto Sans Mono CJK JP" \
-    --variable CJKmainfont="Noto Serif CJK JP" \
+    --listings \
+    --variable documentclass=report \
     --variable fontsize=11pt \
+    --variable papersize=a4 \
     --variable geometry:margin=2.5cm \
-    --variable linkcolor=blue \
-    --variable urlcolor=blue \
-    --variable toccolor=black \
+    --variable lang=ja \
+    --variable tables=true \
+    --variable graphics=true \
     2>&1; then
     
     echo ""
