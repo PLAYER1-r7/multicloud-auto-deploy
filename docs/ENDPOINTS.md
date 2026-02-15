@@ -7,7 +7,7 @@
 | 項目 | 値 |
 |-----|-----|
 | **API Endpoint** | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com` |
-| **Frontend CDN** | `https://dx3l4mbwg1ade.cloudfront.net` ✅ |
+| **Frontend CDN** | `https://d1tf3uumcm4bo1.cloudfront.net` ✅ |
 | **Frontend Storage** | `http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com` |
 | **Region** | ap-northeast-1 (東京) |
 | **API Gateway ID** | z42qmqdqac (HTTP API) |
@@ -62,25 +62,25 @@ curl -I https://mcadwebd45ihd.z11.web.core.windows.net/
 
 | 項目 | 値 |
 |-----|-----|
-| **API Endpoint** | `https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app` |
-| **Frontend CDN** | `http://34.120.43.83` 🆕 |
+| **API Endpoint** | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app` |
+| **Frontend CDN** | `http://34.117.111.182` 🆕 |
 | **Frontend Storage** | `https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html` |
 | **Region** | asia-northeast1 (東京) |
 | **Project ID** | ashnova |
 | **Cloud Run Service** | multicloud-auto-deploy-staging-api |
 | **Cloud Run Service (Frontend)** | mcad-staging-frontend |
 | **Storage Bucket** | ashnova-multicloud-auto-deploy-staging-frontend |
-| **Global IP Address** | 34.120.43.83 (multicloud-frontend-ip) |
+| **Global IP Address** | 34.117.111.182 (multicloud-frontend-ip) |
 | **Backend Bucket** | multicloud-frontend-backend |
 | **Firestore Database** | (default) - messages, posts collections |
 
 **テスト**:
 ```bash
 # API
-curl https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app/
+curl https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app/
 
 # Frontend (CDN)
-curl -I http://34.120.43.83/
+curl -I http://34.117.111.182/
 
 # Frontend (Direct Storage)
 curl -I https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html
@@ -266,15 +266,15 @@ gcloud compute addresses describe multicloud-auto-deploy-staging-cdn-ip --global
 
 echo "=== Testing AWS ==="
 curl -s https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/ | jq
-curl -I https://dx3l4mbwg1ade.cloudfront.net/ 2>&1 | grep HTTP
+curl -I https://d1tf3uumcm4bo1.cloudfront.net/ 2>&1 | grep HTTP
 
 echo -e "\n=== Testing Azure ==="
 curl -s https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger/ | jq
 curl -I https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net/ 2>&1 | grep HTTP
 
 echo -e "\n=== Testing GCP ==="
-curl -s https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app/ | jq
-curl -I http://34.120.43.83/ 2>&1 | grep HTTP
+curl -s https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app/ | jq
+curl -I http://34.117.111.182/ 2>&1 | grep HTTP
 ```
 
 ### メッセージ送信テスト
@@ -293,7 +293,7 @@ curl -X POST https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japane
   -d '{"content":"Test from Azure"}'
 
 # GCP
-curl -X POST https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app/api/messages/ \
+curl -X POST https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app/api/messages/ \
   -H "Content-Type: application/json" \
   -d '{"content":"Test from GCP"}'
 ```
@@ -312,6 +312,7 @@ curl -X POST https://multicloud-auto-deploy-staging-api-899621454670.asia-northe
 | 2026-02-15 | Azure: Container Apps → Functionsに変更 |
 | 2026-02-15 | GCP: Cloud Run APIエンドポイント更新 |
 | 2026-02-15 | **Pulumi管理環境追加** - 全3クラウドでInfrastructure as Code導入 🎉 |
+| 2026-02-15 | **全環境デプロイ成功** - AWS/GCP/Azure統合完了、エンドポイント最新化 |
 
 ---
 

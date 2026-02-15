@@ -12,9 +12,9 @@
 
 | Cloud Provider | API Endpoint | Frontend (CDN) | Direct Storage |
 |---------------|--------------|----------------|----------------|
-| **AWS** (ap-northeast-1) | [API Gateway](https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com) | [CloudFront](https://dx3l4mbwg1ade.cloudfront.net) ✅ | [S3 Static](http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com) |
+| **AWS** (ap-northeast-1) | [API Gateway](https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com) | [CloudFront](https://d1tf3uumcm4bo1.cloudfront.net) ✅ | [S3 Static](http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com) |
 | **Azure** (japaneast) | [Functions](https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger) | [Front Door](https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net) 🆕 | [Blob Storage](https://mcadwebd45ihd.z11.web.core.windows.net) |
-| **GCP** (asia-northeast1) | [Cloud Run](https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app) | [Cloud CDN](http://34.120.43.83) 🆕 | [Cloud Storage](https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html) |
+| **GCP** (asia-northeast1) | [Cloud Run](https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app) | [Cloud CDN](http://34.117.111.182) 🆕 | [Cloud Storage](https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html) |
 
 ### Pulumi管理環境 🎉
 

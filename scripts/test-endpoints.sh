@@ -12,13 +12,13 @@ NC='\033[0m' # No Color
 
 # エンドポイント定義
 AWS_API="https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com"
-AWS_FRONTEND="https://dx3l4mbwg1ade.cloudfront.net"
+AWS_FRONTEND="https://d1tf3uumcm4bo1.cloudfront.net"
 
 AZURE_API="https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger"
-AZURE_FRONTEND="https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net"
+AZURE_FRONTEND="https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net"
 
-GCP_API="https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app"
-GCP_FRONTEND="http://34.120.43.83"
+GCP_API="https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app"
+GCP_FRONTEND="http://34.117.111.182"
 
 # ヘルパー関数
 print_header() {

@@ -9,6 +9,9 @@ CI/CDワークフロー実行時に遭遇する可能性のある問題と解決
 - [フロントエンドAPI接続問題](#フロントエンドapi接続問題)
 - [Terraform State管理](#terraform-state管理)
 - [権限エラー](#権限エラー)
+- [AWS Lambda Runtime Errors](#aws-lambda-runtime-errors)
+- [GCP Cloud Run 500 Errors](#gcp-cloud-run-500-errors)
+- [Azure Functions 500 Errors](#azure-functions-500-errors)
 
 ---
 
@@ -532,6 +535,257 @@ aws logs tail /aws/apigateway/YOUR_API_NAME --since 5m
 
 ---
 
+## AWS Lambda Runtime Errors
+
+### 問題1: Runtime.ImportModuleError - index.handler not found
+
+**症状**:
+```
+[ERROR] Runtime.ImportModuleError: Unable to import module 'index': No module named 'index'
+```
+
+**原因**:
+- GitHub ActionsワークフローがLambda関数用に`handler.py`を生成
+- Lambda関数設定では`index.handler`を期待
+- ファイル名のミスマッチ
+
+**解決策**:
+
+1. **既存の`index.py`を使用するようワークフロー修正**:
+```yaml
+# ❌ 動的生成（削除）
+# cat > package/handler.py << 'EOF'
+# from mangum import Mangum
+# from app.main import app
+# handler = Mangum(app, lifespan="off")
+# EOF
+
+# ✅ 既存ファイルをコピー
+cp index.py package/
+```
+
+2. **`services/api/index.py`の内容確認**:
+```python
+"""AWS Lambda エントリーポイント"""
+from mangum import Mangum
+from app.main import app
+
+# Lambda handler
+handler = Mangum(app, lifespan="off")
+```
+
+3. **Lambda設定確認**:
+```bash
+aws lambda get-function-configuration \
+  --function-name YOUR_FUNCTION_NAME \
+  --query 'Handler'
+# 出力: "index.handler" であることを確認
+```
+
+4. **デプロイ後の動作確認**:
+```bash
+# CloudWatch Logsでエラーがないことを確認
+aws logs tail /aws/lambda/YOUR_FUNCTION_NAME --since 5m
+
+# API経由でテスト
+curl https://YOUR_API_URL/health
+```
+
+**修正コミット例**:
+```bash
+git commit -m "fix(ci): Use index.py instead of handler.py for Lambda entry point"
+```
+
+---
+
+## GCP Cloud Run 500 Errors
+
+### 問題1: 500 Internal Server Error - LocalBackend connection refused
+
+**症状**:
+```
+ConnectionRefusedError: [Errno 111] Connection refused
+File "/workspace/app/backends/local.py", line 30, in __init__
+  self._ensure_bucket()
+```
+
+**原因**:
+- `CLOUD_PROVIDER`環境変数が未設定
+- アプリケーションがLocalBackend（MinIO localhost:9000）を使用しようとする
+- Cloud Runでlocalhost:9000は存在しない
+
+**解決策**:
+
+1. **環境変数を設定**:
+```yaml
+# .github/workflows/deploy-gcp.yml
+gcloud functions deploy $FUNCTION_NAME \
+  --set-env-vars=ENVIRONMENT=staging,CLOUD_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,FIRESTORE_COLLECTION=messages
+```
+
+2. **環境変数確認**:
+```bash
+gcloud run services describe YOUR_SERVICE_NAME \
+  --region=asia-northeast1 \
+  --format="value(spec.template.spec.containers[0].env)"
+```
+
+3. **Cloud Runログで確認**:
+```bash
+gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=YOUR_SERVICE_NAME AND severity>=ERROR" \
+  --limit 10 \
+  --format="table(timestamp,textPayload)" \
+  --freshness=5m
+```
+
+### 問題2: AttributeError - 'bytes' object has no attribute 'encode'
+
+**症状**:
+```
+AttributeError: 'bytes' object has no attribute 'encode'
+File "/workspace/main.py", line 19, in handler
+  "query_string": request.query_string.encode() if request.query_string else b"",
+```
+
+**原因**:
+- `request.query_string`は既に`bytes`型
+- `.encode()`を再度呼び出すとエラー
+
+**解決策**:
+
+`services/api/function.py`を修正:
+```python
+# ❌ 誤り
+"query_string": request.query_string.encode() if request.query_string else b"",
+
+# ✅ 正しい
+"query_string": request.query_string if request.query_string else b"",
+```
+
+**動作確認**:
+```bash
+curl -X POST "https://YOUR_CLOUD_RUN_URL/api/messages/" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Test message","author":"DevOps"}'
+```
+
+---
+
+## Azure Functions 500 Errors
+
+### 問題1: 500 Internal Server Error - Cosmos DB connection failed
+
+**症状**:
+```
+HTTP 500 Internal Server Error (No response body)
+```
+
+**原因**:
+- `AZURE_COSMOS_ENDPOINT`と`AZURE_COSMOS_KEY`が空
+- 既存の環境変数名が`COSMOS_DB_ENDPOINT`/`COSMOS_DB_KEY`
+- アプリケーションが間違った環境変数を参照
+
+**解決策**:
+
+1. **既存の環境変数を確認**:
+```bash
+az functionapp config appsettings list \
+  --name YOUR_FUNCTION_APP \
+  --resource-group YOUR_RESOURCE_GROUP \
+  --output table | grep COSMOS
+```
+
+2. **ワークフローで既存値を取得して設定**:
+```yaml
+# Get existing Cosmos DB settings
+COSMOS_ENDPOINT=$(az functionapp config appsettings list \
+  --name $FUNCTION_APP \
+  --resource-group $RESOURCE_GROUP \
+  --query "[?name=='COSMOS_DB_ENDPOINT'].value | [0]" -o tsv)
+
+COSMOS_KEY=$(az functionapp config appsettings list \
+  --name $FUNCTION_APP \
+  --resource-group $RESOURCE_GROUP \
+  --query "[?name=='COSMOS_DB_KEY'].value | [0]" -o tsv)
+
+# Set environment variables
+az functionapp config appsettings set \
+  --name $FUNCTION_APP \
+  --resource-group $RESOURCE_GROUP \
+  --settings \
+    CLOUD_PROVIDER=azure \
+    ENVIRONMENT=staging \
+    AZURE_COSMOS_ENDPOINT="${COSMOS_ENDPOINT}" \
+    AZURE_COSMOS_KEY="${COSMOS_KEY}"
+```
+
+3. **即座の修正（手動）**:
+```bash
+# 既存値を取得
+COSMOS_ENDPOINT=$(az functionapp config appsettings list \
+  --name YOUR_FUNCTION_APP \
+  --resource-group YOUR_RESOURCE_GROUP \
+  --query "[?name=='COSMOS_DB_ENDPOINT'].value | [0]" -o tsv)
+
+COSMOS_KEY=$(az functionapp config appsettings list \
+  --name YOUR_FUNCTION_APP \
+  --resource-group YOUR_RESOURCE_GROUP \
+  --query "[?name=='COSMOS_DB_KEY'].value | [0]" -o tsv)
+
+# 新しい変数名で設定
+az functionapp config appsettings set \
+  --name YOUR_FUNCTION_APP \
+  --resource-group YOUR_RESOURCE_GROUP \
+  --settings \
+    "AZURE_COSMOS_ENDPOINT=${COSMOS_ENDPOINT}" \
+    "AZURE_COSMOS_KEY=${COSMOS_KEY}"
+```
+
+4. **Function App再起動待機（約30秒）後、テスト**:
+```bash
+curl -X POST "https://YOUR_FUNCTION_APP.azurewebsites.net/api/HttpTrigger/api/messages/" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Azure test","author":"DevOps"}'
+```
+
+### 問題2: 404 Not Found / 405 Method Not Allowed (Front Door経由)
+
+**症状**:
+- ブラウザから Front Door URL経由でアクセス: 404 Error
+- POST /api/messages/: 405 Method Not Allowed
+
+**原因**:
+- フロントエンドが間違ったAPI URLを使用
+- `/api/HttpTrigger`パスが含まれていない
+
+**解決策**:
+
+1. **正しいAPI URLを設定**:
+```yaml
+# .github/workflows/deploy-azure.yml
+FUNC_HOSTNAME=$(az functionapp show --name YOUR_FUNCTION_APP --resource-group YOUR_RESOURCE_GROUP --query defaultHostName -o tsv)
+echo "api_url=https://${FUNC_HOSTNAME}/api/HttpTrigger" >> $GITHUB_OUTPUT
+```
+
+2. **フロントエンドビルド時に正しいURLを使用**:
+```yaml
+- name: Build Frontend
+  run: |
+    cd services/frontend_react
+    npm install
+    VITE_API_URL="${{ steps.pulumi_outputs.outputs.api_url }}" npm run build
+  env:
+    VITE_API_URL: ${{ steps.pulumi_outputs.outputs.api_url }}
+```
+
+3. **Function App直接アクセスで動作確認**:
+```bash
+# 正しいパスでテスト
+curl https://YOUR_FUNCTION_APP.azurewebsites.net/api/HttpTrigger/health
+```
+
+---
+
 ## サポート
 
 問題が解決しない場合:
@@ -539,3 +793,8 @@ aws logs tail /aws/apigateway/YOUR_API_NAME --since 5m
 1. [GitHub Issues](https://github.com/PLAYER1-r7/multicloud-auto-deploy/issues) で報告
 2. エラーログとコマンド出力を添付
 3. 実行環境（OS、CLIバージョン等）を明記
+
+**修正履歴**:
+- 2026-02-15: AWS Lambda ImportModuleError解決方法追加
+- 2026-02-15: GCP Cloud Run 500エラー（環境変数・型エラー）解決方法追加
+- 2026-02-15: Azure Functions 500エラー（Cosmos DB）解決方法追加
