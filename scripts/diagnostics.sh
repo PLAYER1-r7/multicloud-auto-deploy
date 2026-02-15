@@ -57,7 +57,6 @@ check_tool terraform
 check_tool gh
 check_tool node
 check_tool npm
-check_tool python3.11
 check_tool python3.12
 check_tool docker
 check_tool jq
@@ -69,17 +68,29 @@ echo "🐍 Python Environment Check"
 echo "================================================"
 echo ""
 
-# Check Python versions and pip
-for PY_VERSION in python3.11 python3.12; do
-    if command -v $PY_VERSION &> /dev/null; then
-        echo "✅ $PY_VERSION: $($PY_VERSION --version)"
-        if $PY_VERSION -m pip --version &> /dev/null; then
-            echo "  ✅ pip: $($PY_VERSION -m pip --version)"
-        else
-            echo "  ❌ pip: NOT AVAILABLE"
-        fi
+# Check Python version and pip
+if command -v python3.12 &> /dev/null; then
+    echo "✅ python3.12: $(python3.12 --version)"
+    if python3.12 -m pip --version &> /dev/null; then
+        echo "  ✅ pip: $(python3.12 -m pip --version)"
+    else
+        echo "  ❌ pip: NOT AVAILABLE"
     fi
-done
+else
+    echo "❌ python3.12: NOT FOUND"
+fi
+
+# Also check default python3
+if command -v python3 &> /dev/null; then
+    echo "✅ python3: $(python3 --version)"
+    if python3 -m pip --version &> /dev/null; then
+        echo "  ✅ pip: $(python3 -m pip --version)"
+    else
+        echo "  ❌ pip: NOT AVAILABLE"
+    fi
+else
+    echo "❌ python3: NOT FOUND"
+fi
 
 echo ""
 echo "================================================"
