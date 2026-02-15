@@ -209,8 +209,8 @@ convert_mermaid() {
                 
                 # Download SVG from mermaid.ink
                 if curl -s -f -o "$svg_file" "$mermaid_url" 2>/dev/null && [ -s "$svg_file" ]; then
-                    # Convert SVG to PNG for better PDF compatibility
-                    if convert -density 300 -background white -alpha remove "$svg_file" "$png_file" 2>/dev/null && [ -s "$png_file" ]; then
+                    # Convert SVG to PNG using rsvg-convert (handles foreignObject elements correctly)
+                    if rsvg-convert -f png -w 2400 -b white "$svg_file" -o "$png_file" 2>/dev/null && [ -s "$png_file" ]; then
                         echo -e "${GREEN}    ✓ Converted diagram $diagram_counter to PNG${NC}"
                         echo "![Diagram $diagram_counter]($png_file)" >> "$temp_file"
                     else
