@@ -99,14 +99,7 @@ jobs:
           # Copy source code
           echo "📁 Copying source code..."
           cp -r app package/
-          
-          # Create handler.py for Lambda entry point
-          cat > package/handler.py << 'EOF'
-          from mangum import Mangum
-          from app.main import app
-
-          handler = Mangum(app, lifespan="off")
-          EOF
+          cp index.py package/
           
           # Create zip
           echo "🗜️  Creating lambda package..."
