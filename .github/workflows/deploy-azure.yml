@@ -192,41 +192,43 @@ jobs:
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             echo "Attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
             
-            if az functionapp deployment source config-zip \
+            # Run deployment and capture output
+            az functionapp deployment source config-zip \
               --resource-group $RESOURCE_GROUP \
               --name $FUNCTION_APP \
               --src services/api/function-app.zip \
               --timeout 600 \
-              2>&1 | tee deploy_log.txt; then
-              
-              # Check if deployment was actually successful
-              if ! grep -q "ERROR:" deploy_log.txt; then
-                DEPLOY_SUCCESS=true
-                echo "✅ Deployment successful!"
-                break
-              else
-                echo "⚠️  Deployment reported error, checking if it's a transient issue..."
-                # Check if it's a Kudu restart error
-                if grep -q "Kudu has been restarted" deploy_log.txt; then
-                  echo "🔄 Kudu restart detected, retrying..."
-                  RETRY_COUNT=$((RETRY_COUNT+1))
-                  sleep 30  # Wait for Kudu to stabilize
-                else
-                  echo "❌ Non-transient error detected"
-                  cat deploy_log.txt
-                  exit 1
-                fi
-              fi
+              2>&1 | tee deploy_log.txt || true
+            
+            # Check for critical errors (not "partially successful")
+            if grep -q "Kudu has been restarted" deploy_log.txt; then
+              echo "🔄 Kudu restart detected, retrying..."
+              RETRY_COUNT=$((RETRY_COUNT+1))
+              sleep 30
+              continue
+            fi
+            
+            # Check if deployment steps completed (even if "partially successful")
+            if grep -q "UploadPackageStep.*completed" deploy_log.txt || \
+               grep -q "SyncTriggerStep" deploy_log.txt; then
+              echo "✅ Deployment steps completed!"
+              DEPLOY_SUCCESS=true
+              break
+            elif grep -q "ERROR:" deploy_log.txt && ! grep -q "partially successful" deploy_log.txt; then
+              echo "❌ Critical deployment error"
+              cat deploy_log.txt
+              exit 1
             else
-              echo "⚠️  Deployment command failed, retrying..."
+              echo "⚠️  Deployment status unclear, retrying..."
               RETRY_COUNT=$((RETRY_COUNT+1))
               sleep 30
             fi
           done
           
           if [ "$DEPLOY_SUCCESS" = false ]; then
-            echo "❌ Deployment failed after $MAX_RETRIES attempts"
-            exit 1
+            echo "⚠️  Deployment uncertain after $MAX_RETRIES attempts, checking function health..."
+          else
+            echo "✅ Deployment completed successfully!"
           fi
 
       - name: Build Frontend
@@ -290,14 +292,16 @@ jobs:
           echo "🔍 Verifying API deployment..."
           echo "Testing: ${FUNC_URL}/health"
           
-          # Wait for function to be ready (max 2 minutes)
-          max_attempts=24
+          # Wait for function to be ready (max 3 minutes)
+          max_attempts=36
           attempt=0
+          health_check_passed=false
           
           while [ $attempt -lt $max_attempts ]; do
-            if curl -sf "${FUNC_URL}/health" > /dev/null 2>&1; then
-              echo "✅ API is responding"
-              curl -s "${FUNC_URL}/health" | jq .
+            if response=$(curl -sf "${FUNC_URL}/health" 2>&1); then
+              echo "✅ API is responding!"
+              echo "$response" | jq .
+              health_check_passed=true
               break
             else
               echo "⏳ Waiting for function to be ready... (attempt $((attempt+1))/$max_attempts)"
@@ -306,9 +310,15 @@ jobs:
             fi
           done
           
-          if [ $attempt -eq $max_attempts ]; then
-            echo "⚠️  API did not respond within timeout, but deployment may still succeed"
-            echo "Check manually: ${FUNC_URL}/health"
+          if [ "$health_check_passed" = true ]; then
+            echo ""
+            echo "✅ Azure Function deployment verified successfully!"
+            echo "📍 API URL: ${FUNC_URL}"
+          else
+            echo ""
+            echo "❌ Health check failed after waiting for $((max_attempts * 5)) seconds"
+            echo "This may be a transient issue. Check manually: ${FUNC_URL}/health"
+            exit 1
           fi
 
       - name: Notify Success
