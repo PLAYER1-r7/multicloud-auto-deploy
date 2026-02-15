@@ -1,21 +1,23 @@
 #!/bin/bash
 # ========================================
 # Script Name: generate-changelog.sh
-# Description: Generate CHANGELOG.md from Git History
+# Description: Generate Detailed CHANGELOG.md from Git History
 # Author: PLAYER1-r7
 # Created: 2026-02-15
 # Last Modified: 2026-02-15
-# Version: 1.0.0
+# Version: 2.0.0
 # ========================================
 #
-# Usage: ./scripts/generate-changelog.sh [output-file]
+# Usage: ./scripts/generate-changelog.sh [output-file] [--detailed]
 #
 # Description:
 #   Generates a CHANGELOG.md file from git commit history.
 #   Uses Conventional Commits format for categorization.
+#   Includes commit body, file changes, and statistics.
 #
 # Parameters:
 #   $1 - Output file path (default: CHANGELOG.md)
+#   --detailed - Include commit bodies and file changes
 #
 # Commit Categories:
 #   - feat: New features
