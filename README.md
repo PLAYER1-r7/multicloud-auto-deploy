@@ -24,7 +24,7 @@
 |---------------|--------------|----------------|----------------|
 | **AWS** (ap-northeast-1) | [API Gateway](https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com) | [CloudFront](https://d1tf3uumcm4bo1.cloudfront.net) ✅ | [S3 Static](http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com) |
 | **Azure** (japaneast) | [Functions](https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger) | [Front Door](https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net) 🆕 | [Blob Storage](https://mcadwebd45ihd.z11.web.core.windows.net) |
-| **GCP** (asia-northeast1) | [Cloud Run](https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app) | [Cloud CDN](http://34.117.111.182) 🆕 | [Cloud Storage](https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html) |
+| **GCP** (asia-northeast1) | [Cloud Functions](https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app) | [Cloud CDN](http://34.117.111.182) 🆕 | [Cloud Storage](https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html) |
 
 ### Pulumi管理環境 🎉
 
@@ -90,7 +90,7 @@ multicloud-auto-deploy/
 - **Framework**: FastAPI 1.0+ (Python 3.12)
 - **AWS**: Lambda (x86_64) + API Gateway v2 (HTTP)
 - **Azure**: Azure Functions (Python)
-- **GCP**: Cloud Run (Docker)
+- **GCP**: Cloud Functions (Python 3.11)
 
 **Database**
 - **AWS**: DynamoDB (PAY_PER_REQUEST)
@@ -201,21 +201,6 @@ git push origin main
 | **deploy-aws.yml** | `main`へのpush / 手動 | AWS Lambda | Lambda + API Gateway更新 |
 | **deploy-azure.yml** | `main`へのpush / 手動 | Azure Functions | Functions + Cosmos DB更新 |
 | **deploy-gcp.yml** | `main`へのpush / 手動 | GCP Cloud Functions | Cloud Functions更新 |
-
-### マルチクラウドデプロイフロー 🆕
-
-1. **Build Images**: 
-   - APIとFrontendのDockerイメージをビルド（linux/amd64）
-   - Azure ACRとGCP Artifact Registryにプッシュ
-
-2. **Deploy Azure** (並列実行):
-   - Container Apps（API + Frontend）を更新
-
-3. **Deploy GCP** (並列実行):
-   - Cloud Run（API + Frontend）を更新
-
-4. **Health Check**:
-   - デプロイされたAPIのヘルスチェック
 
 ### 必要なGitHub Secrets
 
