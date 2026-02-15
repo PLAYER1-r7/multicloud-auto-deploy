@@ -12,10 +12,11 @@ COPY app/ ./app/
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
-  PYTHONDONTWRITEBYTECODE=1
+  PYTHONDONTWRITEBYTECODE=1 \
+  PORT=8080
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
-# Run with uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run with uvicorn (use PORT env var for Cloud Run compatibility)
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}

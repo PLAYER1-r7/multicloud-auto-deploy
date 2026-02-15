@@ -1,26 +1,31 @@
 # エンドポイント一覧
 
-## 🌐 本番環境エンドポイント
+## 🌐 本番環境エンドポイント（手動構築）
 
 ### AWS (ap-northeast-1)
 
 | 項目 | 値 |
 |-----|-----|
-| **API Endpoint** | `https://52z731x570.execute-api.ap-northeast-1.amazonaws.com` |
-| **Frontend URL** | `https://dx3l4mbwg1ade.cloudfront.net` |
+| **API Endpoint** | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com` |
+| **Frontend CDN** | `https://dx3l4mbwg1ade.cloudfront.net` ✅ |
+| **Frontend Storage** | `http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com` |
 | **Region** | ap-northeast-1 (東京) |
-| **API Gateway ID** | 52z731x570 |
+| **API Gateway ID** | z42qmqdqac (HTTP API) |
 | **CloudFront ID** | E2GDU7Y7UGDV3S |
 | **S3 Bucket** | multicloud-auto-deploy-staging-frontend |
 | **Lambda Function** | multicloud-auto-deploy-staging-api |
+| **Runtime** | Python 3.12 |
 
 **テスト**:
 ```bash
 # API
-curl https://52z731x570.execute-api.ap-northeast-1.amazonaws.com/
+curl https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/
 
-# Frontend
+# Frontend (CDN)
 curl -I https://dx3l4mbwg1ade.cloudfront.net/
+
+# Frontend (Direct S3)
+curl -I http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com/
 ```
 
 ---
@@ -29,22 +34,26 @@ curl -I https://dx3l4mbwg1ade.cloudfront.net/
 
 | 項目 | 値 |
 |-----|-----|
-| **API Endpoint** | `https://mcad-staging-api--0000004.livelycoast-fa9d3350.japaneast.azurecontainerapps.io` |
-| **Frontend URL** | `https://multicloud-auto-deploy-staging-endpoint-deezaegrhyfzgsav.z01.azurefd.net` |
+| **API Endpoint** | `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger` |
+| **Frontend CDN** | `https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net` 🆕 |
+| **Frontend Storage** | `https://mcadwebd45ihd.z11.web.core.windows.net` |
 | **Region** | japaneast (東日本) |
 | **Resource Group** | multicloud-auto-deploy-staging-rg |
-| **Container App** | mcad-staging-api |
-| **Storage Account** | mcadstagingfrontendXXXX |
-| **Container Registry** | mcadstagingacr |
-| **Front Door** | multicloud-auto-deploy-staging-frontdoor |
+| **Function App** | multicloud-auto-deploy-staging-func |
+| **Storage Account** | mcadwebd45ihd ($web container) |
+| **Front Door** | multicloud-frontend (Profile: multicloud-frontend-afd) |
+| **Runtime** | Python 3.12 |
 
 **テスト**:
 ```bash
 # API
-curl https://mcad-staging-api--0000004.livelycoast-fa9d3350.japaneast.azurecontainerapps.io/
+curl https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger/
 
-# Frontend
-curl -I https://multicloud-auto-deploy-staging-endpoint-deezaegrhyfzgsav.z01.azurefd.net/
+# Frontend (CDN)
+curl -I https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net/
+
+# Frontend (Direct Storage)
+curl -I https://mcadwebd45ihd.z11.web.core.windows.net/
 ```
 
 ---
@@ -53,23 +62,118 @@ curl -I https://multicloud-auto-deploy-staging-endpoint-deezaegrhyfzgsav.z01.azu
 
 | 項目 | 値 |
 |-----|-----|
-| **API Endpoint** | `https://mcad-staging-api-son5b3ml7a-an.a.run.app` |
-| **Frontend URL** | `http://34.117.111.182` |
+| **API Endpoint** | `https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app` |
+| **Frontend CDN** | `http://34.120.43.83` 🆕 |
+| **Frontend Storage** | `https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html` |
 | **Region** | asia-northeast1 (東京) |
 | **Project ID** | ashnova |
-| **Cloud Run Service** | mcad-staging-api |
-| **Storage Bucket** | mcad-staging-frontend |
-| **Global IP Address** | 34.117.111.182 (mcad-staging-frontend-ip) |
-| **Artifact Registry** | mcad-staging-repo |
-| **Firestore Database** | (default) |
+| **Cloud Run Service** | multicloud-auto-deploy-staging-api |
+| **Cloud Run Service (Frontend)** | mcad-staging-frontend |
+| **Storage Bucket** | ashnova-multicloud-auto-deploy-staging-frontend |
+| **Global IP Address** | 34.120.43.83 (multicloud-frontend-ip) |
+| **Backend Bucket** | multicloud-frontend-backend |
+| **Firestore Database** | (default) - messages, posts collections |
 
 **テスト**:
 ```bash
 # API
-curl https://mcad-staging-api-son5b3ml7a-an.a.run.app/
+curl https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app/
 
-# Frontend
+# Frontend (CDN)
+curl -I http://34.120.43.83/
+
+# Frontend (Direct Storage)
+curl -I https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html
+```
+
+---
+
+## 🎉 Pulumi管理環境
+
+Infrastructure as Codeで管理されているCDNエンドポイント
+
+### AWS CloudFront (Pulumi)
+
+| 項目 | 値 |
+|-----|-----|
+| **CloudFront URL** | `https://d1tf3uumcm4bo1.cloudfront.net` |
+| **Distribution ID** | E1TBH4R432SZBZ |
+| **Origin** | multicloud-auto-deploy-staging-frontend.s3.ap-northeast-1.amazonaws.com |
+| **管理方法** | Pulumi (`infrastructure/pulumi/aws/`) |
+| **Status** | Deployed ✅ |
+
+**Pulumi管理**:
+```bash
+cd infrastructure/pulumi/aws
+pulumi stack output cloudfront_url
+pulumi stack output cloudfront_distribution_id
+```
+
+**テスト**:
+```bash
+curl -I https://d1tf3uumcm4bo1.cloudfront.net/
+```
+
+---
+
+### Azure Front Door (Pulumi)
+
+| 項目 | 値 |
+|-----|-----|
+| **Front Door URL** | `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net` |
+| **Endpoint Name** | mcad-staging-d45ihd |
+| **Profile Name** | multicloud-auto-deploy-staging-fd |
+| **Origin** | mcadwebd45ihd.z11.web.core.windows.net |
+| **管理方法** | Pulumi (`infrastructure/pulumi/azure/`) |
+| **Status** | Deployed ✅ |
+
+**Pulumi管理**:
+```bash
+cd infrastructure/pulumi/azure
+pulumi stack output frontdoor_url
+pulumi stack output frontdoor_hostname
+```
+
+**テスト**:
+```bash
+curl -I https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/
+```
+
+---
+
+### GCP Cloud CDN (Pulumi)
+
+| 項目 | 値 |
+|-----|-----|
+| **CDN URL** | `http://34.117.111.182` |
+| **Global IP** | 34.117.111.182 |
+| **Backend Bucket** | multicloud-auto-deploy-staging-cdn-backend |
+| **Origin Bucket** | ashnova-multicloud-auto-deploy-staging-frontend |
+| **管理方法** | Pulumi (`infrastructure/pulumi/gcp/`) |
+| **Status** | Deployed ✅ |
+
+**Pulumi管理**:
+```bash
+cd infrastructure/pulumi/gcp
+pulumi stack output cdn_url
+pulumi stack output cdn_ip_address
+```
+
+**テスト**:
+```bash
 curl -I http://34.117.111.182/
+```
+
+**GCP リソース確認**:
+```bash
+# Backend Bucket
+gcloud compute backend-buckets describe multicloud-auto-deploy-staging-cdn-backend
+
+# Forwarding Rule
+gcloud compute forwarding-rules describe multicloud-auto-deploy-staging-cdn-lb --global
+
+# Global Address
+gcloud compute addresses describe multicloud-auto-deploy-staging-cdn-ip --global
 ```
 
 ---
@@ -84,8 +188,10 @@ curl -I http://34.117.111.182/
 
 ### Azure
 - **Resource Group**: https://portal.azure.com/#@/resource/subscriptions/29031d24-d41a-4f97-8362-46b40129a7e8/resourceGroups/multicloud-auto-deploy-staging-rg
-- **Container Apps**: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.App%2FcontainerApps
+- **Function Apps**: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites
 - **Storage Account**: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Storage%2FStorageAccounts
+- **Front Door**: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Cdn%2Fprofiles
+- **Cosmos DB**: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.DocumentDB%2FdatabaseAccounts
 
 ### GCP
 - **Cloud Run**: https://console.cloud.google.com/run?project=ashnova
@@ -159,16 +265,16 @@ curl -I http://34.117.111.182/
 #!/bin/bash
 
 echo "=== Testing AWS ==="
-curl -s https://52z731x570.execute-api.ap-northeast-1.amazonaws.com/ | jq
+curl -s https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/ | jq
 curl -I https://dx3l4mbwg1ade.cloudfront.net/ 2>&1 | grep HTTP
 
 echo -e "\n=== Testing Azure ==="
-curl -s https://mcad-staging-api--0000004.livelycoast-fa9d3350.japaneast.azurecontainerapps.io/ | jq
-curl -I https://multicloud-auto-deploy-staging-endpoint-deezaegrhyfzgsav.z01.azurefd.net/ 2>&1 | grep HTTP
+curl -s https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger/ | jq
+curl -I https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net/ 2>&1 | grep HTTP
 
 echo -e "\n=== Testing GCP ==="
-curl -s https://mcad-staging-api-son5b3ml7a-an.a.run.app/ | jq
-curl -I http://34.117.111.182/ 2>&1 | grep HTTP
+curl -s https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app/ | jq
+curl -I http://34.120.43.83/ 2>&1 | grep HTTP
 ```
 
 ### メッセージ送信テスト
@@ -177,17 +283,17 @@ curl -I http://34.117.111.182/ 2>&1 | grep HTTP
 #!/bin/bash
 
 # AWS
-curl -X POST https://52z731x570.execute-api.ap-northeast-1.amazonaws.com/api/messages \
+curl -X POST https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/api/messages/ \
   -H "Content-Type: application/json" \
   -d '{"content":"Test from AWS"}'
 
 # Azure
-curl -X POST https://mcad-staging-api--0000004.livelycoast-fa9d3350.japaneast.azurecontainerapps.io/api/messages \
+curl -X POST https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger/api/messages/ \
   -H "Content-Type: application/json" \
   -d '{"content":"Test from Azure"}'
 
 # GCP
-curl -X POST https://mcad-staging-api-son5b3ml7a-an.a.run.app/api/messages \
+curl -X POST https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app/api/messages/ \
   -H "Content-Type: application/json" \
   -d '{"content":"Test from GCP"}'
 ```
@@ -201,12 +307,15 @@ curl -X POST https://mcad-staging-api-son5b3ml7a-an.a.run.app/api/messages \
 | 2026-02-14 | 初版作成 - AWS/Azure/GCP全環境のエンドポイント確定 |
 | 2026-02-14 | Azure Frontend URL 修正（API URL問題解決後） |
 | 2026-02-14 | AWS Frontend URL 修正（リージョン修正後） |
+| 2026-02-15 | **大型更新**: 全エンドポイント情報を実際の値に更新 |
+| 2026-02-15 | CDN情報追加 - CloudFront, Front Door, Cloud CDN |
+| 2026-02-15 | Azure: Container Apps → Functionsに変更 |
+| 2026-02-15 | GCP: Cloud Run APIエンドポイント更新 |
+| 2026-02-15 | **Pulumi管理環境追加** - 全3クラウドでInfrastructure as Code導入 🎉 |
 
 ---
 
-## ⚠️ 注意事項
-
-1. **本番環境への適用前に必ずステージング環境でテスト**
+## 📌 重要な注意事項
 2. **API Keyや認証トークンは環境変数で管理**
 3. **クロスオリジン（CORS）設定を確認**
 4. **レート制限に注意**（特にAWS API Gateway、Azure Front Door）

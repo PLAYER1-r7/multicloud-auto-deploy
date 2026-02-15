@@ -14,67 +14,97 @@ Multi-Cloud Auto Deploy Platform の完全なシステムアーキテクチャ�
 
 ## システム概要
 
-```
-┌────────────────────────────────────────────────────────────┐
-│                      ユーザー                                │
-└──────────────────────┬─────────────────────────────────────┘
-                       │
-     ┌─────────────────┼─────────────────┐
-     │                 │                 │
-     ▼                 ▼                 ▼
-┌─────────┐      ┌─────────┐      ┌─────────┐
-│   AWS   │      │  Azure  │      │   GCP   │
-└────┬────┘      └────┬────┘      └────┬────┘
-     │                │                 │
-     └────────────────┴─────────────────┘
-                      │
-              ┌───────┴────────┐
-              │ Application    │
-              │ (Frontend +    │
-              │  Backend + DB) │
-              └────────────────┘
+```mermaid
+graph TB
+    User[👤 ユーザー]
+    
+    User --> AWS[☁️ AWS]
+    User --> Azure[☁️ Azure]
+    User --> GCP[☁️ GCP]
+    
+    AWS --> App1[📱 Frontend + Backend + DB]
+    Azure --> App2[📱 Frontend + Backend + DB]
+    GCP --> App3[📱 Frontend + Backend + DB]
+    
+    style User fill:#e1f5ff
+    style AWS fill:#ff9900
+    style Azure fill:#0078d4
+    style GCP fill:#4285f4
+    style App1 fill:#f0f0f0
+    style App2 fill:#f0f0f0
+    style App3 fill:#f0f0f0
 ```
 
 ## AWS アーキテクチャ
 
 ### 構成図
 
-```
-Internet
-    │
-    ├──→ CloudFront (CDN)
-    │       └──→ S3 (Frontend)
-    │              └──→ index.html, assets/
-    │
-    └──→ API Gateway (HTTP API)
-            └──→ Lambda (Backend)
-                    └──→ DynamoDB (Database)
-                            └──→ messages table
+```mermaid
+graph LR
+    Internet((🌐 Internet))
+    
+    Internet --> CloudFront[☁️ CloudFront CDN]
+    Internet --> APIGateway[🚪 API Gateway v2]
+    
+    CloudFront --> S3[📦 S3 Bucket<br/>Frontend]
+    S3 --> React[⚛️ React App]
+    
+    APIGateway --> Lambda[⚡ Lambda<br/>Python 3.12]
+    Lambda --> DynamoDB[(🗄️ DynamoDB<br/>messages)]
+    
+    style Internet fill:#e1f5ff
+    style CloudFront fill:#ff9900
+    style APIGateway fill:#ff9900
+    style S3 fill:#ff9900
+    style Lambda fill:#ff9900
+    style DynamoDB fill:#ff9900
+    style React fill:#61dafb
 ```
 
 ### リソース構成
 
 | リソース | 名前 | 目的 | リージョン |
 |---------|------|------|----------|
-| S3 Bucket | `multicloud-auto-deploy-staging-frontend` | フロントエンドホスティング | us-east-1 |
-| CloudFront | `E241KZLP132LO6` | CDN・HTTPS終端 | Global |
-| Lambda | `multicloud-auto-deploy-staging-api` | バックエンドAPI（45MB） | us-east-1 |
-| API Gateway | `i0w1fvqd85` | HTTP APIゲートウェイ | us-east-1 |
-| DynamoDB | `multicloud-auto-deploy-staging-messages` | NoSQLデータベース | us-east-1 |
+| S3 Bucket | `multicloud-auto-deploy-staging-frontend` | フロントエンドホスティング | ap-northeast-1 |
+| CloudFront | `E2GDU7Y7UGDV3S` | CDN・HTTPS終端 | Global |
+| Lambda | `multicloud-auto-deploy-staging-api` | バックエンドAPI（Python 3.12） | ap-northeast-1 |
+| API Gateway | `z42qmqdqac` | HTTP APIゲートウェイ（v2） | ap-northeast-1 |
+| DynamoDB | `simple-sns-messages` | NoSQLデータベース（PAY_PER_REQUEST） | ap-northeast-1 |
 
 ### アクセスフロー
 
-1. **フロントエンドアクセス**
-   ```
-   User → CloudFront → S3 Bucket → React App
-   ```
+#### 1. フロントエンドアクセス
 
-2. **API呼び出し**
-   ```
-   React App → API Gateway → Lambda → DynamoDB
-                                    ↓
-                                Response
-   ```
+```mermaid
+sequenceDiagram
+    participant User as 👤 User
+    participant CF as ☁️ CloudFront
+    participant S3 as 📦 S3
+    participant React as ⚛️ React App
+    
+    User->>CF: HTTPS Request
+    CF->>S3: Get index.html
+    S3-->>CF: Return HTML/Assets
+    CF-->>User: Cached Response
+    User->>React: Render App
+```
+
+#### 2. API呼び出し
+
+```mermaid
+sequenceDiagram
+    participant React as ⚛️ React App
+    participant APIGW as 🚪 API Gateway
+    participant Lambda as ⚡ Lambda
+    participant DDB as 🗄️ DynamoDB
+    
+    React->>APIGW: POST /api/messages
+    APIGW->>Lambda: Invoke Function
+    Lambda->>DDB: PutItem
+    DDB-->>Lambda: Success
+    Lambda-->>APIGW: 201 Created
+    APIGW-->>React: JSON Response
+```
 
 ### 最小権限IAM
 
@@ -90,17 +120,24 @@ Internet
 
 ### 構成図
 
-```
-Internet
-    │
-    ├──→ Azure Front Door
-    │       └──→ Storage Account (Frontend)
-    │              └──→ $web container
-    │
-    └──→ Container Apps
-            └──→ Backend API Container
-                    └──→ Cosmos DB (Database)
-                            └──→ messages database
+```mermaid
+graph LR
+    Internet((🌐 Internet))
+    
+    Internet --> FrontDoor[🚪 Azure Front Door]
+    Internet --> Functions[⚡ Azure Functions<br/>Python 3.12]
+    
+    FrontDoor --> BlobStorage[📦 Blob Storage<br/>$web container]
+    BlobStorage --> React[⚛️ React App]
+    
+    Functions --> CosmosDB[(🗄️ Cosmos DB<br/>Serverless<br/>messages)]
+    
+    style Internet fill:#e1f5ff
+    style FrontDoor fill:#0078d4
+    style Functions fill:#0078d4
+    style BlobStorage fill:#0078d4
+    style CosmosDB fill:#0078d4
+    style React fill:#61dafb
 ```
 
 ### リソース構成
@@ -108,82 +145,123 @@ Internet
 | リソース | 名前 | 目的 | リージョン |
 |---------|------|------|----------|
 | Resource Group | `multicloud-auto-deploy-staging-rg` | すべてのリソース管理 | japaneast |
-| Storage Account | `mcadfestaging` | フロントエンドホスティング | japaneast |
-| Container Registry | `mcadstagingacr` | Dockerイメージ保存 | japaneast |
-| Container Apps Env | `mcad-staging-env` | Container Apps環境 | japaneast |
-| Container App | `mcad-staging-api` | バックエンドAPI | japaneast |
-| Cosmos DB | `multicloud-auto-deploy-staging-cosmos` | NoSQLデータベース | japaneast |
-| Front Door | `multicloud-auto-deploy-staging-endpoint` | CDN・WAF | Global |
+| Storage Account | `mcadwebd45ihd` | フロントエンドホスティング（$web） | japaneast |
+| Function App | `multicloud-auto-deploy-staging-func` | バックエンドAPI（Python 3.12） | japaneast |
+| Cosmos DB | `simple-sns-cosmos` | NoSQLデータベース（Serverless） | japaneast |
+| Front Door Profile | `multicloud-frontend-afd` | CDN・WAF | Global |
+| Front Door Endpoint | `multicloud-frontend` | CDNエンドポイント | Global |
 
 ### アクセスフロー
 
-1. **フロントエンドアクセス**
-   ```
-   User → Front Door → Storage Account ($web) → React App
-   ```
+#### 1. フロントエンドアクセス
 
-2. **API呼び出し**
-   ```
-   React App → Container App → Cosmos DB
-                          ↓
-                      Response
-   ```
+```mermaid
+sequenceDiagram
+    participant User as 👤 User
+    participant FD as 🚪 Front Door
+    participant Blob as 📦 Blob Storage
+    participant React as ⚛️ React App
+    
+    User->>FD: HTTPS Request
+    FD->>Blob: Get index.html
+    Blob-->>FD: Return HTML/Assets
+    FD-->>User: Cached Response
+    User->>React: Render App
+```
+
+#### 2. API呼び出し
+
+```mermaid
+sequenceDiagram
+    participant React as ⚛️ React App
+    participant Func as ⚡ Functions
+    participant Cosmos as 🗄️ Cosmos DB
+    
+    React->>Func: POST /api/HttpTrigger/api/messages
+    Func->>Cosmos: Create Document
+    Cosmos-->>Func: Success
+    Func-->>React: 201 Created
+```
 
 ### Azure AD統合
 
 **Service Principal権限**:
 - Contributor: リソースの作成・管理
 - Storage Blob Data Contributor: ストレージへのデータ書き込み
-- AcrPush: Container Registryへのイメージプッシュ
 
 ## GCP アーキテクチャ
 
 ### 構成図
 
-```
-Internet
-    │
-    ├──→ Cloud Load Balancer (34.117.111.182)
-    │       └──→ Backend Bucket
-    │              └──→ Cloud Storage (Frontend)
-    │
-    └──→ Cloud Run (Backend)
-            └──→ Firestore (Database)
-                    └──→ messages collection
+```mermaid
+graph LR
+    Internet((🌐 Internet))
+    
+    Internet --> CDN[☁️ Cloud CDN<br/>34.120.43.83]
+    Internet --> CloudRun[🏃 Cloud Run<br/>FastAPI/Docker]
+    
+    CDN --> BackendBucket[📦 Backend Bucket]
+    BackendBucket --> CloudStorage[☁️ Cloud Storage<br/>Frontend]
+    CloudStorage --> React[⚛️ React App]
+    
+    CloudRun --> Firestore[(🗄️ Firestore<br/>messages/posts)]
+    
+    style Internet fill:#e1f5ff
+    style CDN fill:#4285f4
+    style CloudRun fill:#4285f4
+    style BackendBucket fill:#4285f4
+    style CloudStorage fill:#4285f4
+    style Firestore fill:#4285f4
+    style React fill:#61dafb
 ```
 
 ### リソース構成
 
 | リソース | 名前 | 目的 | リージョン |
 |---------|------|------|----------|
-| Cloud Storage | `mcad-staging-frontend` | フロントエンドホスティング | asia-northeast1 |
-| Artifact Registry | `mcad-staging-repo` | Dockerイメージ保存 | asia-northeast1 |
-| Cloud Run | `mcad-staging-api` | バックエンドAPI | asia-northeast1 |
+| Cloud Storage | `ashnova-multicloud-auto-deploy-staging-frontend` | フロントエンドホスティング | asia-northeast1 |
+| Cloud Run | `multicloud-auto-deploy-staging-api` | バックエンドAPI（Docker） | asia-northeast1 |
 | Firestore | `(default)` | NoSQLデータベース | asia-northeast1 |
-| Backend Bucket | `mcad-staging-backend` | CDN統合 | Global |
-| Global IP | `mcad-staging-frontend-ip` | 固定IPアドレス | Global |
-| URL Map | `mcad-staging-urlmap` | ルーティング | Global |
-| HTTP Proxy | `mcad-staging-http-proxy` | HTTP終端 | Global |
-| Forwarding Rule | `mcad-staging-http-rule` | トラフィック転送 | Global |
+| Backend Bucket | `multicloud-frontend-backend` | CDN統合 | Global |
+| Global IP | `multicloud-frontend-ip` | 固定IPアドレス（34.120.43.83） | Global |
+| URL Map | `multicloud-frontend-urlmap` | ルーティング | Global |
+| HTTP Proxy | `multicloud-frontend-http-proxy` | HTTP終端 | Global |
+| Forwarding Rule | `multicloud-frontend-forwarding-rule` | トラフィック転送 | Global |
 
 ### アクセスフロー
 
-1. **フロントエンドアクセス（CDN経由）**
-   ```
-   User → Load Balancer (34.117.111.182) → Backend Bucket → Cloud Storage → React App
-   ```
+#### 1. フロントエンドアクセス（CDN経由）
 
-2. **フロントエンドアクセス（直接）**
-   ```
-   User → Cloud Storage → React App
-   ```
+```mermaid
+sequenceDiagram
+    participant User as 👤 User
+    participant CDN as ☁️ Cloud CDN
+    participant BB as 📦 Backend Bucket
+    participant GCS as ☁️ Cloud Storage
+    participant React as ⚛️ React App
+    
+    User->>CDN: HTTP Request (34.120.43.83)
+    CDN->>BB: Forward Request
+    BB->>GCS: Get Object
+    GCS-->>BB: Return HTML/Assets
+    BB-->>CDN: Return Content
+    CDN-->>User: Cached Response
+    User->>React: Render App
+```
 
-3. **API呼び出し**
-   ```
-   React App → Cloud Run → Firestore
-                      ↓
-                  Response
-   ```
+#### 2. API呼び出し
+
+```mermaid
+sequenceDiagram
+    participant React as ⚛️ React App
+    participant CR as 🏃 Cloud Run
+    participant FS as 🗄️ Firestore
+    
+    React->>CR: POST /api/messages
+    CR->>FS: Add Document
+    FS-->>CR: Document ID
+    CR-->>React: 201 Created
+```
 
 ### IAM権限
 

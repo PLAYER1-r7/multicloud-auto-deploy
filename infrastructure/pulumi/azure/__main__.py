@@ -8,6 +8,7 @@ Architecture:
 
 Cost: ~$2-8/month for low traffic
 """
+
 import pulumi
 import pulumi_azure_native as azure
 import pulumi_random as random
@@ -96,97 +97,139 @@ app_insights = azure.insights.Component(
 )
 
 # ========================================
-# App Service Plan (Elastic Premium Plan)
-# Note: Using different resource name to force recreation (can't change FC1->EP1)
+# Note: Function App is managed manually
 # ========================================
-app_service_plan = azure.web.AppServicePlan(
-    "app-service-plan-ep1",  # Changed resource name to force new creation
-    name=f"{project_name}-{stack}-asp-ep1",  # Changed Azure name too
+# Function App and App Service Plan are created and managed manually
+# Existing resources:
+# - Function App: multicloud-auto-deploy-staging-func
+# - App Service Plan: FC1 (FlexConsumption)
+# - API URL: https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
+
+# ========================================
+# Azure Front Door for Frontend CDN
+# ========================================
+# Front Door Profile
+frontdoor_profile = azure.cdn.Profile(
+    "frontdoor-profile",
+    profile_name=f"{project_name}-{stack}-fd",
     resource_group_name=resource_group.name,
-    location=location,
-    sku=azure.web.SkuDescriptionArgs(
-        name="EP1",  # Elastic Premium tier (supports scale-to-zero)
-        tier="ElasticPremium",
+    location="Global",  # Front Door is global
+    sku=azure.cdn.SkuArgs(
+        name="Standard_AzureFrontDoor",
     ),
-    kind="elastic",
-    reserved=True,  # Linux
-    maximum_elastic_worker_count=20,
     tags=common_tags,
 )
 
-# ========================================
-# Function App
-# ========================================
-function_app = azure.web.WebApp(
-    "function-app",
-    name=f"{project_name}-{stack}-func",
+# Front Door Endpoint
+frontdoor_endpoint = azure.cdn.AFDEndpoint(
+    "frontdoor-endpoint",
+    endpoint_name=storage_suffix.result.apply(lambda suffix: f"mcad-{stack}-{suffix}"),
+    profile_name=frontdoor_profile.name,
     resource_group_name=resource_group.name,
-    location=location,
-    server_farm_id=app_service_plan.id,
-    kind="FunctionApp",
-    
-    site_config=azure.web.SiteConfigArgs(
-        app_settings=[
-            azure.web.NameValuePairArgs(
-                name="FUNCTIONS_WORKER_RUNTIME",
-                value="python",
-            ),
-            azure.web.NameValuePairArgs(
-                name="FUNCTIONS_EXTENSION_VERSION",
-                value="~4",
-            ),
-            azure.web.NameValuePairArgs(
-                name="AzureWebJobsStorage",
-                value=pulumi.Output.all(
-                    resource_group.name,
-                    functions_storage.name
-                ).apply(lambda args: f"DefaultEndpointsProtocol=https;AccountName={args[1]};AccountKey=...;EndpointSuffix=core.windows.net"),
-            ),
-            azure.web.NameValuePairArgs(
-                name="APPINSIGHTS_INSTRUMENTATIONKEY",
-                value=app_insights.instrumentation_key,
-            ),
-            azure.web.NameValuePairArgs(
-                name="ENVIRONMENT",
-                value=stack,
-            ),
-            azure.web.NameValuePairArgs(
-                name="CLOUD_PROVIDER",
-                value="azure",
-            ),
-        ],
-        linux_fx_version="Python|3.11",
-        cors=azure.web.CorsSettingsArgs(
-            allowed_origins=["*"],
-            support_credentials=False,
-        ),
-        use32_bit_worker_process=False,
-        http20_enabled=True,
-    ),
-    
-    https_only=True,
+    location="Global",
+    enabled_state="Enabled",
     tags=common_tags,
+)
+
+# Front Door Origin Group
+frontdoor_origin_group = azure.cdn.AFDOriginGroup(
+    "frontdoor-origin-group",
+    origin_group_name=f"{project_name}-{stack}-origin-group",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    load_balancing_settings=azure.cdn.LoadBalancingSettingsParametersArgs(
+        sample_size=4,
+        successful_samples_required=3,
+        additional_latency_in_milliseconds=50,
+    ),
+    health_probe_settings=azure.cdn.HealthProbeParametersArgs(
+        probe_path="/",
+        probe_request_type="HEAD",
+        probe_protocol="Https",
+        probe_interval_in_seconds=100,
+    ),
+)
+
+# Front Door Origin (Storage Account for Frontend)
+frontdoor_origin = azure.cdn.AFDOrigin(
+    "frontdoor-origin",
+    origin_name=f"{project_name}-{stack}-origin",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    origin_group_name=frontdoor_origin_group.name,
+    host_name=frontend_storage.primary_endpoints.apply(
+        lambda endpoints: (
+            endpoints.web.replace("https://", "").replace("/", "")
+            if endpoints.web
+            else ""
+        )
+    ),
+    origin_host_header=frontend_storage.primary_endpoints.apply(
+        lambda endpoints: (
+            endpoints.web.replace("https://", "").replace("/", "")
+            if endpoints.web
+            else ""
+        )
+    ),
+    http_port=80,
+    https_port=443,
+    priority=1,
+    weight=1000,
+    enabled_state="Enabled",
+)
+
+# Front Door Route
+frontdoor_route = azure.cdn.Route(
+    "frontdoor-route",
+    route_name=f"{project_name}-{stack}-route",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    endpoint_name=frontdoor_endpoint.name,
+    origin_group=azure.cdn.ResourceReferenceArgs(
+        id=frontdoor_origin_group.id,
+    ),
+    supported_protocols=["Http", "Https"],
+    patterns_to_match=["/*"],
+    forwarding_protocol="HttpsOnly",
+    link_to_default_domain="Enabled",
+    https_redirect="Enabled",
+    opts=pulumi.ResourceOptions(depends_on=[frontdoor_origin]),
 )
 
 # ========================================
 # Outputs
 # ========================================
 pulumi.export("resource_group_name", resource_group.name)
-pulumi.export("function_app_name", function_app.name)
 pulumi.export("functions_storage_name", functions_storage.name)
 pulumi.export("frontend_storage_name", frontend_storage.name)
-pulumi.export("api_url", function_app.default_host_name.apply(
-    lambda host: f"https://{host}"
-))
-pulumi.export("frontend_url", frontend_storage.primary_endpoints.apply(
-    lambda endpoints: endpoints.web if endpoints.web else "Not configured yet"
-))
+
+# Existing manually-managed Function App
+pulumi.export("function_app_name", f"{project_name}-{stack}-func")
+pulumi.export(
+    "api_url",
+    "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net",
+)
+
+pulumi.export(
+    "frontend_url",
+    frontend_storage.primary_endpoints.apply(
+        lambda endpoints: endpoints.web if endpoints.web else "Not configured yet"
+    ),
+)
+pulumi.export("frontdoor_endpoint_name", frontdoor_endpoint.name)
+pulumi.export("frontdoor_hostname", frontdoor_endpoint.host_name)
+pulumi.export(
+    "frontdoor_url",
+    frontdoor_endpoint.host_name.apply(lambda hostname: f"https://{hostname}"),
+)
 pulumi.export("app_insights_instrumentation_key", app_insights.instrumentation_key)
 
 # Cost estimation
-pulumi.export("cost_estimate",
-    "Azure Functions Consumption: First 1M executions/month free, then $0.20 per 1M. "
+pulumi.export(
+    "cost_estimate",
+    "Azure Functions FlexConsumption: Pay-as-you-go. "
     "Storage: $0.02/GB/month. "
     "Application Insights: 5GB free/month. "
-    "Estimated: $2-8/month for low traffic."
+    "Azure Front Door Standard: $35/month + $0.01/GB. "
+    "Estimated: $35-50/month with Front Door.",
 )

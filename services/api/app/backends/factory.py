@@ -22,12 +22,31 @@ def get_backend() -> BaseBackend:
         )
 
     elif settings.cloud_provider == CloudProvider.AZURE:
-        # TODO: Azure Cosmos DB実装
-        raise NotImplementedError("Azure backend not yet implemented")
+        from app.backends.azure import AzureBackend
+
+        if not settings.azure_cosmos_endpoint or not settings.azure_cosmos_key:
+            raise ValueError(
+                "Azure Cosmos DB credentials not configured. "
+                "Set AZURE_COSMOS_ENDPOINT and AZURE_COSMOS_KEY environment variables."
+            )
+
+        return AzureBackend(
+            endpoint=settings.azure_cosmos_endpoint,
+            key=settings.azure_cosmos_key,
+        )
 
     elif settings.cloud_provider == CloudProvider.GCP:
-        # TODO: GCP Firestore実装
-        raise NotImplementedError("GCP backend not yet implemented")
+        from app.backends.gcp import GCPBackend
+
+        if not settings.gcp_project_id:
+            raise ValueError(
+                "GCP project ID not configured. Set GCP_PROJECT_ID environment variable."
+            )
+
+        return GCPBackend(
+            project_id=settings.gcp_project_id,
+            collection_name=settings.firestore_collection,
+        )
 
     else:
         raise ValueError(f"Unknown cloud provider: {settings.cloud_provider}")

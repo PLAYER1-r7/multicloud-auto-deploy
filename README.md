@@ -6,19 +6,29 @@
 
 **マルチクラウド対応の自動デプロイシステム** - AWS/Azure/GCP対応のフルスタックアプリケーション自動デプロイプラットフォーム
 
-> 🐍 **NEW: Python Full Stack版が利用可能になりました！** Pulumi + FastAPI + Reflex による完全Python実装。詳細は [docs/PYTHON_MIGRATION.md](docs/PYTHON_MIGRATION.md) を参照。
-
 ## 🌐 Live Demos
 
-| Cloud Provider | API Endpoint | Frontend |
-|---------------|--------------|----------|
-| **AWS** (ap-northeast-1) | [API](https://52z731x570.execute-api.ap-northeast-1.amazonaws.com/) | [CloudFront](https://dx3l4mbwg1ade.cloudfront.net) ✅ |
-| **Azure** (japaneast) | [Container Apps API](https://mcad-staging-api.livelycoast-fa9d3350.japaneast.azurecontainerapps.io) 🆕 | [Container Apps Frontend](https://mcad-staging-frontend.livelycoast-fa9d3350.japaneast.azurecontainerapps.io) ✅ 🆕 |
-| **GCP** (asia-northeast1) | [Cloud Run API](https://mcad-staging-api-son5b3ml7a-an.a.run.app) 🆕 | [Cloud Run Frontend](https://mcad-staging-frontend-son5b3ml7a-an.a.run.app) ✅ 🆕 |
+### 本番環境（手動構築）
 
-> 🐍 **Azure & GCP**: Pure Python Full Stack（FastAPI + Reflex）がContainer AppsとCloud Runで稼働中！
+| Cloud Provider | API Endpoint | Frontend (CDN) | Direct Storage |
+|---------------|--------------|----------------|----------------|
+| **AWS** (ap-northeast-1) | [API Gateway](https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com) | [CloudFront](https://dx3l4mbwg1ade.cloudfront.net) ✅ | [S3 Static](http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com) |
+| **Azure** (japaneast) | [Functions](https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger) | [Front Door](https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net) 🆕 | [Blob Storage](https://mcadwebd45ihd.z11.web.core.windows.net) |
+| **GCP** (asia-northeast1) | [Cloud Run](https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app) | [Cloud CDN](http://34.120.43.83) 🆕 | [Cloud Storage](https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html) |
+
+### Pulumi管理環境 🎉
+
+| Cloud Provider | CDN URL | Distribution ID | 管理方法 |
+|---------------|---------|-----------------|----------|
+| **AWS** | [CloudFront](https://d1tf3uumcm4bo1.cloudfront.net) | E1TBH4R432SZBZ | Pulumi |
+| **Azure** | [Front Door](https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net) | mcad-staging-d45ihd | Pulumi |
+| **GCP** | [Cloud CDN](http://34.117.111.182) | 34.117.111.182 | Pulumi |
+
+> 🌐 **全クラウドでCDN配信を実装！** CloudFront, Front Door, Cloud CDNによる高速・安全なコンテンツ配信
 > 
-> 📋 詳細なエンドポイント情報は [docs/ENDPOINTS.md](docs/ENDPOINTS.md) を参照してください
+> 🛠️ **Infrastructure as Code**: Pulumiで全CDNリソースを管理（詳細: [CDNセットアップガイド](docs/CDN_SETUP.md)）
+> 
+> 📋 詳細情報: [エンドポイント一覧](docs/ENDPOINTS.md)
 
 ## 🚀 特徴
 
@@ -37,14 +47,16 @@ multicloud-auto-deploy/
 ├── .github/workflows/     # GitHub Actionsワークフロー
 ├── infrastructure/        # インフラストラクチャコード
 │   ├── terraform/        # Terraformコード（AWS/Azure/GCP）
-│   └── pulumi/           # 🆕 Pulumiコード（Python - AWS/Azure/GCP）
+│   └── pulumi/           # Pulumiコード（Python - AWS/Azure/GCP）
 ├── services/             # アプリケーションコード
-│   ├── api/              # 🆕 FastAPI バックエンド（Python）
-│   ├── frontend_reflex/  # ✨ Reflex フロントエンド（Python）
-│   └── backend/          # Legacy バックエンド（Python）
-├── scripts/              # デプロイスクリプト
-└── docs/                 # ドキュメント
-    └── PYTHON_MIGRATION.md  # 🆕 Python完全版移行ガイド
+│   ├── api/              # FastAPI バックエンド（Python 3.12）
+│   ├── frontend_react/   # React フロントエンド（Vite + TypeScript）
+│   └── frontend_reflex/  # Reflex フロントエンド（実験的）
+├── scripts/              # デプロイ・テストスクリプト
+├── docs/                 # ドキュメント
+│   ├── CDN_SETUP.md     # 🆕 CDN設定ガイド
+│   └── ENDPOINTS.md     # エンドポイント一覧
+└── static-site/          # 静的サイト（環境選択画面）
 ```
 
 ## 🛠️ セットアップ
@@ -59,19 +71,32 @@ multicloud-auto-deploy/
 
 ### 技術スタック
 
-**🐍 Python Full Stack**
-- **IaC**: Pulumi (Python) / Terraform (HCL)
-- **Backend**: FastAPI 1.0+ 
-- **Frontend**: Reflex 0.8+ (Pure Python, no JavaScript/React)
-- **Database**: DynamoDB / Cosmos DB / Firestore
-- **Storage**: S3 / Azure Blob / Cloud Storage / MinIO (local)
+**Frontend**
+- **Framework**: React 18+ (Vite)
+- **Hosting**: Static Site (S3 / Azure Blob / Cloud Storage)
+- **CDN**: CloudFront / Azure Front Door / Cloud CDN
+- **Build**: Vite 7.3+, TypeScript
+
+**Backend**
+- **Framework**: FastAPI 1.0+ (Python 3.12)
+- **AWS**: Lambda (x86_64) + API Gateway v2 (HTTP)
+- **Azure**: Azure Functions (Python)
+- **GCP**: Cloud Run (Docker)
+
+**Database**
+- **AWS**: DynamoDB (PAY_PER_REQUEST)
+- **Azure**: Cosmos DB (Serverless)
+- **GCP**: Firestore (Native Mode)
 
 **Infrastructure**
-- Pulumi 3.0+ / Terraform 1.14+
-- AWS Lambda (x86_64) / Azure Container Apps / Cloud Run
-- API Gateway v2 (HTTP)
-- S3 + CloudFront
-- DynamoDB
+- **IaC**: Terraform 1.14+ / Pulumi 3.0+
+  - Terraform: 手動構築環境（`infrastructure/terraform/`）
+  - Pulumi: Infrastructure as Code管理（`infrastructure/pulumi/`）
+    - AWS: CloudFront + Lambda + API Gateway
+    - Azure: Front Door + Functions + Cosmos DB  
+    - GCP: Cloud CDN + Cloud Run + Firestore
+- **CI/CD**: GitHub Actions
+- **CDN**: CloudFront / Azure Front Door / Cloud CDN
 
 **CI/CD**
 - GitHub Actions
@@ -91,13 +116,17 @@ cd multicloud-auto-deploy
 
 2. **ローカル開発環境起動**
 ```bash
-# Python Full Stack（FastAPI + Reflex + MinIO）
-docker-compose up -d api frontend_reflex minio
+# バックエンド（FastAPI）
+docker-compose up -d api
+
+# フロントエンド（React）
+cd services/frontend_react
+npm install
+npm run dev
 
 # アクセス先:
-# - Reflex Frontend: http://localhost:3002
+# - React Frontend: http://localhost:5173
 # - FastAPI API Docs: http://localhost:8000/docs
-# - MinIO Console: http://localhost:9001 (admin/minioadmin)
 ```
 
 3. **Pulumiでデプロイ**
@@ -148,10 +177,11 @@ cp .env.example .env
 ### 必読ガイド
 - 📖 [セットアップガイド](docs/SETUP.md) - 初期セットアップ手順
 - 🚀 [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定
-- ✅ [CI/CDテスト結果](docs/CICD_TEST_RESULTS.md) - パイプライン検証レポート ⭐ NEW
+- ✅ [CI/CDテスト結果](docs/CICD_TEST_RESULTS.md) - パイプライン検証レポート
 - 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策
 - 🌐 [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のエンドポイント情報
-- 📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集 ⭐ NEW
+- 🌍 [CDNセットアップガイド](docs/CDN_SETUP.md) - CloudFront/Front Door/Cloud CDN設定 🆕
+- 📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
 
 ### プロバイダー別デプロイ
 - [AWS デプロイ](docs/AWS_DEPLOYMENT.md)
@@ -236,32 +266,28 @@ Actions > Deploy to Multi-Cloud > Run workflow
 ## 🏗️ サポートされるアーキテクチャ
 
 ### AWS (ap-northeast-1) ✅ 運用中
-- **Frontend**: S3 (Static Hosting) + CloudFront (CDN)
-- **Backend**: Lambda (Python 3.12, x86_64) + API Gateway v2 (HTTP)
-- **Database**: DynamoDB
-- **Auth**: Cognito (予定)
+- **Frontend**: S3 + CloudFront (CDN)
+- **Backend**: Lambda (Python 3.12) + API Gateway v2
+- **Database**: DynamoDB (PAY_PER_REQUEST)
 - **Infrastructure**: Terraform 1.14.5
-- **Deployment**: GitHub Actions (S3-based Lambda deployment)
+- **Deployment**: GitHub Actions
+- **CDN**: CloudFront Distribution (E2GDU7Y7UGDV3S)
 
 ### Azure (japaneast) ✅ 運用中
-- **Frontend**: Container Apps (Reflex - Pure Python) 🆕
-- **Backend**: Container Apps (FastAPI) 🆕
-- **Database**: Cosmos DB / Azure SQL
-- **Storage**: Azure Blob Storage
-- **Auth**: Azure AD B2C (予定)
-- **Infrastructure**: Pulumi / Terraform
-- **Deployment**: GitHub Actions (Azure Container Registry)
-- **Container Registry**: Azure Container Registry (ACR)
+- **Frontend**: Blob Storage ($web) + Azure Front Door
+- **Backend**: Azure Functions (Python 3.12)
+- **Database**: Cosmos DB (Serverless)
+- **Infrastructure**: Terraform / Azure CLI
+- **Deployment**: GitHub Actions
+- **CDN**: Azure Front Door (Standard)
 
 ### GCP (asia-northeast1) ✅ 運用中
-- **Frontend**: Cloud Run (Reflex - Pure Python) 🆕
-- **Backend**: Cloud Run (FastAPI) 🆕
-- **Database**: Firestore / Cloud SQL
-- **Storage**: Cloud Storage
-- **Auth**: Firebase Auth (予定)
-- **Infrastructure**: Pulumi / Terraform
+- **Frontend**: Cloud Storage + Cloud CDN (Load Balancer)
+- **Backend**: Cloud Run (FastAPI, Docker)
+- **Database**: Firestore (Native Mode)
+- **Infrastructure**: gcloud CLI / Terraform
 - **Deployment**: GitHub Actions (Artifact Registry)
-- **Container Registry**: Artifact Registry
+- **CDN**: Cloud CDN (Global HTTP Load Balancer)
 
 ## 🛠️ 開発ツール
 

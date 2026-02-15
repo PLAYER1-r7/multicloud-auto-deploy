@@ -11,14 +11,14 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # エンドポイント定義
-AWS_API="https://52z731x570.execute-api.ap-northeast-1.amazonaws.com"
+AWS_API="https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com"
 AWS_FRONTEND="https://dx3l4mbwg1ade.cloudfront.net"
 
-AZURE_API="https://mcad-staging-api--0000004.livelycoast-fa9d3350.japaneast.azurecontainerapps.io"
-AZURE_FRONTEND="https://multicloud-auto-deploy-staging-endpoint-deezaegrhyfzgsav.z01.azurefd.net"
+AZURE_API="https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger"
+AZURE_FRONTEND="https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net"
 
-GCP_API="https://mcad-staging-api-son5b3ml7a-an.a.run.app"
-GCP_FRONTEND="http://34.117.111.182"
+GCP_API="https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app"
+GCP_FRONTEND="http://34.120.43.83"
 
 # ヘルパー関数
 print_header() {

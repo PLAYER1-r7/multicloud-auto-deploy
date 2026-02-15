@@ -1,15 +1,38 @@
-# AWS Lambda + API Gateway クイックリファレンス
+# クイックリファレンス
 
-このドキュメントは、Lambda + API Gatewayの運用で頻繁に使用するコマンドをまとめたものです。
+AWS/Azure/GCP マルチクラウド環境の運用で頻繁に使用するコマンドをまとめたものです。
 
 ## 📋 目次
 
+- [エンドポイント一覧](#エンドポイント一覧)
 - [デプロイ](#デプロイ)
 - [テストとデバッグ](#テストとデバッグ)
 - [ログ確認](#ログ確認)
 - [監視とメトリクス](#監視とメトリクス)
 - [トラブルシューティング](#トラブルシューティング)
 - [リソース管理](#リソース管理)
+
+---
+
+## エンドポイント一覧
+
+### AWS
+```bash
+API: https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
+CDN: https://dx3l4mbwg1ade.cloudfront.net
+```
+
+### Azure
+```bash
+API: https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger
+CDN: https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net
+```
+
+### GCP
+```bash
+API: https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app
+CDN: http://34.120.43.83
+```
 
 ---
 

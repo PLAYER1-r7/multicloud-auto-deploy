@@ -9,6 +9,7 @@ Architecture:
 
 Cost: ~$2-5/month for low traffic
 """
+
 import json
 import pulumi
 import pulumi_aws as aws
@@ -33,16 +34,18 @@ common_tags = {
 lambda_role = aws.iam.Role(
     "lambda-role",
     name=f"{project_name}-{stack}-lambda-role",
-    assume_role_policy=json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [{
-            "Action": "sts:AssumeRole",
-            "Principal": {
-                "Service": "lambda.amazonaws.com"
-            },
-            "Effect": "Allow",
-        }]
-    }),
+    assume_role_policy=json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Principal": {"Service": "lambda.amazonaws.com"},
+                    "Effect": "Allow",
+                }
+            ],
+        }
+    ),
     tags=common_tags,
 )
 
@@ -56,32 +59,42 @@ aws.iam.RolePolicyAttachment(
 # ========================================
 # Lambda Function (FastAPI with Mangum)
 # ========================================
-# Note: ZIP file must be created in GitHub Actions workflow
-# using: pip install -r requirements.txt -t package/ && zip -r function.zip
+# Note: Lambda function code is deployed separately using deploy-lambda-aws.sh script
+# Pulumi manages the function configuration, but not the code itself
+
+# Create a minimal placeholder Lambda function
+# The actual code will be deployed via CI/CD or deploy script
+import base64
+
+placeholder_code = """
+import json
+def handler(event, context):
+    return {
+        'statusCode': 200,
+        'body': json.dumps({'message': 'Please deploy actual code using deploy-lambda-aws.sh'})
+    }
+"""
 
 lambda_function = aws.lambda_.Function(
     "api-function",
     name=f"{project_name}-{stack}-api",
     runtime="python3.12",
-    handler="handler.handler",  # handler.py の handler 関数
+    handler="index.handler",
     role=lambda_role.arn,
     memory_size=512,
     timeout=30,
     architectures=["x86_64"],
-    
-    # Code will be uploaded separately via S3 or directly
-    # This is a placeholder - actual deployment via workflow
-    code=pulumi.AssetArchive({
-        ".": pulumi.FileArchive("../../../services/api")  # Temporary
-    }),
-    
+    # Use inline code or skip code updates
+    # Code will be uploaded separately via deploy-lambda-aws.sh
+    code=pulumi.AssetArchive({"index.py": pulumi.StringAsset(placeholder_code)}),
+    # Skip code updates if function already exists
+    opts=pulumi.ResourceOptions(ignore_changes=["code", "source_code_hash"]),
     environment={
         "variables": {
             "ENVIRONMENT": stack,
             "CLOUD_PROVIDER": "aws",
         }
     },
-    
     tags=common_tags,
 )
 
@@ -95,7 +108,7 @@ lambda_url = aws.lambda_.FunctionUrl(
         "allow_methods": ["*"],
         "allow_headers": ["*"],
         "max_age": 3600,
-    }
+    },
 )
 
 # Alternative: API Gateway HTTP API v2 (more features)
@@ -174,16 +187,22 @@ frontend_public_access = aws.s3.BucketPublicAccessBlock(
 frontend_bucket_policy = aws.s3.BucketPolicy(
     "frontend-bucket-policy",
     bucket=frontend_bucket.id,
-    policy=frontend_bucket.arn.apply(lambda arn: json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [{
-            "Sid": "PublicReadGetObject",
-            "Effect": "Allow",
-            "Principal": "*",
-            "Action": "s3:GetObject",
-            "Resource": f"{arn}/*"
-        }]
-    })),
+    policy=frontend_bucket.arn.apply(
+        lambda arn: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "PublicReadGetObject",
+                        "Effect": "Allow",
+                        "Principal": "*",
+                        "Action": "s3:GetObject",
+                        "Resource": f"{arn}/*",
+                    }
+                ],
+            }
+        )
+    ),
     opts=pulumi.ResourceOptions(depends_on=[frontend_public_access]),
 )
 
@@ -199,6 +218,102 @@ aws.s3.BucketWebsiteConfigurationV2(
     },
 )
 
+# ========================================
+# CloudFront Distribution for Frontend
+# ========================================
+# CloudFront Origin Access Identity (OAI) for S3 access
+cloudfront_oai = aws.cloudfront.OriginAccessIdentity(
+    "cloudfront-oai",
+    comment=f"{project_name}-{stack} CloudFront OAI",
+)
+
+# Update S3 bucket policy to allow CloudFront OAI access
+cloudfront_bucket_policy = aws.s3.BucketPolicy(
+    "cloudfront-bucket-policy",
+    bucket=frontend_bucket.id,
+    policy=pulumi.Output.all(frontend_bucket.arn, cloudfront_oai.iam_arn).apply(
+        lambda args: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "PublicReadGetObject",
+                        "Effect": "Allow",
+                        "Principal": "*",
+                        "Action": "s3:GetObject",
+                        "Resource": f"{args[0]}/*",
+                    },
+                    {
+                        "Sid": "CloudFrontOAIAccess",
+                        "Effect": "Allow",
+                        "Principal": {"AWS": args[1]},
+                        "Action": "s3:GetObject",
+                        "Resource": f"{args[0]}/*",
+                    },
+                ],
+            }
+        )
+    ),
+    opts=pulumi.ResourceOptions(
+        depends_on=[frontend_public_access], replace_on_changes=["bucket"]
+    ),
+)
+
+# CloudFront Distribution
+cloudfront_distribution = aws.cloudfront.Distribution(
+    "cloudfront-distribution",
+    enabled=True,
+    is_ipv6_enabled=True,
+    comment=f"{project_name}-{stack} Frontend Distribution",
+    default_root_object="index.html",
+    origins=[
+        aws.cloudfront.DistributionOriginArgs(
+            origin_id=frontend_bucket.bucket_regional_domain_name,
+            domain_name=frontend_bucket.bucket_regional_domain_name,
+            s3_origin_config=aws.cloudfront.DistributionOriginS3OriginConfigArgs(
+                origin_access_identity=cloudfront_oai.cloudfront_access_identity_path,
+            ),
+        )
+    ],
+    default_cache_behavior=aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
+        target_origin_id=frontend_bucket.bucket_regional_domain_name,
+        viewer_protocol_policy="redirect-to-https",
+        allowed_methods=["GET", "HEAD", "OPTIONS"],
+        cached_methods=["GET", "HEAD"],
+        compress=True,
+        forwarded_values=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
+            query_string=False,
+            cookies=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs(
+                forward="none",
+            ),
+        ),
+        min_ttl=0,
+        default_ttl=3600,  # 1 hour
+        max_ttl=86400,  # 24 hours
+    ),
+    # Custom error response for SPA routing
+    custom_error_responses=[
+        aws.cloudfront.DistributionCustomErrorResponseArgs(
+            error_code=403,
+            response_code=200,
+            response_page_path="/index.html",
+        ),
+        aws.cloudfront.DistributionCustomErrorResponseArgs(
+            error_code=404,
+            response_code=200,
+            response_page_path="/index.html",
+        ),
+    ],
+    restrictions=aws.cloudfront.DistributionRestrictionsArgs(
+        geo_restriction=aws.cloudfront.DistributionRestrictionsGeoRestrictionArgs(
+            restriction_type="none",
+        ),
+    ),
+    viewer_certificate=aws.cloudfront.DistributionViewerCertificateArgs(
+        cloudfront_default_certificate=True,
+    ),
+    tags=common_tags,
+)
 
 # ========================================
 # Outputs
@@ -210,14 +325,23 @@ pulumi.export("api_gateway_id", api_gateway.id)
 pulumi.export("api_gateway_endpoint", api_gateway.api_endpoint)
 pulumi.export("api_url", api_gateway.api_endpoint)  # For workflow
 pulumi.export("frontend_bucket_name", frontend_bucket.id)
-pulumi.export("frontend_url", frontend_bucket.website_endpoint.apply(
-    lambda endpoint: f"http://{endpoint}"
-))
+pulumi.export(
+    "frontend_url",
+    frontend_bucket.website_endpoint.apply(lambda endpoint: f"http://{endpoint}"),
+)
+pulumi.export("cloudfront_distribution_id", cloudfront_distribution.id)
+pulumi.export("cloudfront_domain", cloudfront_distribution.domain_name)
+pulumi.export(
+    "cloudfront_url",
+    cloudfront_distribution.domain_name.apply(lambda domain: f"https://{domain}"),
+)
 
 # Cost estimation
-pulumi.export("cost_estimate", 
+pulumi.export(
+    "cost_estimate",
     "AWS Lambda: 1M free requests/month, then $0.20 per 1M requests. "
     "API Gateway: $1 per million requests. "
     "S3: $0.023/GB/month. "
-    "Estimated: $2-5/month for low traffic."
+    "CloudFront: $0.085/GB for first 10TB/month (free tier: 1TB/month for 12 months). "
+    "Estimated: $2-10/month for low traffic.",
 )
