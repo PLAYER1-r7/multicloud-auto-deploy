@@ -152,6 +152,33 @@ jobs:
           
           echo "🚀 Deploying to Function App: $FUNCTION_APP"
           
+          # Check for ongoing deployments and wait if necessary
+          echo "🔍 Checking for ongoing deployments..."
+          MAX_WAIT=300  # 5 minutes max wait
+          WAIT_COUNT=0
+          while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+            # Get deployment status from Kudu API
+            DEPLOY_STATUS=$(az rest --method get \
+              --url "https://${FUNCTION_APP}.scm.azurewebsites.net/api/deployments/latest" \
+              --resource "https://management.azure.com/" \
+              --query "status" -o tsv 2>/dev/null || echo "Unknown")
+            
+            if [ "$DEPLOY_STATUS" = "Running" ] || [ "$DEPLOY_STATUS" = "Building" ]; then
+              echo "⏳ Deployment in progress (status: $DEPLOY_STATUS), waiting 30s..."
+              sleep 30
+              WAIT_COUNT=$((WAIT_COUNT+30))
+            else
+              echo "✅ No ongoing deployment detected"
+              break
+            fi
+          done
+          
+          if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
+            echo "⚠️  Timeout waiting for previous deployment, proceeding anyway..."
+          fi
+          
+          sleep 10  # Additional safety buffer
+          
           # Get Cosmos DB endpoint and keys directly from the resource
           echo "🔑 Getting Cosmos DB credentials..."
           COSMOS_ENDPOINT=$(az cosmosdb show \
@@ -204,7 +231,15 @@ jobs:
               --timeout 600 \
               2>&1 | tee deploy_log.txt || true
             
-            # Check for critical errors (not "partially successful")
+            # Check for "another deployment in progress" error (retry with longer wait)
+            if grep -q "another deployment is in progress" deploy_log.txt; then
+              echo "⏳ Another deployment in progress, waiting 60s before retry..."
+              RETRY_COUNT=$((RETRY_COUNT+1))
+              sleep 60
+              continue
+            fi
+            
+            # Check for Kudu restart
             if grep -q "Kudu has been restarted" deploy_log.txt; then
               echo "🔄 Kudu restart detected, retrying..."
               RETRY_COUNT=$((RETRY_COUNT+1))
@@ -224,8 +259,10 @@ jobs:
               echo "✅ Deployment steps completed!"
               DEPLOY_SUCCESS=true
               break
-            # 3. Critical error (but not "partially successful")
-            elif grep -q "ERROR:" deploy_log.txt && ! grep -q "partially successful" deploy_log.txt; then
+            # 3. Critical error (but not "partially successful" or "in progress")
+            elif grep -q "ERROR:" deploy_log.txt && \
+                 ! grep -q "partially successful" deploy_log.txt && \
+                 ! grep -q "another deployment is in progress" deploy_log.txt; then
               echo "❌ Critical deployment error"
               cat deploy_log.txt
               exit 1
