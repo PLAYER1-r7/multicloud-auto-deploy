@@ -98,7 +98,16 @@
 
 % Better list spacing
 \usepackage{enumitem}
-\setlist{itemsep=0.5em}
+\setlist{nosep,leftmargin=*,itemsep=0.3em,parsep=0.2em,topsep=0.5em,partopsep=0em}
+\setlist[itemize,1]{label=\textbullet,leftmargin=1.5em}
+\setlist[itemize,2]{label=\textendash,leftmargin=2em}
+\setlist[enumerate]{leftmargin=1.5em}
+
+% Redefine tightlist to add spacing
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0.3em}%
+  \setlength{\parskip}{0.2em}%
+}
 
 % Graphics support
 \usepackage{graphicx}
