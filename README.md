@@ -45,8 +45,8 @@
 - **マルチクラウド対応**: AWS、Azure、GCPに対応
 - **フルスタック**: フロントエンド、バックエンド、データベースの完全なスタック
 - **自動デプロイ**: GitHub Actionsによる完全自動化
-- **IaC統合**: TerraformとPulumiの両方に対応 🆕
-- **完全Python版**: Pulumi + FastAPI + Reflexによる統一スタック 🆕
+- **IaC統合**: Pulumi 3.0+による Infrastructure as Code
+- **完全Python版**: Pulumi + FastAPI + Reflexによる統一スタック
 - **CI/CD**: プッシュやPRで自動的にビルド・デプロイ
 - **簡単セットアップ**: スクリプト一つで環境構築
 
@@ -56,7 +56,6 @@
 multicloud-auto-deploy/
 ├── .github/workflows/     # GitHub Actionsワークフロー
 ├── infrastructure/        # インフラストラクチャコード
-│   ├── terraform/        # Terraformコード（AWS/Azure/GCP）
 │   └── pulumi/           # Pulumiコード（Python - AWS/Azure/GCP）
 ├── services/             # アプリケーションコード
 │   ├── api/              # FastAPI バックエンド（Python 3.12）
@@ -75,7 +74,7 @@ multicloud-auto-deploy/
 
 - Python 3.12+
 - Docker & Docker Compose
-- Pulumi 3.0+ または Terraform 1.5+
+- Pulumi 3.0+
 - AWS CLI 2.x / Azure CLI 2.x / gcloud CLI 556.0+
 - GitHub アカウント
 
@@ -99,14 +98,12 @@ multicloud-auto-deploy/
 - **GCP**: Firestore (Native Mode)
 
 **Infrastructure**
-- **IaC**: Terraform 1.14+ / Pulumi 3.0+
-  - Terraform: 手動構築環境（`infrastructure/terraform/`）
-  - Pulumi: Infrastructure as Code管理（`infrastructure/pulumi/`）
-    - AWS: CloudFront + Lambda + API Gateway
-    - Azure: Front Door + Functions + Cosmos DB  
-    - GCP: Cloud CDN + Cloud Run + Firestore
+- **IaC**: Pulumi 3.0+
+  - Infrastructure as Code管理（`infrastructure/pulumi/`）
+    - AWS: Lambda + API Gateway
+    - Azure: Functions + Cosmos DB  
+    - GCP: Cloud Functions
 - **CI/CD**: GitHub Actions
-- **CDN**: CloudFront / Azure Front Door / Cloud CDN
 
 **CI/CD**
 - GitHub Actions
@@ -151,7 +148,7 @@ pulumi up
 
 > 📚 詳細な移行ガイドは [docs/PYTHON_MIGRATION.md](docs/PYTHON_MIGRATION.md) を参照
 
-#### Terraform版
+### クイックスタート
 
 1. **リポジトリをクローン**
 ```bash
@@ -159,27 +156,15 @@ git clone https://github.com/PLAYER1-r7/multicloud-auto-deploy.git
 cd multicloud-auto-deploy
 ```
 
-2. **環境変数を設定**
+2. **GitHub Secretsを設定**
 ```bash
-cp .env.example .env
-# .envファイルを編集して認証情報を設定
+./scripts/setup-github-secrets.sh
 ```
 
-3. **クラウドプロバイダー別デプロイ**
-
-#### AWS
+3. **コードをプッシュして自動デプロイ**
 ```bash
-./scripts/deploy-aws.sh
-```
-
-#### Azure
-```bash
-./scripts/deploy-azure.sh
-```
-
-#### GCP
-```bash
-./scripts/deploy-gcp.sh
+git push origin main
+# GitHub Actionsが自動的にデプロイを実行
 ```
 
 ## 📚 ドキュメント
@@ -213,10 +198,9 @@ cp .env.example .env
 
 | ワークフロー | トリガー | デプロイ先 | 説明 |
 |------------|---------|-----------|------|
-| **deploy-multicloud.yml** | `main`へのpush / 手動 | Azure + GCP | Container Apps/Cloud Runへの統合デプロイ 🆕 |
-| **deploy-aws.yml** | `main`へのpush / 手動 | AWS Lambda | Lambda関数の更新 |
-| **deploy-azure.yml** | `main`へのpush / 手動 | Azure | Terraform使用 |
-| **deploy-gcp.yml** | `main`へのpush / 手動 | GCP | Terraform使用 |
+| **deploy-aws.yml** | `main`へのpush / 手動 | AWS Lambda | Lambda + API Gateway更新 |
+| **deploy-azure.yml** | `main`へのpush / 手動 | Azure Functions | Functions + Cosmos DB更新 |
+| **deploy-gcp.yml** | `main`へのpush / 手動 | GCP Cloud Functions | Cloud Functions更新 |
 
 ### マルチクラウドデプロイフロー 🆕
 
@@ -273,28 +257,26 @@ Actions > Deploy to Multi-Cloud > Run workflow
 ## 🏗️ サポートされるアーキテクチャ
 
 ### AWS (ap-northeast-1) ✅ 運用中
-- **Frontend**: S3 + CloudFront (CDN)
+- **Frontend**: S3 Static Website Hosting
 - **Backend**: Lambda (Python 3.12) + API Gateway v2
 - **Database**: DynamoDB (PAY_PER_REQUEST)
-- **Infrastructure**: Terraform 1.14.5
+- **Infrastructure**: Pulumi 3.0+
 - **Deployment**: GitHub Actions
-- **CDN**: CloudFront Distribution (E2GDU7Y7UGDV3S)
 
 ### Azure (japaneast) ✅ 運用中
 - **Frontend**: Blob Storage ($web) + Azure Front Door
 - **Backend**: Azure Functions (Python 3.12)
 - **Database**: Cosmos DB (Serverless)
-- **Infrastructure**: Terraform / Azure CLI
+- **Infrastructure**: Pulumi 3.0+
 - **Deployment**: GitHub Actions
 - **CDN**: Azure Front Door (Standard)
 
 ### GCP (asia-northeast1) ✅ 運用中
-- **Frontend**: Cloud Storage + Cloud CDN (Load Balancer)
-- **Backend**: Cloud Run (FastAPI, Docker)
+- **Frontend**: Cloud Storage Static Website
+- **Backend**: Cloud Functions (Python 3.12)
 - **Database**: Firestore (Native Mode)
-- **Infrastructure**: gcloud CLI / Terraform
-- **Deployment**: GitHub Actions (Artifact Registry)
-- **CDN**: Cloud CDN (Global HTTP Load Balancer)
+- **Infrastructure**: Pulumi 3.0+
+- **Deployment**: GitHub Actions
 
 ## 🛠️ 開発ツール
 
@@ -332,8 +314,8 @@ make build-frontend  # フロントエンドをビルド
 make build-backend   # Lambda パッケージを作成
 make test-all        # 全クラウドのデプロイメントをテスト
 make deploy-aws      # AWSへデプロイ
-make terraform-init  # Terraform初期化
-make terraform-apply # Terraformリソースを適用
+make pulumi-preview  # Pulumi変更プレビュー
+make pulumi-up       # Pulumiスタック適用
 make clean           # ビルド成果物を削除
 ```
 
@@ -343,14 +325,14 @@ VS Codeの Dev Containerに対応しています：
 
 ```bash
 # 必要なツールが全てプリインストール
-- Terraform 1.7.5
+- Pulumi 3.x
 - Node.js 18
 - Python 3.12
 - AWS CLI, Azure CLI, gcloud CLI
 - Docker in Docker
 
 # 便利なエイリアス
-tf              # terraform
+pulumi          # Pulumi CLI
 deploy-aws      # AWS環境にデプロイ
 deploy-azure    # Azure環境にデプロイ  
 deploy-gcp      # GCP環境にデプロイ
@@ -368,7 +350,7 @@ test-all        # 全エンドポイントテスト
 - ✅ インストール済みツールの確認
 - ✅ クラウドプロバイダー認証状態
 - ✅ デプロイメントエンドポイントのテスト
-- ✅ Terraformリソース状態の確認
+- ✅ Pulumiスタック状態の確認
 
 ## 🧪 テストとデバッグ
 
@@ -649,7 +631,7 @@ aws backup create-backup-selection \
 
 問題が発生した場合は [トラブルシューティングガイド](docs/TROUBLESHOOTING.md) を参照してください：
 
-- Azure認証問題（Service Principal、Terraform Wrapper等）
+- Azure認証問題（Service Principal、Pulumi Provider等）
 - GCPリソース競合（State管理、リソースインポート）
 - フロントエンドAPI接続問題（ビルド順序、API URL設定）
 - 権限エラー（IAM、RBAC設定）
