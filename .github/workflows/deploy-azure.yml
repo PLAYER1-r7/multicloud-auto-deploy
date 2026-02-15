@@ -104,14 +104,23 @@ jobs:
         run: |
           cd services/api
           
-          echo "📦 Creating deployment package..."
+          echo "📦 Creating optimized deployment package..."
           
           # Create deployment directory
           rm -rf .deployment
           mkdir -p .deployment
           
           # Install dependencies to deployment directory
-          pip install --target .deployment -r requirements.txt
+          echo "Installing dependencies..."
+          pip install --target .deployment --no-cache-dir -r requirements.txt
+          
+          # Clean up unnecessary files from dependencies
+          echo "Cleaning up unnecessary files..."
+          find .deployment -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
+          find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
+          find .deployment -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
           
           # Copy application code
           cp -r app .deployment/
@@ -119,13 +128,17 @@ jobs:
           cp host.json .deployment/
           cp requirements.txt .deployment/
           
+          # Clean up app __pycache__
+          find .deployment/app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          
           # Create ZIP package
           cd .deployment
-          zip -r ../function-app.zip .
+          zip -r -q ../function-app.zip .
           cd ..
           
           echo "✅ Package created:"
           ls -lh function-app.zip
+          echo "Package size: $(du -h function-app.zip | cut -f1)"
 
       - name: Deploy Function App
         run: | 
@@ -169,12 +182,52 @@ jobs:
               AZURE_COSMOS_CONTAINER=messages \
             > /dev/null
           
-          echo "📦 Deploying function app package..."
-          az functionapp deployment source config-zip \
-            --resource-group $RESOURCE_GROUP \
-            --name $FUNCTION_APP \
-            --src services/api/function-app.zip \
-            --timeout 600
+          echo "📦 Deploying function app package (with retry logic)..."
+          
+          # Retry deployment up to 3 times to handle Kudu restarts
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          DEPLOY_SUCCESS=false
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
+            
+            if az functionapp deployment source config-zip \
+              --resource-group $RESOURCE_GROUP \
+              --name $FUNCTION_APP \
+              --src services/api/function-app.zip \
+              --timeout 600 \
+              2>&1 | tee deploy_log.txt; then
+              
+              # Check if deployment was actually successful
+              if ! grep -q "ERROR:" deploy_log.txt; then
+                DEPLOY_SUCCESS=true
+                echo "✅ Deployment successful!"
+                break
+              else
+                echo "⚠️  Deployment reported error, checking if it's a transient issue..."
+                # Check if it's a Kudu restart error
+                if grep -q "Kudu has been restarted" deploy_log.txt; then
+                  echo "🔄 Kudu restart detected, retrying..."
+                  RETRY_COUNT=$((RETRY_COUNT+1))
+                  sleep 30  # Wait for Kudu to stabilize
+                else
+                  echo "❌ Non-transient error detected"
+                  cat deploy_log.txt
+                  exit 1
+                fi
+              fi
+            else
+              echo "⚠️  Deployment command failed, retrying..."
+              RETRY_COUNT=$((RETRY_COUNT+1))
+              sleep 30
+            fi
+          done
+          
+          if [ "$DEPLOY_SUCCESS" = false ]; then
+            echo "❌ Deployment failed after $MAX_RETRIES attempts"
+            exit 1
+          fi
 
       - name: Build Frontend
         run: |
