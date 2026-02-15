@@ -1,4 +1,5 @@
 """AWS Lambda エントリーポイント"""
+
 from mangum import Mangum
 from app.main import app
 
