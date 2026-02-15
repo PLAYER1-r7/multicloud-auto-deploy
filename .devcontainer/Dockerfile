@@ -8,19 +8,26 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list && \
 
 # Install Python 3.11 alongside 3.12 for compatibility
 RUN apt-get update && \
-  apt-get install -y python3.11 python3.11-venv python3.11-dev && \
-  curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 && \
+  apt-get install -y python3.11 python3.11-venv python3.11-dev python3-pip && \
   apt-get clean && \
   rm -rf /var/lib/apt/lists/*
 
-# Install additional utilities for troubleshooting
+# Install utilities for troubleshooting and PDF generation
 RUN apt-get update && \
   apt-get install -y \
-    zip \
-    unzip \
-    tree \
-    htop \
-    ncdu \
-    netcat-openbsd \
+  zip \
+  unzip \
+  tree \
+  htop \
+  ncdu \
+  netcat-openbsd \
+  poppler-utils \
+  imagemagick \
+  pandoc \
+  texlive-xetex \
+  texlive-fonts-extra \
+  texlive-lang-cjk \
+  fonts-noto-cjk \
+  librsvg2-bin \
   && apt-get clean && \
   rm -rf /var/lib/apt/lists/*
