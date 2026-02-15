@@ -340,7 +340,13 @@ echo -e "${YELLOW}� Converting emojis to text...${NC}"
 convert_emojis "$MERGED_MD"
 
 echo ""
-echo -e "${YELLOW}�📄 Generating PDF with pandoc...${NC}"
+echo -e "${YELLOW}🔧 Fixing list formatting...${NC}"
+# Add blank line between bold text and immediately following list
+# This ensures Pandoc treats them as separate blocks
+perl -i -pe 'BEGIN{undef $/;} s/(\*\*[^\*]+\*\*[^\n]*)\n(- )/$1\n\n$2/g' "$MERGED_MD"
+
+echo ""
+echo -e "${YELLOW}📄 Generating PDF with pandoc...${NC}"
 echo ""
 
 # Generate PDF using pandoc with custom LaTeX settings
