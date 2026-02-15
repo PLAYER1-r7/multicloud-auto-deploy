@@ -114,7 +114,7 @@ sequenceDiagram
 - Lambda: CreateFunction, UpdateFunction, GetFunction
 - API Gateway: GET, POST, PUT, DELETE
 - DynamoDB: DescribeTable, GetItem, PutItem, DeleteItem, Scan
-- Terraform State: S3ベースのリモートステート管理
+- Pulumi State: S3ベースのリモートステート管理
 
 ## Azure アーキテクチャ
 
@@ -328,7 +328,7 @@ K_SERVICE → "GCP"
 
 | ツール | バージョン | 用途 |
 |-------|----------|------|
-| Terraform | 1.7.5 | IaC（Infrastructure as Code） |
+| Pulumi | 3.x | IaC（Infrastructure as Code） |
 | Docker | 24.0+ | コンテナ化 |
 | GitHub Actions | - | CI/CD |
 
@@ -361,7 +361,7 @@ K_SERVICE → "GCP"
 - **API Gateway**: パブリックアクセス（認証なし）
 
 #### Azure
-- **Service Principal**: terraform-deploy（Contributorロール）
+- **Service Principal**: pulumi-deploy（Contributorロール）
 - **Container App**: マネージドID
 - **Storage Account**: パブリック読み取り（静的サイト）
 
@@ -670,7 +670,7 @@ DELETE /api/messages/{id} - メッセージ削除
 3. **Test**: 
    - Frontend: `vitest`
    - Backend: `pytest`
-4. **Deploy Infrastructure**: Terraform/Pulumi
+4. **Deploy Infrastructure**: Pulumi
 5. **Deploy Application**: 
    - Frontend → S3/Storage
    - Backend → Lambda/Functions
@@ -678,26 +678,28 @@ DELETE /api/messages/{id} - メッセージ削除
 
 ## Infrastructure as Code
 
-### Terraform
-
-```hcl
-# 構造
-infrastructure/terraform/
-├── aws/
-│   ├── main.tf        # プロバイダー設定
-│   ├── frontend.tf    # S3 + CloudFront
-│   ├── backend.tf     # Lambda + API Gateway
-│   ├── database.tf    # DynamoDB
-│   ├── variables.tf   # 変数定義
-│   └── outputs.tf     # 出力値
-├── azure/
-└── gcp/
-```
-
 ### Pulumi
 
 ```python
 # Python SDKによるインフラ定義
+infrastructure/pulumi/
+├── aws/
+│   ├── __main__.py    # メインスタック
+│   ├── frontend.py    # S3 + CloudFront
+│   ├── backend.py     # Lambda + API Gateway
+│   ├── database.py    # DynamoDB
+│   └── Pulumi.yaml    # プロジェクト設定
+├── azure/
+│   ├── __main__.py    # メインスタック
+│   ├── frontend.py    # Storage Account + Front Door
+│   ├── backend.py     # Azure Functions
+│   └── database.py    # Cosmos DB
+└── gcp/
+    ├── __main__.py    # メインスタック
+    ├── frontend.py    # Cloud Storage + CDN
+    ├── backend.py     # Cloud Run
+    └── database.py    # Firestore
+
 import pulumi
 import pulumi_aws as aws
 

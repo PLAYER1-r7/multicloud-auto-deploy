@@ -20,10 +20,9 @@ Azure Container Appsを使用したマルチクラウド自動デプロイシス
 # Azure CLI
 curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
-# Terraform
-wget https://releases.hashicorp.com/terraform/1.7.5/terraform_1.7.5_linux_amd64.zip
-unzip terraform_1.7.5_linux_amd64.zip
-sudo mv terraform /usr/local/bin/
+# Pulumi
+curl -fsSL https://get.pulumi.com | sh
+export PATH=$PATH:$HOME/.pulumi/bin
 
 # Docker
 sudo apt-get update
@@ -45,7 +44,7 @@ az account set --subscription "YOUR_SUBSCRIPTION_ID"
 
 3. **Service Principalの作成**
 ```bash
-az ad sp create-for-rbac --name "terraform-deploy" \
+az ad sp create-for-rbac --name "pulumi-deploy" \
   --role Contributor \
   --scopes /subscriptions/YOUR_SUBSCRIPTION_ID
 ```
@@ -54,7 +53,7 @@ az ad sp create-for-rbac --name "terraform-deploy" \
 ```json
 {
   "appId": "00000000-0000-0000-0000-000000000000",
-  "displayName": "terraform-deploy",
+  "displayName": "pulumi-deploy",
   "password": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   "tenant": "00000000-0000-0000-0000-000000000000"
 }
@@ -71,21 +70,22 @@ export ARM_SUBSCRIPTION_ID="<subscription_id>"
 export ARM_TENANT_ID="<tenant>"
 ```
 
-### Step 2: Terraform初期化
+### Step 2: Pulumiスタックの初期化
 
 ```bash
-cd infrastructure/terraform/azure
-terraform init
+cd infrastructure/pulumi/azure
+pulumi stack init staging
+pulumi config set azure-native:location japaneast
+pulumi config set environment staging
 ```
 
 ### Step 3: インフラストラクチャのデプロイ
 
 ```bash
-terraform plan -var="environment=staging"
-terraform apply -var="environment=staging" -auto-approve
+pulumi up
 ```
 
-デプロイされるリソース（15個）：
+デプロイされるリソース：
 - Resource Group
 - Container Registry
 - Container Apps Environment

@@ -61,26 +61,23 @@ npm install
 VITE_API_URL="https://your-api-id.execute-api.us-east-1.amazonaws.com" npm run build
 ```
 
-#### ステップ2: Terraformでインフラ構築
+#### ステップ2: Pulumiでインフラ構築
 
 ```bash
-cd infrastructure/terraform/aws
+cd infrastructure/pulumi/aws
 
-# プレースホルダーLambdaの作成
-echo "print('placeholder')" > lambda_placeholder.py
-zip lambda_placeholder.zip lambda_placeholder.py
-rm lambda_placeholder.py
+# Pulumiスタックの初期化（初回のみ）
+pulumi stack init staging
 
-# Terraform実行
-terraform init
-terraform apply -var="environment=staging"
+# インフラをデプロイ
+pulumi up
 ```
 
 #### ステップ3: フロントエンドをS3にアップロード
 
 ```bash
-# Terraformの出力からバケット名を取得
-BUCKET_NAME=$(cd infrastructure/terraform/aws && terraform output -raw frontend_bucket_name)
+# Pulumiの出力からバケット名を取得
+BUCKET_NAME=$(cd infrastructure/pulumi/aws && pulumi stack output frontend_bucket_name)
 
 # アップロード
 aws s3 sync services/frontend/dist/ "s3://${BUCKET_NAME}/" --delete
@@ -96,7 +93,7 @@ cp -r src/* package/
 cd package && zip -r ../lambda.zip . && cd ..
 
 # デプロイ
-FUNCTION_NAME=$(cd ../../infrastructure/terraform/aws && terraform output -raw lambda_function_name)
+FUNCTION_NAME=$(cd ../../infrastructure/pulumi/aws && pulumi stack output lambda_function_name)
 aws lambda update-function-code \
     --function-name "$FUNCTION_NAME" \
     --zip-file fileb://lambda.zip
@@ -105,7 +102,7 @@ aws lambda update-function-code \
 #### ステップ5: CloudFrontキャッシュの無効化
 
 ```bash
-DISTRIBUTION_ID=$(cd infrastructure/terraform/aws && terraform output -raw cloudfront_distribution_id)
+DISTRIBUTION_ID=$(cd infrastructure/pulumi/aws && pulumi stack output cloudfront_distribution_id)
 aws cloudfront create-invalidation \
     --distribution-id "$DISTRIBUTION_ID" \
     --paths "/*"
@@ -157,14 +154,16 @@ aws acm request-certificate \
     --region us-east-1
 ```
 
-### 3. Terraformに追加
+### 3. Pulumiスタック設定に追加
 
-`terraform.tfvars`を作成：
+`Pulumi.staging.yaml`に設定を追加：
 
-```hcl
-domain_name = "app.example.com"
-certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."
-hosted_zone_id = "Z1234567890ABC"
+```yaml
+config:
+  aws:region: us-east-1
+  multicloud-auto-deploy:domain_name: app.example.com
+  multicloud-auto-deploy:certificate_arn: arn:aws:acm:us-east-1:123456789012:certificate/...
+  multicloud-auto-deploy:hosted_zone_id: Z1234567890ABC
 ```
 
 ## モニタリング
@@ -226,8 +225,8 @@ return {
 ## クリーンアップ
 
 ```bash
-cd infrastructure/terraform/aws
-terraform destroy -var="environment=staging"
+cd infrastructure/pulumi/aws
+pulumi destroy
 ```
 
 ## 次のステップ

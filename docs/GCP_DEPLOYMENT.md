@@ -21,10 +21,9 @@ Cloud Runを使用したマルチクラウド自動デプロイシステムの�
 curl https://sdk.cloud.google.com | bash
 exec -l $SHELL
 
-# Terraform
-wget https://releases.hashicorp.com/terraform/1.7.5/terraform_1.7.5_linux_amd64.zip
-unzip terraform_1.7.5_linux_amd64.zip
-sudo mv terraform /usr/local/bin/
+# Pulumi
+curl -fsSL https://get.pulumi.com | sh
+export PATH=$PATH:$HOME/.pulumi/bin
 
 # Docker
 sudo apt-get update
@@ -64,11 +63,13 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
 
 ## 🚀 デプロイ手順
 
-### Step 1: Terraform初期化
+### Step 1: Pulumiスタックの初期化
 
 ```bash
-cd infrastructure/terraform/gcp
-terraform init
+cd infrastructure/pulumi/gcp
+pulumi stack init staging
+pulumi config set gcp:project YOUR_PROJECT_ID
+pulumi config set environment staging
 ```
 
 ### Step 2: Artifact Registryの手動作成（権限不足の場合）
@@ -79,10 +80,6 @@ gcloud artifacts repositories create mcad-staging-repo \
   --repository-format=docker \
   --location=asia-northeast1 \
   --description="Multi-Cloud Auto Deploy Docker images"
-
-# Terraformにインポート
-terraform import google_artifact_registry_repository.main \
-  projects/YOUR_PROJECT_ID/locations/asia-northeast1/repositories/mcad-staging-repo
 ```
 
 ### Step 3: Firestoreの手動作成（権限不足の場合）
@@ -90,20 +87,15 @@ terraform import google_artifact_registry_repository.main \
 ```bash
 # Firestoreデータベースの作成（Nativeモード）
 gcloud firestore databases create --location=asia-northeast1
-
-# Terraformにインポート
-terraform import google_firestore_database.main \
-  projects/YOUR_PROJECT_ID/databases/(default)
 ```
 
 ### Step 4: インフラストラクチャのデプロイ
 
 ```bash
-terraform plan -var="project_id=YOUR_PROJECT_ID" -var="environment=staging"
-terraform apply -var="project_id=YOUR_PROJECT_ID" -var="environment=staging" -auto-approve
+pulumi up
 ```
 
-デプロイされるリソース（11個）：
+デプロイされるリソース：
 - Cloud Storage Bucket (Frontend)
 - Artifact Registry Repository
 - Cloud Run Service (Backend)
@@ -135,8 +127,8 @@ docker push asia-northeast1-docker.pkg.dev/YOUR_PROJECT_ID/mcad-staging-repo/mul
 
 ```bash
 # Cloud Runサービスを再デプロイ（新しいイメージを使用）
-cd ../../infrastructure/terraform/gcp
-terraform apply -var="project_id=YOUR_PROJECT_ID" -var="environment=staging" -auto-approve
+cd ../../infrastructure/pulumi/gcp
+pulumi up
 ```
 
 ### Step 7: Cloud Run IAMの設定（手動）

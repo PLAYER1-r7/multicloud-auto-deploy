@@ -18,7 +18,7 @@ GitHub Actionsによる自動デプロイの設定ガイド
 
 - **自動デプロイ**: `main`ブランチへのプッシュ時
 - **手動デプロイ**: GitHub Actions UIからワークフロー実行時
-- **対象パス**: `services/**`または`infrastructure/terraform/**`の変更時
+- **対象パス**: `services/**`または`infrastructure/pulumi/**`の変更時
 
 ## GitHub Secrets設定
 
@@ -130,7 +130,7 @@ az role assignment create \
 #   --scope $(az acr show --name mcadstagingacr --query id --output tsv)
 ```
 
-**注意**: 現在のワークフローでは、ACRの名前はTerraform出力から自動的に取得されるため、`AZURE_ACR_LOGIN_SERVER`は必須ではありません。直接ACRを指定したい場合のオプションです。
+**注意**: 現在のワークフローでは、ACRの名前はPulumi出力から自動的に取得されるため、`AZURE_ACR_LOGIN_SERVER`は必須ではありません。直接ACRを指定したい場合のオプションです。
 
 ---
 
@@ -215,7 +215,7 @@ gcloud iam service-accounts keys create key.json \
 ### AWS デプロイ (deploy-aws.yml)
 
 **トリガー**:
-- `main`ブランチへのプッシュ（`services/**`または`infrastructure/terraform/aws/**`の変更）
+- `main`ブランチへのプッシュ（`services/**`または`infrastructure/pulumi/aws/**`の変更）
 - 手動実行
 
 **ステップ**:
@@ -231,16 +231,15 @@ gcloud iam service-accounts keys create key.json \
 ### Azure デプロイ (deploy-azure.yml)
 
 **トリガー**:
-- `main`ブランチへのプッシュ（`services/**`または`infrastructure/terraform/azure/**`の変更）
+- `main`ブランチへのプッシュ（`services/**`または`infrastructure/pulumi/azure/**`の変更）
 - 手動実行
 
 **ステップ**:
 1. Azureログイン
-2. Node.js・Python・Terraformのセットアップ
+2. Node.js・Python・Pulumiのセットアップ
 3. フロントエンドのビルド
-4. Terraformでインフラデプロイ
-5. Dockerイメージのビルドとプッシュ
-6. Container Appの更新
+4. Pulumiでインフラデプロイ
+5. DockerイメージのビルドとプッシュContainer App の更新
 7. フロントエンドのStorage Accountへのアップロード
 8. 成功/失敗通知
 
@@ -251,13 +250,13 @@ gcloud iam service-accounts keys create key.json \
 ### GCP デプロイ (deploy-gcp.yml)
 
 **トリガー**:
-- `main`ブランチへのプッシュ（`services/**`または`infrastructure/terraform/gcp/**`の変更）
+- `main`ブランチへのプッシュ（`services/**`または`infrastructure/pulumi/gcp/**`の変更）
 - 手動実行
 
 **ステップ**:
 1. GCP認証
-2. Node.js・Python・Terraformのセットアップ
-3. Terraformでインフラデプロイ
+2. Node.js・Python・Pulumiのセットアップ
+3. Pulumiでインフラデプロイ
 4. Dockerイメージのビルドとプッシュ
 5. Cloud Runサービスのデプロイ
 6. IAMポリシーの設定
@@ -346,7 +345,6 @@ az role assignment list \
 
 **よくある問題**:
 - "Authenticating using the Azure CLI is only supported as a User" → [詳細](TROUBLESHOOTING.md#azure認証問題)
-- Terraform Wrapper による環境変数干渉 → [詳細](TROUBLESHOOTING.md#問題2-terraform-wrapper-による環境変数の干渉)
 
 ---
 
@@ -414,31 +412,30 @@ gcloud projects get-iam-policy YOUR_PROJECT_ID \
 
 ---
 
-#### Terraform Apply が失敗する
+#### Pulumi Up が失敗する
 
-**症状**: `Error: Backend initialization required`
+**症状**: `error: could not load plugin`
 
 **対処**:
 ```bash
-# Terraformの初期化
-cd infrastructure/terraform/aws  # or azure, gcp
-terraform init -upgrade
+# Pulumiプラグインの更新
+cd infrastructure/pulumi/aws  # or azure, gcp
+pulumi plugin install
 
-# ステートファイルが破損している場合
-terraform state pull > backup.tfstate
-terraform init -reconfigure
+# スタックの確認
+pulumi stack ls
+pulumi config
 ```
 
-#### GCP Terraform State が永続化されない
+#### GCP Pulumi State が永続化されない
 
 **症状**: 毎回 "Resource already exists" エラーが発生
 
-**解決策**: GCS Backendを使用して永続的なStateを設定
+**解決策**: Pulumi Backend（GCS/S3/Azure Blob）を設定
 
 ```bash
-# GCS Bucketの作成
-gcloud storage buckets create gs://multicloud-auto-deploy-tfstate-gcp \
-  --location=asia-northeast1 \
+# GCS Backendの設定
+pulumi login gs://multicloud-auto-deploy-pulumi-state
   --uniform-bucket-level-access
 
 # 既存リソースのインポート

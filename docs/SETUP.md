@@ -147,7 +147,7 @@ GitHubリポジトリの Settings → Secrets and variables → Actions で以�
 
 ```bash
 # Lambda用プレースホルダーの再作成
-cd infrastructure/terraform/aws
+cd infrastructure/pulumi/aws
 echo "print('placeholder')" > lambda_placeholder.py
 zip lambda_placeholder.zip lambda_placeholder.py
 rm lambda_placeholder.py

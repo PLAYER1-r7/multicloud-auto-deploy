@@ -7,7 +7,7 @@ CI/CDワークフロー実行時に遭遇する可能性のある問題と解決
 - [Azure認証問題](#azure認証問題)
 - [GCPリソース競合](#gcpリソース競合)
 - [フロントエンドAPI接続問題](#フロントエンドapi接続問題)
-- [Terraform State管理](#terraform-state管理)
+- [Pulumi State管理](#pulumi-state管理)
 - [権限エラー](#権限エラー)
 - [AWS Lambda Runtime Errors](#aws-lambda-runtime-errors)
 - [GCP Cloud Run 500 Errors](#gcp-cloud-run-500-errors)
@@ -26,30 +26,11 @@ Authenticating using the Azure CLI is only supported as a User (not a Service Pr
 ```
 
 **原因**:
-- Azure CLIでログイン後、TerraformがCLI認証を試みるが、Service Principalでは使用不可
+- Azure CLIでログイン後、Pulumiが認証情報を取得できない場合がある
 
 **解決策**:
 
-1. **ワークフローから初回Azure Loginを削除**:
-```yaml
-# この部分をコメントアウト
-# - name: Azure Login
-#   uses: azure/login@v1
-#   with:
-#     creds: ${{ secrets.AZURE_CREDENTIALS }}
-```
-
-2. **Terraform Providerで明示的に無効化**:
-```terraform
-provider "azurerm" {
-  features {}
-  use_cli  = false
-  use_msi  = false
-  use_oidc = false
-}
-```
-
-3. **環境変数で認証**:
+1. **環境変数で認証**:
 ```yaml
 env:
   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
@@ -58,42 +39,36 @@ env:
   ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
 ```
 
-### 問題2: Terraform Wrapper による環境変数の干渉
-
-**症状**:
-Terraformの出力や環境変数が正しく渡らない
-
-**解決策**:
-```yaml
-- name: Setup Terraform
-  uses: hashicorp/setup-terraform@v3
-  with:
-    terraform_version: 1.7.5
-    terraform_wrapper: false  # 必須！
+2. **Pulumi設定で明示的に指定**:
+```bash
+pulumi config set azure-native:clientId $ARM_CLIENT_ID --secret
+pulumi config set azure-native:clientSecret $ARM_CLIENT_SECRET --secret
+pulumi config set azure-native:subscriptionId $ARM_SUBSCRIPTION_ID
+pulumi config set azure-native:tenantId $ARM_TENANT_ID
 ```
 
-### 問題3: Azure CLI認証後のTerraform実行エラー
+### 問題2: Azure CLI認証後のPulumi実行エラー
 
 **症状**:
-ACR操作のためにAzure CLIログイン後、terraform outputコマンドが失敗
+ACR操作のためにAzure CLIログイン後、pulumi stack output コマンドが失敗
 
 **解決策**:
-Terraform outputsをインフラデプロイ時にGitHub Actions outputsに保存：
+Pulumi outputsをインフラデプロイ時にGitHub Actions outputsに保存：
 
 ```yaml
 - name: Deploy Infrastructure
-  id: terraform
+  id: pulumi
   run: |
-    terraform apply -auto-approve
+    pulumi up --yes
     
-    # Terraformからoutputsを取得してGitHub Actionsに保存
-    ACR_NAME=$(terraform output -raw container_registry_name)
+    # Pulumiからoutputsを取得してGitHub Actionsに保存
+    ACR_NAME=$(pulumi stack output container_registry_name)
     echo "acr_name=$ACR_NAME" >> $GITHUB_OUTPUT
 
 - name: Use Output Later
   run: |
     # GitHub Actions outputsから取得
-    echo "ACR: ${{ steps.terraform.outputs.acr_name }}"
+    echo "ACR: ${{ steps.pulumi.outputs.acr_name }}"
 ```
 
 ---
@@ -110,69 +85,53 @@ Error: Error creating BackendBucket: googleapi: Error 409: already exists.
 ```
 
 **根本原因**:
-- Terraformがローカルbackendを使用していた
+- Pulumiがローカルstateファイルを使用していた
 - GitHub Actions実行ごとにクリーンな環境で実行されるため、stateが保存されない
-- Terraformが既存リソースを認識できず、毎回新規作成を試みる
+- Pulumiが既存リソースを認識できず、毎回新規作成を試みる
 
 **解決策（永続的なremote state）**:
 
 1. **GCSバケットの作成**:
 ```bash
-gcloud storage buckets create gs://multicloud-auto-deploy-tfstate-gcp \
+gcloud storage buckets create gs://multicloud-auto-deploy-pulumi-state-gcp \
   --location=asia-northeast1 \
   --uniform-bucket-level-access
 ```
 
 2. **サービスアカウントに権限付与**:
 ```bash
-gcloud storage buckets add-iam-policy-binding gs://multicloud-auto-deploy-tfstate-gcp \
+gcloud storage buckets add-iam-policy-binding gs://multicloud-auto-deploy-pulumi-state-gcp \
   --member="serviceAccount:github-actions-deploy@PROJECT_ID.iam.gserviceaccount.com" \
   --role="roles/storage.objectAdmin"
 ```
 
-3. **GCS backendの有効化**:
-```terraform
-# infrastructure/terraform/gcp/main.tf
-terraform {
-  backend "gcs" {
-    bucket = "multicloud-auto-deploy-tfstate-gcp"
-    prefix = "terraform/state"
-  }
-}
+3. **Pulumi backendの設定**:
+```bash
+# GCS backendにログイン
+pulumi login gs://multicloud-auto-deploy-pulumi-state-gcp
+
+# または環境変数で設定
+export PULUMI_BACKEND_URL="gs://multicloud-auto-deploy-pulumi-state-gcp"
 ```
 
 4. **既存リソースのインポート（一度だけ実行）**:
 ```bash
-cd infrastructure/terraform/gcp
-
-# Terraformの初期化
-terraform init
+cd infrastructure/pulumi/gcp
 
 # 既存リソースをインポート
-terraform import google_artifact_registry_repository.main \
+pulumi import google-native:artifactregistry/v1:Repository main \
   "projects/PROJECT_ID/locations/REGION/repositories/REPO_NAME"
 
-terraform import google_storage_bucket.frontend "BUCKET_NAME"
+pulumi import gcp:storage/bucket:Bucket frontend "BUCKET_NAME"
 
-terraform import google_compute_global_address.frontend \
+pulumi import gcp:compute/globalAddress:GlobalAddress frontend \
   "projects/PROJECT_ID/global/addresses/ADDRESS_NAME"
 
-terraform import google_firestore_database.main \
+pulumi import gcp:firestore/database:Database main \
   "projects/PROJECT_ID/databases/(default)"
 
-terraform import google_cloud_run_v2_service.api \
+pulumi import gcp:cloudrunv2/service:Service api \
   "projects/PROJECT_ID/locations/REGION/services/SERVICE_NAME"
-
-terraform import google_compute_backend_bucket.frontend "BACKEND_BUCKET_NAME"
-
-terraform import google_compute_url_map.frontend \
-  "projects/PROJECT_ID/global/urlMaps/URLMAP_NAME"
-
-terraform import google_compute_target_http_proxy.frontend \
-  "projects/PROJECT_ID/global/targetHttpProxies/PROXY_NAME"
-
-terraform import google_compute_global_forwarding_rule.frontend_http \
-  "projects/PROJECT_ID/global/forwardingRules/RULE_NAME"
 
 # Stateの確認
 terraform state list
@@ -286,25 +245,28 @@ curl -s https://YOUR-FRONTEND-URL/assets/index-*.js | grep -o "https://.*execute
 
 ---
 
-## Terraform State管理
+## Pulumi State管理
 
 ### ベストプラクティス
 
 1. **Remote Backend を必ず使用**:
-   - AWS: S3 + DynamoDB
-   - Azure: Storage Account
-   - GCP: GCS
+   - AWS: S3 (`pulumi login s3://bucket-name`)
+   - Azure: Azure Blob Storage (`pulumi login azblob://container`)
+   - GCP: GCS (`pulumi login gs://bucket-name`)
+   - Pulumi Service: `pulumi login` (推奨)
 
-2. **State Locking を有効化**:
-   - AWS DynamoDBテーブル
-   - Azure Storage Account（自動）
-   - GCS（自動）
+2. **State の暗号化**:
+   - Pulumiは自動的にstateを暗号化
+   - パスフレーズまたはKMS統合を使用
 
 3. **State の定期バックアップ**:
 ```bash
-# GCSの例
-gcloud storage cp gs://tfstate-bucket/terraform/state/default.tfstate \
-  ./backups/tfstate-$(date +%Y%m%d-%H%M%S).tfstate
+# Pulumi Service使用時
+pulumi stack export > backups/stack-$(date +%Y%m%d-%H%M%S).json
+
+# GCS使用時 
+gcloud storage cp gs://pulumi-state-bucket/.pulumi/stacks/* \
+  ./backups/
 ```
 
 ---
