@@ -436,6 +436,14 @@ perl -i -pe 'BEGIN{undef $/;} s/(\*\*[^\*]+\*\*[^\n]*)\n(- )/$1\n\n$2/g' "$MERGE
 perl -i -pe 'BEGIN{undef $/;} s/([^#\n][：:]\s*)\n(- )/$1\n\n$2/g' "$MERGED_MD"
 
 echo ""
+echo "🔧 Adding page breaks before figures..."
+
+# Add page break before each figure to keep them on separate pages
+# This ensures figures are properly separated in the document
+perl -i -pe 's/^(!\[)/\\clearpage\n\n$1/g' "$MERGED_MD"
+echo "  Added page breaks before figures"
+
+echo ""
 echo "🔧 Fixing table formatting..."
 
 # Remove any zero-width spaces (U+200B) that may have been inserted
