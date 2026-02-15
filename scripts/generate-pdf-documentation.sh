@@ -393,7 +393,8 @@ if pandoc "$MERGED_MD" \
     --include-in-header="$LATEX_HEADER" \
     --highlight-style=tango \
     --listings \
-    --wrap=preserve \
+    --wrap=auto \
+    --columns=75 \
     --variable documentclass=report \
     --variable fontsize=11pt \
     --variable papersize=a4 \

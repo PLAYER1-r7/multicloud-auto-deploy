@@ -7,6 +7,7 @@
 \usepackage{multirow}
 \usepackage{tabularx}
 \usepackage{ragged2e}
+\usepackage{etoolbox}
 
 % Define column types with better text wrapping
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
@@ -58,11 +59,20 @@
 
 % Better table row spacing
 \renewcommand{\arraystretch}{1.5}
-\setlength{\tabcolsep}{8pt}
+\setlength{\tabcolsep}{6pt}
 
 % Improve table cell text wrapping
 \newcommand{\PreserveBackslash}[1]{\let\temp=\\#1\let\\=\temp}
 \let\PBS=\PreserveBackslash
+
+% Force longtable to use full page width and wrap text
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{0pt}
+\setlength{\LTpre}{0.5\baselineskip}
+\setlength{\LTpost}{0.5\baselineskip}
+
+% Reduce table font size for better fit
+\AtBeginEnvironment{longtable}{\small}
 
 % Page layout is handled by pandoc's geometry variable
 % Do not set geometry here to avoid conflicts
