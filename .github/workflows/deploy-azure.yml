@@ -131,6 +131,17 @@ jobs:
           
           echo "🚀 Deploying to Function App: $FUNCTION_APP"
           
+          # Get existing Cosmos DB settings
+          COSMOS_ENDPOINT=$(az functionapp config appsettings list \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --query "[?name=='COSMOS_DB_ENDPOINT'].value | [0]" -o tsv)
+          
+          COSMOS_KEY=$(az functionapp config appsettings list \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --query "[?name=='COSMOS_DB_KEY'].value | [0]" -o tsv)
+          
           # Set environment variables
           az functionapp config appsettings set \
             --name $FUNCTION_APP \
@@ -138,8 +149,8 @@ jobs:
             --settings \
               CLOUD_PROVIDER=azure \
               ENVIRONMENT=staging \
-              AZURE_COSMOS_ENDPOINT="${{ secrets.AZURE_COSMOS_ENDPOINT }}" \
-              AZURE_COSMOS_KEY="${{ secrets.AZURE_COSMOS_KEY }}" \
+              AZURE_COSMOS_ENDPOINT="${COSMOS_ENDPOINT}" \
+              AZURE_COSMOS_KEY="${COSMOS_KEY}" \
               AZURE_COSMOS_DATABASE=multicloud-db \
               AZURE_COSMOS_CONTAINER=messages
           
