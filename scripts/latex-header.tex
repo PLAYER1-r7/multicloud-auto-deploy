@@ -162,8 +162,9 @@
 \usepackage{graphicx}
 \usepackage{float}
 
-% Limit image size to icon size
-\setkeys{Gin}{width=0.25\linewidth,height=0.2\textheight,keepaspectratio}
+% Set default image size for diagrams (Mermaid charts)
+% Icons will be explicitly sized smaller via Pandoc attributes
+\setkeys{Gin}{width=0.8\linewidth,height=0.6\textheight,keepaspectratio}
 
 % Better captions
 \usepackage{caption}

@@ -1,7 +1,7 @@
 # AWS デプロイメントガイド
 
 
-![AWS](images/icons/aws.svg)
+![AWS](images/icons/aws.svg){width=25%}
 
 このドキュメントでは、Multi-Cloud Auto Deploy アプリケーションをAWSにデプロイする詳細な手順を説明します。
 
