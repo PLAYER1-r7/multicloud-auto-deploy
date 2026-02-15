@@ -549,9 +549,19 @@ K_SERVICE → "GCP"
 
 ### フェーズ1: セキュリティ強化
 - [ ] 認証・認可の実装（Cognito/Azure AD/Firebase Auth）
-- [ ] WAF の設定
-- [ ] HTTPS完全対応（GCP）
-- [ ] シークレット管理の統一
+- [x] WAF の設定
+  - ✅ AWS: WAF v2 + マネージドルール + レート制限
+  - ✅ GCP: Cloud Armor + Layer 7 DDoS防御
+  - ✅ Azure: Front Door Premium WAF + Bot保護
+- [x] HTTPS完全対応（GCP）
+  - ✅ TargetHttpsProxy + Managed SSL Certificate
+  - ✅ HTTP→HTTPSリダイレクト
+- [x] シークレット管理の統一
+  - ✅ AWS: Secrets Manager
+  - ✅ GCP: Secret Manager
+  - ✅ Azure: Key Vault
+- [x] CORS設定の厳格化
+  - ✅ 環境変数による許可オリジン管理
 
 ### フェーズ2: 監視・運用
 - [ ] 統合ダッシュボード構築
