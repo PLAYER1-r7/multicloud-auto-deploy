@@ -95,7 +95,7 @@ jobs:
           
           # Get Function App URL
           FUNC_HOSTNAME=$(az functionapp show --name multicloud-auto-deploy-staging-func --resource-group multicloud-auto-deploy-staging-rg --query defaultHostName -o tsv)
-          echo "api_url=https://${FUNC_HOSTNAME}" >> $GITHUB_OUTPUT
+          echo "api_url=https://${FUNC_HOSTNAME}/api/HttpTrigger" >> $GITHUB_OUTPUT
 
       - name: Package Function App
         run: |
@@ -130,6 +130,18 @@ jobs:
           RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
           
           echo "🚀 Deploying to Function App: $FUNCTION_APP"
+          
+          # Set environment variables
+          az functionapp config appsettings set \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --settings \
+              CLOUD_PROVIDER=azure \
+              ENVIRONMENT=staging \
+              AZURE_COSMOS_ENDPOINT="${{ secrets.AZURE_COSMOS_ENDPOINT }}" \
+              AZURE_COSMOS_KEY="${{ secrets.AZURE_COSMOS_KEY }}" \
+              AZURE_COSMOS_DATABASE=multicloud-db \
+              AZURE_COSMOS_CONTAINER=messages
           
           az functionapp deployment source config-zip \
             --resource-group $RESOURCE_GROUP \
