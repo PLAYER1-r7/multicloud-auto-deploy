@@ -552,7 +552,7 @@ K_SERVICE → "GCP"
 - [x] WAF の設定
   - ✅ AWS: WAF v2 + マネージドルール + レート制限
   - ✅ GCP: Cloud Armor + Layer 7 DDoS防御
-  - ✅ Azure: Front Door Premium WAF + Bot保護
+  - ⚠️ Azure: Front Door Standard（WAFなし、コスト重視）
 - [x] HTTPS完全対応（GCP）
   - ✅ TargetHttpsProxy + Managed SSL Certificate
   - ✅ HTTP→HTTPSリダイレクト

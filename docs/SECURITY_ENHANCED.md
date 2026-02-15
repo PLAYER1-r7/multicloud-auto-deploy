@@ -20,13 +20,11 @@
 - コスト: $6/月（ポリシー） + $0.75/100万リクエスト
 
 #### Azure
-- **Azure Front Door Premium** にアップグレード（WAFサポート）
-- マネージドルールセット:
-  - Microsoft Default Rule Set v2.1
-  - Microsoft Bot Manager Rule Set v1.0
-- レート制限: 1分間あたり1,000リクエスト/IP
-- 防御モード: Prevention（脅威をブロック）
-- コスト: $330/月（Premium） + $0.02/10,000リクエスト
+- **Azure Front Door Standard**（WAFなし）
+- 基本的なCDN機能とHTTPS強制
+- HTTPS→HTTPSリダイレクト
+- コスト: $35/月
+- ⚠️ 注意: StandardはWAF機能をサポートしていません。より高度なセキュリティが必要な場合は、Azure Application GatewayまたはPremiumへのアップグレードを検討してください。
 
 ### 2. HTTPS完全対応
 
@@ -188,9 +186,12 @@ config:
 |---------|---------|-----|-----------|------|
 | AWS | $2-5 | $8-10 | $0.50 | **$10-20** |
 | GCP | $10-15 | $7-10 | $0.10 | **$15-25** |
-| Azure | $2-5 | $330 | $0.10 | **$330-350** |
+| Azure | $2-5 | - | $0.10 | **$35-50** |
 
-⚠️ **注意**: Azure Front Door Premiumは高コストですが、最も包括的なWAF機能を提供します。コスト重視の場合は、AWS Application Load BalancerまたはAzure Application Gatewayの検討も可能です。
+⚠️ **注意**: Azure Front Door StandardはWAF機能をサポートしていません。より高度なセキュリティが必要な場合は、以下の選択肢を検討してください：
+- **Azure Application Gateway** + WAF: $200-250/月（リージョナル）
+- **Azure Front Door Premium**: $330/月（グローバル、フルWAF）
+- **サードパーティWAF**: Cloudflare、Akamai等
 
 ## トラブルシューティング
 
