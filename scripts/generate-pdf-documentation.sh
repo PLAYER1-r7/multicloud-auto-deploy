@@ -209,7 +209,8 @@ convert_mermaid() {
                 # Download SVG from mermaid.ink
                 if curl -s -f -o "$svg_file" "$mermaid_url" 2>/dev/null && [ -s "$svg_file" ]; then
                     echo -e "${GREEN}    ✓ Converted diagram $diagram_counter to SVG${NC}"
-                    echo "![Diagram $diagram_counter]($svg_file){width=80%}" >> "$temp_file"
+                    echo "![Diagram $diagram_counter]($svg_file)" >> "$temp_file"
+                    echo "" >> "$temp_file"
                 else
                     echo -e "${YELLOW}    ⚠ Failed to convert diagram $diagram_counter, keeping as code block${NC}"
                     echo '```mermaid' >> "$temp_file"
