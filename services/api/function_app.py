@@ -107,6 +107,8 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
     if "Access-Control-Allow-Origin" not in response_headers:
         response_headers["Access-Control-Allow-Origin"] = "*"
         response_headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
-        response_headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+        response_headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization, X-Requested-With"
+        )
 
     return func.HttpResponse(body=response_body, status_code=status_code, headers=response_headers)

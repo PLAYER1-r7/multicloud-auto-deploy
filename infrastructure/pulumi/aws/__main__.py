@@ -88,6 +88,218 @@ app_secret_version = aws.secretsmanager.SecretVersion(
 )
 
 # ========================================
+# Cognito User Pool for Authentication
+# ========================================
+user_pool = aws.cognito.UserPool(
+    "user-pool",
+    name=f"{project_name}-{stack}-users",
+    mfa_configuration="OFF",
+    password_policy={
+        "minimum_length": 8,
+        "require_lowercase": True,
+        "require_numbers": True,
+        "require_symbols": False,
+        "require_uppercase": True,
+        "temporary_password_validity_days": 7,
+    },
+    auto_verified_attributes=["email"],
+    schemas=[
+        {
+            "attribute_data_type": "String",
+            "name": "email",
+            "required": True,
+            "mutable": True,
+        }
+    ],
+    account_recovery_setting={
+        "recovery_mechanisms": [
+            {
+                "name": "verified_email",
+                "priority": 1,
+            }
+        ]
+    },
+    email_configuration={
+        "email_sending_account": "COGNITO_DEFAULT",
+    },
+    tags=common_tags,
+)
+
+# Cognito User Pool Client
+user_pool_client = aws.cognito.UserPoolClient(
+    "user-pool-client",
+    name=f"{project_name}-{stack}-web-client",
+    user_pool_id=user_pool.id,
+    allowed_oauth_flows=["code", "implicit"],
+    allowed_oauth_scopes=["openid", "email", "profile"],
+    allowed_oauth_flows_user_pool_client=True,
+    callback_urls=[
+        "http://localhost:8080/callback",
+        "https://localhost:8080/callback",
+    ],
+    logout_urls=[
+        "http://localhost:8080/",
+        "https://localhost:8080/",
+    ],
+    access_token_validity=1,
+    id_token_validity=1,
+    refresh_token_validity=30,
+    token_validity_units={
+        "access_token": "hours",
+        "id_token": "hours",
+        "refresh_token": "days",
+    },
+    prevent_user_existence_errors="ENABLED",
+    enable_token_revocation=True,
+    explicit_auth_flows=[
+        "ALLOW_ADMIN_USER_PASSWORD_AUTH",
+        "ALLOW_REFRESH_TOKEN_AUTH",
+        "ALLOW_USER_PASSWORD_AUTH",
+        "ALLOW_USER_SRP_AUTH",
+    ],
+    supported_identity_providers=["COGNITO"],
+)
+
+# Cognito User Pool Domain
+user_pool_domain = aws.cognito.UserPoolDomain(
+    "user-pool-domain",
+    domain=f"{project_name}-{stack}",
+    user_pool_id=user_pool.id,
+)
+
+# ========================================
+# DynamoDB Table (Single Table Design)
+# ========================================
+posts_table = aws.dynamodb.Table(
+    "posts-table",
+    name=f"{project_name}-{stack}-posts",
+    billing_mode="PAY_PER_REQUEST",
+    hash_key="PK",
+    range_key="SK",
+    attributes=[
+        {
+            "name": "PK",
+            "type": "S",
+        },
+        {
+            "name": "SK",
+            "type": "S",
+        },
+        {
+            "name": "postId",
+            "type": "S",
+        },
+        {
+            "name": "userId",
+            "type": "S",
+        },
+        {
+            "name": "createdAt",
+            "type": "S",
+        },
+    ],
+    global_secondary_indexes=[
+        {
+            "name": "PostIdIndex",
+            "hash_key": "postId",
+            "projection_type": "ALL",
+        },
+        {
+            "name": "UserPostsIndex",
+            "hash_key": "userId",
+            "range_key": "createdAt",
+            "projection_type": "ALL",
+        },
+    ],
+    tags=common_tags,
+)
+
+# S3 Bucket for Images
+images_bucket = aws.s3.BucketV2(
+    "images-bucket",
+    bucket=f"{project_name}-{stack}-images",
+    tags=common_tags,
+)
+
+# Disable versioning for cost savings
+aws.s3.BucketVersioningV2(
+    "images-bucket-versioning",
+    bucket=images_bucket.id,
+    versioning_configuration={
+        "status": "Disabled",
+    },
+)
+
+# CORS configuration for browser uploads
+aws.s3.BucketCorsConfigurationV2(
+    "images-bucket-cors",
+    bucket=images_bucket.id,
+    cors_rules=[
+        {
+            "allowed_headers": ["*"],
+            "allowed_methods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+            "allowed_origins": allowed_origins_list,
+            "expose_headers": ["ETag"],
+            "max_age_seconds": 3000,
+        }
+    ],
+)
+
+# Block public access for images bucket
+aws.s3.BucketPublicAccessBlock(
+    "images-bucket-public-access",
+    bucket=images_bucket.id,
+    block_public_acls=True,
+    block_public_policy=True,
+    ignore_public_acls=True,
+    restrict_public_buckets=True,
+)
+
+# Create inline policy for DynamoDB and S3 access
+lambda_policy = aws.iam.RolePolicy(
+    "lambda-policy",
+    role=lambda_role.id,
+    policy=pulumi.Output.all(posts_table.arn, images_bucket.arn).apply(
+        lambda args: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "dynamodb:GetItem",
+                            "dynamodb:PutItem",
+                            "dynamodb:UpdateItem",
+                            "dynamodb:DeleteItem",
+                            "dynamodb:Query",
+                            "dynamodb:Scan",
+                        ],
+                        "Resource": [
+                            args[0],
+                            f"{args[0]}/index/*",
+                        ],
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:PutObject",
+                            "s3:DeleteObject",
+                        ],
+                        "Resource": f"{args[1]}/*",
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": ["s3:ListBucket"],
+                        "Resource": args[1],
+                    },
+                ],
+            }
+        )
+    ),
+)
+
+# ========================================
 # Lambda Function (FastAPI with Mangum)
 # ========================================
 # Note: Lambda function code is deployed separately using deploy-lambda-aws.sh script
@@ -125,6 +337,11 @@ lambda_function = aws.lambda_.Function(
             "ENVIRONMENT": stack,
             "CLOUD_PROVIDER": "aws",
             "SECRET_NAME": app_secret.name,
+            "COGNITO_USER_POOL_ID": user_pool.id,
+            "COGNITO_CLIENT_ID": user_pool_client.id,
+            "COGNITO_REGION": region,
+            "POSTS_TABLE_NAME": posts_table.name,
+            "IMAGES_BUCKET_NAME": images_bucket.id,
         }
     },
     tags=common_tags,
@@ -137,7 +354,7 @@ lambda_url = aws.lambda_.FunctionUrl(
     authorization_type="NONE",  # Public access
     cors={
         "allow_origins": allowed_origins_list,
-        "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
         "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
         "max_age": 3600,
     },
@@ -454,6 +671,14 @@ pulumi.export("waf_web_acl_id", waf_web_acl.id)
 pulumi.export("waf_web_acl_arn", waf_web_acl.arn)
 pulumi.export("secret_name", app_secret.name)
 pulumi.export("secret_arn", app_secret.arn)
+pulumi.export("cognito_user_pool_id", user_pool.id)
+pulumi.export("cognito_user_pool_arn", user_pool.arn)
+pulumi.export("cognito_client_id", user_pool_client.id)
+pulumi.export("cognito_domain", user_pool_domain.domain)
+pulumi.export("posts_table_name", posts_table.name)
+pulumi.export("posts_table_arn", posts_table.arn)
+pulumi.export("images_bucket_name", images_bucket.id)
+pulumi.export("images_bucket_arn", images_bucket.arn)
 
 # Cost estimation
 pulumi.export(
@@ -464,5 +689,7 @@ pulumi.export(
     "CloudFront: $0.085/GB for first 10TB/month (free tier: 1TB/month for 12 months). "
     "AWS WAF: $5/month per web ACL + $1/month per rule + $0.60 per 1M requests. "
     "Secrets Manager: $0.40/month per secret + $0.05 per 10,000 API calls. "
-    "Estimated: $10-20/month for low traffic with WAF and security features.",
+    "DynamoDB: Pay-per-request pricing (25 WCU and 25 RCU free tier). "
+    "Cognito: 50,000 MAU free for first 12 months, then $0.0055 per MAU. "
+    "Estimated: $10-25/month for low traffic with WAF and security features.",
 )
