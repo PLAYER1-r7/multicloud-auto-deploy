@@ -64,7 +64,7 @@ app_secret = gcp.secretmanager.Secret(
     secret_id=f"{project_name}-{stack}-app-config",
     project=project,
     replication=gcp.secretmanager.SecretReplicationArgs(
-        automatic={},
+        auto=gcp.secretmanager.SecretReplicationAutoArgs(),
     ),
     labels=common_labels,
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
@@ -129,56 +129,58 @@ gcp.storage.BucketIAMBinding(
 
 # ========================================
 # Cloud Armor Security Policy (WAF)
+# Note: Cloud Armor is disabled for staging to reduce cost (~$6-7/month)
 # ========================================
-armor_security_policy = gcp.compute.SecurityPolicy(
-    "cloud-armor-policy",
-    name=f"{project_name}-{stack}-armor",
-    project=project,
-    description="Cloud Armor security policy for DDoS protection and rate limiting",
-    # Rate limiting rule: max 1000 requests per minute per IP
-    rules=[
-        gcp.compute.SecurityPolicyRuleArgs(
-            action="rate_based_ban",
-            priority=1000,
-            match=gcp.compute.SecurityPolicyRuleMatchArgs(
-                versioned_expr="SRC_IPS_V1",
-                config=gcp.compute.SecurityPolicyRuleMatchConfigArgs(
-                    src_ip_ranges=["*"],
+if stack == "production":
+    armor_security_policy = gcp.compute.SecurityPolicy(
+        "cloud-armor-policy",
+        name=f"{project_name}-{stack}-armor",
+        project=project,
+        description="Cloud Armor security policy for DDoS protection and rate limiting",
+        # Rate limiting rule: max 1000 requests per minute per IP
+        rules=[
+            gcp.compute.SecurityPolicyRuleArgs(
+                action="rate_based_ban",
+                priority=1000,
+                match=gcp.compute.SecurityPolicyRuleMatchArgs(
+                    versioned_expr="SRC_IPS_V1",
+                    config=gcp.compute.SecurityPolicyRuleMatchConfigArgs(
+                        src_ip_ranges=["*"],
+                    ),
                 ),
-            ),
-            rate_limit_options=gcp.compute.SecurityPolicyRuleRateLimitOptionsArgs(
-                conform_action="allow",
-                exceed_action="deny(429)",
-                enforce_on_key="IP",
-                rate_limit_threshold=gcp.compute.SecurityPolicyRuleRateLimitOptionsRateLimitThresholdArgs(
-                    count=1000,
-                    interval_sec=60,
+                rate_limit_options=gcp.compute.SecurityPolicyRuleRateLimitOptionsArgs(
+                    conform_action="allow",
+                    exceed_action="deny(429)",
+                    enforce_on_key="IP",
+                    rate_limit_threshold=gcp.compute.SecurityPolicyRuleRateLimitOptionsRateLimitThresholdArgs(
+                        count=1000,
+                        interval_sec=60,
+                    ),
+                    ban_duration_sec=600,  # 10 minutes ban
                 ),
-                ban_duration_sec=600,  # 10 minutes ban
+                description="Rate limit: 1000 requests per minute per IP",
             ),
-            description="Rate limit: 1000 requests per minute per IP",
-        ),
-        # Block known bad IPs (example - can be customized)
-        gcp.compute.SecurityPolicyRuleArgs(
-            action="deny(403)",
-            priority=2000,
-            match=gcp.compute.SecurityPolicyRuleMatchArgs(
-                versioned_expr="SRC_IPS_V1",
-                config=gcp.compute.SecurityPolicyRuleMatchConfigArgs(
-                    src_ip_ranges=["192.0.2.0/24"],  # Example bad IP range
+            # Block known bad IPs (example - can be customized)
+            gcp.compute.SecurityPolicyRuleArgs(
+                action="deny(403)",
+                priority=2000,
+                match=gcp.compute.SecurityPolicyRuleMatchArgs(
+                    versioned_expr="SRC_IPS_V1",
+                    config=gcp.compute.SecurityPolicyRuleMatchConfigArgs(
+                        src_ip_ranges=["192.0.2.0/24"],  # Example bad IP range
+                    ),
                 ),
+                description="Block known bad IP ranges",
             ),
-            description="Block known bad IP ranges",
+        ],
+        # Default rule: allow all
+        adaptive_protection_config=gcp.compute.SecurityPolicyAdaptiveProtectionConfigArgs(
+            layer7_ddos_defense_config=gcp.compute.SecurityPolicyAdaptiveProtectionConfigLayer7DdosDefenseConfigArgs(
+                enable=True,
+            ),
         ),
-    ],
-    # Default rule: allow all
-    adaptive_protection_config=gcp.compute.SecurityPolicyAdaptiveProtectionConfigArgs(
-        layer7_ddos_defense_config=gcp.compute.SecurityPolicyAdaptiveProtectionConfigLayer7DdosDefenseConfigArgs(
-            enable=True,
-        ),
-    ),
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
-)
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    )
 
 # ========================================
 # Cloud CDN for Frontend with HTTPS
@@ -192,14 +194,13 @@ cdn_ip_address = gcp.compute.GlobalAddress(
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
 
-# Backend Bucket for Cloud CDN with Cloud Armor
-backend_bucket = gcp.compute.BackendBucket(
-    "cdn-backend-bucket",
-    name=f"{project_name}-{stack}-cdn-backend",
-    bucket_name=frontend_bucket.name,
-    enable_cdn=True,
-    project=project,
-    cdn_policy=gcp.compute.BackendBucketCdnPolicyArgs(
+# Backend Bucket for Cloud CDN with conditional Cloud Armor
+backend_bucket_kwargs = {
+    "name": f"{project_name}-{stack}-cdn-backend",
+    "bucket_name": frontend_bucket.name,
+    "enable_cdn": True,
+    "project": project,
+    "cdn_policy": gcp.compute.BackendBucketCdnPolicyArgs(
         cache_mode="CACHE_ALL_STATIC",
         default_ttl=3600,  # 1 hour
         max_ttl=86400,  # 24 hours
@@ -207,9 +208,16 @@ backend_bucket = gcp.compute.BackendBucket(
         negative_caching=True,
         serve_while_stale=86400,
     ),
-    # Attach Cloud Armor security policy
-    edge_security_policy=armor_security_policy.self_link,
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    "opts": pulumi.ResourceOptions(depends_on=enabled_services),
+}
+
+# Attach Cloud Armor security policy only for production
+if stack == "production":
+    backend_bucket_kwargs["edge_security_policy"] = armor_security_policy.self_link
+
+backend_bucket = gcp.compute.BackendBucket(
+    "cdn-backend-bucket",
+    **backend_bucket_kwargs
 )
 
 # Managed SSL Certificate (for custom domain - optional)
@@ -314,21 +322,35 @@ pulumi.export("cdn_url", cdn_ip_address.address.apply(lambda ip: f"http://{ip}")
 pulumi.export("cdn_https_url", cdn_ip_address.address.apply(lambda ip: f"https://{ip}"))
 pulumi.export("backend_bucket_name", backend_bucket.name)
 pulumi.export("url_map_name", url_map.name)
-pulumi.export("cloud_armor_policy_name", armor_security_policy.name)
+# Cloud Armor exports only for production
+if stack == "production":
+    pulumi.export("cloud_armor_policy_name", armor_security_policy.name)
 pulumi.export("ssl_certificate_name", managed_ssl_cert.name)
 
 # Function name for gcloud deployment (fixed name)
 pulumi.export("function_name", f"{project_name}-{stack}-api")
 
 # Cost estimation
-pulumi.export(
-    "cost_estimate",
+cost_estimate_base = (
     "Cloud Functions: 2M free invocations/month, then $0.40 per 1M. "
     "Cloud Storage: $0.02/GB/month. "
     "Cloud CDN: $0.02-0.08/GB depending on region. "
-    "Cloud Armor: $6/month per policy + $0.75 per 1M requests. "
     "Managed SSL Certificate: Free. "
     "Secret Manager: $0.06 per month per secret + $0.03 per 10,000 access operations. "
     "External IP: $0.01/hour (~$7.30/month). "
-    "Estimated: $15-25/month for low traffic with security features.",
 )
+
+if stack == "production":
+    cost_estimate = (
+        cost_estimate_base
+        + "Cloud Armor: $6/month per policy + $0.75 per 1M requests. "
+        "Estimated: $15-25/month for low traffic with security features."
+    )
+else:
+    cost_estimate = (
+        cost_estimate_base
+        + "Cloud Armor: Disabled for staging (saves ~$6-7/month). "
+        "Estimated: $8-15/month for low traffic without Cloud Armor."
+    )
+
+pulumi.export("cost_estimate", cost_estimate)
