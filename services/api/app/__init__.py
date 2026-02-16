@@ -1,3 +1,1 @@
-"""Simple SNS API - FastAPI Backend"""
-
-__version__ = "1.0.0"
+# Simple SNS API v3

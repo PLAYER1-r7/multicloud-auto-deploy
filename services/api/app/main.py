@@ -1,13 +1,11 @@
-"""FastAPI アプリケーション - Simple SNS API"""
-import logging
-from datetime import datetime
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+import logging
 
 from app.config import settings
 from app.models import HealthResponse
+from app.routes import posts, profile, uploads
 
 # ロギング設定
 logging.basicConfig(
@@ -19,8 +17,8 @@ logger = logging.getLogger(__name__)
 # FastAPIアプリケーション
 app = FastAPI(
     title="Simple SNS API",
-    description="マルチクラウド対応のシンプルなSNS API (完全Python実装)",
-    version="1.0.0",
+    description="マルチクラウド対応のシンプルなSNS API",
+    version="3.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -39,53 +37,48 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # ルーター登録
-from app.routes import messages, uploads
-
-app.include_router(messages.router)
+app.include_router(posts.router)
 app.include_router(uploads.router)
+app.include_router(profile.router)
 
 
 @app.on_event("startup")
 async def startup_event():
     """アプリケーション起動時の処理"""
-    logger.info("🚀 Starting Simple SNS API v1.0.0")
-    logger.info(f"☁️  Cloud Provider: {settings.cloud_provider.value}")
-    logger.info(f"🔐 Auth Disabled: {settings.auth_disabled}")
+    logger.info(f"Starting Simple SNS API v3.0.0")
+    logger.info(f"Cloud Provider: {settings.cloud_provider.value}")
+    logger.info(f"Auth Disabled: {settings.auth_disabled}")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """アプリケーション終了時の処理"""
-    logger.info("👋 Shutting down Simple SNS API")
+    logger.info("Shutting down Simple SNS API")
 
 
 @app.get("/", response_model=HealthResponse)
-async def root():
-    """ルートエンドポイント - ヘルスチェック"""
+def root() -> HealthResponse:
+    """ルートエンドポイント"""
     return HealthResponse(
         status="ok",
-        version="1.0.0",
-        cloud_provider=settings.cloud_provider.value,
-        timestamp=datetime.utcnow(),
+        provider=settings.cloud_provider.value,
     )
 
 
 @app.get("/health", response_model=HealthResponse)
-async def health():
+def health() -> HealthResponse:
     """ヘルスチェックエンドポイント"""
     return HealthResponse(
         status="ok",
-        version="1.0.0",
-        cloud_provider=settings.cloud_provider.value,
-        timestamp=datetime.utcnow(),
+        provider=settings.cloud_provider.value,
     )
 
 
-# Lambda/Azure Functions/Cloud Functions用ハンドラー
-# AWS Lambda
+# AWS Lambda handler (Mangum)
 try:
     from mangum import Mangum
-
     handler = Mangum(app, lifespan="off")
+    logger.info("Mangum handler initialized for AWS Lambda")
 except ImportError:
-    pass
+    logger.warning("Mangum not available - AWS Lambda deployment not supported")
+    handler = None

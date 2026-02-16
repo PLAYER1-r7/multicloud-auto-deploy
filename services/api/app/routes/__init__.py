@@ -1,4 +1,4 @@
 """APIルーター"""
-from app.routes import messages
+# from app.routes import posts, profile, uploads
 
-__all__ = ["messages"]
+__all__ = []

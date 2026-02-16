@@ -1,67 +1,67 @@
-"""アプリケーション設定"""
-import os
-from enum import Enum
 from typing import Optional
-
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-class CloudProvider(str, Enum):
-    """クラウドプロバイダー"""
-
-    AWS = "aws"
-    AZURE = "azure"
-    GCP = "gcp"
-    LOCAL = "local"
+from pydantic_settings import BaseSettings
+from app.models import CloudProvider
 
 
 class Settings(BaseSettings):
     """アプリケーション設定"""
-
-    # Cloud Provider
+    
+    # クラウドプロバイダー
     cloud_provider: CloudProvider = CloudProvider.LOCAL
-
-    # CORS
-    cors_origins: str = "*"
-
-    # Authentication (Cognito/Azure AD/Firebase)
-    auth_disabled: bool = True
-    cognito_user_pool_id: Optional[str] = None
-    cognito_region: Optional[str] = None
-    azure_tenant_id: Optional[str] = None
-    firebase_project_id: Optional[str] = None
-
-    # AWS
+    
+    # 認証設定
+    auth_disabled: bool = False
+    auth_provider: Optional[str] = None
+    auth_issuer: Optional[str] = None
+    auth_jwks_url: Optional[str] = None
+    auth_audience: Optional[str] = None
+    admin_group: str = "Admins"
+    
+    # ローカル開発設定
+    database_url: Optional[str] = None
+    storage_path: str = "./storage"
+    minio_endpoint: Optional[str] = None
+    minio_access_key: Optional[str] = None
+    minio_secret_key: Optional[str] = None
+    minio_bucket: str = "images"
+    
+    # AWS設定
     aws_region: str = "ap-northeast-1"
-    dynamodb_table_name: str = "simple-sns-messages"
-    s3_bucket_name: Optional[str] = None
-
-    # Azure
-    azure_cosmos_endpoint: Optional[str] = None
-    azure_cosmos_key: Optional[str] = None
-    azure_storage_account: Optional[str] = None
-    azure_storage_key: Optional[str] = None
-
-    # GCP
+    posts_table_name: Optional[str] = None
+    images_bucket_name: Optional[str] = None
+    images_cdn_url: Optional[str] = None
+    cognito_user_pool_id: Optional[str] = None
+    cognito_client_id: Optional[str] = None
+    
+    # Azure設定
+    azure_tenant_id: Optional[str] = None
+    azure_client_id: Optional[str] = None
+    azure_storage_account_name: Optional[str] = None
+    azure_storage_account_key: Optional[str] = None
+    azure_storage_container: str = "images"
+    cosmos_db_endpoint: Optional[str] = None
+    cosmos_db_key: Optional[str] = None
+    cosmos_db_database: str = "simple-sns"
+    cosmos_db_container: str = "items"
+    
+    # GCP設定
     gcp_project_id: Optional[str] = None
-    firestore_collection: str = "messages"
-    gcs_bucket_name: Optional[str] = None
-
-    # Local (MinIO)
-    minio_endpoint: str = "localhost:9000"
-    minio_access_key: str = "minioadmin"
-    minio_secret_key: str = "minioadmin"
-    minio_bucket_name: str = "simple-sns"
-
-    # Application
+    gcp_client_id: Optional[str] = None
+    gcp_service_account: Optional[str] = None
+    gcp_storage_bucket: Optional[str] = None
+    gcp_posts_collection: str = "posts"
+    gcp_profiles_collection: str = "profiles"
+    
+    # 共通設定
+    presigned_url_expiry: int = 300
+    cors_origins: str = "*"
     log_level: str = "INFO"
-    max_upload_size: int = 10 * 1024 * 1024  # 10MB
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-    )
+    
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False,
+    }
 
 
+# シングルトンインスタンス
 settings = Settings()

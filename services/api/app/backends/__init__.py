@@ -1,39 +1,37 @@
-"""データベースバックエンドの抽象基底クラス"""
-from abc import ABC, abstractmethod
-from typing import List, Optional
-from datetime import datetime
+from functools import lru_cache
+from app.config import settings
+from app.models import CloudProvider
+from app.backends.base import BackendBase
 
-from app.models import Message, MessageCreate, MessageUpdate
+# Alias for backward compatibility
+BaseBackend = BackendBase
 
 
-class BaseBackend(ABC):
-    """データベースバックエンドの抽象基底クラス"""
-
-    @abstractmethod
-    async def create_message(self, message: MessageCreate) -> Message:
-        """メッセージを作成"""
-        pass
-
-    @abstractmethod
-    async def get_messages(
-        self, limit: int = 20, offset: int = 0
-    ) -> tuple[List[Message], int]:
-        """メッセージ一覧を取得 (messages, total_count)"""
-        pass
-
-    @abstractmethod
-    async def get_message(self, message_id: str) -> Optional[Message]:
-        """メッセージを1件取得"""
-        pass
-
-    @abstractmethod
-    async def update_message(
-        self, message_id: str, message: MessageUpdate
-    ) -> Optional[Message]:
-        """メッセージを更新"""
-        pass
-
-    @abstractmethod
-    async def delete_message(self, message_id: str) -> bool:
-        """メッセージを削除"""
-        pass
+@lru_cache(maxsize=1)
+def get_backend():
+    """
+    設定に基づいて適切なバックエンドを取得
+    
+    Returns:
+        BackendBase実装のインスタンス
+    """
+    provider = settings.cloud_provider
+    
+    if provider == CloudProvider.LOCAL:
+        from app.backends.local_backend import LocalBackend
+        return LocalBackend()
+    
+    elif provider == CloudProvider.AWS:
+        from app.backends.aws_backend import AwsBackend
+        return AwsBackend()
+    
+    elif provider == CloudProvider.AZURE:
+        from app.backends.azure_backend import AzureBackend
+        return AzureBackend()
+    
+    elif provider == CloudProvider.GCP:
+        from app.backends.gcp_backend import GcpBackend
+        return GcpBackend()
+    
+    else:
+        raise ValueError(f"Unsupported cloud provider: {provider}")
