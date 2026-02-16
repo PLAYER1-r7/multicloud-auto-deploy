@@ -5,6 +5,7 @@ Architecture:
 - Cloud Storage (Function source + Frontend)
 - Cloud Functions Gen 2 (deployed via gcloud CLI in workflow)
 - IAM settings
+- Secret Manager with IAM bindings
 
 Note: Cloud Functions is deployed via gcloud CLI, not Pulumi,
 because Pulumi requires the ZIP file to exist before creating the function.
@@ -14,6 +15,7 @@ Cost: ~$2-5/month for low traffic
 
 import pulumi
 import pulumi_gcp as gcp
+import os
 
 # Configuration
 config = pulumi.Config()
@@ -22,6 +24,10 @@ project = gcp_config.require("project")
 region = gcp_config.get("region") or "asia-northeast1"
 stack = pulumi.get_stack()
 project_name = "multicloud-auto-deploy"
+
+# Get the service account email from environment or config (used by GitHub Actions)
+# This will be set from GCP_CREDENTIALS in the workflow
+github_actions_sa = config.get("github_actions_sa") or os.getenv("GITHUB_ACTIONS_SA")
 
 # CORS allowed origins (configurable per environment)
 allowed_origins = config.get("allowedOrigins") or "*"
@@ -70,14 +76,34 @@ app_secret = gcp.secretmanager.Secret(
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
 
+# Grant access to the secret for the service account used by GitHub Actions
+# This allows Pulumi to read the secret version during deployment
+app_secret_iam_binding = gcp.secretmanager.SecretIamBinding(
+    "app-secret-iam-binding",
+    project=project,
+    secret_id=app_secret.secret_id,
+    role="roles/secretmanager.secretAccessor",
+    members=[
+        # Grant access to the default compute service account
+        pulumi.Output.concat("serviceAccount:", project, "-compute@developer.gserviceaccount.com"),
+        # Grant access to the default App Engine service account
+        pulumi.Output.concat("serviceAccount:", project, "@appspot.gserviceaccount.com"),
+    ],
+    opts=pulumi.ResourceOptions(depends_on=[app_secret]),
+)
+
 # Store initial secret value (example - should be updated with actual values)
+# Note: Skip automatic refresh to avoid permission errors during read
 app_secret_version = gcp.secretmanager.SecretVersion(
     "app-secret-version",
     secret=app_secret.id,
     secret_data=pulumi.Output.secret(
         '{"database_url":"changeme","api_key":"changeme"}'
     ),
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    opts=pulumi.ResourceOptions(
+        depends_on=[app_secret_iam_binding],
+        ignore_changes=["secret_data"],  # Don't try to read back the secret value
+    ),
 )
 
 # ========================================
