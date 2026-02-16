@@ -153,34 +153,13 @@ if stack == "production":
         "cloud-armor-policy",
         name=f"{project_name}-{stack}-armor",
         project=project,
-        description="Cloud Armor security policy for DDoS protection and rate limiting",
-        # Rate limiting rule: max 1000 requests per minute per IP
+        type="CLOUD_ARMOR_EDGE",  # Required for edge security
+        description="Cloud Armor edge security policy for CDN protection",
         rules=[
-            gcp.compute.SecurityPolicyRuleArgs(
-                action="rate_based_ban",
-                priority=1000,
-                match=gcp.compute.SecurityPolicyRuleMatchArgs(
-                    versioned_expr="SRC_IPS_V1",
-                    config=gcp.compute.SecurityPolicyRuleMatchConfigArgs(
-                        src_ip_ranges=["*"],
-                    ),
-                ),
-                rate_limit_options=gcp.compute.SecurityPolicyRuleRateLimitOptionsArgs(
-                    conform_action="allow",
-                    exceed_action="deny(429)",
-                    enforce_on_key="IP",
-                    rate_limit_threshold=gcp.compute.SecurityPolicyRuleRateLimitOptionsRateLimitThresholdArgs(
-                        count=1000,
-                        interval_sec=60,
-                    ),
-                    ban_duration_sec=600,  # 10 minutes ban
-                ),
-                description="Rate limit: 1000 requests per minute per IP",
-            ),
             # Block known bad IPs (example - can be customized)
             gcp.compute.SecurityPolicyRuleArgs(
                 action="deny(403)",
-                priority=2000,
+                priority=1000,
                 match=gcp.compute.SecurityPolicyRuleMatchArgs(
                     versioned_expr="SRC_IPS_V1",
                     config=gcp.compute.SecurityPolicyRuleMatchConfigArgs(
@@ -189,13 +168,19 @@ if stack == "production":
                 ),
                 description="Block known bad IP ranges",
             ),
-        ],
-        # Default rule: allow all
-        adaptive_protection_config=gcp.compute.SecurityPolicyAdaptiveProtectionConfigArgs(
-            layer7_ddos_defense_config=gcp.compute.SecurityPolicyAdaptiveProtectionConfigLayer7DdosDefenseConfigArgs(
-                enable=True,
+            # Default rule: allow all (required at priority 2147483647)
+            gcp.compute.SecurityPolicyRuleArgs(
+                action="allow",
+                priority=2147483647,
+                match=gcp.compute.SecurityPolicyRuleMatchArgs(
+                    versioned_expr="SRC_IPS_V1",
+                    config=gcp.compute.SecurityPolicyRuleMatchConfigArgs(
+                        src_ip_ranges=["*"],
+                    ),
+                ),
+                description="Default rule: allow all traffic",
             ),
-        ),
+        ],
         opts=pulumi.ResourceOptions(depends_on=enabled_services),
     )
 

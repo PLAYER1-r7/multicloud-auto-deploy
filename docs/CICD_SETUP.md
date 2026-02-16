@@ -483,8 +483,9 @@ pulumi config
 pulumi login gs://multicloud-auto-deploy-pulumi-state
   --uniform-bucket-level-access
 
-# 既存リソースのインポート
-./scripts/import-gcp-resources.sh
+# 既存リソースがある場合は、Pulumi経由でインポート
+cd infrastructure/pulumi/gcp
+pulumi import <resource_type> <resource_name> <resource_id>
 ```
 
 詳細は [TROUBLESHOOTING.md - GCPリソース競合](TROUBLESHOOTING.md#gcpリソース競合) を参照

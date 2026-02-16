@@ -278,10 +278,7 @@ Actions > Deploy to Multi-Cloud > Run workflow
 ./scripts/test-e2e.sh
 
 # GitHub Secrets設定ガイド
-./scripts/setup-github-secrets.sh
-
-# GCPリソースインポート
-./scripts/import-gcp-resources.sh
+./scripts/manage-github-secrets.sh
 
 # システム診断
 ./scripts/diagnostics.sh

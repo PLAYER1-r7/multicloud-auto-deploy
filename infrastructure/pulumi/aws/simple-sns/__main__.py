@@ -21,6 +21,28 @@ environment = config.get("environment") or "staging"
 project_name = config.get("project_name") or "simple-sns"
 aws_region = config.get("aws:region") or "ap-northeast-1"
 
+# Lambda Layer Configuration
+# Option 1: Use Klayers (public, maintained by community) - Currently unavailable due to resource-based policy
+# Option 2: Use custom layer (build with scripts/build-lambda-layer.sh)
+use_klayers = config.get_bool("use_klayers") or False  # Default to custom layer
+
+# AWS Lambda Powertools Layer (AWS official, always available)
+# https://docs.powertools.aws.dev/lambda/python/latest/#lambda-layer
+powertools_layer_arn = f"arn:aws:lambda:{aws_region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:68"
+
+# Klayers ARNs (update these to latest versions from https://api.klayers.cloud/)
+# Note: Klayers has resource-based policy restrictions and may not be accessible
+klayers_arns = [
+    # FastAPI (includes Pydantic, Starlette)
+    "arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-fastapi:5",
+    # Mangum (FastAPI -> Lambda adapter)
+    "arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-mangum:3",
+    # python-jose (JWT verification)
+    "arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-python-jose:4",
+    # Requests (HTTP client)
+    "arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-requests:10",
+]
+
 # Tags
 tags = {
     "Project": project_name,
@@ -143,6 +165,13 @@ aws.iam.RolePolicyAttachment(
     policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
 )
 
+# Attach X-Ray tracing policy (for Powertools Tracer)
+aws.iam.RolePolicyAttachment(
+    "lambda-xray-access",
+    role=lambda_role.name,
+    policy_arn="arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess",
+)
+
 # Custom policy for DynamoDB and S3
 lambda_policy = aws.iam.RolePolicy(
     "lambda-policy",
@@ -179,21 +208,49 @@ lambda_policy = aws.iam.RolePolicy(
     ),
 )
 
-# Build Lambda deployment package
+# Build Lambda deployment package (application code only)
 def build_lambda_package():
-    """Build Lambda deployment package"""
+    """Build Lambda deployment package - application code only, dependencies in Layer"""
+    api_dir = Path("../../../../services/api") - for custom layer option
+def build_lambda_layer():
+    """Build Lambda Layer package - dependencies only"""
     api_dir = Path("../../../../services/api")
-    build_dir = Path(".build")
-    build_dir.mkdir(exist_ok=True)
+    layer_path = api_dir / "lambda-layer.zip"
     
-    zip_path = build_dir / "lambda.zip"
+    # Check if layer zip exists (created by build-lambda-layer.sh)
+    if layer_path.exists():
+        return str(layer_path)
     
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        # Add app code
-        for py_file in (api_dir / "app").rglob("*.py"):
-            zipf.write(py_file, f"app/{py_file.relative_to(api_dir / 'app')}")
-    
-    return str(zip_path)
+    # If not exists, return None and skip layer creation
+    import sys
+    print("⚠️  Warning: lambda-layer.zip not found. Run scripts/build-lambda-layer.sh first.", file=sys.stderr)
+    print(f"    Expected path: {layer_path}", file=sys.stderr)
+    return None
+
+# Determine which layers to use
+dependency_layers = []
+
+if use_klayers:
+    # Use Klayers (public, community-maintained)
+    print("ℹ️  Using Klayers (public Lambda Layers)")
+    dependency_layers = klayers_arns
+else:
+    # Use custom layer (build with scripts/build-lambda-layer.sh)
+    print("ℹ️  Using custom Lambda Layer")
+    layer_path = build_lambda_layer()
+    if layer_path:
+        lambda_layer = aws.lambda_.LayerVersion(
+            "dependencies-layer",
+            layer_name=f"{project_name}-dependencies-{environment}",
+            code=pulumi.FileArchive(layer_path),
+            compatible_runtimes=["python3.12"],
+            description="Dependencies layer for FastAPI, Mangum, and JWT libraries",
+        )
+        dependency_layers = [lambda_layer.arn]
+
+# Add AWS Lambda Powertools Layer (always included for observability)
+all_layers = dependency_layers + [powertools_layer_arn]
+print(f"ℹ️  Using {len(all_layers)} Lambda Layers (including Powertools)")
 
 # Create Lambda function
 lambda_function = aws.lambda_.Function(
@@ -203,6 +260,7 @@ lambda_function = aws.lambda_.Function(
     handler="app.main.handler",  # Using Mangum handler
     role=lambda_role.arn,
     code=pulumi.FileArchive(build_lambda_package()),
+    layers=all_layers,  # Custom/Klayers + Powertools
     timeout=30,
     memory_size=512,
     environment=aws.lambda_.FunctionEnvironmentArgs(
@@ -213,7 +271,17 @@ lambda_function = aws.lambda_.Function(
             "S3_BUCKET_NAME": images_bucket.bucket,
             "CORS_ORIGINS": "*",
             "AUTH_DISABLED": "true",
+            # Powertools configuration
+            "POWERTOOLS_SERVICE_NAME": "simple-sns-api",
+            "POWERTOOLS_METRICS_NAMESPACE": "SimpleSNS",
+            "POWERTOOLS_LOG_LEVEL": "INFO",
+            "POWERTOOLS_LOGGER_SAMPLE_RATE": "0.1",
+            "POWERTOOLS_TRACER_CAPTURE_RESPONSE": "true",
+            "POWERTOOLS_TRACER_CAPTURE_ERROR": "true",
         }
+    ),
+    tracing_config=aws.lambda_.FunctionTracingConfigArgs(
+        mode="Active",  # Enable X-Ray tracing
     ),
     tags=tags,
 )

@@ -4,7 +4,7 @@ description: AWS Simple SNS (Lambda + API Gateway + DynamoDB + S3) managed by Pu
 
 config:
   aws:region:
-    default: ap-northeast-1
+    value: ap-northeast-1
   simple-sns-aws:environment:
     default: staging
   simple-sns-aws:project_name:

@@ -10,12 +10,25 @@ from app.routes import posts, profile, uploads
 from app.backends import get_backend
 from app.auth import UserInfo, require_user
 
-# ロギング設定
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper()),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+# AWS Lambda Powertools (observability)
+try:
+    from aws_lambda_powertools import Logger, Tracer, Metrics
+    from aws_lambda_powertools.metrics import MetricUnit
+
+    # Powertools Logger (構造化ログ)
+    logger = Logger(service="simple-sns-api")
+    tracer = Tracer(service="simple-sns-api")
+    metrics = Metrics(namespace="SimpleSNS", service="api")
+
+    powertools_available = True
+except ImportError:
+    # Powertools が利用できない場合は標準loggingを使用
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level.upper()),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    logger = logging.getLogger(__name__)
+    powertools_available = False
 
 # FastAPIアプリケーション
 app = FastAPI(
@@ -83,9 +96,15 @@ def legacy_delete_message(
 @app.on_event("startup")
 async def startup_event():
     """アプリケーション起動時の処理"""
-    logger.info(f"Starting Simple SNS API v3.0.0")
-    logger.info(f"Cloud Provider: {settings.cloud_provider.value}")
-    logger.info(f"Auth Disabled: {settings.auth_disabled}")
+    logger.info(
+        "Starting Simple SNS API",
+        extra={
+            "version": "3.0.0",
+            "cloud_provider": settings.cloud_provider.value,
+            "auth_disabled": settings.auth_disabled,
+            "powertools_enabled": powertools_available,
+        },
+    )
 
 
 @app.on_event("shutdown")
@@ -97,6 +116,9 @@ async def shutdown_event():
 @app.get("/", response_model=HealthResponse)
 def root() -> HealthResponse:
     """ルートエンドポイント"""
+    if powertools_available:
+        metrics.add_metric(name="RootEndpointCalled", unit=MetricUnit.Count, value=1)
+
     return HealthResponse(
         status="ok",
         provider=settings.cloud_provider.value,
@@ -106,6 +128,11 @@ def root() -> HealthResponse:
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     """ヘルスチェックエンドポイント"""
+    if powertools_available:
+        metrics.add_metric(name="HealthCheckCalled", unit=MetricUnit.Count, value=1)
+
+    logger.info("Health check requested", extra={"provider": settings.cloud_provider.value})
+
     return HealthResponse(
         status="ok",
         provider=settings.cloud_provider.value,
@@ -116,8 +143,21 @@ def health() -> HealthResponse:
 try:
     from mangum import Mangum
 
-    handler = Mangum(app, lifespan="off")
-    logger.info("Mangum handler initialized for AWS Lambda")
+    _mangum_handler = Mangum(app, lifespan="off")
+
+    if powertools_available:
+        # Powertools decorators を Lambda handler に適用
+        @logger.inject_lambda_context(clear_state=True)
+        @tracer.capture_lambda_handler
+        @metrics.log_metrics(capture_cold_start_metric=True)
+        def handler(event, context):
+            return _mangum_handler(event, context)
+
+        logger.info("Mangum handler initialized with Powertools support")
+    else:
+        handler = _mangum_handler
+        logger.info("Mangum handler initialized for AWS Lambda")
+
 except ImportError:
     logger.warning("Mangum not available - AWS Lambda deployment not supported")
     handler = None

@@ -108,7 +108,7 @@ pulumi stack output cloudfront_url
 - S3 Bucket Policy（OAIアクセス設定）
 - カスタムエラーレスポンス（SPA対応）
 
-**注意:** Lambda関数コードは`ignore_changes`で除外されています。コードは別途`scripts/deploy-lambda-aws.sh`でデプロイしてください。
+**注意:** Lambda関数コードは`ignore_changes`で除外されています。コードはGitHub Actions経由またはPulumi CLIで別途デプロイしてください。
 
 ### Azure Front Door デプロイ
 

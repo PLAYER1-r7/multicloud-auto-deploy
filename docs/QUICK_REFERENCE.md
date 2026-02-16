@@ -41,11 +41,12 @@ CDN: http://34.120.43.83
 ### Lambda関数のデプロイ
 
 ```bash
-# 自動デプロイスクリプト使用（推奨）
-./scripts/deploy-lambda-aws.sh
+# GitHub Actions経由でデプロイ（推奨）
+gh workflow run deploy-aws.yml
 
-# 環境指定
-PROJECT_NAME=myapp ENVIRONMENT=production ./scripts/deploy-lambda-aws.sh
+# または Pulumi CLI を使用
+cd infrastructure/pulumi/aws
+pulumi up
 ```
 
 ### 手動デプロイ
@@ -444,7 +445,6 @@ export ALERT_EMAIL="your@email.com"
 # エイリアス設定
 alias lambda-logs='aws logs tail /aws/lambda/$FUNCTION_NAME --follow'
 alias api-logs='aws logs tail /aws/apigateway/$PROJECT_NAME-$ENVIRONMENT-api --follow'
-alias lambda-deploy='cd ~/projects/multicloud-auto-deploy && ./scripts/deploy-lambda-aws.sh'
 alias api-test='~/projects/multicloud-auto-deploy/scripts/test-api.sh -e https://$API_ID.execute-api.$AWS_REGION.amazonaws.com'
 ```
 

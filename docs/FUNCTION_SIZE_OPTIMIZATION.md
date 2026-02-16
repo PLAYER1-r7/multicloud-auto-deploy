@@ -92,11 +92,7 @@ klayers_arns = [
 ]
 ```
 
-3. 最新の ARN を取得：
-
-```bash
-./scripts/get-klayers-arns.sh
-```
+**注:** 最新の ARN は https://api.klayers.cloud/ で確認できます。
 
 詳細: [LAMBDA_LAYER_PUBLIC_RESOURCES.md](LAMBDA_LAYER_PUBLIC_RESOURCES.md)
 
@@ -247,9 +243,7 @@ Cloud Functions Gen2 は内部的に Cloud Run を使用。コンテナイメー
    - 解凍後の合計サイズ: 250 MB 以下
 
 3. **定期的に ARN を更新**
-   ```bash
-   ./scripts/get-klayers-arns.sh
-   ```
+   - https://api.klayers.cloud/ で最新版を確認
 
 ### ☁️ Azure 固有
 
