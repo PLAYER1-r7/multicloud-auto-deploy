@@ -216,8 +216,7 @@ if stack == "production":
     backend_bucket_kwargs["edge_security_policy"] = armor_security_policy.self_link
 
 backend_bucket = gcp.compute.BackendBucket(
-    "cdn-backend-bucket",
-    **backend_bucket_kwargs
+    "cdn-backend-bucket", **backend_bucket_kwargs
 )
 
 # Managed SSL Certificate (for custom domain - optional)
@@ -348,8 +347,7 @@ if stack == "production":
     )
 else:
     cost_estimate = (
-        cost_estimate_base
-        + "Cloud Armor: Disabled for staging (saves ~$6-7/month). "
+        cost_estimate_base + "Cloud Armor: Disabled for staging (saves ~$6-7/month). "
         "Estimated: $8-15/month for low traffic without Cloud Armor."
     )
 
