@@ -76,21 +76,12 @@ app_secret = gcp.secretmanager.Secret(
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
 
-# Grant access to the secret for the service account used by GitHub Actions
-# This allows Pulumi to read the secret version during deployment
-app_secret_iam_binding = gcp.secretmanager.SecretIamBinding(
-    "app-secret-iam-binding",
-    project=project,
-    secret_id=app_secret.secret_id,
-    role="roles/secretmanager.secretAccessor",
-    members=[
-        # Grant access to the default compute service account
-        pulumi.Output.concat("serviceAccount:", project, "-compute@developer.gserviceaccount.com"),
-        # Grant access to the default App Engine service account
-        pulumi.Output.concat("serviceAccount:", project, "@appspot.gserviceaccount.com"),
-    ],
-    opts=pulumi.ResourceOptions(depends_on=[app_secret]),
-)
+# Grant access to the secret manually via gcloud or Cloud Console
+# IAM bindings must be set manually because Pulumi SA needs setIamPolicy permission
+# Run: scripts/setup-gcp-secret-permissions.sh
+# Or use: gcloud secrets add-iam-policy-binding multicloud-auto-deploy-staging-app-config \
+#         --member="serviceAccount:github-actions-deploy@ashnova.iam.gserviceaccount.com" \
+#         --role="roles/secretmanager.secretAccessor"
 
 # Store initial secret value (example - should be updated with actual values)
 # Note: Skip automatic refresh to avoid permission errors during read
@@ -101,7 +92,7 @@ app_secret_version = gcp.secretmanager.SecretVersion(
         '{"database_url":"changeme","api_key":"changeme"}'
     ),
     opts=pulumi.ResourceOptions(
-        depends_on=[app_secret_iam_binding],
+        depends_on=[app_secret],
         ignore_changes=["secret_data"],  # Don't try to read back the secret value
     ),
 )
