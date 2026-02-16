@@ -324,7 +324,7 @@ lambda_function = aws.lambda_.Function(
     runtime="python3.12",
     handler="index.handler",
     role=lambda_role.arn,
-    memory_size=512,
+    memory_size=256 if stack == "staging" else 512,  # Cost optimization for staging
     timeout=30,
     architectures=["x86_64"],
     # Use inline code or skip code updates
@@ -512,93 +512,95 @@ cloudfront_bucket_policy = aws.s3.BucketPolicy(
 # AWS WAF for CloudFront
 # ========================================
 # WAF Web ACL for DDoS protection and rate limiting
-waf_web_acl = aws.wafv2.WebAcl(
-    "cloudfront-waf",
-    name=f"{project_name}-{stack}-cloudfront-waf",
-    scope="CLOUDFRONT",  # Must be CLOUDFRONT for CloudFront distributions
-    default_action=aws.wafv2.WebAclDefaultActionArgs(
-        allow={},
-    ),
-    rules=[
-        # AWS Managed Rule: Core Rule Set (CRS)
-        aws.wafv2.WebAclRuleArgs(
-            name="AWS-AWSManagedRulesCommonRuleSet",
-            priority=1,
-            override_action=aws.wafv2.WebAclRuleOverrideActionArgs(
-                none={},
-            ),
-            statement=aws.wafv2.WebAclRuleStatementArgs(
-                managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
-                    vendor_name="AWS",
-                    name="AWSManagedRulesCommonRuleSet",
+# Note: WAF is disabled for staging to reduce cost (~$6/month)
+if stack == "production":
+    waf_web_acl = aws.wafv2.WebAcl(
+        "cloudfront-waf",
+        name=f"{project_name}-{stack}-cloudfront-waf",
+        scope="CLOUDFRONT",  # Must be CLOUDFRONT for CloudFront distributions
+        default_action=aws.wafv2.WebAclDefaultActionArgs(
+            allow={},
+        ),
+        rules=[
+            # AWS Managed Rule: Core Rule Set (CRS)
+            aws.wafv2.WebAclRuleArgs(
+                name="AWS-AWSManagedRulesCommonRuleSet",
+                priority=1,
+                override_action=aws.wafv2.WebAclRuleOverrideActionArgs(
+                    none={},
+                ),
+                statement=aws.wafv2.WebAclRuleStatementArgs(
+                    managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
+                        vendor_name="AWS",
+                        name="AWSManagedRulesCommonRuleSet",
+                    ),
+                ),
+                visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
+                    cloudwatch_metrics_enabled=True,
+                    metric_name="AWSManagedRulesCommonRuleSetMetric",
+                    sampled_requests_enabled=True,
                 ),
             ),
-            visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
-                cloudwatch_metrics_enabled=True,
-                metric_name="AWSManagedRulesCommonRuleSetMetric",
-                sampled_requests_enabled=True,
-            ),
-        ),
-        # AWS Managed Rule: Known Bad Inputs
-        aws.wafv2.WebAclRuleArgs(
-            name="AWS-AWSManagedRulesKnownBadInputsRuleSet",
-            priority=2,
-            override_action=aws.wafv2.WebAclRuleOverrideActionArgs(
-                none={},
-            ),
-            statement=aws.wafv2.WebAclRuleStatementArgs(
-                managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
-                    vendor_name="AWS",
-                    name="AWSManagedRulesKnownBadInputsRuleSet",
+            # AWS Managed Rule: Known Bad Inputs
+            aws.wafv2.WebAclRuleArgs(
+                name="AWS-AWSManagedRulesKnownBadInputsRuleSet",
+                priority=2,
+                override_action=aws.wafv2.WebAclRuleOverrideActionArgs(
+                    none={},
+                ),
+                statement=aws.wafv2.WebAclRuleStatementArgs(
+                    managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
+                        vendor_name="AWS",
+                        name="AWSManagedRulesKnownBadInputsRuleSet",
+                    ),
+                ),
+                visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
+                    cloudwatch_metrics_enabled=True,
+                    metric_name="AWSManagedRulesKnownBadInputsRuleSetMetric",
+                    sampled_requests_enabled=True,
                 ),
             ),
-            visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
-                cloudwatch_metrics_enabled=True,
-                metric_name="AWSManagedRulesKnownBadInputsRuleSetMetric",
-                sampled_requests_enabled=True,
-            ),
-        ),
-        # Rate limiting: max 2000 requests per 5 minutes per IP
-        aws.wafv2.WebAclRuleArgs(
-            name="RateLimitRule",
-            priority=3,
-            action=aws.wafv2.WebAclRuleActionArgs(
-                block={},
-            ),
-            statement=aws.wafv2.WebAclRuleStatementArgs(
-                rate_based_statement=aws.wafv2.WebAclRuleStatementRateBasedStatementArgs(
-                    limit=2000,
-                    aggregate_key_type="IP",
+            # Rate limiting: max 2000 requests per 5 minutes per IP
+            aws.wafv2.WebAclRuleArgs(
+                name="RateLimitRule",
+                priority=3,
+                action=aws.wafv2.WebAclRuleActionArgs(
+                    block={},
+                ),
+                statement=aws.wafv2.WebAclRuleStatementArgs(
+                    rate_based_statement=aws.wafv2.WebAclRuleStatementRateBasedStatementArgs(
+                        limit=2000,
+                        aggregate_key_type="IP",
+                    ),
+                ),
+                visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
+                    cloudwatch_metrics_enabled=True,
+                    metric_name="RateLimitRuleMetric",
+                    sampled_requests_enabled=True,
                 ),
             ),
-            visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
-                cloudwatch_metrics_enabled=True,
-                metric_name="RateLimitRuleMetric",
-                sampled_requests_enabled=True,
-            ),
+        ],
+        visibility_config=aws.wafv2.WebAclVisibilityConfigArgs(
+            cloudwatch_metrics_enabled=True,
+            metric_name=f"{project_name}-{stack}-waf-metrics",
+            sampled_requests_enabled=True,
         ),
-    ],
-    visibility_config=aws.wafv2.WebAclVisibilityConfigArgs(
-        cloudwatch_metrics_enabled=True,
-        metric_name=f"{project_name}-{stack}-waf-metrics",
-        sampled_requests_enabled=True,
-    ),
-    tags=common_tags,
-    # WAF for CloudFront must be created in us-east-1
-    opts=pulumi.ResourceOptions(
-        provider=aws.Provider("us-east-1-provider", region="us-east-1")
-    ),
-)
+        tags=common_tags,
+        # WAF for CloudFront must be created in us-east-1
+        opts=pulumi.ResourceOptions(
+            provider=aws.Provider("us-east-1-provider", region="us-east-1")
+        ),
+    )
 
-# CloudFront Distribution with WAF
-cloudfront_distribution = aws.cloudfront.Distribution(
-    "cloudfront-distribution",
-    enabled=True,
-    is_ipv6_enabled=True,
-    comment=f"{project_name}-{stack} Frontend Distribution",
-    default_root_object="index.html",
-    web_acl_id=waf_web_acl.arn,  # Attach WAF
-    origins=[
+# CloudFront Distribution with conditional WAF
+# Use PriceClass_100 for staging (North America + Europe) to reduce cost
+cloudfront_kwargs = {
+    "enabled": True,
+    "is_ipv6_enabled": True,
+    "comment": f"{project_name}-{stack} Frontend Distribution",
+    "default_root_object": "index.html",
+    "price_class": "PriceClass_100" if stack == "staging" else "PriceClass_All",
+    "origins": [
         aws.cloudfront.DistributionOriginArgs(
             origin_id=frontend_bucket.bucket_regional_domain_name,
             domain_name=frontend_bucket.bucket_regional_domain_name,
@@ -607,7 +609,7 @@ cloudfront_distribution = aws.cloudfront.Distribution(
             ),
         )
     ],
-    default_cache_behavior=aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
+    "default_cache_behavior": aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
         target_origin_id=frontend_bucket.bucket_regional_domain_name,
         viewer_protocol_policy="redirect-to-https",
         allowed_methods=["GET", "HEAD", "OPTIONS"],
@@ -623,8 +625,7 @@ cloudfront_distribution = aws.cloudfront.Distribution(
         default_ttl=3600,  # 1 hour
         max_ttl=86400,  # 24 hours
     ),
-    # Custom error response for SPA routing
-    custom_error_responses=[
+    "custom_error_responses": [
         aws.cloudfront.DistributionCustomErrorResponseArgs(
             error_code=403,
             response_code=200,
@@ -636,15 +637,23 @@ cloudfront_distribution = aws.cloudfront.Distribution(
             response_page_path="/index.html",
         ),
     ],
-    restrictions=aws.cloudfront.DistributionRestrictionsArgs(
+    "restrictions": aws.cloudfront.DistributionRestrictionsArgs(
         geo_restriction=aws.cloudfront.DistributionRestrictionsGeoRestrictionArgs(
             restriction_type="none",
         ),
     ),
-    viewer_certificate=aws.cloudfront.DistributionViewerCertificateArgs(
+    "viewer_certificate": aws.cloudfront.DistributionViewerCertificateArgs(
         cloudfront_default_certificate=True,
     ),
-    tags=common_tags,
+    "tags": common_tags,
+}
+
+# Add WAF only for production
+if stack == "production":
+    cloudfront_kwargs["web_acl_id"] = waf_web_acl.arn
+
+cloudfront_distribution = aws.cloudfront.Distribution(
+    "cloudfront-distribution", **cloudfront_kwargs
 )
 
 # ========================================
@@ -667,8 +676,10 @@ pulumi.export(
     "cloudfront_url",
     cloudfront_distribution.domain_name.apply(lambda domain: f"https://{domain}"),
 )
-pulumi.export("waf_web_acl_id", waf_web_acl.id)
-pulumi.export("waf_web_acl_arn", waf_web_acl.arn)
+# WAF exports only for production
+if stack == "production":
+    pulumi.export("waf_web_acl_id", waf_web_acl.id)
+    pulumi.export("waf_web_acl_arn", waf_web_acl.arn)
 pulumi.export("secret_name", app_secret.name)
 pulumi.export("secret_arn", app_secret.arn)
 pulumi.export("cognito_user_pool_id", user_pool.id)
