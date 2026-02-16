@@ -115,6 +115,7 @@ def health() -> HealthResponse:
 # AWS Lambda handler (Mangum)
 try:
     from mangum import Mangum
+
     handler = Mangum(app, lifespan="off")
     logger.info("Mangum handler initialized for AWS Lambda")
 except ImportError:
