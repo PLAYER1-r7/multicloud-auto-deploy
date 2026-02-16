@@ -1,3 +1,15 @@
+# Multi-Cloud API Requirements
+# ⚠️ This file contains ALL dependencies for ALL cloud providers.
+# For production deployments, use cloud-specific requirements files:
+#   - requirements-aws.txt (AWS Lambda with Klayers)
+#   - requirements-azure.txt (Azure Functions)
+#   - requirements-gcp.txt (GCP Cloud Functions)
+#
+# This file is used for:
+#   - Local development
+#   - Testing
+#   - Docker builds
+
 # FastAPI Core
 fastapi==0.115.0
 pydantic==2.9.0

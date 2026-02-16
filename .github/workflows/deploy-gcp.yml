@@ -92,28 +92,56 @@ jobs:
         run: |
           cd services/api
           
-          echo "📦 Creating deployment package..."
+          echo "📦 Creating optimized deployment package..."
           
           # Create deployment directory
           rm -rf .deployment
           mkdir -p .deployment
           
-          # Install dependencies
-          pip install --target .deployment -r requirements.txt
+          # Install GCP-specific dependencies only
+          echo "Installing GCP-specific dependencies..."
+          pip install --target .deployment --no-cache-dir -r requirements-gcp.txt
+          
+          # Aggressive cleanup of unnecessary files
+          echo "Cleaning up unnecessary files..."
+          find .deployment -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
+          find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
+          find .deployment -type f -name "*.so" -delete 2>/dev/null || true
+          
+          # Remove test and documentation files
+          find .deployment -type f -name "test_*.py" -delete 2>/dev/null || true
+          find .deployment -type f -name "*_test.py" -delete 2>/dev/null || true
+          find .deployment -type d -name "docs" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "examples" -exec rm -rf {} + 2>/dev/null || true
           
           # Copy application code
           cp -r app .deployment/
           # Rename function.py to main.py for Cloud Functions
           cp function.py .deployment/main.py
-          cp requirements.txt .deployment/
+          cp requirements-gcp.txt .deployment/requirements.txt
           
-          # Create ZIP package
+          # Clean up app __pycache__
+          find .deployment/app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          
+          # Create ZIP package with maximum compression
           cd .deployment
-          zip -r ../function-source.zip .
+          zip -r9 -q ../function-source.zip .
           cd ..
           
           echo "✅ Package created:"
           ls -lh function-source.zip
+          PACKAGE_SIZE=$(du -h function-source.zip | cut -f1)
+          PACKAGE_SIZE_KB=$(du -k function-source.zip | cut -f1)
+          echo "📦 Package size: $PACKAGE_SIZE ($PACKAGE_SIZE_KB KB)"
+          
+          # Show size breakdown
+          echo ""
+          echo "📊 Top 10 largest items in package:"
+          unzip -l function-source.zip | sort -k4 -n -r | head -n 11
 
       - name: Deploy Cloud Function
         id: deploy_function

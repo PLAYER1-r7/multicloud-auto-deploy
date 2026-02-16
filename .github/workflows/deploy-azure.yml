@@ -114,35 +114,50 @@ jobs:
           rm -rf .deployment
           mkdir -p .deployment
           
-          # Install dependencies to deployment directory
-          echo "Installing dependencies..."
-          pip install --target .deployment --no-cache-dir -r requirements.txt
+          # Install dependencies to deployment directory (Azure-specific only)
+          echo "Installing Azure-specific dependencies..."
+          pip install --target .deployment --no-cache-dir -r requirements-azure.txt
           
-          # Clean up unnecessary files from dependencies
+          # Aggressive cleanup of unnecessary files
           echo "Cleaning up unnecessary files..."
           find .deployment -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-          find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
-          find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
           find .deployment -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
           find .deployment -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
+          find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
+          find .deployment -type f -name "*.so" -delete 2>/dev/null || true
+          
+          # Remove test and documentation files
+          find .deployment -type f -name "test_*.py" -delete 2>/dev/null || true
+          find .deployment -type f -name "*_test.py" -delete 2>/dev/null || true
+          find .deployment -type d -name "docs" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "examples" -exec rm -rf {} + 2>/dev/null || true
           
           # Copy application code
           cp -r app .deployment/
           cp function_app.py .deployment/
           cp host.json .deployment/
-          cp requirements.txt .deployment/
+          cp requirements-azure.txt .deployment/requirements.txt
           
           # Clean up app __pycache__
           find .deployment/app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
           
-          # Create ZIP package
+          # Create ZIP package with maximum compression
           cd .deployment
-          zip -r -q ../function-app.zip .
+          zip -r9 -q ../function-app.zip .
           cd ..
           
           echo "✅ Package created:"
           ls -lh function-app.zip
-          echo "Package size: $(du -h function-app.zip | cut -f1)"
+          PACKAGE_SIZE=$(du -h function-app.zip | cut -f1)
+          PACKAGE_SIZE_KB=$(du -k function-app.zip | cut -f1)
+          echo "📦 Package size: $PACKAGE_SIZE ($PACKAGE_SIZE_KB KB)"
+          
+          # Show size breakdown
+          echo ""
+          echo "📊 Top 10 largest items in package:"
+          unzip -l function-app.zip | sort -k4 -n -r | head -n 11
 
       - name: Deploy Function App
         run: | 

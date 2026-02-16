@@ -176,7 +176,8 @@ git push origin main
 - 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策
 - 🌐 [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のエンドポイント情報
 - 🌍 [CDNセットアップガイド](docs/CDN_SETUP.md) - CloudFront/Front Door/Cloud CDN設定 🆕
-- 📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
+- � [関数サイズ最適化](docs/FUNCTION_SIZE_OPTIMIZATION.md) - デプロイパッケージサイズ削減（AWS 97%削減！） 🆕
+- �📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
 
 ### プロバイダー別デプロイ
 - [AWS デプロイ](docs/AWS_DEPLOYMENT.md)
