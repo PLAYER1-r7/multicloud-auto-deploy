@@ -1,6 +1,6 @@
-from typing import Optional
+from typing import Optional, Any
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 
 
 class CloudProvider(str, Enum):
@@ -43,6 +43,16 @@ class ListPostsResponse(BaseModel):
     next_token: Optional[str] = Field(None, alias="nextToken")
 
     model_config = {"populate_by_name": True}
+    
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        """後方互換性: resultsフィールドを追加"""
+        return {
+            "items": self.items,
+            "results": self.items,  # 旧フロントエンド互換
+            "limit": self.limit,
+            "nextToken": self.next_token,
+        }
 
 
 class ProfileResponse(BaseModel):
