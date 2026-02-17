@@ -1,121 +1,71 @@
 {
-  "name": "Ashnova Multi-Cloud Development",
-  // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+  "name": "Multi-Cloud Auto Deploy",
   "build": {
-    "dockerfile": "Dockerfile"
+    "dockerfile": "Dockerfile",
+    "context": "."
   },
-  // Features to add to the dev container. More info: https://containers.dev/features.
   "features": {
-    "ghcr.io/devcontainers/features/aws-cli:1": {
-      "version": "latest"
-    },
-    "ghcr.io/devcontainers/features/azure-cli:1": {
-      "version": "latest",
-      "bicepVersion": "latest"
-    },
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "moby": true,
-      "azureDnsAutoDetection": true,
-      "installDockerBuildx": true,
       "version": "latest",
-      "dockerDashComposeVersion": "none"
+      "dockerDashComposeVersion": "v2",
+      "moby": false
     },
     "ghcr.io/devcontainers/features/node:1": {
-      "nodeGypDependencies": true,
-      "version": "lts",
-      "pnpmVersion": "latest",
-      "nvmVersion": "latest"
+      "version": "22"
     },
-    "ghcr.io/devcontainers/features/git:1": {
-      "ppa": true,
-      "version": "latest"
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12"
     },
-    "ghcr.io/devcontainers/features/github-cli:1": {
-      "installDirectlyFromGitHubRelease": true,
-      "version": "latest"
-    },
+    "ghcr.io/devcontainers/features/aws-cli:1": {},
+    "ghcr.io/devcontainers/features/azure-cli:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/github-copilot-cli:1": {},
     "ghcr.io/devcontainers-extra/features/pulumi:1": {
-      "bashCompletion": true,
-      "version": "latest"
-    },
-    "ghcr.io/devcontainers/features/copilot-cli:1": {
       "version": "latest"
     }
   },
-  // Mount the local .aws directory to the container to persist credentials
-  "mounts": [
-    "source=${localEnv:HOME}/.aws,target=/home/vscode/.aws,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.config/gcloud,target=/home/vscode/.config/gcloud,type=bind,consistency=cached"
-  ],
-  "remoteEnv": {
-    "PATH": "${containerEnv:PATH}:/home/vscode/.pulumi/bin"
-  },
-  // Use 'postCreateCommand' to run commands after the container is created.
-  "postCreateCommand": "bash .devcontainer/setup.sh",
-  // Ensure environment is up to date on every start
-  "postStartCommand": "bash .devcontainer/setup.sh",
-  // Configure tool-specific properties.
   "customizations": {
     "vscode": {
       "extensions": [
+        "pulumi.pulumi-lsp-client",
+        "ms-azuretools.vscode-docker",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "ms-python.black-formatter",
-        "hashicorp.terraform",
-        "ms-azuretools.vscode-docker",
-        "esbenp.prettier-vscode",
-        "foxundermoon.shell-format",
-        "tamasfe.even-better-toml",
-        "yzhang.markdown-all-in-one",
-        "pulumi.pulumi-lsp-client",
+        "redhat.vscode-yaml",
         "github.vscode-github-actions",
-        "github.copilot"
+        "ms-vscode.azure-account",
+        "amazonwebservices.aws-toolkit-vscode",
+        "googlecloudtools.cloudcode"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "/workspaces/ashnova/ashnova.v3/services/api_v2/.venv/bin/python",
-        "python.terminal.activateEnvironment": true,
-        "python.analysis.extraPaths": [
-          "/workspaces/ashnova/ashnova.v3/services/api_v2",
-          "/workspaces/ashnova/ashnova.v3/services/web"
-        ],
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
         "[python]": {
-          "editor.formatOnSave": true,
-          "editor.defaultFormatter": "ms-python.black-formatter"
+          "editor.tabSize": 4
+        },
+        "[markdown]": {
+          "editor.wordWrap": "on"
         }
       }
     }
   },
-  // Use 'forwardPorts' to make a list of ports inside the container available locally.
   "forwardPorts": [
-    8000, // API
-    8080, // Web (SSR)
-    5432, // PostgreSQL
-    9000, // MinIO API
-    9001, // MinIO Console
-    5173 // Static Site
+    3000,
+    8000,
+    8080
   ],
-  "portsAttributes": {
-    "8000": {
-      "label": "API (FastAPI)",
-      "onAutoForward": "notify"
-    },
-    "8080": {
-      "label": "Web App (SSR)",
-      "onAutoForward": "openBrowser"
-    },
-    "5432": {
-      "label": "PostgreSQL"
-    },
-    "9000": {
-      "label": "MinIO API"
-    },
-    "9001": {
-      "label": "MinIO Console"
-    },
-    "5173": {
-      "label": "Static Site"
-    }
-  }
-  // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-  // "remoteUser": "root"
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "remoteUser": "vscode",
+  "mounts": [
+    "source=${localEnv:HOME}/.aws,target=/home/vscode/.aws,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.azure,target=/home/vscode/.azure,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.config/gcloud,target=/home/vscode/.config/gcloud,type=bind,consistency=cached"
+  ]
 }

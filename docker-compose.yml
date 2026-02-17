@@ -1,0 +1,69 @@
+services:
+  # ========================================
+  # FastAPI Backend (New Python implementation)
+  # ========================================
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - CLOUD_PROVIDER=local
+      - CORS_ORIGINS=*
+      - AUTH_DISABLED=true
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET_NAME=simple-sns
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./services/api/app:/app/app
+    depends_on:
+      - minio
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ========================================
+  # Reflex Web Frontend (New Python implementation)
+  # ========================================
+  frontend_reflex:
+    build:
+      context: ./services/frontend_reflex
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"  # Frontend
+      - "3003:3003"  # Reflex backend (WebSocket)
+    environment:
+      - API_URL=http://api:8000
+    volumes:
+      - ./services/frontend_reflex:/app
+      - /app/.web
+    depends_on:
+      - api
+
+  # ========================================
+  # MinIO (S3-compatible storage for local dev)
+  # ========================================
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"  # Console
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+networks:
+  default:
+    name: multicloud-network
+
+volumes:
+  minio-data:

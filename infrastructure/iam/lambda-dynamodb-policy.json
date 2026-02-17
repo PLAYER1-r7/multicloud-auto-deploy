@@ -1,0 +1,21 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DynamoDBAccess",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Scan",
+        "dynamodb:Query",
+        "dynamodb:UpdateItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:us-east-1:278280499340:table/multicloud-auto-deploy-staging-messages",
+        "arn:aws:dynamodb:us-east-1:278280499340:table/multicloud-auto-deploy-staging-messages/index/*"
+      ]
+    }
+  ]
+}

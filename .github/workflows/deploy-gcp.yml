@@ -1,0 +1,217 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "infrastructure/pulumi/gcp/**"
+      - ".github/workflows/deploy-gcp.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  GCP_REGION: asia-northeast1
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Install Pulumi Python Dependencies
+        run: |
+          cd infrastructure/pulumi/gcp
+          pip install -r requirements.txt
+
+      - name: Initialize Pulumi Stack
+        run: |
+          cd infrastructure/pulumi/gcp
+          pulumi login
+          pulumi stack select staging 2>/dev/null || pulumi stack init staging
+          pulumi config set gcp:project ${{ secrets.GCP_PROJECT_ID }}
+          pulumi config set gcp:region asia-northeast1
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Deploy Infrastructure with Pulumi
+        id: pulumi
+        uses: pulumi/actions@v5
+        with:
+          command: up
+          stack-name: staging
+          work-dir: infrastructure/pulumi/gcp
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Get Pulumi Outputs
+        id: pulumi_outputs
+        run: |
+          cd infrastructure/pulumi/gcp
+          echo "function_source_bucket=$(pulumi stack output function_source_bucket)" >> $GITHUB_OUTPUT
+          echo "frontend_bucket=$(pulumi stack output frontend_bucket)" >> $GITHUB_OUTPUT
+          echo "function_name=$(pulumi stack output function_name)" >> $GITHUB_OUTPUT
+
+      - name: Package Cloud Function
+        run: |
+          cd services/api
+          
+          echo "📦 Creating optimized deployment package..."
+          
+          # Create deployment directory
+          rm -rf .deployment
+          mkdir -p .deployment
+          
+          # Install GCP-specific dependencies only
+          echo "Installing GCP-specific dependencies..."
+          pip install --target .deployment --no-cache-dir -r requirements-gcp.txt
+          
+          # Aggressive cleanup of unnecessary files
+          echo "Cleaning up unnecessary files..."
+          find .deployment -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
+          find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
+          find .deployment -type f -name "*.so" -delete 2>/dev/null || true
+          
+          # Remove test and documentation files
+          find .deployment -type f -name "test_*.py" -delete 2>/dev/null || true
+          find .deployment -type f -name "*_test.py" -delete 2>/dev/null || true
+          find .deployment -type d -name "docs" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "examples" -exec rm -rf {} + 2>/dev/null || true
+          
+          # Copy application code
+          cp -r app .deployment/
+          # Rename function.py to main.py for Cloud Functions
+          cp function.py .deployment/main.py
+          cp requirements-gcp.txt .deployment/requirements.txt
+          
+          # Clean up app __pycache__
+          find .deployment/app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          
+          # Create ZIP package with maximum compression
+          cd .deployment
+          zip -r9 -q ../function-source.zip .
+          cd ..
+          
+          echo "✅ Package created:"
+          ls -lh function-source.zip
+          PACKAGE_SIZE=$(du -h function-source.zip | cut -f1)
+          PACKAGE_SIZE_KB=$(du -k function-source.zip | cut -f1)
+          echo "📦 Package size: $PACKAGE_SIZE ($PACKAGE_SIZE_KB KB)"
+          
+          # Show size breakdown
+          echo ""
+          echo "📊 Top 10 largest items in package:"
+          unzip -l function-source.zip | sort -k4 -n -r | head -n 11
+
+      - name: Deploy Cloud Function
+        id: deploy_function
+        run: |
+          # Use values from Pulumi outputs
+          PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+          FUNCTION_NAME="${{ steps.pulumi_outputs.outputs.function_name }}"
+          FUNCTION_BUCKET="${{ steps.pulumi_outputs.outputs.function_source_bucket }}"
+          REGION=${{ env.GCP_REGION }}
+          
+          echo "🚀 Deploying Cloud Function: $FUNCTION_NAME"
+          echo "  Project: $PROJECT_ID"
+          echo "  Bucket: $FUNCTION_BUCKET"
+          echo "  Region: $REGION"
+          
+          # Upload source to GCS
+          gsutil cp services/api/function-source.zip gs://$FUNCTION_BUCKET/function-source.zip
+          
+          # Deploy function (creates if not exists, updates if exists)
+          gcloud functions deploy $FUNCTION_NAME \
+            --gen2 \
+            --region=$REGION \
+            --runtime=python311 \
+            --source=gs://$FUNCTION_BUCKET/function-source.zip \
+            --entry-point=handler \
+            --trigger-http \
+            --allow-unauthenticated \
+            --max-instances=10 \
+            --memory=512MB \
+            --timeout=60s \
+            --set-env-vars=ENVIRONMENT=staging,CLOUD_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,FIRESTORE_COLLECTION=messages
+          
+          # Get function URL
+          FUNCTION_URL=$(gcloud functions describe $FUNCTION_NAME --region=$REGION --gen2 --format="value(serviceConfig.uri)")
+          echo "api_url=$FUNCTION_URL" >> $GITHUB_OUTPUT
+          
+          echo "✅ Cloud Function deployed successfully"
+          echo "  URL: $FUNCTION_URL"
+
+      - name: Build Frontend
+        run: |
+          # Use API URL from Cloud Functions deployment
+          API_URL="${{ steps.deploy_function.outputs.api_url }}"
+          
+          echo "Building frontend with API URL: $API_URL"
+
+          cd services/frontend_react
+          npm install
+          VITE_API_URL=$API_URL npm run build
+
+      - name: Deploy Frontend to Cloud Storage
+        run: |
+          # Use bucket name from Pulumi output
+          BUCKET_NAME="${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
+          
+          echo "Deploying frontend to bucket: $BUCKET_NAME"
+
+          # Upload frontend to Cloud Storage
+          gsutil -m cp -r services/frontend_react/dist/* gs://$BUCKET_NAME/
+
+          # Make objects public
+          gsutil -m acl ch -u AllUsers:R gs://$BUCKET_NAME/** || true
+
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "✅ GCP deployment succeeded!"
+          echo "📍 Function URL: ${{ steps.deploy_function.outputs.api_url }}"
+          echo "🌐 Frontend Bucket: ${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ GCP deployment failed!"

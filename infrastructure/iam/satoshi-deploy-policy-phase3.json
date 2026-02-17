@@ -1,0 +1,30 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LambdaCodeSigningRead",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:GetFunctionCodeSigningConfig"
+      ],
+      "Resource": "arn:aws:lambda:us-east-1:278280499340:function:multicloud-auto-deploy-*"
+    },
+    {
+      "Sid": "DynamoDBTimeToLive",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:DescribeTimeToLive"
+      ],
+      "Resource": "arn:aws:dynamodb:us-east-1:278280499340:table/multicloud-auto-deploy-*"
+    },
+    {
+      "Sid": "S3BucketAcl",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketAcl",
+        "s3:PutBucketAcl"
+      ],
+      "Resource": "arn:aws:s3:::multicloud-auto-deploy-*"
+    }
+  ]
+}

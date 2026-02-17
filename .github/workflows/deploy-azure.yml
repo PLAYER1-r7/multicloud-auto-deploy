@@ -1,0 +1,428 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "infrastructure/pulumi/azure/**"
+      - ".github/workflows/deploy-azure.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  AZURE_REGION: japaneast
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Skip initial Azure Login - use Service Principal env vars for Terraform only
+      # - name: Azure Login
+      #   uses: azure/login@v1
+      #   with:
+      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Install Pulumi Python Dependencies
+        run: |
+          cd infrastructure/pulumi/azure
+          pip install -r requirements.txt
+
+      - name: Initialize Pulumi Stack
+        run: |
+          cd infrastructure/pulumi/azure
+          pulumi login
+          pulumi stack select staging 2>/dev/null || pulumi stack init staging
+          pulumi config set azure-native:location japaneast
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set Azure Environment Variables
+        id: azure_env
+        run: |
+          echo "subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_OUTPUT
+          CREDS='${{ secrets.AZURE_CREDENTIALS }}'
+          echo "client_id=$(echo $CREDS | jq -r '.clientId')" >> $GITHUB_OUTPUT
+          echo "client_secret=$(echo $CREDS | jq -r '.clientSecret')" >> $GITHUB_OUTPUT
+          echo "tenant_id=$(echo $CREDS | jq -r '.tenantId')" >> $GITHUB_OUTPUT
+
+      # Pulumi Infrastructure deployment is skipped - using Portal-created resources
+      # Azure Portal quota limitations prevent IaC-based App Service Plan creation
+      # Resources created manually: multicloud-auto-deploy-staging-func (FC1 Flex Consumption)
+
+      - name: Use Portal-Created Resources
+        id: pulumi_outputs
+        run: |
+          echo "resource_group_name=multicloud-auto-deploy-staging-rg" >> $GITHUB_OUTPUT
+          echo "function_app_name=multicloud-auto-deploy-staging-func" >> $GITHUB_OUTPUT
+          
+          # Get storage account name dynamically
+          STORAGE_NAME=$(az storage account list --resource-group multicloud-auto-deploy-staging-rg --query "[?starts_with(name, 'multicloud')].name | [0]" -o tsv)
+          echo "functions_storage_name=${STORAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "frontend_storage_name=mcadwebd45ihd" >> $GITHUB_OUTPUT
+          
+          # Get Function App URL - use config hostname list for Flex Consumption plan
+          # (defaultHostName is not reliable for Flex Consumption SKU)
+          FUNC_HOSTNAME=$(az functionapp config hostname list \
+            --webapp-name multicloud-auto-deploy-staging-func \
+            --resource-group multicloud-auto-deploy-staging-rg \
+            --query '[0].name' -o tsv)
+          API_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
+          echo "api_url=${API_URL}" >> $GITHUB_OUTPUT
+          
+          echo "📍 Configured API URL: ${API_URL}"
+
+      - name: Package Function App
+        run: |
+          cd services/api
+          
+          echo "📦 Creating optimized deployment package..."
+          
+          # Create deployment directory
+          rm -rf .deployment
+          mkdir -p .deployment
+          
+          # Install dependencies to deployment directory (Azure-specific only)
+          echo "Installing Azure-specific dependencies..."
+          pip install --target .deployment --no-cache-dir -r requirements-azure.txt
+          
+          # Aggressive cleanup of unnecessary files
+          echo "Cleaning up unnecessary files..."
+          find .deployment -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
+          find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
+          find .deployment -type f -name "*.so" -delete 2>/dev/null || true
+          
+          # Remove test and documentation files
+          find .deployment -type f -name "test_*.py" -delete 2>/dev/null || true
+          find .deployment -type f -name "*_test.py" -delete 2>/dev/null || true
+          find .deployment -type d -name "docs" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "examples" -exec rm -rf {} + 2>/dev/null || true
+          
+          # Copy application code
+          cp -r app .deployment/
+          cp function_app.py .deployment/
+          cp host.json .deployment/
+          cp requirements-azure.txt .deployment/requirements.txt
+          
+          # Clean up app __pycache__
+          find .deployment/app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          
+          # Create ZIP package with maximum compression
+          cd .deployment
+          zip -r9 -q ../function-app.zip .
+          cd ..
+          
+          echo "✅ Package created:"
+          ls -lh function-app.zip
+          PACKAGE_SIZE=$(du -h function-app.zip | cut -f1)
+          PACKAGE_SIZE_KB=$(du -k function-app.zip | cut -f1)
+          echo "📦 Package size: $PACKAGE_SIZE ($PACKAGE_SIZE_KB KB)"
+          
+          # Show size breakdown
+          echo ""
+          echo "📊 Top 10 largest items in package:"
+          unzip -l function-app.zip | sort -k4 -n -r | head -n 11
+
+      - name: Deploy Function App
+        run: | 
+          FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
+          COSMOS_ACCOUNT="multicloud-auto-deploy-staging"
+          
+          echo "🚀 Deploying to Function App: $FUNCTION_APP"
+          
+          # Check for ongoing deployments and wait if necessary
+          echo "🔍 Checking for ongoing deployments..."
+          MAX_WAIT=300  # 5 minutes max wait
+          WAIT_COUNT=0
+          while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+            # Get deployment status from Kudu API
+            DEPLOY_STATUS=$(az rest --method get \
+              --url "https://${FUNCTION_APP}.scm.azurewebsites.net/api/deployments/latest" \
+              --resource "https://management.azure.com/" \
+              --query "status" -o tsv 2>/dev/null || echo "Unknown")
+            
+            if [ "$DEPLOY_STATUS" = "Running" ] || [ "$DEPLOY_STATUS" = "Building" ]; then
+              echo "⏳ Deployment in progress (status: $DEPLOY_STATUS), waiting 30s..."
+              sleep 30
+              WAIT_COUNT=$((WAIT_COUNT+30))
+            else
+              echo "✅ No ongoing deployment detected"
+              break
+            fi
+          done
+          
+          if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
+            echo "⚠️  Timeout waiting for previous deployment, proceeding anyway..."
+          fi
+          
+          sleep 10  # Additional safety buffer
+          
+          # Get Cosmos DB endpoint and keys directly from the resource
+          echo "🔑 Getting Cosmos DB credentials..."
+          COSMOS_ENDPOINT=$(az cosmosdb show \
+            --name $COSMOS_ACCOUNT \
+            --resource-group $RESOURCE_GROUP \
+            --query documentEndpoint -o tsv)
+          
+          COSMOS_KEY=$(az cosmosdb keys list \
+            --name $COSMOS_ACCOUNT \
+            --resource-group $RESOURCE_GROUP \
+            --type keys \
+            --query primaryMasterKey -o tsv)
+          
+          if [ -z "$COSMOS_ENDPOINT" ] || [ -z "$COSMOS_KEY" ]; then
+            echo "❌ Failed to retrieve Cosmos DB credentials"
+            exit 1
+          fi
+          
+          echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
+          
+          # Set environment variables
+          echo "⚙️  Setting environment variables..."
+          az functionapp config appsettings set \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --settings \
+              CLOUD_PROVIDER=azure \
+              ENVIRONMENT=staging \
+              AZURE_COSMOS_ENDPOINT="${COSMOS_ENDPOINT}" \
+              AZURE_COSMOS_KEY="${COSMOS_KEY}" \
+              AZURE_COSMOS_DATABASE=multicloud-db \
+              AZURE_COSMOS_CONTAINER=messages \
+            > /dev/null
+          
+          echo "📦 Deploying function app package (with retry logic)..."
+          
+          # Retry deployment up to 3 times to handle Kudu restarts
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          DEPLOY_SUCCESS=false
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
+            
+            # Run deployment and capture output
+            az functionapp deployment source config-zip \
+              --resource-group $RESOURCE_GROUP \
+              --name $FUNCTION_APP \
+              --src services/api/function-app.zip \
+              --timeout 600 \
+              2>&1 | tee deploy_log.txt || true
+            
+            # Check for "another deployment in progress" error (retry with longer wait)
+            if grep -q "another deployment is in progress" deploy_log.txt; then
+              echo "⏳ Another deployment in progress, waiting 60s before retry..."
+              RETRY_COUNT=$((RETRY_COUNT+1))
+              sleep 60
+              continue
+            fi
+            
+            # Check for Kudu restart
+            if grep -q "Kudu has been restarted" deploy_log.txt; then
+              echo "🔄 Kudu restart detected, retrying..."
+              RETRY_COUNT=$((RETRY_COUNT+1))
+              sleep 30
+              continue
+            fi
+            
+            # Check for successful deployment (in order of reliability)
+            # 1. Explicit success message (most reliable for Flex Consumption)
+            if grep -q "Deployment was successful" deploy_log.txt; then
+              echo "✅ Deployment successful!"
+              DEPLOY_SUCCESS=true
+              break
+            # 2. Deployment steps completed (for other plan types)
+            elif grep -q "UploadPackageStep.*completed" deploy_log.txt || \
+                 grep -q "SyncTriggerStep" deploy_log.txt; then
+              echo "✅ Deployment steps completed!"
+              DEPLOY_SUCCESS=true
+              break
+            # 3. Critical error (but not "partially successful" or "in progress")
+            elif grep -q "ERROR:" deploy_log.txt && \
+                 ! grep -q "partially successful" deploy_log.txt && \
+                 ! grep -q "another deployment is in progress" deploy_log.txt; then
+              echo "❌ Critical deployment error"
+              cat deploy_log.txt
+              exit 1
+            else
+              echo "⚠️  Deployment status unclear, retrying..."
+              RETRY_COUNT=$((RETRY_COUNT+1))
+              sleep 30
+            fi
+          done
+          
+          if [ "$DEPLOY_SUCCESS" = false ]; then
+            echo "⚠️  Deployment uncertain after $MAX_RETRIES attempts, checking function health..."
+          else
+            echo "✅ Deployment completed successfully!"
+          fi
+
+      - name: Build Frontend
+        run: |
+          cd services/frontend_react
+          
+          API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
+          echo "🔧 Building frontend with API_URL: $API_URL"
+          
+          npm install
+          npm run build
+          
+          # Verify the API URL was embedded
+          echo "🔍 Verifying built assets..."
+          grep -r "multicloud-auto-deploy-staging-func" dist/ || echo "⚠️ API URL not found in build - check VITE_API_URL"
+        env:
+          VITE_API_URL: ${{ steps.pulumi_outputs.outputs.api_url }}
+
+      - name: Enable Static Website Hosting
+        run: |
+          STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+          
+          echo "🌐 Enabling static website hosting on $STORAGE_ACCOUNT..."
+          
+          # Get storage account key
+          STORAGE_KEY=$(az storage account keys list \
+            --resource-group multicloud-auto-deploy-staging-rg \
+            --account-name $STORAGE_ACCOUNT \
+            --query '[0].value' -o tsv)
+          
+          az storage blob service-properties update \
+            --account-name $STORAGE_ACCOUNT \
+            --account-key $STORAGE_KEY \
+            --static-website \
+            --index-document index.html \
+            --404-document index.html
+
+      - name: Deploy Frontend to Storage
+        run: |
+          # Use storage account from Pulumi output
+          STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+          
+          # Get storage account key
+          STORAGE_KEY=$(az storage account keys list \
+            --resource-group multicloud-auto-deploy-staging-rg \
+            --account-name $STORAGE_ACCOUNT \
+            --query '[0].value' -o tsv)
+
+          # Upload frontend to blob storage
+          az storage blob upload-batch \
+            --account-name $STORAGE_ACCOUNT \
+            --account-key $STORAGE_KEY \
+            --source services/frontend_react/dist \
+            --destination '$web' \
+            --overwrite
+
+      - name: Verify Deployment
+        run: |
+          FUNCTION_APP="multicloud-auto-deploy-staging-func"
+          RESOURCE_GROUP="multicloud-auto-deploy-staging-rg"
+          
+          echo "🔍 Verifying API deployment..."
+          echo "Getting Function App hostname..."
+          
+          # Get hostname - for Flex Consumption plan, use config hostname list
+          # (defaultHostName is not reliable for Flex Consumption SKU)
+          max_hostname_attempts=10
+          hostname_attempt=0
+          FUNC_HOSTNAME=""
+          
+          while [ $hostname_attempt -lt $max_hostname_attempts ]; do
+            FUNC_HOSTNAME=$(az functionapp config hostname list \
+              --webapp-name $FUNCTION_APP \
+              --resource-group $RESOURCE_GROUP \
+              --query '[0].name' -o tsv 2>/dev/null || echo "")
+            
+            if [ -n "$FUNC_HOSTNAME" ] && [ "$FUNC_HOSTNAME" != "None" ]; then
+              echo "✅ Got hostname: $FUNC_HOSTNAME"
+              break
+            else
+              echo "⏳ Waiting for Function App to be ready... (attempt $((hostname_attempt+1))/$max_hostname_attempts)"
+              sleep 10
+              hostname_attempt=$((hostname_attempt+1))
+            fi
+          done
+          
+          if [ -z "$FUNC_HOSTNAME" ] || [ "$FUNC_HOSTNAME" = "None" ]; then
+            echo "❌ Failed to get Function App hostname after waiting"
+            echo "Try checking manually: az functionapp config hostname list --webapp-name $FUNCTION_APP --resource-group $RESOURCE_GROUP"
+            exit 1
+          fi
+          
+          FUNC_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
+          echo "Testing: ${FUNC_URL}/health"
+          
+          # Wait for function to be ready (max 3 minutes)
+          max_attempts=36
+          attempt=0
+          health_check_passed=false
+          
+          while [ $attempt -lt $max_attempts ]; do
+            if response=$(curl -sf "${FUNC_URL}/health" 2>&1); then
+              echo "✅ API is responding!"
+              echo "$response" | jq .
+              health_check_passed=true
+              break
+            else
+              echo "⏳ Waiting for function to be ready... (attempt $((attempt+1))/$max_attempts)"
+              sleep 5
+              attempt=$((attempt+1))
+            fi
+          done
+          
+          if [ "$health_check_passed" = true ]; then
+            echo ""
+            echo "✅ Azure Function deployment verified successfully!"
+            echo "📍 API URL: ${FUNC_URL}"
+          else
+            echo ""
+            echo "❌ Health check failed after waiting for $((max_attempts * 5)) seconds"
+            echo "This may be a transient issue. Check manually: ${FUNC_URL}/health"
+            exit 1
+          fi
+
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "✅ Azure deployment succeeded!"
+          echo "📍 API URL: ${{ steps.pulumi_outputs.outputs.api_url }}"
+          echo "🌐 Frontend Storage: ${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ Azure deployment failed!"
