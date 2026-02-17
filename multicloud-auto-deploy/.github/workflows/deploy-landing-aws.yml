@@ -3,8 +3,8 @@ name: Deploy Landing Page to AWS
 on:
   push:
     branches:
-      - main
-      - 'feature/**'
+      - develop  # staging自動デプロイ
+      - main     # production自動デプロイ
     paths:
       - 'static-site/**'
       - '.github/workflows/deploy-landing-aws.yml'

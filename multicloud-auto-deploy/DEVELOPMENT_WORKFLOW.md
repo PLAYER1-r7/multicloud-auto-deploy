@@ -2,18 +2,22 @@
 
 ## 概要
 
-このプロジェクトは、ブランチベースの開発フローを採用しています。
+このプロジェクトは、2ブランチ構成の開発フローを採用しています。
+
+## ブランチ戦略
+
+- **develop** - 開発ブランチ（staging環境に自動デプロイ）
+- **main** - 本番ブランチ（production環境に自動デプロイ）
+- **feature/xxx** - 機能開発ブランチ（ローカルのみ、pushしない）
 
 ## 開発フロー
 
 ```
-feature/xxx → ローカル開発（コミットのみ、pushしない）
-    ↓ staging確認したいとき push
-feature/xxx → staging自動デプロイ（動作確認）
-    ↓ 開発完了、mainにマージ
-main        → staging自動デプロイ（最終確認）
-    ↓ 確認OK、手動でproduction選択
-main        → production手動デプロイ
+feature/xxx (local) → ローカル開発・コミット（pushしない）
+    ↓ 開発完了、developにマージ
+develop → push → staging自動デプロイ（動作確認）
+    ↓ 確認OK、mainにマージ
+main → push → production自動デプロイ（本番リリース）
 ```
 
 ## ステップ別ガイド
@@ -21,9 +25,9 @@ main        → production手動デプロイ
 ### 1. 機能開発開始
 
 ```bash
-# mainブランチから最新を取得
-git checkout main
-git pull origin main
+# developブランチから最新を取得
+git checkout develop
+git pull origin develop
 
 # featureブランチを作成
 git checkout -b feature/your-feature-name
@@ -34,20 +38,27 @@ git checkout -b feature/your-feature-name
 ```bash
 # コードを編集
 # テストを実行
-# コミット（ローカルのみ）
+# コミット（ローカルのみ、pushしない）
 git add .
 git commit -m "feat: add new feature"
 
 # ローカル環境でテスト
 docker compose up -d
 # テスト実行...
+
+# コミットは何度でもOK（pushしない限りデプロイされない）
 ```
 
-### 3. Staging環境で確認
+### 3. Staging環境で確認（developにマージ）
 
 ```bash
-# featureブランチをpush → staging自動デプロイ
-git push origin feature/your-feature-name
+# 開発完了、developにマージ
+git checkout develop
+git pull origin develop
+git merge feature/your-feature-name
+
+# developにpush → staging自動デプロイ
+git push origin develop
 ```
 
 **自動実行されるもの：**
@@ -58,90 +69,145 @@ git push origin feature/your-feature-name
 - https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions
 - 実行状況とログを確認
 
-### 4. Mainにマージ（開発完了）
+### 4. Production環境へリリース（mainにマージ）
+
+Staging環境で問題なければ、mainにマージしてproductionへリリース：
 
 ```bash
-# featureブランチで開発完了
+# developで最終確認完了
 git checkout main
 git pull origin main
-git merge feature/your-feature-name
+git merge develop
 
-# mainにpush → staging自動デプロイ（最終確認）
+# mainにpush → production自動デプロイ
 git push origin main
 ```
 
-**この時点で：**
-- mainブランチへのpush = staging環境に自動デプロイ
-- 本番環境へは**まだデプロイされない**
+**重要：mainへのpush = production環境への本番リリースです**
 
-### 5. Production環境へデプロイ（手動）
+### 5. 緊急時の手動デプロイ
 
-Staging環境で問題なければ、GitHub ActionsのUIから手動でproductionへデプロイ：
+必要に応じて、GitHub ActionsのUIから手動でデプロイ可能：
 
 1. https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions
 2. 該当するワークフロー（Deploy to AWS/Azure/GCPなど）を選択
 3. 「Run workflow」ボタンをクリック
-4. Branch: `main` を選択
-5. Environment: `production` を選択
+4. Branch: 対象ブランチを選択
+5. Environment: `staging` または `production` を選択
 6. 「Run workflow」を実行
 
 ## トリガー条件
 
-### 自動デプロイ（Staging）
+### 自動デプロイ
 
-以下の場合に**staging環境**へ自動デプロイ：
-
-- **ブランチ**: `main` または `feature/**`
+#### Staging環境
+- **ブランチ**: `develop`
+- **トリガー**: `develop` ブランチへのpush
 - **対象パス**:
   - `services/**` → APIデプロイ
   - `infrastructure/**` → インフラデプロイ
   - `services/frontend_react/**` → フロントエンドデプロイ
   - `static-site/**` → ランディングページデプロイ
 
+#### Production環境
+- **ブランチ**: `main`
+- **トリガー**: `main` ブランチへのpush
+- **対象パス**: staging環境と同じ
+- **⚠️ 重要**: mainへのpushは即座にproduction環境へデプロイされます
+
 ### 手動デプロイ
 
 - GitHub Actions UI から workflow_dispatch で実行
 - Environment を選択可能: `staging` または `production`
+- 任意のブランチから実行可能
 
 ## 注意事項
 
-### ⚠️ Production環境への自動デプロイはありません
+### ⚠️ Main = Production環境
 
-- Production環境へは**必ず手動で承認・実行**が必要
-- 誤ってproductionへデプロイされることはありません
+- **mainブランチへのpush = production本番リリース**
+- mainブランチは常に安定版を保つ
+- 開発中の機能はdevelopブランチで管理
 
 ### 🔄 ローカル開発は自由にコミット
 
-- ローカルでコミットを重ねても、pushしない限りデプロイされません
+- Feature ブランチでコミットを重ねても、pushしない限りデプロイされません
 - 開発中は好きなだけコミットして構いません
 
 ### 🚀 Staging確認のタイミング
 
-- 機能が一区切りついたタイミングでpush
+- 機能が一区切りついたタイミングでdevelopにマージ
 - Staging環境でE2Eテストや動作確認を実施
+- 問題なければmainにマージしてproductionリリース
 
 ### 🗑️ Feature ブランチの削除
 
 ```bash
-# マージ後、ローカルとリモートのfeatureブランチを削除
+# developにマージ後、ローカルのfeatureブランチを削除
 git branch -d feature/your-feature-name
-git push origin --delete feature/your-feature-name
+
+# リモートにpushしていた場合は削除（通常はpushしない）
+# git push origin --delete feature/your-feature-name
 ```
+
+## ブランチ保護の推奨設定
+
+GitHub リポジトリで以下の保護設定を推奨：
+
+### mainブランチ
+- Require pull request reviews before merging
+- Require status checks to pass before merging
+- Include administrators（管理者も同じルールに従う）
+
+### developブランチ
+- Require status checks to pass before merging（任意）
 
 ## 緊急時の対応
 
 ### Staging環境のロールバック
 
 ```bash
-# 前のコミットに戻す
+# developブランチで前のコミットに戻す
+git checkout develop
 git revert HEAD
-git push origin main  # staging自動デプロイ
+git push origin develop  # staging自動デプロイ
 ```
 
 ### Production環境のロールバック
 
-1. GitHub Actions UIから古いコミットを指定して手動実行
-2. または緊急修正ブランチを作成してhotfix適用
+```bash
+# mainブランチで前のコミットに戻す
+git checkout main
+git revert HEAD
+git push origin main  # production自動デプロイ
+```
+
+または、GitHub Actions UIから古いコミットを指定して手動実行
+
+### Hotfix（緊急修正）
+
+Production環境に緊急の修正が必要な場合：
+
+```bash
+# mainから直接hotfixブランチを作成
+git checkout main
+git pull origin main
+git checkout -b hotfix/urgent-fix
+
+# 修正・テスト・コミット
+git add .
+git commit -m "hotfix: urgent security fix"
+
+# mainに直接マージ（本番リリース）
+git checkout main
+git merge hotfix/urgent-fix
+git push origin main  # production自動デプロイ
+
+# developにも反映
+git checkout develop
+git merge hotfix/urgent-fix
+git push origin develop
+```
 
 ## ワークフロー一覧
 
