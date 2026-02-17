@@ -163,6 +163,12 @@ jobs:
           # Upload source to GCS
           gsutil cp services/api/function-source.zip gs://$FUNCTION_BUCKET/function-source.zip
           
+          # Get CDN URL for CORS
+          CDN_URL=$(gcloud compute addresses list --filter="name:multicloud-auto-deploy-staging-ip" --format="get(address)" --global)
+          CORS_ORIGINS="https://${CDN_URL},http://localhost:5173"
+          
+          echo "🔒 CORS Origins: $CORS_ORIGINS"
+          
           # Deploy function (creates if not exists, updates if exists)
           gcloud functions deploy $FUNCTION_NAME \
             --gen2 \
@@ -175,7 +181,7 @@ jobs:
             --max-instances=10 \
             --memory=512MB \
             --timeout=60s \
-            --set-env-vars=ENVIRONMENT=staging,CLOUD_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,FIRESTORE_COLLECTION=messages
+            --set-env-vars=ENVIRONMENT=staging,CLOUD_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,FIRESTORE_COLLECTION=messages,CORS_ORIGINS="$CORS_ORIGINS"
           
           # Get function URL
           FUNCTION_URL=$(gcloud functions describe $FUNCTION_NAME --region=$REGION --gen2 --format="value(serviceConfig.uri)")

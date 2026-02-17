@@ -8,7 +8,7 @@ on:
     paths:
       - "multicloud-auto-deploy/services/**"
       - "multicloud-auto-deploy/infrastructure/pulumi/aws/**"
-      - "multicloud-auto-deploy/.github/workflows/deploy-aws.yml"
+      - ".github/workflows/deploy-aws.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -228,15 +228,22 @@ jobs:
               --output json || { echo "❌ Lambda update failed!"; exit 1; }
           fi
           
-          # Update configuration to attach the Layer(s)
-          echo "🔗 Attaching Lambda Layer(s)..."
+          # Get CloudFront URL for CORS
+          CLOUDFRONT_URL="${{ steps.pulumi_outputs.outputs.cloudfront_distribution_url }}"
+          CORS_ORIGINS="https://${CLOUDFRONT_URL},http://localhost:5173"
+          
+          echo "🔒 CORS Origins: $CORS_ORIGINS"
+          
+          # Update configuration with environment variables and Layer(s)
+          echo "🔗 Updating Lambda configuration..."
           aws lambda update-function-configuration \
             --function-name $LAMBDA_FUNCTION \
             --region ${{ env.AWS_REGION }} \
             --layers $LAYER_ARNS \
-            --output json || { echo "❌ Layer attachment failed!"; exit 1; }
+            --environment "Variables={CLOUD_PROVIDER=aws,ENVIRONMENT=staging,AUTH_PROVIDER=cognito,AWS_COGNITO_USER_POOL_ID=${{ steps.pulumi_outputs.outputs.cognito_user_pool_id }},AWS_COGNITO_CLIENT_ID=${{ steps.pulumi_outputs.outputs.cognito_client_id }},CORS_ORIGINS=${CORS_ORIGINS}}" \
+            --output json || { echo "❌ Lambda configuration update failed!"; exit 1; }
           
-          echo "✅ Lambda function updated successfully with Layer(s) attached"
+          echo "✅ Lambda function updated successfully with Layer(s) and environment variables"
           echo "api_endpoint=${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}" >> $GITHUB_OUTPUT
 
       - name: Build Frontend

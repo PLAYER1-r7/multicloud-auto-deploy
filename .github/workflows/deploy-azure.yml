@@ -244,6 +244,16 @@ jobs:
           
           echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
           
+          # Get Front Door URL for CORS
+          FRONTDOOR_URL=$(az afd endpoint show \
+            --profile-name mcad-staging-d45ihd \
+            --resource-group $RESOURCE_GROUP \
+            --endpoint-name mcad-staging-d45ihd \
+            --query "hostName" -o tsv)
+          CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
+          
+          echo "🔒 CORS Origins: $CORS_ORIGINS"
+          
           # Set environment variables (including Azure AD authentication)
           echo "⚙️  Setting environment variables..."
           az functionapp config appsettings set \
@@ -259,6 +269,7 @@ jobs:
               AUTH_PROVIDER=azure \
               AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
               AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
+              CORS_ORIGINS="${CORS_ORIGINS}" \
             > /dev/null
           
           echo "🔐 Azure AD Authentication configured:"
