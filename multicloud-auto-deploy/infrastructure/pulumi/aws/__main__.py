@@ -643,11 +643,24 @@ cloudfront_kwargs = {
             restriction_type="none",
         ),
     ),
-    "viewer_certificate": aws.cloudfront.DistributionViewerCertificateArgs(
-        cloudfront_default_certificate=True,
-    ),
     "tags": common_tags,
 }
+
+# Custom domain configuration (optional)
+custom_domain = config.get("customDomain")  # e.g., aws.yourdomain.com
+acm_certificate_arn = config.get("acmCertificateArn")  # ACM certificate ARN in us-east-1
+
+if custom_domain and acm_certificate_arn:
+    cloudfront_kwargs["aliases"] = [custom_domain]
+    cloudfront_kwargs["viewer_certificate"] = aws.cloudfront.DistributionViewerCertificateArgs(
+        acm_certificate_arn=acm_certificate_arn,
+        ssl_support_method="sni-only",
+        minimum_protocol_version="TLSv1.2_2021",
+    )
+else:
+    cloudfront_kwargs["viewer_certificate"] = aws.cloudfront.DistributionViewerCertificateArgs(
+        cloudfront_default_certificate=True,
+    )
 
 # Add WAF only for production
 if stack == "production":
@@ -691,6 +704,11 @@ pulumi.export(
     "cloudfront_url",
     cloudfront_distribution.domain_name.apply(lambda domain: f"https://{domain}"),
 )
+# Custom domain exports (if configured)
+if custom_domain:
+    pulumi.export("custom_domain", custom_domain)
+    pulumi.export("custom_domain_url", f"https://{custom_domain}")
+    pulumi.export("acm_certificate_arn", acm_certificate_arn)
 # WAF exports only for production
 if stack == "production":
     pulumi.export("waf_web_acl_id", waf_web_acl.id)

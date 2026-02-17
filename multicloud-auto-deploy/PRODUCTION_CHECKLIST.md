@@ -70,49 +70,84 @@ az keyvault secret list --vault-name multicloud-auto-deploy-staging-kv
 
 ### 4. カスタムドメインの設定（オプション）
 
-#### GCP: HTTPS証明書
-現在プレースホルダー（`example.com`）を使用しています。実際のドメインを設定する場合：
+各クラウドで異なるドメインを使用する場合の詳細な設定手順は、以下のガイドを参照してください：
 
-[infrastructure/pulumi/gcp/__main__.py](infrastructure/pulumi/gcp/__main__.py) (L115-120付近):
-```python
-managed_ssl_cert = gcp.compute.ManagedSslCertificate(
-    f"{project_name}-{stack}-ssl-cert",
-    managed=gcp.compute.ManagedSslCertificateManagedArgs(
-        domains=["yourdomain.com", "www.yourdomain.com"],  # 実際のドメインに変更
-    ),
-)
+**📕 [カスタムドメイン設定ガイド](CUSTOM_DOMAIN_SETUP.md)**
+
+このガイドでは以下の内容を説明しています：
+- **AWS CloudFront**: ACM証明書の作成、CloudFront alias設定、DNS CNAME設定
+- **Azure Front Door**: カスタムドメイン追加、DNS検証、HTTPSの有効化
+- **GCP Cloud CDN**: Managed SSL証明書の更新、DNS A レコード設定
+
+#### 現在のエンドポイント
+
+```bash
+# 現在のエンドポイントを確認
+cd infrastructure/pulumi/aws && pulumi stack output cloudfront_domain
+cd infrastructure/pulumi/azure && pulumi stack output frontdoor_hostname  
+cd infrastructure/pulumi/gcp && pulumi stack output cdn_ip_address
 ```
 
-DNS設定:
+#### Pulumi設定でカスタムドメインを有効化
+
 ```bash
-# GCPのロードバランサーIPアドレスを取得
+# AWS: ACM証明書とドメインを設定
+cd infrastructure/pulumi/aws
+pulumi config set customDomain aws.yourdomain.com
+pulumi config set acmCertificateArn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID
+pulumi up
+
+# GCP: ドメインを設定
 cd infrastructure/pulumi/gcp
-pulumi stack output loadBalancerIP
+pulumi config set customDomain gcp.yourdomain.com
+pulumi up
 
-# DNSにAレコード追加
-# yourdomain.com -> [Load Balancer IP]
-```
-
-#### Azure: Front Doorカスタムドメイン
-```bash
-az afd custom-domain create \
-  --resource-group multicloud-auto-deploy-staging-rg \
-  --profile-name multicloud-auto-deploy-staging-fd \
-  --custom-domain-name yourdomain \
-  --host-name yourdomain.com
+# Azure: Azure CLIで設定（詳細はガイド参照）
 ```
 
 ---
 
 ## 📊 監視・ログ設定
 
-### 5. アラート設定（推奨）
+### 5. アラート設定（✅ 実装済み）
 
-まだ実装されていない項目：
-- [ ] CloudWatch/Cloud Monitoring/Azure Monitorアラート
-- [ ] WAFブロック数の監視
-- [ ] エラー率の閾値アラート
-- [ ] コスト異常検知
+**実装状況**: 全クラウドで監視とアラート設定が完了しました。
+
+#### AWS (9リソース)
+- SNS Topic: メール通知設定
+- CloudWatch Alarms:
+  - Lambda関数エラー監視
+  - API Gateway 4XX/5XX エラー監視
+  - CloudFront エラー率監視
+  - DynamoDB スロットリング監視
+
+**アラート先**: `sat0sh1kawada@spa.nifty.com`
+
+#### Azure (5リソース)
+- Action Group: メール通知設定
+- Metric Alerts:
+  - Function App エラー監視
+  - Front Door 4XX/5XX エラー監視
+  - Cosmos DB RU消費監視
+
+**アラート先**: `sat0sh1kawada@spa.nifty.com`
+
+#### GCP (7リソース)
+- Notification Channel: メール通知設定
+- Alert Policies:
+  - Cloud Function エラー監視
+  - Load Balancer レイテンシ監視
+  - Firestore 書き込み監視
+
+**アラート先**: `sat0sh1kawada@spa.nifty.com`
+
+**確認方法**:
+```bash
+# 各クラウドの監視リソースを確認
+cd infrastructure/pulumi/aws && pulumi stack output | grep alarm
+cd infrastructure/pulumi/azure && pulumi stack output | grep alert
+cd infrastructure/pulumi/gcp && pulumi stack output | grep alert
+```
 
 ---
 

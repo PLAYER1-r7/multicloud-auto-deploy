@@ -279,14 +279,21 @@ url_map = gcp.compute.URLMap(
 )
 
 # Target HTTPS Proxy with SSL (managed certificate)
+# Custom domain configuration (optional)
+custom_domain = config.get("customDomain")  # e.g., gcp.yourdomain.com
+ssl_domains = [custom_domain] if custom_domain else [f"{project_name}-{stack}.example.com"]
+
 managed_ssl_cert = gcp.compute.ManagedSslCertificate(
     "managed-ssl-cert",
     name=f"{project_name}-{stack}-ssl-cert",
     project=project,
     managed=gcp.compute.ManagedSslCertificateManagedArgs(
-        domains=[f"{project_name}-{stack}.example.com"],  # Replace with actual domain
+        domains=ssl_domains,
     ),
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    opts=pulumi.ResourceOptions(
+        depends_on=enabled_services,
+        delete_before_replace=True,  # Required for domain changes
+    ),
 )
 
 https_proxy = gcp.compute.TargetHttpsProxy(
@@ -350,6 +357,12 @@ forwarding_rule = gcp.compute.GlobalForwardingRule(
 # ========================================
 pulumi.export("project_id", project)
 pulumi.export("region", region)
+
+# Custom domain exports (if configured)
+if custom_domain:
+    pulumi.export("custom_domain", custom_domain)
+    pulumi.export("custom_domain_url", f"https://{custom_domain}")
+    pulumi.export("ssl_certificate_domains", ssl_domains)
 
 # Firebase Authentication
 pulumi.export("firebase_project_id", project)

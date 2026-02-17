@@ -324,7 +324,9 @@ def setup_monitoring(
 
     # Derive resource names from IDs
     function_app_name = f"{project_name}-{stack}-func"
-    cosmos_account_name = f"{project_name}-{stack}-cosmos"  # Not used if cosmos_account_id is None
+    cosmos_account_name = (
+        f"{project_name}-{stack}-cosmos"  # Not used if cosmos_account_id is None
+    )
 
     # Create Action Group for notifications
     action_group = create_action_group(
