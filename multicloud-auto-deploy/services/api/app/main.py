@@ -1,3 +1,7 @@
+"""
+Multi-cloud Simple SNS API (v1.2.2)
+CORS-hardened version for production deployment
+"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
