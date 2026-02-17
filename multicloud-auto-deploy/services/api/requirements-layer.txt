@@ -1,5 +1,8 @@
 # Lambda Layer Dependencies
-# Python 3.12 compatible versions
+# Optimized for AWS Lambda Python 3.12
+# 
+# Note: boto3 and botocore are pre-installed in Lambda runtime, so they are excluded
+# This significantly reduces layer size and allows direct ZIP upload (<50MB)
 
 # Type checking (Python 3.12 compatibility fix)
 typing_extensions==4.12.2
@@ -9,12 +12,15 @@ fastapi==0.115.0
 pydantic==2.9.0
 pydantic-settings==2.5.2
 
-# Lambda adapter
+# Lambda adapter (FastAPI -> Lambda)
 mangum==0.17.0
 
-# Auth
+# Auth & JWT
 python-jose[cryptography]==3.3.0
 pyjwt==2.9.0
 
 # HTTP client
 requests==2.32.3
+
+# File upload support
+python-multipart==0.0.9

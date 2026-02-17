@@ -27,6 +27,7 @@
 ## GitHub Actions YAML構文エラー
 
 ### 症状
+
 ```
 Error: .github/workflows/deploy-*.yml: mapping values are not allowed in this context
 ```
@@ -34,13 +35,16 @@ Error: .github/workflows/deploy-*.yml: mapping values are not allowed in this co
 ワークフロー実行時にYAML構文エラーでパース失敗。
 
 ### 原因
+
 GitHub Actions YAMLパーサーとbash here-document構文（`cat << EOF`）の競合。
 YAMLの特殊文字（`:`、`{}`など）がhere-document内で解釈されてしまう。
 
 ### 解決策
+
 here-documentを使わず、`echo`コマンドでファイルを構築する：
 
 **❌ 動作しない例:**
+
 ```yaml
 - name: Create config
   run: |
@@ -52,6 +56,7 @@ here-documentを使わず、`echo`コマンドでファイルを構築する：
 ```
 
 **✅ 正しい例:**
+
 ```yaml
 - name: Create config
   run: |
@@ -61,6 +66,7 @@ here-documentを使わず、`echo`コマンドでファイルを構築する：
 ```
 
 または完全に引用符でエスケープ：
+
 ```yaml
 - name: Create config
   run: |
@@ -72,6 +78,7 @@ here-documentを使わず、`echo`コマンドでファイルを構築する：
 ```
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-gcp.yml` (lines 172-179)
 - `.github/workflows/deploy-aws.yml` (lines 247-258)
 
@@ -80,6 +87,7 @@ here-documentを使わず、`echo`コマンドでファイルを構築する：
 ## Azure CORS設定の名前競合
 
 ### 症状
+
 ```
 ERROR: Application setting 'CORS_ORIGINS' already exists.
 Choose --overwrite if you want to change the value
@@ -89,10 +97,12 @@ Azure Function Appに`CORS_ORIGINS`を設定しようとすると「既に存在
 しかし設定一覧（`--output table`）には表示されない。
 
 ### 原因
+
 Azureは設定名の**大文字・小文字を区別しない**。
 以前に小文字`cors_origins`が設定されていると、大文字`CORS_ORIGINS`を追加できない。
 
 ### 調査方法
+
 ```bash
 # 設定名に "cors" を含むものをすべて検索
 az functionapp config appsettings list \
@@ -109,6 +119,7 @@ az functionapp config appsettings list \
 ```
 
 ### 解決策
+
 **両方の名前バリエーションを削除**してから設定する：
 
 ```yaml
@@ -129,9 +140,11 @@ az functionapp config appsettings set \
 ```
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-azure.yml` (lines 257-265)
 
 ### 関連情報
+
 - Azure CLI は `--overwrite` フラグをサポートしていない
 - 設定名は内部的に小文字で正規化される可能性がある
 - 常に `delete` → `set` のパターンを使うのが安全
@@ -141,28 +154,27 @@ az functionapp config appsettings set \
 ## AWS Lambda Layer権限エラー
 
 ### 症状
+
 ```
 An error occurred (AccessDeniedException) when calling the PublishLayerVersion operation:
 User: arn:aws:iam::ACCOUNT:user/USER is not authorized to perform:
 lambda:PublishLayerVersion on resource: arn:aws:lambda:REGION:ACCOUNT:layer:NAME
 ```
 
-または：
-```
-lambda:GetLayerVersion on resource: arn:aws:lambda:REGION:EXTERNAL_ACCOUNT:layer:Klayers-*
-```
-
 ### 原因
+
 IAMユーザーにLambda Layer関連の権限がない。
 
 **必要な権限:**
+
 1. **カスタムLayerを作成**する場合: `lambda:PublishLayerVersion`
-2. **公開Layerを参照**する場合: `lambda:GetLayerVersion`（外部アカウントのLayerに対して）
-3. Layer削除: `lambda:DeleteLayerVersion`
+2. Layer削除: `lambda:DeleteLayerVersion`
+3. Layerバージョン取得: `lambda:GetLayerVersion`
 
 ### 解決策
 
 #### 1. IAMポリシーの更新
+
 ```json
 {
   "Version": "2012-10-17",
@@ -173,12 +185,12 @@ IAMユーザーにLambda Layer関連の権限がない。
       "Action": [
         "lambda:PublishLayerVersion",
         "lambda:GetLayerVersion",
-        "lambda:DeleteLayerVersion"
+        "lambda:DeleteLayerVersion",
+        "lambda:ListLayerVersions"
       ],
       "Resource": [
         "arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-*",
-        "arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-*:*",
-        "arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-*"
+        "arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-*:*"
       ]
     }
   ]
@@ -186,6 +198,7 @@ IAMユーザーにLambda Layer関連の権限がない。
 ```
 
 #### 2. ポリシーバージョンの作成
+
 ```bash
 aws iam create-policy-version \
   --policy-arn arn:aws:iam::ACCOUNT_ID:policy/GitHubActionsDeploymentPolicy \
@@ -193,32 +206,96 @@ aws iam create-policy-version \
   --set-as-default
 ```
 
-#### 3. ワークフローの条件分岐
-公開Layer（Klayers）を使う場合は権限が必要なので、**push時はカスタムLayerを使う**：
-
-```yaml
-- name: Get Klayers ARNs
-  if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.use_klayers == 'true' }}
-  # ...
-
-- name: Deploy Lambda Layer (Custom)
-  if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.use_klayers == 'false') }}
-  # ...
-```
-
 ### 該当ファイル
-- `.github/workflows/deploy-aws.yml` (lines 144, 169)
+
+- `.github/workflows/deploy-aws.yml`
 - `infrastructure/aws/iam-policy-github-actions.json`
 
 ### ベストプラクティス
-- **push時**: カスタムLayer（自分のアカウントなので権限管理が容易）
-- **手動実行時**: Klayers（高速デプロイ、Layerビルド不要）
+
+- **カスタムLayer使用**: 確実に動作し、完全な制御が可能
+- **boto3除外**: Lambdaランタイムに含まれるため除外してサイズ削減
+- **直接アップロード**: 50MB未満を維持してS3不要
+
+---
+
+## AWS Lambda パッケージサイズ超過（RequestEntityTooLargeException）
+
+### 症状
+
+```
+An error occurred (RequestEntityTooLargeException) when calling the UpdateFunctionCode operation:
+Request must be smaller than 69905067 bytes for the UpdateFunctionCode operation
+```
+
+Lambda関数の直接アップロードが50MBを超えて失敗。
+
+### 原因
+
+- Lambda関数のZIPファイルが50MBを超えている
+- 依存関係がLambda関数コードに含まれている
+
+### 解決策
+
+#### 1. カスタムLambda Layerを使用
+
+依存関係をLayerに分離してLambda関数コードを軽量化：
+
+```bash
+# Layer をビルド
+cd /workspaces/ashnova/multicloud-auto-deploy
+./scripts/build-lambda-layer.sh
+
+# Layer をデプロイ
+aws lambda publish-layer-version \
+  --layer-name multicloud-auto-deploy-staging-dependencies \
+  --description "Dependencies for FastAPI + Mangum + JWT (Python 3.12)" \
+  --zip-file fileb://services/api/lambda-layer.zip \
+  --compatible-runtimes python3.12 \
+  --region ap-northeast-1
+```
+
+#### 2. アプリケーションコードのみをパッケージング
+
+```bash
+cd services/api
+rm -rf .build lambda.zip
+mkdir -p .build/package
+
+# アプリケーションコードのみコピー（依存関係は除外）
+cp -r app .build/package/
+cp index.py .build/package/
+
+# ZIPファイル作成
+cd .build/package
+zip -r ../../lambda.zip .
+cd ../..
+```
+
+#### 3. 最適化結果
+
+- **Layer（依存関係）**: ~8-10MB
+- **Lambda関数（アプリケーションのみ）**: ~78KB
+- **合計**: 50MB未満（直接アップロード可能）
+
+### 該当ファイル
+
+- `.github/workflows/deploy-aws.yml`
+- `scripts/build-lambda-layer.sh`
+- `services/api/requirements-layer.txt`
+
+### ベストプラクティス
+
+- boto3をレイヤーから除外（Lambdaランタイムに含まれる）
+- 不要なファイルを削除（テスト、ドキュメント、.pycなど）
+- 直接アップロード優先（S3経由より高速）
 
 ---
 
 ## AWS Lambda ResourceConflictException
 
 ### 症状
+
 ```
 An error occurred (ResourceConflictException) when calling the UpdateFunctionConfiguration operation:
 The operation cannot be performed at this time.
@@ -226,12 +303,14 @@ An update is in progress for resource: arn:aws:lambda:REGION:ACCOUNT:function:NA
 ```
 
 ### 原因
+
 Lambda関数のコード更新（`update-function-code`）が完了する前に、
 設定更新（`update-function-configuration`）を実行しようとした。
 
 Lambdaは**同時に複数の更新操作を受け付けない**。
 
 ### 解決策
+
 Lambda関数のステータスが`Active`になるまで待機する：
 
 ```yaml
@@ -241,7 +320,7 @@ Lambda関数のステータスが`Active`になるまで待機する：
     aws lambda update-function-code \
       --function-name $LAMBDA_FUNCTION \
       --zip-file fileb://lambda.zip
-    
+
     # ステータス確認ループ
     echo "⏳ Waiting for Lambda function to become Active..."
     MAX_WAIT=60
@@ -261,7 +340,7 @@ Lambda関数のステータスが`Active`になるまで待機する：
       sleep 2
       WAIT_COUNT=$((WAIT_COUNT+1))
     done
-    
+
     # 設定更新
     aws lambda update-function-configuration \
       --function-name $LAMBDA_FUNCTION \
@@ -270,6 +349,7 @@ Lambda関数のステータスが`Active`になるまで待機する：
 ```
 
 ### Lambda関数の状態遷移
+
 ```
 Pending → Active
          ↓
@@ -281,9 +361,11 @@ Pending → Active
 `update-function-code`実行後: `Pending` → `Active` （通常2-5秒）
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-aws.yml` (lines 237-261)
 
 ### 関連コマンド
+
 ```bash
 # 現在の状態を確認
 aws lambda get-function \
@@ -302,6 +384,7 @@ aws lambda get-function \
 ## Azure Front Doorエンドポイント取得
 
 ### 症状
+
 ```
 ERROR: Resource 'multicloud-auto-deploy-staging-endpoint' not found.
 ```
@@ -309,21 +392,24 @@ ERROR: Resource 'multicloud-auto-deploy-staging-endpoint' not found.
 Front Doorのエンドポイント名を直接指定して取得しようとするとエラー。
 
 ### 原因
+
 Azure Front Door（Standard/Premium）のエンドポイント名は**自動生成**される。
 ハードコードされた名前は存在しない可能性が高い。
 
 ### 間違った方法
+
 ```yaml
 # ❌ エンドポイント名を直接指定
 FRONTDOOR_HOSTNAME=$(az afd endpoint show \
-  --endpoint-name multicloud-auto-deploy-staging-endpoint \
-  --profile-name $FRONTDOOR_PROFILE \
-  --resource-group $RESOURCE_GROUP \
-  --query hostName \
-  --output tsv)
+--endpoint-name multicloud-auto-deploy-staging-endpoint \
+--profile-name $FRONTDOOR_PROFILE \
+--resource-group $RESOURCE_GROUP \
+--query hostName \
+--output tsv)
 ```
 
 ### 正しい方法
+
 **Pulumi outputsから取得**する：
 
 ```yaml
@@ -331,7 +417,7 @@ FRONTDOOR_HOSTNAME=$(az afd endpoint show \
   id: pulumi_outputs
   run: |
     cd multicloud-auto-deploy/infrastructure/pulumi/azure
-    
+
     FRONTDOOR_HOSTNAME=$(pulumi stack output frontdoor_hostname)
     echo "frontdoor_hostname=$FRONTDOOR_HOSTNAME" >> $GITHUB_OUTPUT
 
@@ -342,6 +428,7 @@ FRONTDOOR_HOSTNAME=$(az afd endpoint show \
 ```
 
 または、エンドポイントをリストして最初のものを取得：
+
 ```bash
 # 全エンドポイントをリスト
 az afd endpoint list \
@@ -352,9 +439,11 @@ az afd endpoint list \
 ```
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-azure.yml` (lines 250-252)
 
 ### Pulumiでのexport
+
 ```python
 # infrastructure/pulumi/azure/__main__.py
 import pulumi
@@ -368,6 +457,7 @@ pulumi.export("frontdoor_hostname", endpoint.host_name)
 ```
 
 ### ベストプラクティス
+
 - インフラのIDや名前は**Pulumiの出力から取得**する
 - ハードコードを避ける
 - エンドポイント名はリソース作成時に自動生成されることを想定
@@ -377,11 +467,13 @@ pulumi.export("frontdoor_hostname", endpoint.host_name)
 ## Azureリソース名のハードコード問題
 
 ### 症状
+
 ```
 ERROR: Resource group 'mcad-staging' could not be found.
 ```
 
 または：
+
 ```
 ERROR: The Resource 'Microsoft.Web/sites/mcad-staging-func' not found.
 ```
@@ -389,13 +481,16 @@ ERROR: The Resource 'Microsoft.Web/sites/mcad-staging-func' not found.
 Azure CLIコマンドでリソース名やリソースグループ名を指定すると「見つからない」エラー。
 
 ### 原因
+
 ワークフロー内で**ハードコードされたリソース名**を使用しているが、実際のPulumiで作成されたリソース名が異なる。
 
 **例:**
+
 - ワークフロー: `mcad-staging-func` @ `mcad-staging`
 - 実際: `multicloud-auto-deploy-staging-func` @ `multicloud-auto-deploy-staging-rg`
 
 ### 調査方法
+
 ```bash
 # 1. Pulumiのoutputsを確認（正しい名前が分かる）
 cd infrastructure/pulumi/azure
@@ -409,6 +504,7 @@ az functionapp list --query "[].{name:name, rg:resourceGroup}" --output table
 ```
 
 ### 解決策
+
 **Pulumi outputsから動的に取得**する：
 
 ```yaml
@@ -416,10 +512,10 @@ az functionapp list --query "[].{name:name, rg:resourceGroup}" --output table
   id: pulumi_outputs
   run: |
     cd infrastructure/pulumi/azure
-    
+
     RESOURCE_GROUP=$(pulumi stack output resource_group_name)
     FUNCTION_APP=$(pulumi stack output function_app_name)
-    
+
     echo "resource_group_name=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
     echo "function_app_name=$FUNCTION_APP" >> $GITHUB_OUTPUT
 
@@ -432,6 +528,7 @@ az functionapp list --query "[].{name:name, rg:resourceGroup}" --output table
 ```
 
 ### Pulumiでのexport
+
 ```python
 # infrastructure/pulumi/azure/__main__.py
 import pulumi
@@ -445,9 +542,11 @@ pulumi.export("function_app_name", function_app.name)
 ```
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-azure.yml` (lines 244-265)
 
 ### ベストプラクティス
+
 - **すべてのリソース名をPulumi outputsから取得**
 - ハードコードは絶対に避ける
 - 環境ごと（staging/production）に異なる命名規則を想定
@@ -457,6 +556,7 @@ pulumi.export("function_app_name", function_app.name)
 ## Azure Function App デプロイメント競合
 
 ### 症状
+
 ```
 ERROR: Deployment was cancelled and another deployment is in progress.
 ```
@@ -464,14 +564,17 @@ ERROR: Deployment was cancelled and another deployment is in progress.
 Function Appへのzipデプロイが失敗し、「別のデプロイメントが進行中」エラー。
 
 ### 原因
+
 Azure Function Appは**同時に1つのデプロイしか受け付けない**。
 
 以下の場合に発生：
+
 1. 前回のデプロイメントがまだ完了していない
 2. 設定変更（`az functionapp config appsettings set`）直後にデプロイ
 3. Kuduサービスの再起動中
 
 ### 解決策
+
 **リトライロジック**を実装する：
 
 ```yaml
@@ -480,7 +583,7 @@ Azure Function Appは**同時に1つのデプロイしか受け付けない**。
     MAX_RETRIES=3
     RETRY_COUNT=0
     DEPLOY_SUCCESS=false
-    
+
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
       echo "Attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
       
@@ -499,7 +602,7 @@ Azure Function Appは**同時に1つのデプロイしか受け付けない**。
       
       RETRY_COUNT=$((RETRY_COUNT+1))
     done
-    
+
     if [ "$DEPLOY_SUCCESS" = false ]; then
       # 最終確認: Function Appが正常に起動しているか
       echo "⚠️ Deployment uncertain after $MAX_RETRIES attempts, checking function health..."
@@ -516,9 +619,11 @@ Azure Function Appは**同時に1つのデプロイしか受け付けない**。
 ```
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-azure.yml` (lines 268-295)
 
 ### 関連する設定変更の待機
+
 設定変更後は短い待機を入れる：
 
 ```yaml
@@ -533,6 +638,7 @@ az functionapp deployment source config-zip ...
 ```
 
 ### 参考
+
 - Kudu (App Service のデプロイメントエンジン) の再起動には5-15秒かかる
 - 待機時間は環境により調整（staging: 短め、production: 長め）
 
@@ -541,11 +647,13 @@ az functionapp deployment source config-zip ...
 ## モノレポ構造でのGitパス問題
 
 ### 症状
+
 ```
 fatal: pathspec 'multicloud-auto-deploy/services/api/app/main.py' did not match any files
 ```
 
 または：
+
 ```
 fatal: '../.github/workflows/deploy-aws.yml' is outside repository
 ```
@@ -553,9 +661,11 @@ fatal: '../.github/workflows/deploy-aws.yml' is outside repository
 Gitコマンドでファイルパスを指定すると「見つからない」または「リポジトリ外」エラー。
 
 ### 原因
+
 **作業ディレクトリとGitリポジトリのルートが異なる**状態でGitコマンドを実行。
 
 **例:**
+
 - Gitリポジトリルート: `/workspaces/ashnova`
 - 作業ディレクトリ: `/workspaces/ashnova/multicloud-auto-deploy/infrastructure/pulumi/azure`
 
@@ -563,6 +673,7 @@ Gitコマンドでファイルパスを指定すると「見つからない」�
 `/workspaces/ashnova/multicloud-auto-deploy/multicloud-auto-deploy/...` を探してしまう。
 
 ### 調査方法
+
 ```bash
 # 現在のディレクトリ
 pwd
@@ -577,6 +688,7 @@ git status --short
 ### 解決策
 
 #### 方法1: リポジトリルートに移動してからコミット
+
 ```bash
 cd $(git rev-parse --show-toplevel)
 git add .github/workflows/deploy-aws.yml
@@ -585,6 +697,7 @@ git push origin develop
 ```
 
 #### 方法2: 相対パスを使う
+
 ```bash
 # 現在地: /workspaces/ashnova/multicloud-auto-deploy
 git add ../.github/workflows/deploy-aws.yml
@@ -598,6 +711,7 @@ git push ashnova develop
 ```
 
 #### 方法3: git -Cオプションを使う
+
 ```bash
 # どこからでもリポジトリルートを基準に実行
 git -C /workspaces/ashnova add .github/workflows/deploy-aws.yml
@@ -606,11 +720,13 @@ git -C /workspaces/ashnova push origin develop
 ```
 
 ### 該当する状況
+
 - モノレポ構造（複数のPulumiプロジェクト、複数のサービス）
 - ワークフロー実行中に `cd` でディレクトリ移動
 - 相対パスと絶対パスの混在
 
 ### ベストプラクティス
+
 - Gitコマンドは**常にリポジトリルートから実行**
 - 相対パスを使う場合は `git status` で確認
 - スクリプト内では `cd $(git rev-parse --show-toplevel)` で統一
@@ -620,11 +736,13 @@ git -C /workspaces/ashnova push origin develop
 ## Pulumi スタックとディレクトリの混同
 
 ### 症状
+
 ```
 error: no stack named 'staging' found
 ```
 
 または：
+
 ```
 error: could not read current project: no Pulumi.yaml project file found
 ```
@@ -632,9 +750,11 @@ error: could not read current project: no Pulumi.yaml project file found
 Pulumiコマンドを実行すると、スタックが見つからない、またはプロジェクトファイルがないエラー。
 
 ### 原因
+
 **間違ったディレクトリでPulumiコマンドを実行**している。
 
 モノレポでは複数のPulumiプロジェクトが存在：
+
 - `infrastructure/pulumi/aws/`
 - `infrastructure/pulumi/azure/`
 - `infrastructure/pulumi/gcp/`
@@ -642,6 +762,7 @@ Pulumiコマンドを実行すると、スタックが見つからない、ま�
 各ディレクトリには独立した `Pulumi.yaml` とスタックがある。
 
 ### 調査方法
+
 ```bash
 # 現在のディレクトリ
 pwd
@@ -657,6 +778,7 @@ pulumi stack ls
 ```
 
 ### 解決策
+
 **正しいディレクトリに移動してから実行**：
 
 ```bash
@@ -665,7 +787,7 @@ cd infrastructure/pulumi/aws
 pulumi stack select staging
 pulumi up
 
-# Azure  
+# Azure
 cd infrastructure/pulumi/azure
 pulumi stack select staging
 pulumi up
@@ -677,30 +799,34 @@ pulumi up
 ```
 
 ### GitHub Actionsでの対応
+
 ```yaml
 - name: Deploy Infrastructure
   run: |
     # クラウドごとに正しいディレクトリに移動
     cd infrastructure/pulumi/aws  # or azure, gcp
-    
+
     # スタック選択
     pulumi stack select staging --non-interactive
-    
+
     # デプロイ
     pulumi up --yes
 ```
 
 ### エラー回避のチェックリスト
+
 1. ✅ `Pulumi.yaml` が存在するディレクトリにいるか
 2. ✅ `pulumi stack ls` でスタックが表示されるか
 3. ✅ `pulumi config get <key>` で設定が取得できるか
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-aws.yml` (line 80)
 - `.github/workflows/deploy-azure.yml` (line 81)
 - `.github/workflows/deploy-gcp.yml` (line 168)
 
 ### ベストプラクティス
+
 - スクリプトの冒頭で `cd` を明示的に実行
 - エラーメッセージで「プロジェクトが見つからない」と出たらディレクトリを確認
 - `pulumi about` で現在の状態を確認する習慣
@@ -710,6 +836,7 @@ pulumi up
 ## 環境変数の引用符とエスケープ
 
 ### 症状
+
 ```bash
 # JSON構文エラー
 Error: invalid character 'h' after object key:value pair
@@ -721,11 +848,13 @@ CORS_ORIGINS=""
 bashスクリプトやJSONファイル生成時に、環境変数が正しく展開されない、またはJSON構文エラー。
 
 ### 原因
+
 **引用符のエスケープ不足**、または**変数展開のタイミング**の問題。
 
 #### よくあるパターン:
 
 1. **JSON内の引用符エスケープ漏れ**
+
 ```bash
 # ❌ 間違い: 変数内のURLにコロンがあるとJSON構文エラー
 echo '{"url": "$MY_URL"}' > config.json
@@ -737,6 +866,7 @@ echo "{"url": "$MY_URL"}" > config.json
 ```
 
 2. **カンマ区切りリストの扱い**
+
 ```bash
 # ❌ 間違い: 最後のカンマ
 echo "  \"key1\": \"value1\"," >> config.json
@@ -748,6 +878,7 @@ echo "}" >> config.json
 ### 解決策
 
 #### 方法1: echoで段階的に構築（推奨）
+
 ```bash
 # 変数の準備
 CORS_ORIGINS="https://example.com,http://localhost:5173"
@@ -767,6 +898,7 @@ cat /tmp/config.json | jq .  # jqで構文チェック
 ```
 
 #### 方法2: jqを使う（最も安全）
+
 ```bash
 jq -n \
   --arg cors "$CORS_ORIGINS" \
@@ -781,6 +913,7 @@ jq -n \
 ```
 
 #### 方法3: Heredocument（シングルクォートで囲む）
+
 ```bash
 cat > /tmp/config.json << 'EOF'
 {
@@ -816,6 +949,7 @@ RESULT="$(aws lambda get-function --function-name xyz --query 'Configuration.Sta
 ```
 
 ### GitHub Actionsでの注意点
+
 ```yaml
 # ✅ 正しい: ${{ }} 構文は自動エスケープ
 - name: Set variable
@@ -830,6 +964,7 @@ RESULT="$(aws lambda get-function --function-name xyz --query 'Configuration.Sta
 ```
 
 ### デバッグ方法
+
 ```bash
 # 変数の内容を確認
 echo "CORS_ORIGINS: [$CORS_ORIGINS]"
@@ -843,6 +978,7 @@ echo "$MY_VAR" | od -c  # 制御文字を表示
 ```
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-aws.yml` (lines 247-258)
 - `.github/workflows/deploy-gcp.yml` (lines 172-179)
 
@@ -851,6 +987,7 @@ echo "$MY_VAR" | od -c  # 制御文字を表示
 ## CloudフロントIDの取得とキャッシュ無効化
 
 ### 症状
+
 ```
 An error occurred (InvalidArgument) when calling the CreateInvalidation operation:
 Your request contains one or more invalid CloudFront distribution ids.
@@ -859,15 +996,18 @@ Your request contains one or more invalid CloudFront distribution ids.
 CloudFrontのキャッシュ無効化コマンドでDistribution IDが見つからないエラー。
 
 ### 原因
+
 1. **Distribution IDのハードコード**（実際のIDと異なる）
 2. **Pulumi outputsからの取得方法が間違っている**
 3. **Distribution IDとDomain Nameの混同**
 
 CloudFrontでは：
+
 - **Distribution ID**: `E1234ABCD5678` （アルファベット+数字、ランダム生成）
 - **Domain Name**: `d1tf3uumcm4bo1.cloudfront.net` （実際のURL）
 
 ### 調査方法
+
 ```bash
 # 1. Pulumi outputsを確認
 cd infrastructure/pulumi/aws
@@ -887,6 +1027,7 @@ aws cloudfront list-distributions \
 ### 解決策
 
 #### Pulumi outputsから取得
+
 ```python
 # infrastructure/pulumi/aws/__main__.py
 import pulumi
@@ -900,15 +1041,16 @@ pulumi.export("cloudfront_domain", distribution.domain_name)
 ```
 
 #### ワークフローで使用
+
 ```yaml
 - name: Get Pulumi Outputs
   id: pulumi_outputs
   run: |
     cd infrastructure/pulumi/aws
-    
+
     CLOUDFRONT_ID=$(pulumi stack output cloudfront_id)
     CLOUDFRONT_DOMAIN=$(pulumi stack output cloudfront_domain)
-    
+
     echo "cloudfront_id=$CLOUDFRONT_ID" >> $GITHUB_OUTPUT
     echo "cloudfront_domain=$CLOUDFRONT_DOMAIN" >> $GITHUB_OUTPUT
 
@@ -918,11 +1060,12 @@ pulumi.export("cloudfront_domain", distribution.domain_name)
     aws cloudfront create-invalidation \
       --distribution-id ${{ steps.pulumi_outputs.outputs.cloudfront_id }} \
       --paths "/*"
-    
+
     echo "✅ CloudFront cache invalidation initiated"
 ```
 
 #### 無効化の確認
+
 ```bash
 # 無効化ステータスの確認
 aws cloudfront list-invalidations \
@@ -938,6 +1081,7 @@ aws cloudfront get-invalidation \
 ### 無効化のベストプラクティス
 
 #### パスの指定
+
 ```bash
 # ✅ 全ファイル（最も確実）
 --paths "/*"
@@ -953,12 +1097,14 @@ aws cloudfront get-invalidation \
 ```
 
 #### コスト最適化
+
 - 月1,000回まで無料
 - 1,001回目以降は$0.005/パス
 - `/*` は1パスとしてカウント（推奨）
 - 個別ファイル指定は各ファイルが1パスとしてカウント
 
 #### 待機時間
+
 ```bash
 # 無効化は数秒〜数分かかる
 aws cloudfront create-invalidation --distribution-id $ID --paths "/*"
@@ -970,10 +1116,12 @@ aws cloudfront wait invalidation-completed \
 ```
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-aws.yml` (lines 279-284)
 - `infrastructure/pulumi/aws/__main__.py`
 
 ### 参考
+
 - [CloudFront Cache Invalidation](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Invalidation.html)
 - 無効化は即座に反映されない（通常1-3分）
 - 頻繁な無効化よりバージョニング戦略（`app.v123.js`）を推奨
@@ -983,11 +1131,13 @@ aws cloudfront wait invalidation-completed \
 ## Lambda Layer ビルド時の依存関係エラー
 
 ### 症状
+
 ```
 ERROR: Could not find a version that satisfies the requirement fastapi==0.109.0
 ```
 
 または：
+
 ```
 ERROR: No matching distribution found for cryptography>=41.0.0
 ```
@@ -1003,6 +1153,7 @@ Lambda Layerのビルド時に、Python依存関係のインストールが失�
 ### 解決策
 
 #### Lambda互換のビルド（推奨）
+
 ```bash
 # Docker使用してLambda環境でビルド
 docker run --rm \
@@ -1021,26 +1172,28 @@ docker run --rm \
 ```
 
 #### GitHub Actionsでのビルド
+
 ```yaml
 - name: Build Lambda Layer
   run: |
     cd services/api
-    
+
     # Lambda互換の依存関係をインストール
     docker run --rm \
       -v "$PWD":/var/task \
       -w /var/task \
       public.ecr.aws/lambda/python:3.12 \
       pip install -r requirements.txt -t python/ --platform manylinux2014_x86_64 --only-binary=:all:
-    
+
     # Layer zipを作成
     zip -r lambda-layer.zip python/
-    
+
     # サイズ確認
     ls -lh lambda-layer.zip
 ```
 
 #### プラットフォーム指定（pip 20.3+）
+
 ```bash
 # Linux x86_64向けにビルド
 pip install -r requirements.txt \
@@ -1058,8 +1211,8 @@ pip install -r requirements.txt -t python/ --upgrade
 
 ```txt
 # ✅ バージョン固定（再現性）
-fastapi==0.109.0
-pydantic==2.5.3
+fastapi==0.115.0
+pydantic==2.9.0
 mangum==0.17.0
 
 # ❌ 避ける: バージョン固定なし（予期しない破壊的変更）
@@ -1068,6 +1221,9 @@ pydantic
 
 # ✅ 範囲指定（セキュリティパッチ適用）
 requests>=2.31.0,<3.0.0
+
+# ❌ boto3/botocore を含めない（Lambdaランタイムに含まれる）
+# boto3==1.35.0  # 除外してサイズ削減
 
 # ネイティブ拡張の代替
 # ❌ psycopg2（ビルドが複雑）
@@ -1092,19 +1248,23 @@ zip -r lambda-layer-optimized.zip python/
 ```
 
 ### Lambda Layerのサイズ制限
+
 - **展開後の最大サイズ**: 250 MB
 - **zip圧縮時の最大サイズ**: 50 MB（直接アップロード）、無制限（S3経由）
 
 サイズ超過の場合：
+
 1. 不要な依存関係を削除
 2. ネイティブ拡張を避ける（pure Pythonの代替を探す）
 3. 複数のLayerに分割
 
 ### 該当ファイル
+
 - `scripts/build-lambda-layer.sh`
 - `.github/workflows/deploy-aws.yml` (lines 98-112)
 
 ### トラブルシューティング
+
 ```bash
 # Layer内のパッケージを確認
 unzip -l lambda-layer.zip | head -20
@@ -1122,11 +1282,13 @@ python3 -c "import sys; sys.path.insert(0, '/tmp/layer-test/python'); import fas
 ## GitHub Actions シークレットの参照エラー
 
 ### 症状
+
 ```yaml
-The workflow is not valid. ... unrecognized named-value: 'secrets'
+The workflow is not valid. ... unrecognized named-value: "secrets"
 ```
 
 または、ワークフロー実行時に：
+
 ```
 Error: Process completed with exit code 1.
 AWS_ACCESS_KEY_ID: command not found
@@ -1142,11 +1304,13 @@ AWS_ACCESS_KEY_ID: command not found
 ### 確認方法
 
 #### GitHubリポジトリでシークレットを確認
+
 ```
 Settings → Secrets and variables → Actions → Repository secrets
 ```
 
 必要なシークレット:
+
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AZURE_CREDENTIALS` (JSON形式)
@@ -1154,6 +1318,7 @@ Settings → Secrets and variables → Actions → Repository secrets
 - `PULUMI_ACCESS_TOKEN`
 
 #### GitHub CLIで確認
+
 ```bash
 gh secret list --repo OWNER/REPO
 
@@ -1164,6 +1329,7 @@ gh secret list --repo OWNER/REPO | grep AWS_ACCESS_KEY_ID
 ### 解決策
 
 #### 正しい参照方法
+
 ```yaml
 # ✅ secrets context（GitHub Actions内）
 - name: Configure AWS Credentials
@@ -1188,6 +1354,7 @@ gh secret list --repo OWNER/REPO | grep AWS_ACCESS_KEY_ID
 ```
 
 #### シークレットの設定
+
 ```bash
 # GitHub CLIでシークレットを設定
 gh secret set AWS_ACCESS_KEY_ID --body "AKIAIOSFODNN7EXAMPLE" --repo OWNER/REPO
@@ -1201,6 +1368,7 @@ gh secret set PULUMI_ACCESS_TOKEN --repo OWNER/REPO
 ```
 
 #### JSON形式のシークレット（Azure/GCP）
+
 ```bash
 # Azure Credentials (Service Principal)
 az ad sp create-for-rbac \
@@ -1232,16 +1400,17 @@ gcloud iam service-accounts keys create key.json \
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production  # または staging
+    environment: production # または staging
     steps:
       - name: Deploy
         run: |
           echo "Deploying to ${{ vars.ENVIRONMENT_NAME }}"
         env:
-          API_KEY: ${{ secrets.PROD_API_KEY }}  # production環境のシークレット
+          API_KEY: ${{ secrets.PROD_API_KEY }} # production環境のシークレット
 ```
 
 環境の設定:
+
 ```
 Settings → Environments → New environment
 → Add secret
@@ -1277,11 +1446,13 @@ Settings → Environments → New environment
 ```
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-aws.yml` (lines 31-35)
 - `.github/workflows/deploy-azure.yml` (lines 32-38)
 - `.github/workflows/deploy-gcp.yml` (lines 145-149)
 
 ### セキュリティのベストプラクティス
+
 1. **最小権限の原則**: 必要最小限の権限を持つIAMユーザー/Service Principalを使用
 2. **ローテーション**: 定期的にシークレットを更新
 3. **環境分離**: staging/productionで異なるシークレットを使用
@@ -1293,6 +1464,7 @@ Settings → Environments → New environment
 ## 一般的なトラブルシューティングのヒント
 
 ### 1. Azure CLIのデバッグ
+
 ```bash
 # デバッグログを有効化
 export AZURE_CLI_DEBUG=1
@@ -1302,6 +1474,7 @@ az <command> --debug
 ```
 
 ### 2. AWS CLIのデバッグ
+
 ```bash
 # デバッグログを有効化
 aws <command> --debug
@@ -1311,6 +1484,7 @@ aws logs tail /aws/lambda/<function-name> --follow
 ```
 
 ### 3. GitHub Actionsのデバッグ
+
 ```yaml
 # ステップのデバッグ情報を有効化
 - name: Debug
@@ -1323,6 +1497,7 @@ aws logs tail /aws/lambda/<function-name> --follow
 リポジトリシークレット `ACTIONS_STEP_DEBUG=true` を設定すると全ステップで詳細ログが出力される。
 
 ### 4. 設定値の検証
+
 ```bash
 # Azure
 az functionapp config appsettings list --name <name> --resource-group <rg> --output table
@@ -1335,6 +1510,7 @@ gcloud functions describe <name> --region <region> --format json
 ```
 
 ### 5. デプロイメントの段階的検証
+
 1. インフラが正しくプロビジョニングされているか（Pulumi outputsで確認）
 2. アプリケーションコードがデプロイされているか
 3. 環境変数が正しく設定されているか
@@ -1356,7 +1532,7 @@ gcloud functions describe <name> --region <region> --format json
 
 ## 更新履歴
 
-| 日付 | 内容 |
-|------|------|
-| 2026-02-17 | 初版作成（CORS hardening デプロイの知見） |
+| 日付       | 内容                                                                                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-02-17 | 初版作成（CORS hardening デプロイの知見）                                                                                                                 |
 | 2026-02-17 | 追加: リソース名ハードコード、デプロイメント競合、Gitパス、Pulumiディレクトリ、環境変数エスケープ、CloudFront、Lambda Layer、GitHub Secretsの全11トピック |

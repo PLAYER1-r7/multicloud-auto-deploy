@@ -1,22 +1,12 @@
-# AWS Lambda Requirements (Using Klayers for main dependencies)
-# Only include dependencies NOT available in Klayers
+# AWS Lambda Application Code Requirements
+# Dependencies in this file are deployed with the Lambda function code
+# Most dependencies are in the Lambda Layer (requirements-layer.txt)
+# 
+# This file should remain minimal to keep Lambda package size under 50MB
+# for direct ZIP upload (no S3 required)
 
-# Core dependencies (provided by Klayers public layers)
-# fastapi==0.115.0  # Klayers-p312-fastapi
-# pydantic==2.9.0  # Included in fastapi layer
-# uvicorn[standard]==0.32.0  # Not needed in Lambda
-# python-jose[cryptography]==3.3.0  # Klayers-p312-python-jose
-# requests==2.32.3  # Klayers-p312-requests
-# mangum==0.17.0  # Klayers-p312-mangum
+# Note: All main dependencies (FastAPI, Pydantic, Mangum, etc.) are in Lambda Layer
+# Note: boto3 is pre-installed in Lambda runtime, no need to include
 
-# Required dependencies not in Klayers
-pydantic-settings==2.5.2
-python-multipart==0.0.9
-pyjwt==2.9.0
-
-# AWS-specific dependencies
-boto3==1.35.0
-
-# Database
-# psycopg2-binary==2.9.9  # Only if using RDS PostgreSQL
-# sqlalchemy==2.0.35  # Only if using ORM
+# Currently, all dependencies are in Lambda Layer
+# If you need additional dependencies for your function code only, add them here
