@@ -311,7 +311,9 @@ import os
 import pathlib
 
 # Path to Lambda Layer ZIP (relative to infrastructure/pulumi/aws/)
-layer_zip_path = pathlib.Path(__file__).parent.parent.parent.parent / "services" / "api" / "lambda-layer.zip"
+# In GitHub Actions: /home/runner/work/multicloud-auto-deploy/multicloud-auto-deploy/multicloud-auto-deploy/infrastructure/pulumi/aws
+# Target: multicloud-auto-deploy/services/api/lambda-layer.zip
+layer_zip_path = pathlib.Path(__file__).parent.parent.parent / "services" / "api" / "lambda-layer.zip"
 
 # Check if layer ZIP exists
 if not layer_zip_path.exists():
