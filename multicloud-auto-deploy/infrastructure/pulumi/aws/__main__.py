@@ -337,12 +337,14 @@ lambda_function = aws.lambda_.Function(
         "variables": {
             "ENVIRONMENT": stack,
             "CLOUD_PROVIDER": "aws",
+            "AUTH_PROVIDER": "cognito",
             "SECRET_NAME": app_secret.name,
             "COGNITO_USER_POOL_ID": user_pool.id,
             "COGNITO_CLIENT_ID": user_pool_client.id,
             "COGNITO_REGION": region,
             "POSTS_TABLE_NAME": posts_table.name,
             "IMAGES_BUCKET_NAME": images_bucket.id,
+            "CORS_ORIGINS": allowed_origins,
         }
     },
     tags=common_tags,
@@ -648,18 +650,24 @@ cloudfront_kwargs = {
 
 # Custom domain configuration (optional)
 custom_domain = config.get("customDomain")  # e.g., aws.yourdomain.com
-acm_certificate_arn = config.get("acmCertificateArn")  # ACM certificate ARN in us-east-1
+acm_certificate_arn = config.get(
+    "acmCertificateArn"
+)  # ACM certificate ARN in us-east-1
 
 if custom_domain and acm_certificate_arn:
     cloudfront_kwargs["aliases"] = [custom_domain]
-    cloudfront_kwargs["viewer_certificate"] = aws.cloudfront.DistributionViewerCertificateArgs(
-        acm_certificate_arn=acm_certificate_arn,
-        ssl_support_method="sni-only",
-        minimum_protocol_version="TLSv1.2_2021",
+    cloudfront_kwargs["viewer_certificate"] = (
+        aws.cloudfront.DistributionViewerCertificateArgs(
+            acm_certificate_arn=acm_certificate_arn,
+            ssl_support_method="sni-only",
+            minimum_protocol_version="TLSv1.2_2021",
+        )
     )
 else:
-    cloudfront_kwargs["viewer_certificate"] = aws.cloudfront.DistributionViewerCertificateArgs(
-        cloudfront_default_certificate=True,
+    cloudfront_kwargs["viewer_certificate"] = (
+        aws.cloudfront.DistributionViewerCertificateArgs(
+            cloudfront_default_certificate=True,
+        )
     )
 
 # Add WAF only for production

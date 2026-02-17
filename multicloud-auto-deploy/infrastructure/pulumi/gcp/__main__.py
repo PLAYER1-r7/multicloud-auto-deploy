@@ -281,7 +281,9 @@ url_map = gcp.compute.URLMap(
 # Target HTTPS Proxy with SSL (managed certificate)
 # Custom domain configuration (optional)
 custom_domain = config.get("customDomain")  # e.g., gcp.yourdomain.com
-ssl_domains = [custom_domain] if custom_domain else [f"{project_name}-{stack}.example.com"]
+ssl_domains = (
+    [custom_domain] if custom_domain else [f"{project_name}-{stack}.example.com"]
+)
 
 managed_ssl_cert = gcp.compute.ManagedSslCertificate(
     "managed-ssl-cert",
