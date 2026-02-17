@@ -258,8 +258,10 @@ jobs:
           az functionapp config appsettings delete \
             --name $FUNCTION_APP \
             --resource-group $RESOURCE_GROUP \
-            --setting-names CORS_ORIGINS \
-            2>/dev/null || echo "  (No existing CORS_ORIGINS found)"
+            --setting-names CORS_ORIGINS || true
+          
+          # Wait for delete to propagate
+          sleep 5
           
           # Set environment variables (including Azure AD authentication)
           echo "⚙️  Setting environment variables..."
