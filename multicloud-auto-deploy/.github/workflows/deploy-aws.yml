@@ -202,9 +202,9 @@ jobs:
           
           # Debug: Check lambda.zip exists and show size
           echo "📦 Checking lambda.zip..."
-          ls -lh services/api/lambda.zip || { echo "❌ lambda.zip not found!"; exit 1; }
+          ls -lh multicloud-auto-deploy/services/api/lambda.zip || { echo "❌ lambda.zip not found!"; exit 1; }
           
-          SIZE_MB=$(du -m services/api/lambda.zip | cut -f1)
+          SIZE_MB=$(du -m multicloud-auto-deploy/services/api/lambda.zip | cut -f1)
           
           if [ $SIZE_MB -lt 50 ]; then
             # Direct upload (faster!)
@@ -212,7 +212,7 @@ jobs:
             aws lambda update-function-code \
               --function-name $LAMBDA_FUNCTION \
               --region ${{ env.AWS_REGION }} \
-              --zip-file fileb://services/api/lambda.zip \
+              --zip-file fileb://multicloud-auto-deploy/services/api/lambda.zip \
               --output json || { echo "❌ Lambda update failed!"; exit 1; }
           else
             # S3 upload for large packages
@@ -220,7 +220,7 @@ jobs:
             S3_KEY="lambda-deployments/lambda-$(date +%Y%m%d-%H%M%S).zip"
             
             echo "☁️  Uploading to S3: s3://$S3_BUCKET/$S3_KEY"
-            aws s3 cp services/api/lambda.zip s3://$S3_BUCKET/$S3_KEY || { echo "❌ S3 upload failed!"; exit 1; }
+            aws s3 cp multicloud-auto-deploy/services/api/lambda.zip s3://$S3_BUCKET/$S3_KEY || { echo "❌ S3 upload failed!"; exit 1; }
             
             echo "🚀 Updating Lambda from S3"
             aws lambda update-function-code \
