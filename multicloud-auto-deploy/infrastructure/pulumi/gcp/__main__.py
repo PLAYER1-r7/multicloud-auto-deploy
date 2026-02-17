@@ -84,7 +84,7 @@ firebase_web_app = gcp.firebase.WebApp(
 # Note: Firebase Web App configuration (API Key, Auth Domain) is available
 # in the Firebase Console after the app is created. These cannot be retrieved
 # programmatically via Pulumi at provisioning time.
-# 
+#
 # To get the configuration:
 # 1. Visit Firebase Console: https://console.firebase.google.com/
 # 2. Select your project
@@ -360,20 +360,27 @@ pulumi.export(
         "Firebase Web App created successfully!\\n",
         "\\n",
         "To get Firebase configuration (API Key, Auth Domain):\\n",
-        "1. Visit: https://console.firebase.google.com/project/", project, "/settings/general\\n",
+        "1. Visit: https://console.firebase.google.com/project/",
+        project,
+        "/settings/general\\n",
         "2. Scroll to 'Your apps' section\\n",
-        "3. Find your web app: ", firebase_web_app.display_name, "\\n",
+        "3. Find your web app: ",
+        firebase_web_app.display_name,
+        "\\n",
         "4. Copy the Firebase SDK configuration\\n",
         "\\n",
         "To enable authentication:\\n",
-        "1. Visit: https://console.firebase.google.com/project/", project, "/authentication\\n",
+        "1. Visit: https://console.firebase.google.com/project/",
+        project,
+        "/authentication\\n",
         "2. Enable Google Sign-In provider\\n",
         "3. Configure OAuth consent screen\\n",
         "\\n",
-        "Cloud Functions environment variables:\\n"
-        "  AUTH_PROVIDER=firebase\\n",
-        "  GCP_PROJECT_ID=", project, "\\n",
-    )
+        "Cloud Functions environment variables:\\n" "  AUTH_PROVIDER=firebase\\n",
+        "  GCP_PROJECT_ID=",
+        project,
+        "\\n",
+    ),
 )
 pulumi.export("function_source_bucket", function_source_bucket.name)
 pulumi.export("frontend_bucket", frontend_bucket.name)

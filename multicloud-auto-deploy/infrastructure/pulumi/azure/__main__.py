@@ -317,8 +317,10 @@ pulumi.export(
         "Configure Function App with these environment variables:\\n",
         "  AUTH_PROVIDER=azure\\n",
         "  AZURE_TENANT_ID=<your-tenant-id>\\n",
-        "  AZURE_CLIENT_ID=", app_registration.client_id, "\\n",
-    )
+        "  AZURE_CLIENT_ID=",
+        app_registration.client_id,
+        "\\n",
+    ),
 )
 
 # Existing manually-managed Function App

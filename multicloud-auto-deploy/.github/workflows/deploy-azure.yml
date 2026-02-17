@@ -55,12 +55,12 @@ jobs:
 
       - name: Install Pulumi Python Dependencies
         run: |
-          cd infrastructure/pulumi/azure
+          cd multicloud-auto-deploy/infrastructure/pulumi/azure
           pip install -r requirements.txt
 
       - name: Initialize Pulumi Stack
         run: |
-          cd infrastructure/pulumi/azure
+          cd multicloud-auto-deploy/infrastructure/pulumi/azure
           pulumi login
           pulumi stack select staging 2>/dev/null || pulumi stack init staging
           pulumi config set azure-native:location japaneast
