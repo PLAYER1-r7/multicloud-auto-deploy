@@ -253,6 +253,14 @@ jobs:
           
           echo "🔒 CORS Origins: $CORS_ORIGINS"
           
+          # Remove existing CORS_ORIGINS if it exists (to avoid conflict)
+          echo "🔧 Removing existing CORS_ORIGINS setting if present..."
+          az functionapp config appsettings delete \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --setting-names CORS_ORIGINS \
+            2>/dev/null || echo "  (No existing CORS_ORIGINS found)"
+          
           # Set environment variables (including Azure AD authentication)
           echo "⚙️  Setting environment variables..."
           az functionapp config appsettings set \
