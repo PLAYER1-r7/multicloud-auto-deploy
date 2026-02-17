@@ -91,6 +91,9 @@ jobs:
           echo "lambda_function_name=$(pulumi stack output lambda_function_name)" >> $GITHUB_OUTPUT
           echo "api_gateway_endpoint=$(pulumi stack output api_gateway_endpoint)" >> $GITHUB_OUTPUT
           echo "frontend_bucket_name=$(pulumi stack output frontend_bucket_name)" >> $GITHUB_OUTPUT
+          echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)" >> $GITHUB_OUTPUT
+          echo "cognito_user_pool_id=$(pulumi stack output cognito_user_pool_id)" >> $GITHUB_OUTPUT
+          echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
 
       - name: Build Lambda Layer
         if: ${{ github.event.inputs.use_klayers != 'true' }}
@@ -173,7 +176,7 @@ jobs:
           LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
             --layer-name $LAYER_NAME \
             --description "Dependencies for FastAPI + Mangum + JWT (Python 3.12)" \
-            --zip-file fileb://services/api/lambda-layer.zip \
+            --zip-file fileb://multicloud-auto-deploy/services/api/lambda-layer.zip \
             --compatible-runtimes python3.12 \
             --region ${{ env.AWS_REGION }} \
             --query LayerVersionArn \
@@ -228,9 +231,9 @@ jobs:
               --output json || { echo "❌ Lambda update failed!"; exit 1; }
           fi
           
-          # Get CloudFront URL for CORS
-          CLOUDFRONT_URL="${{ steps.pulumi_outputs.outputs.cloudfront_distribution_url }}"
-          CORS_ORIGINS="https://${CLOUDFRONT_URL},http://localhost:5173"
+          # Get CloudFront domain for CORS
+          CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
+          CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},http://localhost:5173"
           
           echo "🔒 CORS Origins: $CORS_ORIGINS"
           

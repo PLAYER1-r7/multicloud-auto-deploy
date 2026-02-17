@@ -90,6 +90,7 @@ jobs:
           echo "function_source_bucket=$(pulumi stack output function_source_bucket)" >> $GITHUB_OUTPUT
           echo "frontend_bucket=$(pulumi stack output frontend_bucket)" >> $GITHUB_OUTPUT
           echo "function_name=$(pulumi stack output function_name)" >> $GITHUB_OUTPUT
+          echo "cdn_ip_address=$(pulumi stack output cdn_ip_address)" >> $GITHUB_OUTPUT
 
       - name: Package Cloud Function
         run: |
@@ -163,8 +164,8 @@ jobs:
           # Upload source to GCS
           gsutil cp services/api/function-source.zip gs://$FUNCTION_BUCKET/function-source.zip
           
-          # Get CDN URL for CORS
-          CDN_URL=$(gcloud compute addresses list --filter="name:multicloud-auto-deploy-staging-ip" --format="get(address)" --global)
+          # Get CDN IP from Pulumi outputs for CORS
+          CDN_URL="${{ steps.pulumi_outputs.outputs.cdn_ip_address }}"
           CORS_ORIGINS="https://${CDN_URL},http://localhost:5173"
           
           echo "🔒 CORS Origins: $CORS_ORIGINS"
@@ -181,7 +182,14 @@ jobs:
             --max-instances=10 \
             --memory=512MB \
             --timeout=60s \
-            --set-env-vars=ENVIRONMENT=staging,CLOUD_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,FIRESTORE_COLLECTION=messages,CORS_ORIGINS="$CORS_ORIGINS"
+            --set-env-vars=ENVIRONMENT=staging,CLOUD_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,FIRESTORE_COLLECTION=messages
+          
+          # Update CORS_ORIGINS separately to avoid escaping issues
+          echo "🔒 Setting CORS environment variable..."
+          gcloud functions deploy $FUNCTION_NAME \
+            --gen2 \
+            --region=$REGION \
+            --update-env-vars=CORS_ORIGINS="$CORS_ORIGINS"
           
           # Get function URL
           FUNCTION_URL=$(gcloud functions describe $FUNCTION_NAME --region=$REGION --gen2 --format="value(serviceConfig.uri)")
