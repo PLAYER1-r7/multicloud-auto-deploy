@@ -59,11 +59,24 @@ jobs:
           cd multicloud-auto-deploy/infrastructure/pulumi/aws
           pip install -r requirements.txt
 
+      - name: Determine Pulumi Stack Name
+        id: set_stack
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            STACK_NAME="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            STACK_NAME="production"
+          else
+            STACK_NAME="staging"
+          fi
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "📦 Using Pulumi stack: $STACK_NAME"
+
       - name: Initialize Pulumi Stack
         run: |
           cd multicloud-auto-deploy/infrastructure/pulumi/aws
           pulumi login
-          pulumi stack select staging 2>/dev/null || pulumi stack init staging
+          pulumi stack select ${{ steps.set_stack.outputs.stack_name }} 2>/dev/null || pulumi stack init ${{ steps.set_stack.outputs.stack_name }}
           pulumi config set aws:region ${{ env.AWS_REGION }}
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
@@ -73,7 +86,7 @@ jobs:
         uses: pulumi/actions@v5
         with:
           command: up
-          stack-name: staging
+          stack-name: ${{ steps.set_stack.outputs.stack_name }}
           work-dir: multicloud-auto-deploy/infrastructure/pulumi/aws
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
@@ -91,6 +104,7 @@ jobs:
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
 
       - name: Build Lambda Layer
+        if: ${{ github.event.inputs.use_klayers == 'false' }}
         id: build_layer
         run: |
           cd multicloud-auto-deploy/services/api

@@ -58,11 +58,24 @@ jobs:
           cd multicloud-auto-deploy/infrastructure/pulumi/azure
           pip install -r requirements.txt
 
+      - name: Determine Pulumi Stack Name
+        id: set_stack
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            STACK_NAME="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            STACK_NAME="production"
+          else
+            STACK_NAME="staging"
+          fi
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "📦 Using Pulumi stack: $STACK_NAME"
+
       - name: Initialize Pulumi Stack
         run: |
           cd multicloud-auto-deploy/infrastructure/pulumi/azure
           pulumi login
-          pulumi stack select staging 2>/dev/null || pulumi stack init staging
+          pulumi stack select ${{ steps.set_stack.outputs.stack_name }} 2>/dev/null || pulumi stack init ${{ steps.set_stack.outputs.stack_name }}
           pulumi config set azure-native:location japaneast
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
@@ -90,7 +103,7 @@ jobs:
         uses: pulumi/actions@v5
         with:
           command: up
-          stack-name: staging
+          stack-name: ${{ steps.set_stack.outputs.stack_name }}
           work-dir: multicloud-auto-deploy/infrastructure/pulumi/azure
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
