@@ -4,10 +4,20 @@ on:
   push:
     branches:
       - main
+      - 'feature/**'
     paths:
       - 'static-site/**'
       - '.github/workflows/deploy-landing-aws.yml'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
 
 env:
   AWS_REGION: ap-northeast-1

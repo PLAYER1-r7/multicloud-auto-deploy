@@ -2,7 +2,9 @@ name: Deploy to Azure
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'feature/**'
     paths:
       - "services/**"
       - "infrastructure/pulumi/azure/**"
@@ -26,7 +28,8 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'staging' }}
+    # push: staging自動デプロイ, workflow_dispatch: 選択した環境
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'staging' }}
 
     steps:
       - uses: actions/checkout@v4

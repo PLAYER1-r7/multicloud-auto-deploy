@@ -4,10 +4,20 @@ on:
   push:
     branches:
       - main
+      - 'feature/**'
     paths:
       - 'services/frontend_react/**'
       - '.github/workflows/deploy-frontend-azure.yml'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
 
 env:
   AZURE_STORAGE_ACCOUNT: mcadstaticweb752
