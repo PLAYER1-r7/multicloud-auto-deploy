@@ -8,7 +8,7 @@ on:
     paths:
       - "multicloud-auto-deploy/services/**"
       - "multicloud-auto-deploy/infrastructure/pulumi/aws/**"
-      - ".github/workflows/deploy-aws.yml"
+      - "multicloud-auto-deploy/.github/workflows/deploy-aws.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -33,7 +33,8 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'staging' }}
+    # develop→staging, main→production, 手動→選択した環境
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -60,12 +61,12 @@ jobs:
 
       - name: Install Pulumi Python Dependencies
         run: |
-          cd infrastructure/pulumi/aws
+          cd multicloud-auto-deploy/infrastructure/pulumi/aws
           pip install -r requirements.txt
 
       - name: Initialize Pulumi Stack
         run: |
-          cd infrastructure/pulumi/aws
+          cd multicloud-auto-deploy/infrastructure/pulumi/aws
           pulumi login
           pulumi stack select staging 2>/dev/null || pulumi stack init staging
           pulumi config set aws:region ${{ env.AWS_REGION }}
@@ -78,7 +79,7 @@ jobs:
         with:
           command: up
           stack-name: staging
-          work-dir: infrastructure/pulumi/aws
+          work-dir: multicloud-auto-deploy/infrastructure/pulumi/aws
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           AWS_REGION: ${{ env.AWS_REGION }}
@@ -86,7 +87,7 @@ jobs:
       - name: Get Pulumi Outputs
         id: pulumi_outputs
         run: |
-          cd infrastructure/pulumi/aws
+          cd multicloud-auto-deploy/infrastructure/pulumi/aws
           echo "lambda_function_name=$(pulumi stack output lambda_function_name)" >> $GITHUB_OUTPUT
           echo "api_gateway_endpoint=$(pulumi stack output api_gateway_endpoint)" >> $GITHUB_OUTPUT
           echo "frontend_bucket_name=$(pulumi stack output frontend_bucket_name)" >> $GITHUB_OUTPUT
@@ -95,7 +96,7 @@ jobs:
         if: ${{ github.event.inputs.use_klayers != 'true' }}
         id: build_layer
         run: |
-          cd services/api
+          cd multicloud-auto-deploy/services/api
           rm -rf .build-layer lambda-layer.zip
           
           # Build Lambda Layer (dependencies only)
@@ -108,7 +109,7 @@ jobs:
 
       - name: Package Backend (Application Code Only)
         run: |
-          cd services/api
+          cd multicloud-auto-deploy/services/api
           rm -rf .build lambda.zip
           mkdir -p .build/package
           
@@ -240,7 +241,7 @@ jobs:
 
       - name: Build Frontend
         run: |
-          cd services/frontend_react
+          cd multicloud-auto-deploy/services/frontend_react
           npm install
           npm run build
         env:
@@ -249,7 +250,7 @@ jobs:
       - name: Deploy Frontend to S3
         run: |
           S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
-          aws s3 sync services/frontend_react/dist/ s3://$S3_BUCKET/ --delete
+          aws s3 sync multicloud-auto-deploy/services/frontend_react/dist/ s3://$S3_BUCKET/ --delete
 
       - name: Notify Success
         if: success()

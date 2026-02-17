@@ -8,7 +8,7 @@ on:
     paths:
       - "multicloud-auto-deploy/services/**"
       - "multicloud-auto-deploy/infrastructure/pulumi/azure/**"
-      - ".github/workflows/deploy-azure.yml"
+      - "multicloud-auto-deploy/.github/workflows/deploy-azure.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -28,7 +28,8 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'staging' }}
+    # develop→staging, main→production, 手動→選択した環境
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -54,12 +55,12 @@ jobs:
 
       - name: Install Pulumi Python Dependencies
         run: |
-          cd infrastructure/pulumi/azure
+          cd multicloud-auto-deploy/infrastructure/pulumi/azure
           pip install -r requirements.txt
 
       - name: Initialize Pulumi Stack
         run: |
-          cd infrastructure/pulumi/azure
+          cd multicloud-auto-deploy/infrastructure/pulumi/azure
           pulumi login
           pulumi stack select staging 2>/dev/null || pulumi stack init staging
           pulumi config set azure-native:location japaneast
@@ -80,31 +81,58 @@ jobs:
           echo "client_secret=$(echo $CREDS | jq -r '.clientSecret')" >> $GITHUB_OUTPUT
           echo "tenant_id=$(echo $CREDS | jq -r '.tenantId')" >> $GITHUB_OUTPUT
 
-      # Pulumi Infrastructure deployment is skipped - using Portal-created resources
+      # Deploy Azure AD resources with Pulumi (Function App remains manual)
       # Azure Portal quota limitations prevent IaC-based App Service Plan creation
-      # Resources created manually: multicloud-auto-deploy-staging-func (FC1 Flex Consumption)
+      # Function App created manually: multicloud-auto-deploy-staging-func (FC1 Flex Consumption)
+      
+      - name: Deploy Infrastructure with Pulumi
+        id: pulumi
+        uses: pulumi/actions@v5
+        with:
+          command: up
+          stack-name: staging
+          work-dir: multicloud-auto-deploy/infrastructure/pulumi/azure
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ARM_CLIENT_ID: ${{ steps.azure_env.outputs.client_id }}
+          ARM_CLIENT_SECRET: ${{ steps.azure_env.outputs.client_secret }}
+          ARM_TENANT_ID: ${{ steps.azure_env.outputs.tenant_id }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.azure_env.outputs.subscription_id }}
+          AZURE_STORAGE_ACCOUNT: ""  # Required for Pulumi state backend
 
-      - name: Use Portal-Created Resources
+      - name: Get Pulumi Outputs
         id: pulumi_outputs
         run: |
-          echo "resource_group_name=multicloud-auto-deploy-staging-rg" >> $GITHUB_OUTPUT
+          cd multicloud-auto-deploy/infrastructure/pulumi/azure
+          
+          # Get resource names from Pulumi
+          echo "resource_group_name=$(pulumi stack output resource_group_name)" >> $GITHUB_OUTPUT
+          
+          # Get Azure AD outputs
+          echo "azure_ad_client_id=$(pulumi stack output azure_ad_client_id)" >> $GITHUB_OUTPUT
+          echo "azure_ad_object_id=$(pulumi stack output azure_ad_object_id)" >> $GITHUB_OUTPUT
+          
+          # Manual Function App reference (not managed by Pulumi)
           echo "function_app_name=multicloud-auto-deploy-staging-func" >> $GITHUB_OUTPUT
           
-          # Get storage account name dynamically
-          STORAGE_NAME=$(az storage account list --resource-group multicloud-auto-deploy-staging-rg --query "[?starts_with(name, 'multicloud')].name | [0]" -o tsv)
-          echo "functions_storage_name=${STORAGE_NAME}" >> $GITHUB_OUTPUT
-          echo "frontend_storage_name=mcadwebd45ihd" >> $GITHUB_OUTPUT
+          # Get storage account names dynamically from Azure (fallback if Pulumi outputs not available)
+          RG_NAME=$(pulumi stack output resource_group_name)
+          FUNC_STORAGE=$(az storage account list --resource-group $RG_NAME --query "[?contains(name, 'func')].name | [0]" -o tsv)
+          WEB_STORAGE=$(az storage account list --resource-group $RG_NAME --query "[?contains(name, 'web')].name | [0]" -o tsv)
           
-          # Get Function App URL - use config hostname list for Flex Consumption plan
-          # (defaultHostName is not reliable for Flex Consumption SKU)
+          echo "functions_storage_name=${FUNC_STORAGE}" >> $GITHUB_OUTPUT
+          echo "frontend_storage_name=${WEB_STORAGE}" >> $GITHUB_OUTPUT
+          
+          # Get Function App URL
           FUNC_HOSTNAME=$(az functionapp config hostname list \
             --webapp-name multicloud-auto-deploy-staging-func \
-            --resource-group multicloud-auto-deploy-staging-rg \
+            --resource-group $RG_NAME \
             --query '[0].name' -o tsv)
           API_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
           echo "api_url=${API_URL}" >> $GITHUB_OUTPUT
           
           echo "📍 Configured API URL: ${API_URL}"
+          echo "🔐 Azure AD Client ID: $(pulumi stack output azure_ad_client_id)"
 
       - name: Package Function App
         run: |
@@ -216,7 +244,7 @@ jobs:
           
           echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
           
-          # Set environment variables
+          # Set environment variables (including Azure AD authentication)
           echo "⚙️  Setting environment variables..."
           az functionapp config appsettings set \
             --name $FUNCTION_APP \
@@ -228,7 +256,14 @@ jobs:
               AZURE_COSMOS_KEY="${COSMOS_KEY}" \
               AZURE_COSMOS_DATABASE=multicloud-db \
               AZURE_COSMOS_CONTAINER=messages \
+              AUTH_PROVIDER=azure \
+              AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
+              AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
             > /dev/null
+          
+          echo "🔐 Azure AD Authentication configured:"
+          echo "  Tenant ID: ${{ steps.azure_env.outputs.tenant_id }}"
+          echo "  Client ID: ${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
           
           echo "📦 Deploying function app package (with retry logic)..."
           
@@ -244,7 +279,7 @@ jobs:
             az functionapp deployment source config-zip \
               --resource-group $RESOURCE_GROUP \
               --name $FUNCTION_APP \
-              --src services/api/function-app.zip \
+              --src multicloud-auto-deploy/services/api/function-app.zip \
               --timeout 600 \
               2>&1 | tee deploy_log.txt || true
             
@@ -346,7 +381,7 @@ jobs:
           az storage blob upload-batch \
             --account-name $STORAGE_ACCOUNT \
             --account-key $STORAGE_KEY \
-            --source services/frontend_react/dist \
+            --source multicloud-auto-deploy/services/frontend_react/dist \
             --destination '$web' \
             --overwrite
 

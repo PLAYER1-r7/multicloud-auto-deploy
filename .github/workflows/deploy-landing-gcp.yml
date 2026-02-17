@@ -6,9 +6,18 @@ on:
       - develop  # staging自動デプロイ
       - main     # production自動デプロイ
     paths:
-      - 'multicloud-auto-deploy/static-site/**'
+      - 'static-site/**'
       - '.github/workflows/deploy-landing-gcp.yml'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
 
 env:
   GCP_PROJECT_ID: ashnova
