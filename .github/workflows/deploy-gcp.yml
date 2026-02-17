@@ -170,7 +170,18 @@ jobs:
           
           echo "🔒 CORS Origins: $CORS_ORIGINS"
           
-          # Deploy function (creates if not exists, updates if exists)
+          # Create env vars file to avoid escaping issues with special characters
+          cat > /tmp/env-vars.yaml <<EOF
+ENVIRONMENT: staging
+CLOUD_PROVIDER: gcp
+GCP_PROJECT_ID: $PROJECT_ID
+FIRESTORE_COLLECTION: messages
+CORS_ORIGINS: "$CORS_ORIGINS"
+EOF
+          
+          echo "📝 Environment variables file created"
+          
+          # Deploy function with env vars from file
           gcloud functions deploy $FUNCTION_NAME \
             --gen2 \
             --region=$REGION \
@@ -182,14 +193,7 @@ jobs:
             --max-instances=10 \
             --memory=512MB \
             --timeout=60s \
-            --set-env-vars=ENVIRONMENT=staging,CLOUD_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,FIRESTORE_COLLECTION=messages
-          
-          # Update CORS_ORIGINS separately to avoid escaping issues
-          echo "🔒 Setting CORS environment variable..."
-          gcloud functions deploy $FUNCTION_NAME \
-            --gen2 \
-            --region=$REGION \
-            --update-env-vars=CORS_ORIGINS="$CORS_ORIGINS"
+            --env-vars-file=/tmp/env-vars.yaml
           
           # Get function URL
           FUNCTION_URL=$(gcloud functions describe $FUNCTION_NAME --region=$REGION --gen2 --format="value(serviceConfig.uri)")

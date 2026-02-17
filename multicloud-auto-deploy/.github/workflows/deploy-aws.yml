@@ -96,7 +96,7 @@ jobs:
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
 
       - name: Build Lambda Layer
-        if: ${{ github.event.inputs.use_klayers != 'true' }}
+        if: ${{ github.event.inputs.use_klayers == 'false' }}
         id: build_layer
         run: |
           cd multicloud-auto-deploy/services/api
@@ -165,7 +165,7 @@ jobs:
           echo "  Requests: $REQUESTS_ARN"
 
       - name: Deploy Lambda Layer (Custom)
-        if: ${{ github.event.inputs.use_klayers != 'true' }}
+        if: ${{ github.event.inputs.use_klayers == 'false' }}
         id: deploy_layer
         run: |
           set -e
