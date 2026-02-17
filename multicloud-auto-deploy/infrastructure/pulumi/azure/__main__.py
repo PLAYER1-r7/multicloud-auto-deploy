@@ -13,6 +13,7 @@ import pulumi
 import pulumi_azure_native as azure
 import pulumi_azuread as azuread
 import pulumi_random as random
+import monitoring
 
 # Configuration
 config = pulumi.Config()
@@ -302,6 +303,29 @@ frontdoor_route = azure.cdn.Route(
 )
 
 # ========================================
+# Monitoring and Alerts
+# ========================================
+alarm_email = config.get("alarmEmail")
+
+# Note: Function App ID is derived from the manually-managed app
+function_app_id = pulumi.Output.concat(
+    "/subscriptions/", azure.get_client_config().subscription_id,
+    "/resourceGroups/", resource_group.name,
+    "/providers/Microsoft.Web/sites/", f"{project_name}-{stack}-func"
+)
+
+monitoring_resources = monitoring.setup_monitoring(
+    project_name=project_name,
+    stack=stack,
+    resource_group_name=resource_group.name,
+    location=location,
+    function_app_id=function_app_id,
+    cosmos_account_id=cosmos_account.id,
+    frontdoor_profile_id=frontdoor_profile.id,
+    alarm_email=alarm_email,
+)
+
+# ========================================
 # Outputs
 # ========================================
 pulumi.export("resource_group_name", resource_group.name)
@@ -345,6 +369,13 @@ pulumi.export(
 pulumi.export("app_insights_instrumentation_key", app_insights.instrumentation_key)
 pulumi.export("key_vault_name", key_vault.name)
 pulumi.export("key_vault_uri", key_vault.properties.vault_uri)
+
+# Monitoring exports
+if monitoring_resources["action_group"]:
+    pulumi.export("monitoring_action_group_id", monitoring_resources["action_group"].id)
+pulumi.export("monitoring_function_alerts", list(monitoring_resources["function_app_alerts"].keys()))
+pulumi.export("monitoring_cosmos_alerts", list(monitoring_resources["cosmos_db_alerts"].keys()))
+pulumi.export("monitoring_frontdoor_alerts", list(monitoring_resources["frontdoor_alerts"].keys()))
 
 # Cost estimation
 pulumi.export(

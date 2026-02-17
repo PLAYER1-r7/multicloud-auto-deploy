@@ -13,6 +13,7 @@ Cost: ~$2-5/month for low traffic
 import json
 import pulumi
 import pulumi_aws as aws
+import monitoring
 
 # Configuration
 config = pulumi.Config()
@@ -657,6 +658,20 @@ cloudfront_distribution = aws.cloudfront.Distribution(
 )
 
 # ========================================
+# Monitoring and Alerts
+# ========================================
+alarm_email = config.get("alarmEmail")
+monitoring_resources = monitoring.setup_monitoring(
+    project_name=project_name,
+    stack=stack,
+    lambda_function_name=lambda_function.name,
+    api_gateway_id=api_gateway.id,
+    api_gateway_name=api_gateway.name,
+    cloudfront_distribution_id=cloudfront_distribution.id,
+    alarm_email=alarm_email,
+)
+
+# ========================================
 # Outputs
 # ========================================
 pulumi.export("lambda_function_name", lambda_function.name)
@@ -690,6 +705,15 @@ pulumi.export("posts_table_name", posts_table.name)
 pulumi.export("posts_table_arn", posts_table.arn)
 pulumi.export("images_bucket_name", images_bucket.id)
 pulumi.export("images_bucket_arn", images_bucket.arn)
+
+# Monitoring exports
+if monitoring_resources["sns_topic"]:
+    pulumi.export("monitoring_sns_topic_arn", monitoring_resources["sns_topic"].arn)
+pulumi.export("monitoring_lambda_alarms", list(monitoring_resources["lambda_alarms"].keys()))
+pulumi.export("monitoring_api_alarms", list(monitoring_resources["api_gateway_alarms"].keys()))
+pulumi.export("monitoring_cloudfront_alarms", list(monitoring_resources["cloudfront_alarms"].keys()))
+if monitoring_resources["cost_anomaly_detector"]:
+    pulumi.export("monitoring_cost_detector_arn", monitoring_resources["cost_anomaly_detector"].arn)
 
 # Cost estimation
 pulumi.export(

@@ -16,6 +16,7 @@ Cost: ~$2-5/month for low traffic
 import pulumi
 import pulumi_gcp as gcp
 import os
+import monitoring
 
 # Configuration
 config = pulumi.Config()
@@ -401,8 +402,32 @@ if stack == "production":
     pulumi.export("cloud_armor_policy_name", armor_security_policy.name)
 pulumi.export("ssl_certificate_name", managed_ssl_cert.name)
 
+# ========================================
+# Monitoring and Alerts
+# ========================================
+alarm_email = config.get("alarmEmail")
+function_name = f"{project_name}-{stack}-api"
+
+monitoring_resources = monitoring.setup_monitoring(
+    project_name=project_name,
+    stack=stack,
+    function_name=pulumi.Output.from_input(function_name),
+    region=region,
+    project_id=project,
+    alarm_email=alarm_email,
+    monthly_budget_usd=config.get_int("monthlyBudgetUsd") or 50,
+)
+
 # Function name for gcloud deployment (fixed name)
 pulumi.export("function_name", f"{project_name}-{stack}-api")
+
+# Monitoring exports
+if monitoring_resources["notification_channel"]:
+    pulumi.export("monitoring_notification_channel_id", monitoring_resources["notification_channel"].id)
+pulumi.export("monitoring_function_alerts", list(monitoring_resources["function_alerts"].keys()))
+pulumi.export("monitoring_firestore_alerts", list(monitoring_resources["firestore_alerts"].keys()))
+if monitoring_resources["billing_budget"]:
+    pulumi.export("monitoring_billing_budget_name", monitoring_resources["billing_budget"].display_name)
 
 # Cost estimation
 cost_estimate_base = (
