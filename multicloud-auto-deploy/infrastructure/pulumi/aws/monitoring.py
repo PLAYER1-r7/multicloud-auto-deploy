@@ -38,6 +38,9 @@ def create_sns_topic(
             topic=topic.arn,
             protocol="email",
             endpoint=email,
+            opts=pulumi.ResourceOptions(
+                retain_on_delete=True,  # Don't delete subscription (requires SNS:Unsubscribe permission)
+            ),
         )
 
     return topic
