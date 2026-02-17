@@ -171,13 +171,11 @@ jobs:
           echo "🔒 CORS Origins: $CORS_ORIGINS"
           
           # Create env vars file to avoid escaping issues with special characters
-          cat > /tmp/env-vars.yaml <<EOF
-ENVIRONMENT: staging
-CLOUD_PROVIDER: gcp
-GCP_PROJECT_ID: $PROJECT_ID
-FIRESTORE_COLLECTION: messages
-CORS_ORIGINS: "$CORS_ORIGINS"
-EOF
+          echo "ENVIRONMENT: staging" > /tmp/env-vars.yaml
+          echo "CLOUD_PROVIDER: gcp" >> /tmp/env-vars.yaml
+          echo "GCP_PROJECT_ID: $PROJECT_ID" >> /tmp/env-vars.yaml
+          echo "FIRESTORE_COLLECTION: messages" >> /tmp/env-vars.yaml
+          echo "CORS_ORIGINS: \"$CORS_ORIGINS\"" >> /tmp/env-vars.yaml
           
           echo "📝 Environment variables file created"
           
