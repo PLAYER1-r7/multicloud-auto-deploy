@@ -4,7 +4,7 @@ from app.models import CloudProvider
 
 
 class Settings(BaseSettings):
-    """アプリケーション設定"""
+    """アプリケーション設定 (v1.2.2)"""
     
     # クラウドプロバイダー
     cloud_provider: CloudProvider = CloudProvider.LOCAL
