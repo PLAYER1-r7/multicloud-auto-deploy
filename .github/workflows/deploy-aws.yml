@@ -234,6 +234,31 @@ jobs:
               --output json || { echo "❌ Lambda update failed!"; exit 1; }
           fi
           
+          # Wait for Lambda function to become Active after code update
+          echo "⏳ Waiting for Lambda function to become Active..."
+          MAX_WAIT=60
+          WAIT_COUNT=0
+          while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+            STATUS=$(aws lambda get-function \
+              --function-name $LAMBDA_FUNCTION \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Configuration.State' \
+              --output text)
+            
+            if [ "$STATUS" == "Active" ]; then
+              echo "✅ Lambda function is Active"
+              break
+            fi
+            
+            echo "  Status: $STATUS, waiting... ($((WAIT_COUNT+1))/$MAX_WAIT)"
+            sleep 2
+            WAIT_COUNT=$((WAIT_COUNT+1))
+          done
+          
+          if [ $WAIT_COUNT -eq $MAX_WAIT ]; then
+            echo "⚠️  Timeout waiting for Lambda to become Active, but continuing..."
+          fi
+          
           # Get CloudFront domain for CORS
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
           CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},http://localhost:5173"
