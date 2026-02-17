@@ -8,7 +8,7 @@ on:
     paths:
       - "multicloud-auto-deploy/services/**"
       - "multicloud-auto-deploy/infrastructure/pulumi/azure/**"
-      - "multicloud-auto-deploy/.github/workflows/deploy-azure.yml"
+      - ".github/workflows/deploy-azure.yml"
   workflow_dispatch:
     inputs:
       environment:
