@@ -2,10 +2,12 @@ name: Deploy to Azure
 
 on:
   push:
-    branches: [main]
+    branches:
+      - develop  # staging自動デプロイ
+      - main     # production自動デプロイ
     paths:
-      - "services/**"
-      - "infrastructure/pulumi/azure/**"
+      - "multicloud-auto-deploy/services/**"
+      - "multicloud-auto-deploy/infrastructure/pulumi/azure/**"
       - ".github/workflows/deploy-azure.yml"
   workflow_dispatch:
     inputs:

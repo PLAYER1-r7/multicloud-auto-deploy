@@ -3,9 +3,10 @@ name: Deploy Frontend to AWS
 on:
   push:
     branches:
-      - main
+      - develop  # staging自動デプロイ
+      - main     # production自動デプロイ
     paths:
-      - 'services/frontend_react/**'
+      - 'multicloud-auto-deploy/services/frontend_react/**'
       - '.github/workflows/deploy-frontend-aws.yml'
   workflow_dispatch:
 
