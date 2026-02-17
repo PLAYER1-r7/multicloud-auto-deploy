@@ -332,7 +332,9 @@ lambda_function = aws.lambda_.Function(
     # Built with x86_64 platform for Lambda compatibility
     # Note: Update layer ARN if a new version is published
     layers=[
-        "arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-dependencies:2",
+        # Staging: optimized layer v6 (8.9MB)
+        # Production: optimized layer v6 (8.9MB) - using same layer for now
+        f"arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-{stack}-dependencies:6",
     ],
     # Use inline code or skip code updates
     # Code will be uploaded separately via deploy-lambda-aws.sh
