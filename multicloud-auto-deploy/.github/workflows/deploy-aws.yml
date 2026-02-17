@@ -83,7 +83,6 @@ jobs:
 
       - name: Build Lambda Layer
         run: |
-          cd multicloud-auto-deploy
           echo "🔨 Building Lambda Layer..."
           ./scripts/build-lambda-layer.sh
           echo "✅ Lambda Layer built successfully"
