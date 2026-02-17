@@ -310,10 +310,18 @@ lambda_policy = aws.iam.RolePolicy(
 import os
 import pathlib
 
-# Path to Lambda Layer ZIP (relative to infrastructure/pulumi/aws/)
-# In GitHub Actions: /home/runner/work/multicloud-auto-deploy/multicloud-auto-deploy/multicloud-auto-deploy/infrastructure/pulumi/aws
-# Target: multicloud-auto-deploy/services/api/lambda-layer.zip
-layer_zip_path = pathlib.Path(__file__).parent.parent.parent / "services" / "api" / "lambda-layer.zip"
+# Path to Lambda Layer ZIP
+# Strategy: Use GITHUB_WORKSPACE env var in CI, fallback to relative path for local development
+workspace_root = os.environ.get("GITHUB_WORKSPACE")
+if workspace_root:
+    # GitHub Actions: GITHUB_WORKSPACE points to checked-out repository root
+    # Example: /home/runner/work/multicloud-auto-deploy/multicloud-auto-deploy/multicloud-auto-deploy
+    layer_zip_path = pathlib.Path(workspace_root) / "multicloud-auto-deploy" / "services" / "api" / "lambda-layer.zip"
+else:
+    # Local development: Calculate relative path from this file
+    # __file__ -> infrastructure/pulumi/aws/__main__.py
+    # Go up 4 levels to reach project root, then down to services/api
+    layer_zip_path = pathlib.Path(__file__).parent.parent.parent.parent / "services" / "api" / "lambda-layer.zip"
 
 # Check if layer ZIP exists
 if not layer_zip_path.exists():
