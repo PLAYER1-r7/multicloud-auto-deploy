@@ -1,0 +1,3 @@
+name: multicloud-auto-deploy-azure
+description: Multi-Cloud Auto Deploy - Azure Infrastructure
+runtime: python

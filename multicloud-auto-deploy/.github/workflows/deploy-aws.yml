@@ -1,0 +1,261 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "infrastructure/pulumi/aws/**"
+      - ".github/workflows/deploy-aws.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+      use_klayers:
+        description: "Use Klayers (public Lambda Layers)"
+        required: false
+        default: true
+        type: boolean
+
+env:
+  AWS_REGION: ap-northeast-1
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Install Pulumi Python Dependencies
+        run: |
+          cd infrastructure/pulumi/aws
+          pip install -r requirements.txt
+
+      - name: Initialize Pulumi Stack
+        run: |
+          cd infrastructure/pulumi/aws
+          pulumi login
+          pulumi stack select staging 2>/dev/null || pulumi stack init staging
+          pulumi config set aws:region ${{ env.AWS_REGION }}
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Deploy Infrastructure with Pulumi
+        id: pulumi
+        uses: pulumi/actions@v5
+        with:
+          command: up
+          stack-name: staging
+          work-dir: infrastructure/pulumi/aws
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+      - name: Get Pulumi Outputs
+        id: pulumi_outputs
+        run: |
+          cd infrastructure/pulumi/aws
+          echo "lambda_function_name=$(pulumi stack output lambda_function_name)" >> $GITHUB_OUTPUT
+          echo "api_gateway_endpoint=$(pulumi stack output api_gateway_endpoint)" >> $GITHUB_OUTPUT
+          echo "frontend_bucket_name=$(pulumi stack output frontend_bucket_name)" >> $GITHUB_OUTPUT
+
+      - name: Build Lambda Layer
+        if: ${{ github.event.inputs.use_klayers != 'true' }}
+        id: build_layer
+        run: |
+          cd services/api
+          rm -rf .build-layer lambda-layer.zip
+          
+          # Build Lambda Layer (dependencies only)
+          echo "📦 Building Lambda Layer (dependencies)..."
+          bash ../../scripts/build-lambda-layer.sh
+          
+          # Show layer info
+          echo "✅ Layer package created:"
+          ls -lh lambda-layer.zip
+
+      - name: Package Backend (Application Code Only)
+        run: |
+          cd services/api
+          rm -rf .build lambda.zip
+          mkdir -p .build/package
+          
+          # Copy application code only (no dependencies - they're in the Layer)
+          echo "📁 Copying application code..."
+          cp -r app .build/package/
+          cp index.py .build/package/
+          
+          # Create zip (application code only - lightweight!)
+          echo "🗜️  Creating lambda package (code only)..."
+          cd .build/package
+          zip -r ../../lambda.zip .
+          cd ../..
+          
+          # Show package info
+          echo "✅ Package created:"
+          ls -lh lambda.zip
+          SIZE_MB=$(du -m lambda.zip | cut -f1)
+          echo "📊 Package size: ${SIZE_MB}MB"
+          
+          if [ $SIZE_MB -lt 50 ]; then
+            echo "✅ Package is under 50MB - direct upload possible!"
+            echo "use_direct_upload=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  Package exceeds 50MB - will use S3"
+            echo "use_direct_upload=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get Klayers ARNs
+        if: ${{ github.event.inputs.use_klayers == 'true' || github.event.inputs.use_klayers == '' }}
+        id: get_klayers
+        run: |
+          echo "📦 Getting latest Klayers ARNs..."
+          
+          # FastAPI (includes Pydantic, Starlette)
+          FASTAPI_ARN="arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-fastapi:5"
+          # Mangum (FastAPI -> Lambda adapter)
+          MANGUM_ARN="arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-mangum:3"
+          # python-jose (JWT verification)
+          JOSE_ARN="arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-python-jose:4"
+          # Requests (HTTP client)
+          REQUESTS_ARN="arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-requests:10"
+          
+          echo "klayers_arns=$FASTAPI_ARN $MANGUM_ARN $JOSE_ARN $REQUESTS_ARN" >> $GITHUB_OUTPUT
+          
+          echo "✅ Klayers ARNs:"
+          echo "  FastAPI: $FASTAPI_ARN"
+          echo "  Mangum: $MANGUM_ARN"
+          echo "  python-jose: $JOSE_ARN"
+          echo "  Requests: $REQUESTS_ARN"
+
+      - name: Deploy Lambda Layer (Custom)
+        if: ${{ github.event.inputs.use_klayers != 'true' }}
+        id: deploy_layer
+        run: |
+          set -e
+          
+          LAYER_NAME="multicloud-auto-deploy-${{ github.event.inputs.environment || 'staging' }}-dependencies"
+          
+          echo "🚀 Publishing Custom Lambda Layer: $LAYER_NAME"
+          LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
+            --layer-name $LAYER_NAME \
+            --description "Dependencies for FastAPI + Mangum + JWT (Python 3.12)" \
+            --zip-file fileb://services/api/lambda-layer.zip \
+            --compatible-runtimes python3.12 \
+            --region ${{ env.AWS_REGION }} \
+            --query LayerVersionArn \
+            --output text)
+          
+          echo "✅ Layer published: $LAYER_VERSION_ARN"
+          echo "layer_arn=$LAYER_VERSION_ARN" >> $GITHUB_OUTPUT
+
+      - name: Update Lambda Function
+        id: update_lambda
+        run: |
+          set -e
+          LAMBDA_FUNCTION="${{ steps.pulumi_outputs.outputs.lambda_function_name }}"
+          
+          # Determine which layers to use
+          if [ "${{ github.event.inputs.use_klayers }}" == "true" ] || [ -z "${{ github.event.inputs.use_klayers }}" ]; then
+            echo "🌐 Using Klayers (public Lambda Layers)"
+            LAYER_ARNS="${{ steps.get_klayers.outputs.klayers_arns }}"
+          else
+            echo "🔧 Using custom Lambda Layer"
+            LAYER_ARNS="${{ steps.deploy_layer.outputs.layer_arn }}"
+          fi
+          
+          # Debug: Check lambda.zip exists and show size
+          echo "📦 Checking lambda.zip..."
+          ls -lh services/api/lambda.zip || { echo "❌ lambda.zip not found!"; exit 1; }
+          
+          SIZE_MB=$(du -m services/api/lambda.zip | cut -f1)
+          
+          if [ $SIZE_MB -lt 50 ]; then
+            # Direct upload (faster!)
+            echo "🚀 Direct upload to Lambda (${SIZE_MB}MB < 50MB)"
+            aws lambda update-function-code \
+              --function-name $LAMBDA_FUNCTION \
+              --region ${{ env.AWS_REGION }} \
+              --zip-file fileb://services/api/lambda.zip \
+              --output json || { echo "❌ Lambda update failed!"; exit 1; }
+          else
+            # S3 upload for large packages
+            S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
+            S3_KEY="lambda-deployments/lambda-$(date +%Y%m%d-%H%M%S).zip"
+            
+            echo "☁️  Uploading to S3: s3://$S3_BUCKET/$S3_KEY"
+            aws s3 cp services/api/lambda.zip s3://$S3_BUCKET/$S3_KEY || { echo "❌ S3 upload failed!"; exit 1; }
+            
+            echo "🚀 Updating Lambda from S3"
+            aws lambda update-function-code \
+              --function-name $LAMBDA_FUNCTION \
+              --region ${{ env.AWS_REGION }} \
+              --s3-bucket $S3_BUCKET \
+              --s3-key $S3_KEY \
+              --output json || { echo "❌ Lambda update failed!"; exit 1; }
+          fi
+          
+          # Update configuration to attach the Layer(s)
+          echo "🔗 Attaching Lambda Layer(s)..."
+          aws lambda update-function-configuration \
+            --function-name $LAMBDA_FUNCTION \
+            --region ${{ env.AWS_REGION }} \
+            --layers $LAYER_ARNS \
+            --output json || { echo "❌ Layer attachment failed!"; exit 1; }
+          
+          echo "✅ Lambda function updated successfully with Layer(s) attached"
+          echo "api_endpoint=${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}" >> $GITHUB_OUTPUT
+
+      - name: Build Frontend
+        run: |
+          cd services/frontend_react
+          npm install
+          npm run build
+        env:
+          VITE_API_URL: ${{ steps.update_lambda.outputs.api_endpoint }}
+
+      - name: Deploy Frontend to S3
+        run: |
+          S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
+          aws s3 sync services/frontend_react/dist/ s3://$S3_BUCKET/ --delete
+
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "✅ AWS deployment succeeded!"
+          echo "📍 API Endpoint: ${{ steps.update_lambda.outputs.api_endpoint }}"
+          echo "🌐 Frontend: ${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ AWS deployment failed!"

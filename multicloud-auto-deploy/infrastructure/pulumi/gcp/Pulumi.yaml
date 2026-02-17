@@ -1,0 +1,3 @@
+name: multicloud-auto-deploy-gcp
+description: Multi-Cloud Auto Deploy - GCP Infrastructure
+runtime: python

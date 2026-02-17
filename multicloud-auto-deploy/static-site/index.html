@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ashnova - マルチクラウド静的サイト</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 800px;
+        }
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+        .cloud-badges {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+        .badge {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1.5rem;
+            border-radius: 2rem;
+            backdrop-filter: blur(10px);
+            font-weight: 600;
+        }
+        .links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .link {
+            background: rgba(255, 255, 255, 0.9);
+            color: #667eea;
+            padding: 0.8rem 2rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .link:hover {
+            background: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+        .footer {
+            margin-top: 3rem;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Ashnova v3</h1>
+        <p>マルチクラウド対応の静的サイト & SNS プラットフォーム</p>
+        
+        <div class="cloud-badges">
+            <div class="badge">AWS</div>
+            <div class="badge">Azure</div>
+            <div class="badge">GCP</div>
+        </div>
+        
+        <div class="links">
+            <a href="#" id="snsLink" class="link">SNS アプリ</a>
+            <a href="https://github.com" class="link">GitHub</a>
+            <a href="#" id="apiDocsLink" class="link">API ドキュメント</a>
+        </div>
+        
+        <div class="footer">
+            <p>Powered by Python + Pulumi</p>
+        </div>
+    </div>
+    <script>
+        // dev container環境でも動作するよう、動的にリンクを生成
+        const protocol = window.location.protocol;
+        const hostname = window.location.hostname;
+        
+        // ポート番号を取得（dev containerの転送URLの場合、異なる形式になる）
+        const currentPort = window.location.port;
+        
+        // 同じホストの別ポートへのリンクを生成
+        document.getElementById('snsLink').href = `${protocol}//${hostname}:8080`;
+        document.getElementById('apiDocsLink').href = `${protocol}//${hostname}:8000/docs`;
+        
+        // dev container環境ではポート転送URLが複雑になるため、
+        // 現在のURLベースで推測する（例: https://xxx-5173.preview... → https://xxx-8080.preview...）
+        if (currentPort && hostname.includes('preview')) {
+            // GitHub Codespaces や VS Code dev container の転送URLパターン
+            const snsHostname = hostname.replace(/-5173\./, '-8080.');
+            const apiHostname = hostname.replace(/-5173\./, '-8000.');
+            document.getElementById('snsLink').href = `${protocol}//${snsHostname}`;
+            document.getElementById('apiDocsLink').href = `${protocol}//${apiHostname}/docs`;
+        } else if (currentPort && !hostname.includes('localhost') && !hostname.includes('127.0.0.1')) {
+            // その他のポート転送環境の場合
+            // 最初は localhostとして試して、必要に応じて調整
+        }
+    </script>
+</body>
+</html>
