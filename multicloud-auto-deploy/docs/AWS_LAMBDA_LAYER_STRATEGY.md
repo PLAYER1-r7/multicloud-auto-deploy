@@ -4,9 +4,80 @@
 
 ## 📋 概要
 
-AWS Lambda関数の依存関係管理において、**公開Layer + カスタムLayerの組み合わせ**による最適な実装戦略を提案します。
+AWS Lambda関数の依存関係管理において、**Pulumi自動管理によるカスタムLayer**の実装戦略を提案します。
 
-### 現在の課題
+### 💡 最新アプローチ（2026-02-17更新）
+
+**Pulumiによる完全自動管理**
+
+従来のARNハードコーディング方式から、**Pulumi Infrastructure as Code**による完全自動管理に移行しました。
+
+#### メリット
+
+✅ **手動作業の完全排除**: Lambda Layer ARNの手動更新が不要  
+✅ **バージョン管理の自動化**: Lambda Layerの内容変更時に自動的に新バージョン作成  
+✅ **デプロイの一貫性**: インフラとアプリケーションコードを同時にデプロイ  
+✅ **ロールバック対応**: Pulumiのスタック履歴で簡単にロールバック可能  
+
+#### 実装方法
+
+```python
+# infrastructure/pulumi/aws/__main__.py
+
+# Lambda Layer ZIPを自動検出
+layer_zip_path = pathlib.Path(__file__).parent.parent.parent.parent / "services" / "api" / "lambda-layer.zip"
+
+# Pulumi Lambda Layer リソース作成
+lambda_layer = aws.lambda_.LayerVersion(
+    "dependencies-layer",
+    layer_name=f"{project_name}-{stack}-dependencies",
+    code=pulumi.FileArchive(str(layer_zip_path)),
+    compatible_runtimes=["python3.12"],
+    description=f"Dependencies for {project_name} {stack} (FastAPI, Mangum, Pydantic, etc.)",
+)
+
+# Lambda関数に自動アタッチ
+lambda_function = aws.lambda_.Function(
+    "api-function",
+    name=f"{project_name}-{stack}-api",
+    runtime="python3.12",
+    layers=[lambda_layer.arn],  # 動的ARN参照
+    # ... その他の設定
+)
+```
+
+#### デプロイフロー
+
+```bash
+# 1. Lambda Layerをビルド
+./scripts/build-lambda-layer.sh
+
+# 2. Pulumiで自動デプロイ（Layer + Lambda Function）
+cd infrastructure/pulumi/aws
+pulumi up
+
+# GitHub Actions経由の場合は自動実行:
+git push origin develop  # staging環境に自動デプロイ
+```
+
+#### GitHub Actions統合
+
+```yaml
+# .github/workflows/deploy-aws.yml
+
+- name: Build Lambda Layer
+  run: |
+    cd multicloud-auto-deploy
+    ./scripts/build-lambda-layer.sh
+    
+- name: Deploy with Pulumi
+  uses: pulumi/actions@v5
+  with:
+    command: up
+    # Lambda LayerとLambda Functionを同時にデプロイ
+```
+
+### 従来の課題（解決済み）
 
 - **問題**: Lambda関数で `No module named 'mangum'` エラーが発生
 - **原因**: Lambda Layerが正しくアタッチされていない、または内容が不完全

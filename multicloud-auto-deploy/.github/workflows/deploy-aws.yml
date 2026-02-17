@@ -81,6 +81,14 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
+      - name: Build Lambda Layer
+        run: |
+          cd multicloud-auto-deploy
+          echo "🔨 Building Lambda Layer..."
+          ./scripts/build-lambda-layer.sh
+          echo "✅ Lambda Layer built successfully"
+          ls -lh services/api/lambda-layer.zip
+
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5
