@@ -302,3 +302,4 @@ def setup_monitoring(
         "cloudfront_alarms": cloudfront_alarms,
     }
 # SNS:Unsubscribe permission added to satoshi user (2026-02-17)
+# SNS:GetSubscriptionAttributes permission added (2026-02-17)
