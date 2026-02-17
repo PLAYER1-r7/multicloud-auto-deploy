@@ -1,0 +1,3 @@
+name: ashnova-aws-simple-sns-web
+runtime: python
+description: Simple SNS SSR web stack (FastAPI + Jinja2)

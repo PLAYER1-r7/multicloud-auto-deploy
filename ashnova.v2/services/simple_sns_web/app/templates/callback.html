@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Signing in | Simple SNS{% endblock %}
+{% block content %}
+  <section
+    id="callback-root"
+    class="panel"
+    data-session-url="{{ session_url }}"
+    data-profile-url="{{ profile_url }}"
+  >
+    <h1>Signing you in</h1>
+    <p id="status" class="muted">Processing tokens...</p>
+    <noscript>
+      <p class="muted">JavaScript is required to complete login.</p>
+    </noscript>
+  </section>
+  <script src="{{ base_path }}/static/callback.js" defer></script>
+{% endblock %}

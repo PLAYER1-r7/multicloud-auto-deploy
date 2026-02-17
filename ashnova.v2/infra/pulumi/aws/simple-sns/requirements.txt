@@ -1,0 +1,2 @@
+pulumi>=3.121.0
+pulumi-aws>=7.19.0

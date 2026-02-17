@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Markdown記法ガイド - Simple SNS</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: false, theme: "default" });
+      window.mermaid = mermaid;
+    </script>
+    <style>
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f8f9fa;
+        --text-primary: #212529;
+        --text-secondary: #6c757d;
+        --border-color: #dee2e6;
+        --button-bg: #0d6efd;
+        --button-hover: #0b5ed7;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+          "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+          sans-serif;
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid var(--border-color);
+      }
+
+      h1 {
+        font-size: 24px;
+        margin: 0;
+      }
+
+      .close-btn {
+        padding: 8px 16px;
+        font-size: 14px;
+        cursor: pointer;
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+      }
+
+      .close-btn:hover {
+        background-color: #5a6268;
+      }
+
+      .content {
+        background-color: var(--bg-secondary);
+        padding: 20px;
+        border-radius: 8px;
+      }
+
+      .markdown-content {
+        color: var(--text-primary);
+      }
+
+      .markdown-content h2 {
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+        font-size: 1.8em;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.3em;
+      }
+
+      .markdown-content h3 {
+        margin-top: 1.2em;
+        margin-bottom: 0.5em;
+        font-size: 1.4em;
+      }
+
+      .markdown-content h4 {
+        margin-top: 1em;
+        margin-bottom: 0.5em;
+        font-size: 1.2em;
+      }
+
+      .markdown-content p {
+        margin-bottom: 1em;
+      }
+
+      .markdown-content ul,
+      .markdown-content ol {
+        margin-bottom: 1em;
+        padding-left: 2em;
+      }
+
+      .markdown-content li {
+        margin-bottom: 0.5em;
+      }
+
+      .markdown-content code {
+        background-color: rgba(0, 0, 0, 0.05);
+        padding: 0.2em 0.4em;
+        border-radius: 3px;
+        font-family: "Courier New", monospace;
+        font-size: 0.9em;
+      }
+
+      .markdown-content pre {
+        background-color: #f6f8fa;
+        padding: 16px;
+        border-radius: 6px;
+        overflow-x: auto;
+        margin-bottom: 1em;
+      }
+
+      .markdown-content pre code {
+        background-color: transparent;
+        padding: 0;
+      }
+
+      .markdown-content blockquote {
+        border-left: 4px solid var(--border-color);
+        padding-left: 1em;
+        margin-left: 0;
+        margin-bottom: 1em;
+        color: var(--text-secondary);
+      }
+
+      .markdown-content a {
+        color: var(--button-bg);
+        text-decoration: none;
+      }
+
+      .markdown-content a:hover {
+        text-decoration: underline;
+      }
+
+      .markdown-content table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-bottom: 1em;
+      }
+
+      .markdown-content th,
+      .markdown-content td {
+        border: 1px solid var(--border-color);
+        padding: 8px;
+        text-align: left;
+      }
+
+      .markdown-content th {
+        background-color: rgba(0, 0, 0, 0.05);
+        font-weight: bold;
+      }
+
+      .mermaid-diagram {
+        margin: 1em 0;
+        text-align: center;
+        background: white;
+        padding: 1em;
+        border-radius: 4px;
+      }
+
+      .example-section {
+        margin-bottom: 2em;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .example-header {
+        background-color: #e9ecef;
+        padding: 10px 15px;
+        font-weight: bold;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .example-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .example-row:last-child {
+        border-bottom: none;
+      }
+
+      .example-code {
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-right: 1px solid var(--border-color);
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .example-result {
+        padding: 15px;
+        background-color: white;
+      }
+
+      .section-title {
+        background-color: #0d6efd;
+        color: white;
+        padding: 12px 15px;
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 0;
+      }
+
+      @media (max-width: 768px) {
+        .example-row {
+          grid-template-columns: 1fr;
+        }
+
+        .example-code {
+          border-right: none;
+          border-bottom: 1px solid var(--border-color);
+        }
+      }
+
+      .markdown-content img {
+        max-width: 100%;
+        height: auto;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Markdown記法ガイド</h1>
+        <button class="close-btn" onclick="closeWindow()">✕ 閉じる</button>
+      </header>
+      <div class="content">
+        <div id="markdown-content" class="markdown-content">
+          <!-- 基本記法 -->
+          <h2 class="section-title">基本記法</h2>
+          
+          <div class="example-section">
+            <div class="example-header">見出し</div>
+            <div class="example-row">
+              <div class="example-code"># 見出し1
+## 見出し2
+### 見出し3</div>
+              <div class="example-result" data-markdown="# 見出し1
+## 見出し2
+### 見出し3"></div>
+            </div>
+          </div>
+
+          <div class="example-section">
+            <div class="example-header">強調・装飾</div>
+            <div class="example-row">
+              <div class="example-code">**太字**
+*イタリック*
+***太字＋イタリック***
+~~打消し線~~</div>
+              <div class="example-result" data-markdown="**太字**
+*イタリック*
+***太字＋イタリック***
+~~打消し線~~"></div>
+            </div>
+          </div>
+
+          <div class="example-section">
+            <div class="example-header">リスト</div>
+            <div class="example-row">
+              <div class="example-code">- 項目1
+- 項目2
+  - サブ項目1
+  - サブ項目2
+
+1. 番号付き1
+2. 番号付き2
+3. 番号付き3</div>
+              <div class="example-result" data-markdown="- 項目1
+- 項目2
+  - サブ項目1
+  - サブ項目2
+
+1. 番号付き1
+2. 番号付き2
+3. 番号付き3"></div>
+            </div>
+          </div>
+
+          <div class="example-section">
+            <div class="example-header">リンク</div>
+            <div class="example-row">
+              <div class="example-code">[リンクテキスト](https://example.com)
+<https://example.com></div>
+              <div class="example-result" data-markdown="[リンクテキスト](https://example.com)
+<https://example.com>"></div>
+            </div>
+          </div>
+
+          <div class="example-section">
+            <div class="example-header">コードブロック</div>
+            <div class="example-row">
+              <div class="example-code">```javascript
+function hello() {
+  console.log("Hello!");
+}
+```</div>
+              <div class="example-result" data-markdown="```javascript
+function hello() {
+  console.log('Hello!');
+}
+```"></div>
+            </div>
+          </div>
+
+          <!-- テーブル -->
+          <h2 class="section-title">テーブル</h2>
+          
+          <div class="example-section">
+            <div class="example-header">基本的なテーブル</div>
+            <div class="example-row">
+              <div class="example-code">| 列1 | 列2 | 列3 |
+|------|------|------|
+| A | B | C |
+| D | E | F |</div>
+              <div class="example-result" data-markdown="| 列1 | 列2 | 列3 |
+|------|------|------|
+| A | B | C |
+| D | E | F |"></div>
+            </div>
+          </div>
+
+          <!-- GitHub拡張 -->
+          <h2 class="section-title">GitHub拡張記法</h2>
+          
+          <div class="example-section">
+            <div class="example-header">タスクリスト</div>
+            <div class="example-row">
+              <div class="example-code">- [x] 完了したタスク
+- [ ] 未完了のタスク
+- [ ] 別の未完了タスク</div>
+              <div class="example-result" data-markdown="- [x] 完了したタスク
+- [ ] 未完了のタスク
+- [ ] 別の未完了タスク"></div>
+            </div>
+          </div>
+
+          <!-- 数式 -->
+          <h2 class="section-title">数式（LaTeX/KaTeX）</h2>
+          
+          <div class="example-section">
+            <div class="example-header">インライン数式</div>
+            <div class="example-row">
+              <div class="example-code">円の面積は $A = \pi r^2$ です。</div>
+              <div class="example-result" data-math="円の面積は $A = \pi r^2$ です。"></div>
+            </div>
+          </div>
+
+          <div class="example-section">
+            <div class="example-header">ブロック数式</div>
+            <div class="example-row">
+              <div class="example-code">$$
+\int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2}
+$$</div>
+              <div class="example-result" data-math="$$
+\int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2}
+$$"></div>
+            </div>
+          </div>
+
+          <!-- Mermaid -->
+          <h2 class="section-title">Mermaidダイアグラム</h2>
+          
+          <div class="example-section">
+            <div class="example-header">フローチャート</div>
+            <div class="example-row">
+              <div class="example-code">```mermaid
+graph TD
+    A[開始] --> B{条件}
+    B -->|Yes| C[処理1]
+    B -->|No| D[処理2]
+    C --> E[終了]
+    D --> E
+```</div>
+              <div class="example-result" data-mermaid="graph TD
+    A[開始] --> B{条件}
+    B -->|Yes| C[処理1]
+    B -->|No| D[処理2]
+    C --> E[終了]
+    D --> E"></div>
+            </div>
+          </div>
+
+          <div class="example-section">
+            <div class="example-header">シーケンス図</div>
+            <div class="example-row">
+              <div class="example-code">```mermaid
+sequenceDiagram
+    Alice->>Bob: こんにちは
+    Bob-->>Alice: こんにちは!
+```</div>
+              <div class="example-result" data-mermaid="sequenceDiagram
+    Alice->>Bob: こんにちは
+    Bob-->>Alice: こんにちは!"></div>
+            </div>
+          </div>
+
+          <p style="margin-top: 2em; padding: 15px; background: #e7f3ff; border-left: 4px solid #2196F3;">
+            <strong>参考:</strong> より詳しいMarkdown記法については、
+            <a href="https://www.tohoho-web.com/ex/markdown.html" target="_blank" rel="noopener noreferrer">とほほのMarkdown入門</a>
+            をご覧ください。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function closeWindow() {
+        // window.open()で開かれたウィンドウは常にwindow.close()で閉じられる
+        // 閉じられない場合（直接アクセスなど）はトップページへ遷移
+        window.close();
+        // window.close()が失敗した場合のフォールバック
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 100);
+      }
+
+      // ページ読み込み時に各example-resultをレンダリング
+      async function renderAllExamples() {
+        marked.setOptions({
+          gfm: true,
+          breaks: true,
+          headerIds: false,
+          mangle: false
+        });
+
+        // Markdownレンダリング
+        document.querySelectorAll('[data-markdown]').forEach(el => {
+          const markdown = el.getAttribute('data-markdown');
+          el.innerHTML = marked.parse(markdown);
+        });
+
+        // 数式レンダリング
+        document.querySelectorAll('[data-math]').forEach(el => {
+          const text = el.getAttribute('data-math');
+          el.innerHTML = renderMathInText(text);
+        });
+
+        // Mermaidレンダリング
+        const mermaidElements = document.querySelectorAll('[data-mermaid]');
+        for (let i = 0; i < mermaidElements.length; i++) {
+          const el = mermaidElements[i];
+          const code = el.getAttribute('data-mermaid');
+          try {
+            const id = `mermaid-${i}-${Date.now()}`;
+            const { svg } = await mermaid.render(id, code);
+            el.innerHTML = svg;
+            el.style.textAlign = 'center';
+          } catch (e) {
+            el.innerHTML = `<pre style="color: red;">エラー: ${e.message}</pre>`;
+          }
+        }
+      }
+
+      function renderMathInText(text) {
+        if (typeof katex === 'undefined') return text;
+
+        // ブロック数式
+        text = text.replace(/\$\$([^\$]+)\$\$/g, (match, math) => {
+          try {
+            return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
+          } catch (e) {
+            return match;
+          }
+        });
+
+        // インライン数式
+        text = text.replace(/\$([^\$]+)\$/g, (match, math) => {
+          try {
+            return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
+          } catch (e) {
+            return match;
+          }
+        });
+
+        return text;
+      }
+
+      // ページ読み込み時に実行
+      window.addEventListener('DOMContentLoaded', renderAllExamples);
+    </script>
+  </body>
+</html>
+    </script>
+  </body>
+</html>

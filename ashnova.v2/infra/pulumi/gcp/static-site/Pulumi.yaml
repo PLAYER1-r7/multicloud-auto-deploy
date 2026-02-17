@@ -1,0 +1,3 @@
+name: ashnova-gcp-static-site
+runtime: python
+description: GCP static site (Cloud Storage + Cloud CDN) managed by Pulumi

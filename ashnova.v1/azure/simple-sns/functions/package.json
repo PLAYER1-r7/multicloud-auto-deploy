@@ -1,0 +1,32 @@
+{
+  "name": "simple-sns-functions",
+  "version": "1.0.0",
+  "description": "Azure Functions for Simple-SNS",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rimraf dist",
+    "prestart": "npm run clean && npm run build",
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/cosmos": "^4.0.0",
+    "@azure/functions": "^4.5.0",
+    "@azure/identity": "^4.0.0",
+    "@azure/storage-blob": "^12.17.0",
+    "cookie": "^0.7.0",
+    "jsonwebtoken": "^9.0.3",
+    "jwks-rsa": "^3.2.2",
+    "nanoid": "^3.3.7",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/ms": "^0.7.34",
+    "@types/node": "^20.11.0",
+    "azure-functions-core-tools": "^4.0.5390",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.3"
+  }
+}

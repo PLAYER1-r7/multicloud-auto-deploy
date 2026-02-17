@@ -1,0 +1,3 @@
+name: ashnova-gcp-simple-sns-web
+runtime: python
+description: Simple SNS Web on GCP Cloud Run

@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Home | Simple SNS{% endblock %}
+{% block content %}
+  <section class="hero">
+    <h1>投稿一覧</h1>
+    <p>最新の投稿を表示しています。</p>
+    <div class="hero-actions">
+      <button class="button ghost icon-only" type="button" id="search-toggle" aria-label="Search">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="M20 20l-3.5-3.5"></path>
+        </svg>
+        <span class="sr-only">検索</span>
+      </button>
+    </div>
+  </section>
+
+  <section class="panel search-panel" id="search-panel" hidden>
+    <h2>検索</h2>
+    <form class="form" method="get" action="{{ base_path }}/">
+      <div class="field">
+        <label class="label" for="tagFilter">タグ検索</label>
+        <input
+          class="input"
+          id="tagFilter"
+          name="tag"
+          type="text"
+          value="{{ tag_filter or '' }}"
+          placeholder="タグを入力して絞り込み..."
+        />
+      </div>
+      <div class="field">
+        <label class="label" for="searchKeyword">投稿内容検索</label>
+        <input
+          class="input"
+          id="searchKeyword"
+          name="q"
+          type="text"
+          value="{{ search_keyword or '' }}"
+          placeholder="投稿内容を検索..."
+        />
+      </div>
+      <div class="actions">
+        <button class="button icon-only" type="submit" aria-label="Search">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="M20 20l-3.5-3.5"></path>
+          </svg>
+          <span class="sr-only">検索</span>
+        </button>
+        <button class="button ghost icon-only" type="button" data-href="{{ base_path }}/" aria-label="Clear">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6L6 18"></path>
+            <path d="M6 6l12 12"></path>
+          </svg>
+          <span class="sr-only">クリア</span>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>新規投稿</h2>
+    {% if success %}
+      <div class="alert success">{{ success }}</div>
+    {% endif %}
+    {% if error %}
+      <div class="alert">{{ error }}</div>
+    {% endif %}
+    {% if logged_in %}
+      <form class="form" id="post-form" method="post" action="{{ base_path }}/posts" enctype="multipart/form-data" hx-disable data-base-path="{{ base_path }}">
+        <div class="field">
+          <label class="label" for="content">投稿内容</label>
+          <textarea
+            class="input textarea"
+            id="content"
+            name="content"
+            rows="4"
+            maxlength="5000"
+            required
+          ></textarea>
+        </div>
+        <div class="field">
+          <label class="label" for="tags">タグ (スペース区切り)</label>
+          <input
+            class="input"
+            id="tags"
+            name="tags"
+            type="text"
+            maxlength="200"
+            placeholder="例: React TypeScript AWS"
+          />
+        </div>
+        <label class="checkbox">
+          <input type="checkbox" name="is_markdown" />
+          Markdownとして扱う
+        </label>
+        <div class="field">
+          <label class="label" for="images">画像 (JPEG/PNG/HEIC/HEIF, 最大16枚)</label>
+          <input
+            class="input"
+            id="images"
+            name="images"
+            type="file"
+            accept="image/jpeg,image/png,image/heic,image/heif"
+            multiple
+          />
+          <p class="muted">JPEG/PNG/HEIC/HEIF に対応。</p>
+          <div class="alert" id="upload-error" hidden></div>
+          <div class="preview-grid" id="image-preview"></div>
+        </div>
+        <div id="image-keys"></div>
+        <div class="actions">
+          <button class="button icon-only" type="submit" aria-label="Post">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M22 2L11 13"></path>
+              <path d="M22 2L15 22l-4-9-9-4 20-7z"></path>
+            </svg>
+            <span class="sr-only">投稿する</span>
+          </button>
+        </div>
+      </form>
+    {% else %}
+      <p class="muted">投稿するにはログインしてください。</p>
+    {% endif %}
+  </section>
+
+  {% if posts %}
+    <ul class="posts">
+      {% for post in posts %}
+        <li
+          class="post post-card"
+          data-post-id="{{ post.postId }}"
+          data-user="{{ (post.nickname or post.userId) | e }}"
+          data-created="{{ post.createdAt }}"
+          data-content="{{ (post.content or '') | e }}"
+          data-tags="{{ (post.tags or []) | join(',') }}"
+          data-images="{{ (post.imageUrls or []) | join(',') }}"
+        >
+          <div class="post-meta">
+            <span class="post-user">{{ post.nickname or post.userId }}</span>
+            <span class="post-date" data-iso="{{ post.createdAt }}">{{ post.createdAt }}</span>
+          </div>
+          <p class="post-content">{{ post.content }}</p>
+          {% if post.imageUrls %}
+            <div class="post-images">
+              {% for url in post.imageUrls %}
+                <button class="thumb-button" type="button" data-full="{{ url }}" aria-label="Open image">
+                  <img class="post-image" src="{{ url }}" alt="Post image" loading="lazy" />
+                  {% if post.imageUrls|length > 1 %}
+                    <span class="thumb-count">{{ loop.index }}/{{ post.imageUrls|length }}</span>
+                  {% endif %}
+                </button>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if post.tags %}
+            <div class="tags">
+              {% for tag in post.tags %}
+                <span class="tag">{{ tag }}</span>
+              {% endfor %}
+            </div>
+          {% endif %}
+          <button class="button ghost post-link icon-only" type="button" data-href="{{ base_path }}/posts/{{ post.postId }}" aria-label="View details">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M1.5 12s4.5-7 10.5-7 10.5 7 10.5 7-4.5 7-10.5 7-10.5-7-10.5-7z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span class="sr-only">View details</span>
+          </button>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">投稿がまだありません。</p>
+  {% endif %}
+  <div class="post-modal" id="post-modal" hidden>
+    <div class="post-modal-backdrop" data-close></div>
+    <div class="post-modal-body" role="dialog" aria-modal="true">
+      <button class="post-modal-close" type="button" data-close aria-label="Close">×</button>
+      <div class="post-modal-meta">
+        <div class="post-modal-user" id="modal-user"></div>
+        <div class="post-modal-time" id="modal-time"></div>
+      </div>
+      <div class="post-modal-content" id="modal-content"></div>
+      <div class="post-images" id="modal-images"></div>
+      <div class="tags" id="modal-tags"></div>
+      <button class="button ghost post-link icon-only" id="modal-link" type="button" data-href="#" aria-label="Open details">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M1.5 12s4.5-7 10.5-7 10.5 7 10.5 7-4.5 7-10.5 7-10.5-7-10.5-7z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        <span class="sr-only">詳細を見る</span>
+      </button>
+    </div>
+  </div>
+  <script src="{{ base_path }}/static/uploads.js"></script>
+{% endblock %}

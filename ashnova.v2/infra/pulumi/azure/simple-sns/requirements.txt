@@ -1,0 +1,4 @@
+pulumi>=3.120
+pulumi-azure-native>=2.23
+azure-storage-blob>=12.19
+pulumi-azuread>=5.0

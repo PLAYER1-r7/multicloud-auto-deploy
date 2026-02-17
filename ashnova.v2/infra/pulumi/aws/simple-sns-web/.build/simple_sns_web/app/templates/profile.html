@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Profile | Simple SNS{% endblock %}
+{% block content %}
+  <section class="panel">
+    <h1>Profile</h1>
+    {% if success %}
+      <div class="alert success">{{ success }}</div>
+    {% endif %}
+    {% if error %}
+      <div class="alert">Failed to load profile: {{ error }}</div>
+    {% endif %}
+    {% if error_detail %}
+      <div class="alert">Details: {{ error_detail }}</div>
+    {% endif %}
+    {% if profile %}
+      <div class="profile-grid">
+        <div>
+          <div class="label">User ID</div>
+          <div class="value">{{ profile.userId }}</div>
+        </div>
+        <div>
+          <div class="label">Nickname</div>
+          <div class="value">{{ profile.nickname or "-" }}</div>
+        </div>
+      </div>
+      <form class="form" method="post" action="{{ base_path }}/profile" hx-boost="false">
+        <div class="field">
+          <label class="label" for="nickname">Nickname</label>
+          <input
+            class="input"
+            id="nickname"
+            name="nickname"
+            type="text"
+            maxlength="40"
+            value="{{ profile.nickname or "" }}"
+            required
+          />
+        </div>
+        <div class="actions">
+          <button class="button" type="submit">Save</button>
+        </div>
+      </form>
+    {% else %}
+      <p>Sign in to see profile details.</p>
+      {% if login_url %}
+        <button class="button icon-only" type="button" data-href="{{ login_url }}" aria-label="Sign in">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 8l4 4-4 4"></path>
+            <path d="M19 12H9"></path>
+            <path d="M11 5H5v14h6"></path>
+          </svg>
+          <span class="sr-only">Sign in</span>
+        </button>
+      {% endif %}
+    {% endif %}
+    <p class="muted">API base: {{ api_base_url }}</p>
+  </section>
+{% endblock %}

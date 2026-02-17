@@ -1,0 +1,11 @@
+{
+  "currentVersion": "1.2.3",
+  "releaseDate": "2026-01-17T22:15:00+09:00",
+  "releaseNotesUrl": "https://github.com/PLAYER1-r7/simple-sns/releases/tag/v1.2.3",
+  "latestReleaseUrl": "https://github.com/PLAYER1-r7/simple-sns/releases/latest",
+  "changes": [
+    "惑星テーマの背景デザイン実装 - ライトモードは地球に雲と太陽のフレア、ダークモードは星空",
+    "ドットパターンを削除し、より自然な宇宙空間の表現に改善",
+    "クラウドドリフトとスターシマーアニメーションの追加"
+  ]
+}

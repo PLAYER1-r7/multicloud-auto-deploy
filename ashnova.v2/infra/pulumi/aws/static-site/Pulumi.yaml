@@ -1,0 +1,3 @@
+name: ashnova-aws-static-site
+runtime: python
+description: AWS static site (S3 + CloudFront) managed by Pulumi

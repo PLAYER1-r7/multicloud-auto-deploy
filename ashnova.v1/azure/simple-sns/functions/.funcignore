@@ -1,0 +1,6 @@
+# Azure Functions publish ignore
+.git/
+function*.zip
+*.zip
+**/*.map
+.vscode/

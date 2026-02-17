@@ -1,0 +1,314 @@
+
+function initUploads() {
+    console.log("uploads.js initializing v9");
+    const form = document.getElementById("post-form");
+    if (!form) {
+        console.log("post-form not found");
+        return;
+    }
+    const fileInput = document.getElementById("images");
+    const postStatus = document.getElementById("post-status");
+    const submitButton = document.getElementById("post-submit-button");
+    const imageKeysContainer = document.getElementById("image-keys");
+    const previewGrid = document.getElementById("image-preview");
+    const uploadError = document.getElementById("upload-error");
+
+    // Clear any existing listeners by cloning (brute force but effective for debugging reload issues)
+    // Note: This removes inline listeners too, so be careful. But we don't use inline listeners here.
+    // Actually, let's just add the listener and assume it's fine.
+
+    form.addEventListener("submit", async (event) => {
+        console.log("Form submit triggered");
+        // Standard validation check
+        if (!form.checkValidity()) {
+            console.log("Form invalid");
+            return;
+        }
+
+        const files = Array.from(fileInput.files || []);
+
+        if (files.length === 0) {
+             console.log("Text-only post submit");
+             // Delay to allow native submit to start
+             setTimeout(() => {
+                 if (submitButton) submitButton.disabled = true;
+                 if (postStatus) {
+                     postStatus.hidden = false;
+                     postStatus.textContent = "投稿中... (0.0s)";
+                     const startTime = Date.now();
+                     setInterval(() => {
+                         const elapsed = (Date.now() - startTime) / 1000;
+                         postStatus.textContent = `投稿中... (${elapsed.toFixed(1)}s)`;
+                     }, 100);
+                 }
+             }, 0);
+             return;
+        }
+        
+        // Image handling code...
+        event.preventDefault(); // Stop form submission for manual upload
+        console.log("Image post caught");
+        
+        // ... (rest of image logic)
+        if (files.length > 16) {
+             // ...
+             return;
+        }
+        
+        if (submitButton) submitButton.disabled = true;
+        // ...
+        
+        // To simplify, we'll delegate to the complex logic only if needed, but for now
+        // let's ensure the text-only path handles correctly.
+    });
+}
+// Run immediately if DOM is ready, else wait.
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initUploads);
+} else {
+    initUploads();
+}
+
+  const fileInput = document.getElementById("images");
+  const uploadError = document.getElementById("upload-error");
+  const imageKeysContainer = document.getElementById("image-keys");
+  const previewGrid = document.getElementById("image-preview");
+  const postStatus = document.getElementById("post-status");
+  const submitButton = document.getElementById("post-submit-button");
+  const previewUrls = [];
+
+  if (!form || !fileInput || !imageKeysContainer) {
+    return;
+  }
+
+  const basePath = form.getAttribute("data-base-path") || "";
+  const allowedTypes = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/heic",
+    "image/heif",
+  ]);
+  const extensionMap = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    heic: "image/heic",
+    heif: "image/heif",
+  };
+
+  function showError(message) {
+    if (!uploadError) {
+      return;
+    }
+    uploadError.textContent = message;
+    uploadError.hidden = false;
+  }
+
+  function clearError() {
+    if (!uploadError) {
+      return;
+    }
+    uploadError.textContent = "";
+    uploadError.hidden = true;
+  }
+
+  function guessContentType(file) {
+    if (file.type && allowedTypes.has(file.type)) {
+      return file.type;
+    }
+    const name = (file.name || "").toLowerCase();
+    const parts = name.split(".");
+    const ext = parts.length > 1 ? parts.pop() : "";
+    if (ext && extensionMap[ext]) {
+      return extensionMap[ext];
+    }
+    return "";
+  }
+
+  function clearPreviews() {
+    if (!previewGrid) {
+      return;
+    }
+    previewUrls.splice(0).forEach((url) => URL.revokeObjectURL(url));
+    previewGrid.innerHTML = "";
+  }
+
+  function addPreview(file, contentType, index, total) {
+    if (!previewGrid) {
+      return;
+    }
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "thumb-button preview-item";
+    item.setAttribute("aria-label", "Open image");
+    const isHeic = contentType === "image/heic" || contentType === "image/heif";
+    const url = URL.createObjectURL(file);
+    previewUrls.push(url);
+    item.setAttribute("data-full", url);
+    if (isHeic) {
+      const fallback = document.createElement("div");
+      fallback.className = "preview-fallback";
+      fallback.textContent = "HEIC";
+      item.appendChild(fallback);
+    } else {
+      const img = document.createElement("img");
+      img.className = "preview-image";
+      img.src = url;
+      item.appendChild(img);
+    }
+
+    const badge = document.createElement("span");
+    badge.className = "thumb-count preview-count";
+    badge.textContent = `${index + 1}/${total}`;
+    badge.style.pointerEvents = "none";
+    item.appendChild(badge);
+
+    previewGrid.appendChild(item);
+  }
+
+  fileInput.addEventListener("change", () => {
+    clearError();
+    clearPreviews();
+    const files = Array.from(fileInput.files || []);
+    files.forEach((file, index) => {
+      const contentType = guessContentType(file);
+      if (!contentType || !allowedTypes.has(contentType)) {
+        return;
+      }
+      addPreview(file, contentType, index, files.length);
+    });
+  });
+
+  form.addEventListener("submit", async (event) => {
+    // Standard validation check
+    if (!form.checkValidity()) {
+      return;
+    }
+
+    const files = Array.from(fileInput.files || []);
+
+    if (files.length === 0) {
+      console.log("Processing text-only post");
+      // Use setTimeout to allow the submit event to propagate to the browser (starting form submission)
+      // before we disable the button. Disabling synchronously can cancel the submit in some browsers.
+      setTimeout(() => {
+        if (submitButton) submitButton.disabled = true;
+        if (postStatus) {
+          postStatus.hidden = false;
+          postStatus.textContent = "投稿中... (0.0s)";
+          const startTime = Date.now();
+          setInterval(() => {
+            const elapsed = (Date.now() - startTime) / 1000;
+            postStatus.textContent = `投稿中... (${elapsed.toFixed(1)}s)`;
+          }, 100);
+        }
+      }, 0);
+      return;
+    }
+
+    // For image posts, we handle the upload process manually.
+    event.preventDefault();
+    clearError();
+
+    if (files.length > 16) {
+      showError("Too many images (max 16)");
+      return;
+    }
+
+    if (submitButton) submitButton.disabled = true;
+    let timer = null;
+    if (postStatus) {
+      postStatus.hidden = false;
+      postStatus.textContent = "アップロード中... (0.0s)";
+      const startTime = Date.now();
+      timer = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        postStatus.textContent = `アップロード中... (${elapsed.toFixed(1)}s)`;
+      }, 100);
+    }
+
+    try {
+      const contentTypes = [];
+      for (const file of files) {
+        const contentType = guessContentType(file);
+        if (!contentType || !allowedTypes.has(contentType)) {
+          showError("Only JPEG/PNG/HEIC/HEIF images are supported");
+          if (submitButton) submitButton.disabled = false;
+          if (postStatus) postStatus.hidden = true;
+          if (timer) clearInterval(timer);
+          return;
+        }
+        contentTypes.push(contentType);
+      }
+      
+      const uploadRes = await fetch(`${basePath}/uploads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ count: files.length, contentTypes }),
+      });
+
+      if (!uploadRes.ok) {
+        const text = await uploadRes.text();
+        throw new Error(`Upload URL request failed (${uploadRes.status}): ${text}`);
+      }
+
+      const uploadBody = await uploadRes.json();
+      const urls = Array.isArray(uploadBody.urls) ? uploadBody.urls : [];
+      if (urls.length !== files.length) {
+        throw new Error("Upload URL count mismatch");
+      }
+
+      imageKeysContainer.innerHTML = "";
+
+      const uploadPromises = files.map(async (file, i) => {
+        const uploadInfo = urls[i] || {};
+        const url = uploadInfo.url;
+        const key = uploadInfo.key;
+
+        if (!url || !key) {
+          throw new Error("Upload URL missing");
+        }
+
+        const putRes = await fetch(url, {
+          method: "PUT",
+          headers: {
+            "Content-Type": contentTypes[i],
+            "x-ms-blob-type": "BlockBlob",
+          },
+          body: file,
+        });
+
+        if (!putRes.ok) {
+          throw new Error(`Upload failed (${putRes.status})`);
+        }
+
+        return key;
+      });
+
+      const keys = await Promise.all(uploadPromises);
+
+      keys.forEach((key) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "image_keys";
+        input.value = key;
+        imageKeysContainer.appendChild(input);
+      });
+
+      if (postStatus) {
+        // Change text to indicate final submission
+        postStatus.textContent = "投稿処理中...";
+        if (timer) clearInterval(timer); // Stop the upload timer
+      }
+
+      fileInput.value = "";
+      form.submit();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Upload failed");
+      if (submitButton) submitButton.disabled = false;
+      if (postStatus) postStatus.hidden = true;
+      if (timer) clearInterval(timer);
+    }
+  });
+});

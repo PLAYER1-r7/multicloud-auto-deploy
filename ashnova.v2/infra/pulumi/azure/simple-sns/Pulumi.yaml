@@ -1,0 +1,3 @@
+name: ashnova-azure-simple-sns
+runtime: python
+description: Simple SNS API on Azure Functions
