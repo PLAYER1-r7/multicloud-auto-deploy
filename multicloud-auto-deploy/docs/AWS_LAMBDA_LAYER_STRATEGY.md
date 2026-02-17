@@ -17,7 +17,7 @@ AWS Lambda関数の依存関係管理において、**Pulumi自動管理によ�
 ✅ **手動作業の完全排除**: Lambda Layer ARNの手動更新が不要  
 ✅ **バージョン管理の自動化**: Lambda Layerの内容変更時に自動的に新バージョン作成  
 ✅ **デプロイの一貫性**: インフラとアプリケーションコードを同時にデプロイ  
-✅ **ロールバック対応**: Pulumiのスタック履歴で簡単にロールバック可能  
+✅ **ロールバック対応**: Pulumiのスタック履歴で簡単にロールバック可能
 
 #### 実装方法
 
@@ -69,7 +69,7 @@ git push origin develop  # staging環境に自動デプロイ
   run: |
     cd multicloud-auto-deploy
     ./scripts/build-lambda-layer.sh
-    
+
 - name: Deploy with Pulumi
   uses: pulumi/actions@v5
   with:

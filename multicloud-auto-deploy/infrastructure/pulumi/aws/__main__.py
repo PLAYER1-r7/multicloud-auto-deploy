@@ -375,7 +375,7 @@ lambda_function = aws.lambda_.Function(
     "api-function",
     name=f"{project_name}-{stack}-api",
     runtime="python3.12",
-    handler="index.handler",
+    handler="app.main.handler",  # FastAPI application entry point with Mangum
     role=lambda_role.arn,
     memory_size=256 if stack == "staging" else 512,  # Cost optimization for staging
     timeout=30,

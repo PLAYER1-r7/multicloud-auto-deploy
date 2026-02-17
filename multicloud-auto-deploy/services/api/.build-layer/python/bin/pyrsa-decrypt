@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.12
+#!/usr/local/python/3.12.12/bin/python3
 import sys
 from rsa.cli import decrypt
 if __name__ == '__main__':

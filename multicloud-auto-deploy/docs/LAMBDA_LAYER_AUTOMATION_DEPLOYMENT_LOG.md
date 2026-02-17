@@ -9,12 +9,15 @@
 ## 🎯 実装目的
 
 ### 課題
+
 Lambda Layer更新のたびにPulumiコード内のARNを手動で変更する必要があり、以下の問題がありました：
+
 - ハードコーディングされたLayer ARN（v2 → v6への更新時に手動変更が必要）
 - バージョン管理の手動追跡
 - ヒューマンエラーのリスク
 
 ### 解決策
+
 Pulumi Infrastructure as CodeでLambda LayerVersionリソースを管理し、動的にLambda関数へアタッチ。
 
 ---
@@ -85,12 +88,13 @@ lambda_function = aws.lambda_.Function(
 **結果**: ❌ 失敗
 
 **エラー内容**:
+
 1. **Pulumi認証**: ✅ 成功（`PULUMI_ACCESS_TOKEN`更新後）
 2. **Lambda Layer更新**: ✅ 成功（v6にアップグレード）
 3. **SNS権限エラー**: ❌ IAMユーザー`satoshi`が`SNS:Unsubscribe`権限なし
 
 ```
-AuthorizationError: User: arn:aws:iam::278280499340:user/satoshi is not authorized 
+AuthorizationError: User: arn:aws:iam::278280499340:user/satoshi is not authorized
 to perform: SNS:Unsubscribe on resource: arn:aws:sns:ap-northeast-1:278280499340:
 multicloud-auto-deploy-staging-alarms
 ```
@@ -107,6 +111,7 @@ multicloud-auto-deploy-staging-alarms
 **結果**: ❌ 失敗
 
 **エラー内容**:
+
 - 同様のSNS権限エラー（継続）
 
 **学んだこと**: ARN更新だけではSNS権限問題は解決しない
@@ -121,11 +126,14 @@ multicloud-auto-deploy-staging-alarms
 **結果**: ❌ 失敗
 
 **エラー内容**:
+
 1. **Lambda Layer ZIPパスエラー**: ❌ ファイルが見つからない
+
    ```
    warning: Lambda Layer ZIP not found at /home/runner/work/multicloud-auto-deploy/
    multicloud-auto-deploy/multicloud-auto-deploy/infrastructure/services/api/lambda-layer.zip
    ```
+
    - 期待: `.../multicloud-auto-deploy/services/api/lambda-layer.zip`
    - 実際: `.../multicloud-auto-deploy/infrastructure/services/api/lambda-layer.zip`
 
@@ -143,10 +151,12 @@ multicloud-auto-deploy-staging-alarms
 **結果**: ❌ 失敗
 
 **エラー内容**:
+
 - **Lambda Layer ZIPパスエラー**: ❌ 依然として見つからない（パスがまだ間違っている）
 - **SNS権限エラー**: ❌ 継続
 
 **パス問題の詳細**:
+
 - 修正内容: `parent.parent.parent.parent` → `parent.parent.parent` (4→3に減らした)
 - 問題: GitHub Actionsの`work-dir`設定により、相対パス計算が複雑化
 - 結論: 環境変数`GITHUB_WORKSPACE`を使用する方が確実
@@ -161,6 +171,7 @@ multicloud-auto-deploy-staging-alarms
 **結果**: ❌ 失敗
 
 **変更内容**:
+
 ```python
 workspace_root = os.environ.get("GITHUB_WORKSPACE")
 if workspace_root:
@@ -172,6 +183,7 @@ else:
 ```
 
 **エラー内容**:
+
 - **Lambda Layer ZIPパスエラー**: ❌ 依然 failed
 - **SNS権限エラー**: ❌ 継続
 
@@ -204,11 +216,13 @@ else:
    ```
 
 **エラー内容**:
+
 - **Lambda Layer ZIPパスエラー**: ❌ 依然として見つからない
 - **SNS権限エラー**: ❌ 継続（主要なブロッカー）
 - **ワークフロー順序問題**: "Build Lambda Layer"ステップが"Deploy Infrastructure with Pulumi"の後に配置されているため、Pulumiデプロイが失敗すると実行されない
 
 **根本原因の特定**:
+
 1. ワークフローの"Build Lambda Layer"ステップが2箇所にあるが、Pulumiデプロイの前のものが実行されていない
 2. SNS:Unsubscribe権限エラーがデプロイを完全にブロック
 
@@ -219,11 +233,13 @@ else:
 ### SNS:Unsubscribe 権限エラー
 
 **症状**:
+
 ```
 User: arn:aws:iam::278280499340:user/satoshi is not authorized to perform: SNS:Unsubscribe
 ```
 
-**影響**: 
+**影響**:
+
 - Pulumiが既存のSNS TopicSubscriptionリソースを削除しようとして失敗
 - デプロイ全体が失敗（エラーハンドリング不足）
 
@@ -232,6 +248,7 @@ User: arn:aws:iam::278280499340:user/satoshi is not authorized to perform: SNS:U
 **解決策（優先順）**:
 
 1. **IAMポリシー更新（推奨）**:
+
    ```json
    {
      "Version": "2012-10-17",
@@ -251,6 +268,7 @@ User: arn:aws:iam::278280499340:user/satoshi is not authorized to perform: SNS:U
    ```
 
 2. **Pulumi保護オプション**:
+
    ```python
    sns_subscription = aws.sns.TopicSubscription(
        "alarm-email-subscription",
@@ -318,4 +336,3 @@ User: arn:aws:iam::278280499340:user/satoshi is not authorized to perform: SNS:U
 - [ ] Staging環境へのデプロイ成功
 - [ ] Production環境へのデプロイ成功
 - [ ] ドキュメント完成度 100%
-

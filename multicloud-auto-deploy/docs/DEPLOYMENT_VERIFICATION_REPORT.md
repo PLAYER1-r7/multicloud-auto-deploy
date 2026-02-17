@@ -48,6 +48,7 @@ pulumi whoami
 **APIエンドポイント**: `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/`
 
 **検証結果**:
+
 ```bash
 curl -s https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/ | jq .
 ```
@@ -63,6 +64,7 @@ curl -s https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/ | jq .
 **ステータス**: ✅ 正常動作
 
 **Lambda設定確認**:
+
 ```bash
 aws lambda get-function-configuration \
   --function-name multicloud-auto-deploy-staging-api \
@@ -79,6 +81,7 @@ aws lambda get-function-configuration \
 **APIエンドポイント**: `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com/`
 
 **検証結果**:
+
 ```bash
 curl -s https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com/ | jq .
 ```
@@ -94,6 +97,7 @@ curl -s https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com/ | jq .
 **ステータス**: ✅ 正常動作
 
 **Lambda設定確認**:
+
 - **Lambda Layer**: `arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-dependencies:2`
 - **Layer Size**: 27,386,418 bytes (27MB)
 - **Status**: ⚠️ 古いバージョン（v2）を使用中
@@ -109,6 +113,7 @@ curl -s https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com/ | jq .
 **APIエンドポイント**: Azure Functions (japaneast-01)
 
 **検証結果**:
+
 ```bash
 curl -s <staging-endpoint> | jq .
 ```
@@ -138,6 +143,7 @@ curl -s <staging-endpoint> | jq .
 **APIエンドポイント**: Cloud Run (asia-northeast1)
 
 **検証結果**:
+
 ```bash
 curl -s <staging-endpoint> | jq .
 ```
@@ -164,31 +170,52 @@ curl -s <staging-endpoint> | jq .
 
 ### Developブランチ（Staging）
 
+#### 初回検証時（Commit: `043c577` - 2026-02-17 17:05:50Z）
+
 最新ワークフロー実行（Commit: `043c577`）:
 
-| ワークフロー | ステータス | 説明 |
-|------------|----------|------|
-| Deploy to AWS | ❌ Failure | Pulumi認証エラー |
+| ワークフロー    | ステータス | 説明             |
+| --------------- | ---------- | ---------------- |
+| Deploy to AWS   | ❌ Failure | Pulumi認証エラー |
 | Deploy to Azure | ❌ Failure | Pulumi認証エラー |
-| Deploy to GCP | ❌ Failure | Pulumi認証エラー |
+| Deploy to GCP   | ❌ Failure | Pulumi認証エラー |
 
 **エラー詳細**:
+
 ```
 error: problem logging in: Unauthorized: No credentials provided or are invalid.
 ```
 
 **原因**: `PULUMI_ACCESS_TOKEN` GitHub Secretが無効または期限切れ
 
+#### Pulumi認証修正後（2026-02-17 18:10:12Z）
+
+**対応**: GitHub Secretsの`PULUMI_ACCESS_TOKEN`を更新 → ワークフローを手動トリガー
+
+| ワークフロー    | Run ID      | ステータス | URL                                                                                   |
+| --------------- | ----------- | ---------- | ------------------------------------------------------------------------------------- |
+| Deploy to AWS   | 22110083251 | 🔄 進行中  | [View](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions/runs/22110083251) |
+| Deploy to Azure | 22110085127 | 🔄 進行中  | [View](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions/runs/22110085127) |
+| Deploy to GCP   | 22110086720 | 🔄 進行中  | [View](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions/runs/22110086720) |
+
+**トリガーコマンド**:
+
+```bash
+gh workflow run deploy-aws.yml --ref develop -f environment=staging
+gh workflow run deploy-azure.yml --ref develop -f environment=staging
+gh workflow run deploy-gcp.yml --ref develop -f environment=staging
+```
+
 ### Mainブランチ（Production）
 
 最新ワークフロー実行（Commit: `043c577`）:
 
-| ワークフロー | ステータス | 説明 |
-|------------|----------|------|
-| Deploy to AWS | ❌ Failure | Pulumi認証エラー |
-| Deploy to Azure | ❌ Failure | Pulumi認証エラー |
-| Deploy to GCP | ❌ Failure | Pulumi認証エラー |
-| Deploy Landing (Azure) | ✅ Success | - |
+| ワークフロー           | ステータス | 説明             |
+| ---------------------- | ---------- | ---------------- |
+| Deploy to AWS          | ❌ Failure | Pulumi認証エラー |
+| Deploy to Azure        | ❌ Failure | Pulumi認証エラー |
+| Deploy to GCP          | ❌ Failure | Pulumi認証エラー |
+| Deploy Landing (Azure) | ✅ Success | -                |
 
 ---
 
@@ -198,6 +225,7 @@ error: problem logging in: Unauthorized: No credentials provided or are invalid.
 
 **症状**:
 GitHub Actionsでのデプロイ時に以下のエラーが発生:
+
 ```
 error: problem logging in: Unauthorized: No credentials provided or are invalid.
 ```
@@ -221,10 +249,11 @@ error: problem logging in: Unauthorized: No credentials provided or are invalid.
    - 新しいトークンを貼り付けて保存
 
 3. **検証**:
+
    ```bash
    # 手動でワークフローをトリガー
    gh workflow run deploy-aws.yml -f environment=staging
-   
+
    # ワークフロー実行を監視
    gh run watch
    ```
@@ -238,6 +267,7 @@ error: problem logging in: Unauthorized: No credentials provided or are invalid.
 **更新方法**:
 
 Option A: CI/CDパイプライン経由（推奨）
+
 ```bash
 # developをmainにマージしてproduction環境を更新
 git checkout main
@@ -246,6 +276,7 @@ git push ashnova main
 ```
 
 Option B: 手動更新
+
 ```bash
 # Production用Layer発行
 cd /workspaces/ashnova/multicloud-auto-deploy
@@ -272,27 +303,27 @@ aws lambda update-function-configuration \
 ### Staging環境
 
 | クラウド | API | フロントエンド | 総合評価 |
-|---------|-----|---------------|---------|
-| AWS | ✅ | ✅ | ✅ 良好 |
-| Azure | ✅ | ✅ | ✅ 良好 |
-| GCP | ✅ | ✅ | ✅ 良好 |
+| -------- | --- | -------------- | -------- |
+| AWS      | ✅  | ✅             | ✅ 良好  |
+| Azure    | ✅  | ✅             | ✅ 良好  |
+| GCP      | ✅  | ✅             | ✅ 良好  |
 
 **Staging環境**: すべて正常動作中
 
 ### Production環境
 
-| クラウド | API | フロントエンド | 総合評価 |
-|---------|-----|---------------|---------|
-| AWS | ✅ | ❓ | ⚠️ 改善推奨 |
-| Azure | ❓ | ❓ | ❓ 確認待ち |
-| GCP | ❓ | ❓ | ❓ 確認待ち |
+| クラウド | API | フロントエンド | 総合評価    |
+| -------- | --- | -------------- | ----------- |
+| AWS      | ✅  | ❓             | ⚠️ 改善推奨 |
+| Azure    | ❓  | ❓             | ❓ 確認待ち |
+| GCP      | ❓  | ❓             | ❓ 確認待ち |
 
 **Production環境**: 部分的に動作中、Lambda Layer更新とエンドポイント確認が必要
 
 ### CI/CD パイプライン
 
-| ステータス | 説明 |
-|----------|------|
+| ステータス | 説明                                             |
+| ---------- | ------------------------------------------------ |
 | ❌ Blocked | Pulumi認証エラーによりすべてのデプロイがブロック |
 
 ---
