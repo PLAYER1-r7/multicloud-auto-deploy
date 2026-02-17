@@ -173,6 +173,7 @@ git push origin main
 - 📖 [セットアップガイド](docs/SETUP.md) - 初期セットアップ手順
 - 🔐 [認証セットアップガイド](docs/AUTHENTICATION_SETUP.md) - AWS Cognito / Azure AD / Firebase Auth（Pulumi自動化済み） ✨
 - 🚀 [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定
+- 📊 [デプロイ監視ガイド](docs/DEPLOYMENT_MONITORING.md) - GitHub Actions監視方法 🆕
 - ✅ [CI/CDテスト結果](docs/CICD_TEST_RESULTS.md) - パイプライン検証レポート
 - 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策
 - 🌐 [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のエンドポイント情報
