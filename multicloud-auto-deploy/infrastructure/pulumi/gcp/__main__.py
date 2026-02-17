@@ -81,11 +81,16 @@ firebase_web_app = gcp.firebase.WebApp(
     opts=pulumi.ResourceOptions(depends_on=[firebase_project]),
 )
 
-# Get Web App configuration
-firebase_web_app_config = gcp.firebase.get_web_app_config_output(
-    project=project,
-    app_id=firebase_web_app.app_id,
-)
+# Note: Firebase Web App configuration (API Key, Auth Domain) is available
+# in the Firebase Console after the app is created. These cannot be retrieved
+# programmatically via Pulumi at provisioning time.
+# 
+# To get the configuration:
+# 1. Visit Firebase Console: https://console.firebase.google.com/
+# 2. Select your project
+# 3. Go to Project Settings → General
+# 4. Scroll down to "Your apps" and find your Web App
+# 5. Copy the Firebase SDK configuration
 
 # Note: Authentication providers (Google, Email/Password, etc.) must be configured
 # manually in Firebase Console due to OAuth consent screen requirements.
@@ -348,17 +353,26 @@ pulumi.export("region", region)
 # Firebase Authentication
 pulumi.export("firebase_project_id", project)
 pulumi.export("firebase_web_app_id", firebase_web_app.app_id)
-pulumi.export("firebase_api_key", firebase_web_app_config.api_key)
-pulumi.export("firebase_auth_domain", firebase_web_app_config.auth_domain)
+pulumi.export("firebase_web_app_name", firebase_web_app.name)
 pulumi.export(
     "auth_config_instructions",
     pulumi.Output.concat(
-        "Configure Cloud Functions with these environment variables:\\n",
+        "Firebase Web App created successfully!\\n",
+        "\\n",
+        "To get Firebase configuration (API Key, Auth Domain):\\n",
+        "1. Visit: https://console.firebase.google.com/project/", project, "/settings/general\\n",
+        "2. Scroll to 'Your apps' section\\n",
+        "3. Find your web app: ", firebase_web_app.display_name, "\\n",
+        "4. Copy the Firebase SDK configuration\\n",
+        "\\n",
+        "To enable authentication:\\n",
+        "1. Visit: https://console.firebase.google.com/project/", project, "/authentication\\n",
+        "2. Enable Google Sign-In provider\\n",
+        "3. Configure OAuth consent screen\\n",
+        "\\n",
+        "Cloud Functions environment variables:\\n"
         "  AUTH_PROVIDER=firebase\\n",
         "  GCP_PROJECT_ID=", project, "\\n",
-        "\\n",
-        "Firebase Console: https://console.firebase.google.com/project/", project, "/authentication\\n",
-        "Enable Google Sign-In provider in Firebase Console.\\n",
     )
 )
 pulumi.export("function_source_bucket", function_source_bucket.name)

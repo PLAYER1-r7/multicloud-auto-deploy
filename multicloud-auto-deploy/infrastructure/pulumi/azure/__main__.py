@@ -48,6 +48,9 @@ storage_suffix = random.RandomString(
     upper=False,
 )
 
+# Random UUID for OAuth2 permission scope
+oauth2_scope_id = random.RandomUuid("oauth2-scope-id")
+
 # ========================================
 # Storage Account for Azure Functions
 # ========================================
@@ -177,7 +180,7 @@ app_registration = azuread.Application(
                 admin_consent_description="Allow the application to access the API on behalf of the signed-in user.",
                 admin_consent_display_name="Access API",
                 enabled=True,
-                id=storage_suffix.result.apply(lambda s: f"00000000-0000-0000-0000-{s}00000000"),
+                id=oauth2_scope_id.result,
                 type="User",
                 user_consent_description="Allow the application to access the API on your behalf.",
                 user_consent_display_name="Access API",
@@ -307,14 +310,13 @@ pulumi.export("frontend_storage_name", frontend_storage.name)
 
 # Azure AD Authentication
 pulumi.export("azure_ad_client_id", app_registration.client_id)
-pulumi.export("azure_ad_application_id", app_registration.application_id)
-pulumi.export("azure_ad_tenant_id", app_registration.tenant_id)
+pulumi.export("azure_ad_object_id", app_registration.id)  # Object ID of the application
 pulumi.export(
     "auth_config_instructions",
     pulumi.Output.concat(
         "Configure Function App with these environment variables:\\n",
         "  AUTH_PROVIDER=azure\\n",
-        "  AZURE_TENANT_ID=", app_registration.tenant_id, "\\n",
+        "  AZURE_TENANT_ID=<your-tenant-id>\\n",
         "  AZURE_CLIENT_ID=", app_registration.client_id, "\\n",
     )
 )
