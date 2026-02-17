@@ -6,9 +6,9 @@ on:
       - develop  # staging自動デプロイ
       - main     # production自動デプロイ
     paths:
-      - "services/**"
-      - "infrastructure/pulumi/aws/**"
-      - ".github/workflows/deploy-aws.yml"
+      - "multicloud-auto-deploy/services/**"
+      - "multicloud-auto-deploy/infrastructure/pulumi/aws/**"
+      - "multicloud-auto-deploy/.github/workflows/deploy-aws.yml"
   workflow_dispatch:
     inputs:
       environment:

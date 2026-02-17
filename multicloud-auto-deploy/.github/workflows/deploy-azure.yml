@@ -6,9 +6,9 @@ on:
       - develop  # staging自動デプロイ
       - main     # production自動デプロイ
     paths:
-      - "services/**"
-      - "infrastructure/pulumi/azure/**"
-      - ".github/workflows/deploy-azure.yml"
+      - "multicloud-auto-deploy/services/**"
+      - "multicloud-auto-deploy/infrastructure/pulumi/azure/**"
+      - "multicloud-auto-deploy/.github/workflows/deploy-azure.yml"
   workflow_dispatch:
     inputs:
       environment:
