@@ -112,6 +112,9 @@ jobs:
           echo "azure_ad_client_id=$(pulumi stack output azure_ad_client_id)" >> $GITHUB_OUTPUT
           echo "azure_ad_object_id=$(pulumi stack output azure_ad_object_id)" >> $GITHUB_OUTPUT
           
+          # Get Front Door hostname for CORS
+          echo "frontdoor_hostname=$(pulumi stack output frontdoor_hostname)" >> $GITHUB_OUTPUT
+          
           # Manual Function App reference (not managed by Pulumi)
           echo "function_app_name=multicloud-auto-deploy-staging-func" >> $GITHUB_OUTPUT
           
@@ -244,12 +247,8 @@ jobs:
           
           echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
           
-          # Get Front Door URL for CORS
-          FRONTDOOR_URL=$(az afd endpoint show \
-            --profile-name mcad-staging-d45ihd \
-            --resource-group $RESOURCE_GROUP \
-            --endpoint-name mcad-staging-d45ihd \
-            --query "hostName" -o tsv)
+          # Get Front Door URL for CORS from Pulumi outputs
+          FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
           CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
           
           echo "🔒 CORS Origins: $CORS_ORIGINS"
