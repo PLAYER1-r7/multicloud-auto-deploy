@@ -237,13 +237,27 @@ jobs:
           
           echo "🔒 CORS Origins: $CORS_ORIGINS"
           
+          # Create environment variables JSON to avoid escaping issues
+          cat > /tmp/lambda-env.json <<EOF
+{
+  "Variables": {
+    "CLOUD_PROVIDER": "aws",
+    "ENVIRONMENT": "staging",
+    "AUTH_PROVIDER": "cognito",
+    "AWS_COGNITO_USER_POOL_ID": "${{ steps.pulumi_outputs.outputs.cognito_user_pool_id }}",
+    "AWS_COGNITO_CLIENT_ID": "${{ steps.pulumi_outputs.outputs.cognito_client_id }}",
+    "CORS_ORIGINS": "${CORS_ORIGINS}"
+  }
+}
+EOF
+          
           # Update configuration with environment variables and Layer(s)
           echo "🔗 Updating Lambda configuration..."
           aws lambda update-function-configuration \
             --function-name $LAMBDA_FUNCTION \
             --region ${{ env.AWS_REGION }} \
             --layers $LAYER_ARNS \
-            --environment "Variables={CLOUD_PROVIDER=aws,ENVIRONMENT=staging,AUTH_PROVIDER=cognito,AWS_COGNITO_USER_POOL_ID=${{ steps.pulumi_outputs.outputs.cognito_user_pool_id }},AWS_COGNITO_CLIENT_ID=${{ steps.pulumi_outputs.outputs.cognito_client_id }},CORS_ORIGINS=${CORS_ORIGINS}}" \
+            --environment file:///tmp/lambda-env.json \
             --output json || { echo "❌ Lambda configuration update failed!"; exit 1; }
           
           echo "✅ Lambda function updated successfully with Layer(s) and environment variables"
