@@ -1,18 +1,23 @@
-# 認証セットアップガイド
+# 認証セットアップガイド 🔐
 
 このガイドでは、マルチクラウド環境での認証機能のセットアップ方法を説明します。
 
-## 概要
+## ✨ 自動化状況
 
-各クラウドプロバイダーで以下の認証サービスを使用します：
+v1.3.0より、**全クラウドプロバイダーでPulumi自動化に対応**しました！
 
-| プラットフォーム | 認証サービス | JWT検証 | APIコード対応 |
-|------------|------------|---------|-------------|
-| **AWS** | Amazon Cognito | ✅ 実装済み | ✅ 完全対応 |
-| **Azure** | Azure AD / Azure AD B2C | ✅ 実装済み | ✅ 完全対応 |
-| **GCP** | Firebase Authentication | ✅ 実装済み | ✅ 完全対応 |
+| プラットフォーム | 認証サービス | Pulumi自動化 | JWT検証 | APIコード対応 |
+|------------|------------|------------|---------|-------------|
+| **AWS** | Amazon Cognito | ✅ 完全自動 | ✅ 実装済み | ✅ 完全対応 |
+| **Azure** | Azure AD | ✅ 完全自動 | ✅ 実装済み | ✅ 完全対応 |
+| **GCP** | Firebase Auth | ✅ 完全自動 | ✅ 実装済み | ✅ 完全対応 |
 
-## AWS Cognito（自動セットアップ済み）
+### 🚀 自動化により実現したこと
+- `pulumi up` だけで認証リソースを自動作成
+- AWS Cognitoと同レベルの自動化をAzure AD/Firebaseにも提供
+- 手動セットアップなしで認証機能が利用可能
+
+## AWS Cognito（完全自動化 ✅）
 
 AWS版は完全に自動化されています。Pulumiが以下を自動的にプロビジョニングします：
 
@@ -37,17 +42,35 @@ AWS_REGION=ap-northeast-1
 
 ---
 
-## Azure AD / Azure AD B2C（手動セットアップ）
+## Azure AD（完全自動化 ✅）
 
-Azure版は手動セットアップが必要です。理由：
-- テナント設定やユーザーフローのカスタマイズが必要
-- セキュリティ上、手動設定が推奨される
+Azure版もPulumiで完全自動化されています。`pulumi-azuread`を使用して、以下を自動作成します：
 
-### オプション1: Azure AD（推奨・シンプル）
+### 自動作成されるリソース
+- **Azure AD Application**: API用のアプリケーション登録
+- **Service Principal**: アプリケーションのサービスプリンシパル
+- **Redirect URIs**: フロントエンド向けのリダイレクトURI
+- **OAuth2 Permission Scopes**: API.Access スコープ
 
-標準のAzure AD（Entra ID）を使用します。
+### 環境変数（Pulumiが自動出力）
+`pulumi up` 実行後、以下の情報がOutputsとして出力されます：
 
-#### 手順
+```bash
+AUTH_PROVIDER=azure
+AZURE_TENANT_ID=<pulumi output "azure_ad_tenant_id">
+AZURE_CLIENT_ID=<pulumi output "azure_ad_client_id">
+```
+
+### 手動設定が必要な部分（オプション）
+
+**Azure AD B2Cを使用する場合のみ**、以下の手動設定が必要です：
+- B2Cテナントの作成（通常のAzure ADとは別管理）
+- ユーザーフローのカスタマイズ
+
+### 旧手動セットアップ方法（参考）
+
+<details>
+<summary>v1.2.x以前の手動セットアップ方法（クリックして展開）</summary>
 
 1. **アプリケーション登録を作成**
 
@@ -138,9 +161,48 @@ AZURE_CLIENT_ID=<b2c-client-id>
 
 ---
 
-## GCP Firebase Authentication（手動セットアップ）
+## GCP Firebase Authentication（完全自動化 ✅）
 
-GCP版は Firebase Authentication を使用します。
+GCP版もPulumiで完全自動化されています。`pulumi-gcp`の`firebase`モジュールを使用して、以下を自動作成します：
+
+### 自動作成されるリソース
+- **Firebase Project**: 既存GCPプロジェクトでFirebaseを有効化
+- **Firebase Web App**: Webアプリケーションの登録
+- **Firebase Configuration**: API Key、Auth Domain等の設定
+
+### 環境変数（Pulumiが自動出力）
+`pulumi up` 実行後、以下の情報がOutputsとして出力されます：
+
+```bash
+AUTH_PROVIDER=firebase
+GCP_PROJECT_ID=<pulumi output "firebase_project_id">
+# Firebase設定（フロントエンド用）
+FIREBASE_API_KEY=<pulumi output "firebase_api_key">
+FIREBASE_AUTH_DOMAIN=<pulumi output "firebase_auth_domain">
+```
+
+### 手動設定が必要な部分
+
+**以下の設定のみ手動で行う必要があります**（OAuth同意画面の要件のため）：
+
+1. **Google Sign-Inプロバイダーの有効化**
+   - [Firebase Console](https://console.firebase.google.com/) → Authentication → Sign-in method
+   - Google プロバイダーを有効化
+   - Project support email を設定
+
+2. **OAuth同意画面の設定**（初回のみ）
+   - GCP Console → APIs & Services → OAuth consent screen
+   - User Type: External
+   - アプリ名、サポートメール、開発者連絡先を入力
+
+3. **承認済みドメインの追加**（本番環境）
+   - Firebase Console → Authentication → Settings → Authorized domains
+   - カスタムドメインを追加
+
+### 旧手動セットアップ方法（参考）
+
+<details>
+<summary>v1.2.x以前の手動セットアップ方法（クリックして展開）</summary>
 
 ### 手順
 
@@ -194,6 +256,8 @@ GCP_PROJECT_ID=<your-project-id>
 # 必要に応じて
 # GCP_CLIENT_ID=<web-app-client-id>
 ```
+
+</details>
 
 #### GitHub Secretsに追加
 

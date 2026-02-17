@@ -11,6 +11,7 @@ Cost: ~$2-8/month for low traffic
 
 import pulumi
 import pulumi_azure_native as azure
+import pulumi_azuread as azuread
 import pulumi_random as random
 
 # Configuration
@@ -140,21 +141,60 @@ app_secret = azure.keyvault.Secret(
 )
 
 # ========================================
-# Authentication Setup
+# Authentication Setup - Azure AD Application
 # ========================================
-# Azure AD / Azure AD B2C authentication is configured manually.
-# See: docs/AUTHENTICATION_SETUP.md for detailed setup instructions.
-#
-# Required environment variables for Function App:
-# - AUTH_PROVIDER=azure
-# - AZURE_TENANT_ID=<your-tenant-id>
-# - AZURE_CLIENT_ID=<your-client-id>
-#
-# Configure via Azure CLI:
-# az functionapp config appsettings set \
-#   --name multicloud-auto-deploy-staging-func \
-#   --resource-group multicloud-auto-deploy-staging-rg \
-#   --settings AUTH_PROVIDER=azure AZURE_TENANT_ID=<id> AZURE_CLIENT_ID=<id>
+# Azure AD Application for authentication (automated)
+# This creates an Azure AD app registration for the API
+
+# Get Azure AD tenant from azuread config
+azuread_config = pulumi.Config("azuread")
+azure_tenant_id = azuread_config.get("tenantId") or pulumi.Output.from_input("")
+
+# Create Azure AD Application
+app_registration = azuread.Application(
+    "api-app",
+    display_name=f"{project_name}-{stack}-api",
+    # Sign-in audience: AzureADMyOrg = Single tenant
+    sign_in_audience="AzureADMyOrg",
+    # Web application configuration
+    web=azuread.ApplicationWebArgs(
+        redirect_uris=[
+            # Add your frontend URLs here
+            f"https://{project_name}-{stack}-web.azurewebsites.net/callback",
+            "http://localhost:3000/callback",  # Local development
+            "https://localhost:3000/callback",
+        ],
+        implicit_grant=azuread.ApplicationWebImplicitGrantArgs(
+            access_token_issuance_enabled=True,
+            id_token_issuance_enabled=True,
+        ),
+    ),
+    # API configuration (expose an API)
+    api=azuread.ApplicationApiArgs(
+        # OAuth2 permission scopes
+        oauth2_permission_scopes=[
+            azuread.ApplicationApiOauth2PermissionScopeArgs(
+                admin_consent_description="Allow the application to access the API on behalf of the signed-in user.",
+                admin_consent_display_name="Access API",
+                enabled=True,
+                id=storage_suffix.result.apply(lambda s: f"00000000-0000-0000-0000-{s}00000000"),
+                type="User",
+                user_consent_description="Allow the application to access the API on your behalf.",
+                user_consent_display_name="Access API",
+                value="API.Access",
+            ),
+        ],
+    ),
+    opts=pulumi.ResourceOptions(depends_on=[resource_group]),
+)
+
+# Create Service Principal for the application
+app_service_principal = azuread.ServicePrincipal(
+    "api-sp",
+    client_id=app_registration.client_id,
+    app_role_assignment_required=False,
+    opts=pulumi.ResourceOptions(depends_on=[app_registration]),
+)
 
 # ========================================
 # Note: Function App is managed manually
@@ -264,6 +304,20 @@ frontdoor_route = azure.cdn.Route(
 pulumi.export("resource_group_name", resource_group.name)
 pulumi.export("functions_storage_name", functions_storage.name)
 pulumi.export("frontend_storage_name", frontend_storage.name)
+
+# Azure AD Authentication
+pulumi.export("azure_ad_client_id", app_registration.client_id)
+pulumi.export("azure_ad_application_id", app_registration.application_id)
+pulumi.export("azure_ad_tenant_id", app_registration.tenant_id)
+pulumi.export(
+    "auth_config_instructions",
+    pulumi.Output.concat(
+        "Configure Function App with these environment variables:\\n",
+        "  AUTH_PROVIDER=azure\\n",
+        "  AZURE_TENANT_ID=", app_registration.tenant_id, "\\n",
+        "  AZURE_CLIENT_ID=", app_registration.client_id, "\\n",
+    )
+)
 
 # Existing manually-managed Function App
 pulumi.export("function_app_name", f"{project_name}-{stack}-func")
