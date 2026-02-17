@@ -49,6 +49,8 @@ services = [
     "storage-api.googleapis.com",
     "run.googleapis.com",  # Cloud Functions Gen 2 uses Cloud Run
     "secretmanager.googleapis.com",  # Secret Manager
+    "firebase.googleapis.com",  # Firebase
+    "identitytoolkit.googleapis.com",  # Identity Platform (Firebase Auth backend)
 ]
 
 enabled_services = []
@@ -62,23 +64,37 @@ for service in services:
     enabled_services.append(svc)
 
 # ========================================
-# Authentication Setup
+# Authentication Setup - Firebase Project
 # ========================================
-# Firebase Authentication is configured manually.
-# See: docs/AUTHENTICATION_SETUP.md for detailed setup instructions.
+# Create Firebase Project (enables Firebase for this GCP project)
+firebase_project = gcp.firebase.Project(
+    "firebase-project",
+    project=project,
+    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+)
+
+# Create Firebase Web App
+firebase_web_app = gcp.firebase.WebApp(
+    "web-app",
+    project=project,
+    display_name=f"{project_name}-{stack}-web",
+    opts=pulumi.ResourceOptions(depends_on=[firebase_project]),
+)
+
+# Get Web App configuration
+firebase_web_app_config = gcp.firebase.get_web_app_config_output(
+    project=project,
+    app_id=firebase_web_app.app_id,
+)
+
+# Note: Authentication providers (Google, Email/Password, etc.) must be configured
+# manually in Firebase Console due to OAuth consent screen requirements.
+# Visit: https://console.firebase.google.com/project/{project}/authentication/providers
 #
-# Required environment variables for Cloud Functions:
-# - AUTH_PROVIDER=firebase
-# - GCP_PROJECT_ID=<your-project-id>
-#
-# Firebase Console: https://console.firebase.google.com/
-# 1. Enable Authentication
-# 2. Configure Google Sign-In provider
-# 3. Add authorized domains
-#
-# Configure via gcloud (when function is deployed):
-# gcloud functions update <function-name> \
-#   --set-env-vars AUTH_PROVIDER=firebase,GCP_PROJECT_ID=<project-id>
+# Required steps:
+# 1. Enable Google Sign-In provider
+# 2. Configure OAuth consent screen
+# 3. Add authorized domains for your frontend
 
 # ========================================
 # Secret Manager
@@ -328,6 +344,23 @@ forwarding_rule = gcp.compute.GlobalForwardingRule(
 # ========================================
 pulumi.export("project_id", project)
 pulumi.export("region", region)
+
+# Firebase Authentication
+pulumi.export("firebase_project_id", project)
+pulumi.export("firebase_web_app_id", firebase_web_app.app_id)
+pulumi.export("firebase_api_key", firebase_web_app_config.api_key)
+pulumi.export("firebase_auth_domain", firebase_web_app_config.auth_domain)
+pulumi.export(
+    "auth_config_instructions",
+    pulumi.Output.concat(
+        "Configure Cloud Functions with these environment variables:\\n",
+        "  AUTH_PROVIDER=firebase\\n",
+        "  GCP_PROJECT_ID=", project, "\\n",
+        "\\n",
+        "Firebase Console: https://console.firebase.google.com/project/", project, "/authentication\\n",
+        "Enable Google Sign-In provider in Firebase Console.\\n",
+    )
+)
 pulumi.export("function_source_bucket", function_source_bucket.name)
 pulumi.export("frontend_bucket", frontend_bucket.name)
 pulumi.export("secret_name", app_secret.secret_id)
