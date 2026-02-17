@@ -2,7 +2,7 @@
 # TODO: Implement based on ashnova.v2
 
 from app.backends.base import BackendBase
-from app.models import Post, CreatePostBody, ProfileResponse, ProfileUpdateRequest
+from app.models import Post, CreatePostBody, UpdatePostBody, ProfileResponse, ProfileUpdateRequest
 from app.auth import UserInfo
 from typing import Optional, Tuple
 
@@ -28,6 +28,10 @@ class GcpBackend(BackendBase):
     
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
         # TODO: Implement using Firestore delete
+        raise NotImplementedError("GCP backend not yet implemented")
+    
+    def update_post(self, post_id: str, body: UpdatePostBody, user: UserInfo) -> dict:
+        # TODO: Implement using Firestore update
         raise NotImplementedError("GCP backend not yet implemented")
     
     def get_profile(self, user_id: str) -> ProfileResponse:

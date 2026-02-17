@@ -2,25 +2,556 @@
 
 本番環境デプロイで遭遇した問題と解決策のナレッジベース。
 
-## 目次
+## 🚀 クイック診断フローチャート
 
-- [GitHub Actions YAML構文エラー](#github-actions-yaml構文エラー)
-- [Azure CORS設定の名前競合](#azure-cors設定の名前競合)
+```
+デプロイが失敗した？
+  │
+  ├─ GitHub Actions エラー？
+  │   ├─ YAML構文エラー → [GitHub Actions YAML構文エラー](#github-actions-yaml構文エラー)
+  │   ├─ シークレット参照エラー → [GitHub Actionsシークレット参照エラー](#github-actionsシークレット参照エラー)
+  │   └─ ワークフローがトリガーされない → [ワークフローがトリガーされない](#github-actionsワークフローがトリガーされない)
+  │
+  ├─ AWS エラー？
+  │   ├─ Lambda Layer権限エラー → [AWS Lambda Layer権限エラー](#aws-lambda-layer権限エラー)
+  │   ├─ ResourceConflictException → [AWS Lambda ResourceConflictException](#aws-lambda-resourceconflictexception)
+  │   ├─ CloudFrontエラー → [CloudFront IDの取得とキャッシュ無効化](#cloudフロントidの取得とキャッシュ無効化)
+  │   ├─ Lambda依存関係エラー → [Lambda Layerビルド時の依存関係エラー](#lambda-layerビルド時の依存関係エラー)
+  │   └─ Lambda ImportModuleError → [AWS Lambda Runtime Errors](#aws-lambda-runtime-errors)
+  │
+  ├─ Azure エラー？
+  │   ├─ CORS設定の名前競合 → [Azure CORS設定の名前競合](#azure-cors設定の名前競合)
+  │   ├─ リソースが見つからない → [Azureリソース名のハードコード問題](#azureリソース名のハードコード問題)
+  │   ├─ デプロイメント競合 → [Azure Function Appデプロイメント競合](#azure-function-appデプロイメント競合)
+  │   ├─ Front Doorエンドポイント取得 → [Azure Front Doorエンドポイント取得](#azure-front-doorエンドポイント取得)
+  │   ├─ Partially Successful → [Azure Flex Consumption: Partially Successful](#azure-flex-consumption-partially-successful)
+  │   ├─ defaultHostName null → [Azure Flex Consumption: defaultHostName null](#azure-flex-consumption-defaulthostname-null)
+  │   └─ Kudu再起動 → [Azure Flex Consumption: Kudu再起動](#azure-flex-consumption-kudu再起動)
+  │
+  ├─ GCP エラー？
+  │   ├─ Cloud Run 500エラー → [GCP Cloud Run 500 Errors](#gcp-cloud-run-500-errors)
+  │   └─ Firestore 403エラー → [GCP権限エラー](#gcp権限エラー)
+  │
+  └─ Pulumi エラー？
+      ├─ スタックが見つからない → [Pulumiスタックとディレクトリの混同](#pulumiスタックとディレクトリの混同)
+      ├─ パスワード/パスフレーズエラー → [Pulumiパスワード・パスフレーズエラー](#pulumiパスワードパスフレーズエラー)
+      └─ リソース競合 → [GCPリソース競合](#gcpリソース競合)
+```
+
+## 📊 エラーメッセージ別インデックス
+
+素早く解決策を見つけるために、エラーメッセージから検索してください。
+
+| エラーメッセージ | 問題 | セクション |
+|----------------|------|----------|
+| `mapping values are not allowed in this context` | YAML構文エラー | [GitHub Actions YAML](#github-actions-yaml構文エラー) |
+| `Application setting already exists` | CORS設定の競合 | [Azure CORS設定](#azure-cors設定の名前競合) |
+| `AccessDeniedException ... PublishLayerVersion` | Lambda Layer権限不足 | [Lambda Layer権限](#aws-lambda-layer権限エラー) |
+| `ResourceConflictException ... update is in progress` | Lambda更新の競合 | [Lambda ResourceConflict](#aws-lambda-resourceconflictexception) |
+| `Resource ... not found` | リソース名のハードコード | [Azureリソース名](#azureリソース名のハードコード問題) |
+| `Deployment was cancelled and another deployment` | 同時デプロイ | [Azure デプロイメント競合](#azure-function-appデプロイメント競合) |
+| `pathspec ... did not match any files` | Gitパス問題 | [Gitパス問題](#モノレポ構造でのgitパス問題) |
+| `no stack named ... found` | Pulumiディレクトリ | [Pulumiスタック](#pulumiスタックとディレクトリの混同) |
+| `invalid character ... after object key:value pair` | JSON構文エラー | [環境変数エスケープ](#環境変数の引用符とエスケープ) |
+| `invalid CloudFront distribution ids` | CloudFront ID | [CloudFront](#cloudフロントidの取得とキャッシュ無効化) |
+| `Could not find a version that satisfies` | pip依存関係 | [Lambda Layer依存関係](#lambda-layerビルド時の依存関係エラー) |
+| `unrecognized named-value: 'secrets'` | シークレット参照 | [GitHub Secretsエラー](#github-actionsシークレット参照エラー) |
+| `Deployment was partially successful` | Azure Flex特有 | [Partially Successful](#azure-flex-consumption-partially-successful) |
+| `defaultHostName returns null` | Azure Flex特有 | [defaultHostName null](#azure-flex-consumption-defaulthostname-null) |
+| `Kudu has been restarted` | Azure Flex特有 | [Kudu再起動](#azure-flex-consumption-kudu再起動) |
+| `Runtime.ImportModuleError` | Lambda entrypoint | [Lambda ImportError](#aws-lambda-runtime-errors) |
+| `ConnectionRefusedError: [Errno 111]` | GCP環境変数未設定 | [GCP Cloud Run 500](#gcp-cloud-run-500-errors) |
+
+## 📑 目次
+
+### クラウド別トラブルシューティング
+
+#### AWS
 - [AWS Lambda Layer権限エラー](#aws-lambda-layer権限エラー)
 - [AWS Lambda ResourceConflictException](#aws-lambda-resourceconflictexception)
+- [AWS Lambda Runtime Errors](#aws-lambda-runtime-errors)
+- [CloudフロントIDの取得とキャッシュ無効化](#cloudフロントidの取得とキャッシュ無効化)
+- [Lambda Layerビルド時の依存関係エラー](#lambda-layerビルド時の依存関係エラー)
+
+#### Azure
+- [Azure CORS設定の名前競合](#azure-cors設定の名前競合)
 - [Azure Front Doorエンドポイント取得](#azure-front-doorエンドポイント取得)
 - [Azureリソース名のハードコード問題](#azureリソース名のハードコード問題)
-- [Azure Function App デプロイメント競合](#azure-function-app-デプロイメント競合)
+- [Azure Function Appデプロイメント競合](#azure-function-appデプロイメント競合)
+- [Azure Flex Consumption: Partially Successful](#azure-flex-consumption-partially-successful)
+- [Azure Flex Consumption: defaultHostName null](#azure-flex-consumption-defaulthostname-null)
+- [Azure Flex Consumption: Kudu再起動](#azure-flex-consumption-kudu再起動)
+
+#### GCP
+- [GCP Cloud Run 500 Errors](#gcp-cloud-run-500-errors)
+- [GCP権限エラー](#gcp権限エラー)
+- [GCPリソース競合](#gcpリソース競合)
+
+### 共通問題
+- [GitHub Actions YAML構文エラー](#github-actions-yaml構文エラー)
+- [GitHub Actionsシークレット参照エラー](#github-actionsシークレット参照エラー)
+- [GitHub Actionsワークフローがトリガーされない](#github-actionsワークフローがトリガーされない)
 - [モノレポ構造でのGitパス問題](#モノレポ構造でのgitパス問題)
-- [Pulumi スタックとディレクトリの混同](#pulumi-スタックとディレクトリの混同)
+- [Pulumiスタックとディレクトリの混同](#pulumiスタックとディレクトリの混同)
+- [Pulumiパスワード・パスフレーズエラー](#pulumiパスワードパスフレーズエラー)
 - [環境変数の引用符とエスケープ](#環境変数の引用符とエスケープ)
-- [CloudフロントIDの取得とキャッシュ無効化](#cloudフロントidの取得とキャッシュ無効化)
-- [Lambda Layer ビルド時の依存関係エラー](#lambda-layer-ビルド時の依存関係エラー)
-- [GitHub Actions シークレットの参照エラー](#github-actions-シークレットの参照エラー)
-- [GitHub Actions ワークフローがトリガーされない](#github-actions-ワークフローがトリガーされない)
-- [CORS Origins の設定ミスとプリフライトエラー](#cors-origins-の設定ミスとプリフライトエラー)
-- [Pulumi パスワード・パスフレーズエラー](#pulumi-パスワードパスフレーズエラー)
+- [CORS Originsの設定ミスとプリフライトエラー](#cors-originsの設定ミスとプリフライトエラー)
 - [認証プロバイダーの設定と環境変数](#認証プロバイダーの設定と環境変数)
+
+---
+
+## ⏱️ 5分で解決：よくある問題トップ5
+
+### 1. 🔴 Azure Functions: "Partially Successful" だが動作する
+**即座の解決策**: これは正常です。ヘルスチェックをパスすれば無視してOK。詳細は[こちら](#azure-flex-consumption-partially-successful)
+
+### 2. 🔴 AWS Lambda: "ResourceConflictException"
+**即座の解決策**: Lambda関数のステータスが`Active`になるまで待機（2-10秒）。詳細は[こちら](#aws-lambda-resourceconflictexception)
+
+### 3. 🔴 Azure: "Application setting already exists"
+**即座の解決策**: 設定を削除してから再設定。`az functionapp config appsettings delete` → `set`。詳細は[こちら](#azure-cors設定の名前競合)
+
+### 4. 🔴 Pulumi: "no stack named 'staging' found"
+**即座の解決策**: 正しいディレクトリに移動。`cd infrastructure/pulumi/[aws|azure|gcp]`。詳細は[こちら](#pulumiスタックとディレクトリの混同)
+
+### 5. 🔴 GitHub Actions: "YAML構文エラー"
+**即座の解決策**: `cat << EOF` を `echo` に置き換え、または `cat << 'EOF'` で引用符をエスケープ。詳細は[こちら](#github-actions-yaml構文エラー)
+
+---
+
+## Azure Flex Consumption: Partially Successful
+
+**解決時間**: ⏱️ 2分
+
+### 症状
+```
+ERROR: Deployment was partially successful. These are the deployment logs:
+[***"message": "The logs you are looking for were not found. In flex consumption plans,
+the instance will be recycled and logs will not be persisted after that..."***]
+```
+
+しかし、Function Appは実際には正常に動作している。
+
+### 原因
+- Azure Flex Consumptionプランではインスタンスがリサイクルされ、デプロイログが保持されない
+- `az functionapp deployment source config-zip`が"partially successful"を返すが、実際にはデプロイは成功している
+- 詳細なステップログ（`UploadPackageStep`, `OryxBuildStep`等）が出力されない
+
+### 解決策
+
+1. **"Deployment was successful"メッセージを検出**:
+```bash
+# 成功メッセージを最優先でチェック
+if grep -q "Deployment was successful" deploy_log.txt; then
+  echo "✅ Deployment successful!"
+  DEPLOY_SUCCESS=true
+  break
+fi
+```
+
+2. **"partially successful"を無視**:
+```bash
+# "partially successful"を無視し、critical errorのみ失敗扱い
+elif grep -q "ERROR:" deploy_log.txt && ! grep -q "partially successful" deploy_log.txt; then
+  echo "❌ Critical deployment error"
+  cat deploy_log.txt
+  exit 1
+fi
+```
+
+3. **ヘルスチェックを必須検証に**:
+```bash
+# デプロイ後のヘルスチェックで最終確認
+curl -f -s -o /dev/null -w "%{http_code}" "$FUNC_URL/health"
+if [ $? -eq 0 ]; then
+  echo "✅ Health check passed!"
+else
+  echo "❌ Health check failed"
+  exit 1
+fi
+```
+
+### ベストプラクティス
+- "Partially Successful"は**正常な挙動**として扱う
+- デプロイ完了の判定はヘルスチェックで行う
+- Flex Consumptionプランでは詳細ログが取得できないことを前提にする
+
+### 該当ファイル
+- `.github/workflows/deploy-azure.yml` (lines 280-310)
+
+---
+
+## Azure Flex Consumption: defaultHostName null
+
+**解決時間**: ⏱️ 1分
+
+### 症状
+```
+Testing: https:///api/HttpTrigger/health
+❌ Health check failed
+```
+
+`az functionapp show --query defaultHostName`がnullを返し、URLが空になる。
+
+### 原因
+Flex Consumptionプランでは`defaultHostName`フィールドがnullまたは未設定。
+
+### 解決策
+
+**`az functionapp config hostname list`を使用**:
+```bash
+# Flex Consumption対応のホスト名取得
+FUNC_HOSTNAME=$(az functionapp config hostname list \
+  --webapp-name $FUNCTION_APP \
+  --resource-group $RESOURCE_GROUP \
+  --query '[0].name' -o tsv)
+
+if [ -n "$FUNC_HOSTNAME" ] && [ "$FUNC_HOSTNAME" != "None" ]; then
+  echo "✅ Got hostname: $FUNC_HOSTNAME"
+  FUNC_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
+else
+  echo "❌ Failed to get Function App hostname"
+  exit 1
+fi
+```
+
+### 比較
+
+| コマンド | Consumption Y1 | Flex Consumption | Premium EP1 |
+|---------|---------------|------------------|-------------|
+| `show --query defaultHostName` | ✅ 動作 | ❌ null | ✅ 動作 |
+| `config hostname list` | ✅ 動作 | ✅ 動作 | ✅ 動作 |
+
+### ベストプラクティス
+- すべてのSKUで動作する`config hostname list`を使用
+- hostnameが取得できない場合はリトライロジックを実装
+- 取得後は必ず空チェック（`-n`）を実施
+
+### 該当ファイル
+- `.github/workflows/deploy-azure.yml` (lines 320-330)
+
+---
+
+## Azure Flex Consumption: Kudu再起動
+
+**解決時間**: ⏱️ 5分
+
+### 症状
+```
+🔄 Kudu restart detected, retrying...
+Attempt 2/3...
+```
+
+大きなデプロイパッケージでKuduが再起動し、デプロイが中断される。
+
+### 原因
+- デプロイパッケージに不要なファイル（`__pycache__`, `.pyc`, `tests`, `.dist-info`）が含まれサイズが大きい
+- Flex Consumptionプランの動的スケーリングによりKuduインスタンスが再起動
+- リトライロジックが未実装
+
+### 解決策
+
+#### 1. パッケージサイズの最適化
+```bash
+# 依存関係インストール
+pip install --target .deployment --no-cache-dir -r requirements.txt
+
+# 不要ファイルの削除
+find .deployment -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
+find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
+find .deployment -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+find .deployment -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+
+# ZIP作成（quietモード）
+cd .deployment
+zip -r -q ../function-app.zip .
+
+echo "✅ Package size: $(du -h ../function-app.zip | cut -f1)"
+```
+
+#### 2. リトライロジックの実装
+```bash
+MAX_RETRIES=3
+RETRY_COUNT=0
+DEPLOY_SUCCESS=false
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  echo "Attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
+  
+  # デプロイ実行
+  az functionapp deployment source config-zip \
+    --resource-group $RESOURCE_GROUP \
+    --name $FUNCTION_APP \
+    --src services/api/function-app.zip \
+    --timeout 600 \
+    2>&1 | tee deploy_log.txt || true
+  
+  # Kudu再起動を検出
+  if grep -q "Kudu has been restarted" deploy_log.txt; then
+    echo "🔄 Kudu restart detected, retrying..."
+    RETRY_COUNT=$((RETRY_COUNT+1))
+    sleep 30  # Kudu安定化待ち
+    continue
+  fi
+  
+  # 成功判定
+  if grep -q "Deployment was successful" deploy_log.txt; then
+    DEPLOY_SUCCESS=true
+    break
+  fi
+  
+  # 失敗時は非Kuduエラーとして即座に終了
+  if grep -q "ERROR:" deploy_log.txt && ! grep -q "Kudu\|partially successful" deploy_log.txt; then
+    echo "❌ Non-transient error detected"
+    cat deploy_log.txt
+    exit 1
+  fi
+  
+  RETRY_COUNT=$((RETRY_COUNT+1))
+  sleep 30
+done
+
+if [ "$DEPLOY_SUCCESS" = false ]; then
+  echo "❌ Deployment failed after $MAX_RETRIES attempts"
+  exit 1
+fi
+```
+
+### パッケージサイズの目安
+
+| 最適化前 | 最適化後 | 削減率 |
+|---------|---------|--------|
+| 45 MB | 28 MB | 38% |
+
+### ベストプラクティス
+- パッケージサイズは30MB以下を目標
+- `--no-cache-dir`を使用してpipキャッシュを削除
+- リトライ間隔は30秒（Kuduの安定化時間）
+- 最大3回までリトライ
+
+### 該当ファイル
+- `.github/workflows/deploy-azure.yml` (lines 260-295)
+
+---
+
+## AWS Lambda Runtime Errors
+
+**解決時間**: ⏱️ 3分
+
+### 症状
+```
+[ERROR] Runtime.ImportModuleError: Unable to import module 'index': No module named 'index'
+```
+
+### 原因
+- GitHub Actionsワークフローが`handler.py`を動的生成
+- Lambda関数設定では`index.handler`を期待
+- ファイル名のミスマッチ
+
+### 解決策
+
+**既存の`index.py`をコピー**:
+```yaml
+# ❌ 動的生成（削除）
+# cat > package/handler.py << 'EOF'
+# from mangum import Mangum
+# from app.main import app
+# handler = Mangum(app, lifespan="off")
+# EOF
+
+# ✅ 既存ファイルをコピー
+- name: Package Lambda Function
+  run: |
+    cd services/api
+    cp index.py package/
+    cp -r app package/
+    cd package
+    zip -r ../lambda.zip .
+```
+
+### `index.py`の内容
+```python
+"""AWS Lambda エントリーポイント"""
+from mangum import Mangum
+from app.main import app
+
+# Lambda handler
+handler = Mangum(app, lifespan="off")
+```
+
+### 確認方法
+```bash
+# Zipの中身確認
+unzip -l lambda.zip | grep -E "(index.py|handler.py)"
+
+# Lambda設定確認
+aws lambda get-function-configuration \
+  --function-name YOUR_FUNCTION_NAME \
+  --query 'Handler'
+# 出力: "index.handler"
+```
+
+### 該当ファイル
+- `.github/workflows/deploy-aws.yml` (lines 200-220)
+- `services/api/index.py`
+
+---
+
+## GCP Cloud Run 500 Errors
+
+**解決時間**: ⏱️ 2分
+
+### 症状
+```
+ConnectionRefusedError: [Errno 111] Connection refused
+File "/workspace/app/backends/local.py", line 30, in __init__
+  self._ensure_bucket()
+```
+
+### 原因
+`CLOUD_PROVIDER`環境変数が未設定で、アプリケーションがLocalBackend（MinIO localhost:9000）を使用しようとする。
+
+### 解決策
+
+**環境変数を設定**:
+```bash
+gcloud run services update $SERVICE_NAME \
+  --region=$REGION \
+  --set-env-vars="ENVIRONMENT=staging,CLOUD_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,FIRESTORE_COLLECTION=messages"
+```
+
+### 環境変数チェックリスト
+
+| 環境変数 | 必須 | 例 | 用途 |
+|---------|------|-----|------|
+| `CLOUD_PROVIDER` | ✅ | `gcp` | バックエンド選択 |
+| `GCP_PROJECT_ID` | ✅ | `my-project-123` | Firestoreプロジェクト |
+| `FIRESTORE_COLLECTION` | ✅ | `messages` | コレクション名 |
+| `ENVIRONMENT` | ⚠️ | `staging` | ログレベル |
+
+### 確認方法
+```bash
+# 環境変数確認
+gcloud run services describe $SERVICE_NAME \
+  --region=$REGION \
+  --format="value(spec.template.spec.containers[0].env)"
+
+# ログ確認
+gcloud logging read "resource.type=cloud_run_revision AND severity>=ERROR" \
+  --limit 10 \
+  --format="table(timestamp,textPayload)"
+```
+
+### 該当ファイル
+- `.github/workflows/deploy-gcp.yml` (lines 190-200)
+
+---
+
+## GCP権限エラー
+
+**解決時間**: ⏱️ 5分
+
+### Firestore Permission Denied
+
+**症状**:
+```
+Error: Error creating database: googleapi: Error 403: 
+The caller does not have permission
+```
+
+**解決策**:
+```bash
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:github-actions-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/datastore.owner"
+```
+
+### Cloud Run Permission Denied
+
+**症状**:
+```
+Error 403: Permission 'run.services.setIamPolicy' denied
+```
+
+**解決策**:
+```bash
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:github-actions-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/run.admin"
+```
+
+### 必要な権限一覧
+
+| サービス | ロール | 用途 |
+|---------|--------|------|
+| Cloud Run | `roles/run.admin` | サービス管理 |
+| Firestore | `roles/datastore.owner` | データベース管理 |
+| Artifact Registry | `roles/artifactregistry.writer` | コンテナプッシュ |
+| Storage | `roles/storage.admin` | バケット管理 |
+
+### 確認方法
+```bash
+# サービスアカウントの権限確認
+gcloud projects get-iam-policy $PROJECT_ID \
+  --flatten="bindings[].members" \
+  --filter="bindings.members:serviceAccount:github-actions-deploy@*"
+```
+
+---
+
+## GCPリソース競合
+
+**解決時間**: ⏱️ 10分（初回セットアップ）
+
+### 症状
+```
+Error: Error creating Repository: googleapi: Error 409: the repository already exists.
+Error: Error creating Service: googleapi: Error 409: Resource already exists.
+```
+
+### 原因
+- Pulumiがローカルstateファイルを使用
+- GitHub Actions実行ごとにクリーンな環境でstateが保存されない
+- 既存リソースを認識できず、毎回新規作成を試みる
+
+### 解決策（Remote State使用）
+
+#### 1. GCSバケット作成
+```bash
+gcloud storage buckets create gs://multicloud-auto-deploy-pulumi-state-gcp \
+  --location=asia-northeast1 \
+  --uniform-bucket-level-access
+```
+
+#### 2. サービスアカウントに権限付与
+```bash
+gcloud storage buckets add-iam-policy-binding gs://multicloud-auto-deploy-pulumi-state-gcp \
+  --member="serviceAccount:github-actions-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
+```
+
+#### 3. Pulumi backendの設定
+```bash
+# GCS backendにログイン
+pulumi login gs://multicloud-auto-deploy-pulumi-state-gcp
+
+# または環境変数で設定
+export PULUMI_BACKEND_URL="gs://multicloud-auto-deploy-pulumi-state-gcp"
+```
+
+#### 4. GitHub Actionsワークフローで設定
+```yaml
+- name: Configure Pulumi
+  run: |
+    pulumi login gs://multicloud-auto-deploy-pulumi-state-gcp
+```
+
+### ベストプラクティス
+- **AWS**: S3バケット (`pulumi login s3://bucket-name`)
+- **Azure**: Blob Storage (`pulumi login azblob://container`)
+- **GCP**: GCS (`pulumi login gs://bucket-name`)
+- **推奨**: Pulumi Service (`pulumi login`)（最も簡単）
 
 ---
 
@@ -86,6 +617,8 @@ here-documentを使わず、`echo`コマンドでファイルを構築する：
 
 ## Azure CORS設定の名前競合
 
+**解決時間**: ⏱️ 2分
+
 ### 症状
 
 ```
@@ -101,38 +634,29 @@ Azure Function Appに`CORS_ORIGINS`を設定しようとすると「既に存在
 Azureは設定名の**大文字・小文字を区別しない**。
 以前に小文字`cors_origins`が設定されていると、大文字`CORS_ORIGINS`を追加できない。
 
-### 調査方法
+### 解決策（3ステップ）
 
+#### 1. 既存設定を確認
 ```bash
-# 設定名に "cors" を含むものをすべて検索
 az functionapp config appsettings list \
   --name <function-app-name> \
   --resource-group <resource-group> \
   --query "[?contains(name, 'cors')]" \
   --output table
-
-# または jq でフィルター
-az functionapp config appsettings list \
-  --name <function-app-name> \
-  --resource-group <resource-group> \
-  | jq '.[] | select(.name | test("cors"; "i"))'
 ```
 
-### 解決策
-
-**両方の名前バリエーションを削除**してから設定する：
-
-```yaml
-# 既存のCORS設定を削除（大文字・小文字両方）
+#### 2. 両方の名前を削除
+```bash
 az functionapp config appsettings delete \
   --name $FUNCTION_APP \
   --resource-group $RESOURCE_GROUP \
   --setting-names CORS_ORIGINS cors_origins 2>/dev/null || true
 
-# 短い待機（削除の伝播）
-sleep 3
+sleep 3  # 削除の伝播待ち
+```
 
-# 新しい設定を追加
+#### 3. 新しい設定を追加
+```bash
 az functionapp config appsettings set \
   --name $FUNCTION_APP \
   --resource-group $RESOURCE_GROUP \
@@ -140,18 +664,18 @@ az functionapp config appsettings set \
 ```
 
 ### 該当ファイル
-
 - `.github/workflows/deploy-azure.yml` (lines 257-265)
 
-### 関連情報
-
-- Azure CLI は `--overwrite` フラグをサポートしていない
-- 設定名は内部的に小文字で正規化される可能性がある
-- 常に `delete` → `set` のパターンを使うのが安全
+### ベストプラクティス
+- Azure CLIは`--overwrite`フラグをサポートしていない
+- 常に`delete` → `set`のパターンを使う
+- 設定変更後は`sleep 3`で伝播待ち
 
 ---
 
 ## AWS Lambda Layer権限エラー
+
+**解決時間**: ⏱️ 5分
 
 ### 症状
 
@@ -1534,5 +2058,55 @@ gcloud functions describe <name> --region <region> --format json
 
 | 日付       | 内容                                                                                                                                                      |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-02-17 | 初版作成（CORS hardening デプロイの知見）                                                                                                                 |
+| 2026-02-17 | 🎯 **大幅改善**: クイック診断フローチャート、エラーメッセージ別インデックス、よくある問題トップ5を追加。全セクションに解決時間を表示。Azure Flex Consumption特有の問題（Partially Successful、defaultHostName null、Kudu再起動）を詳細ドキュメント化。AWS Lambda Runtime Errors、GCP Cloud Run 500 Errors、GitHub Actionsシークレット参照エラーを追加。 |
 | 2026-02-17 | 追加: リソース名ハードコード、デプロイメント競合、Gitパス、Pulumiディレクトリ、環境変数エスケープ、CloudFront、Lambda Layer、GitHub Secretsの全11トピック |
+| 2026-02-17 | 初版作成（CORS hardening デプロイの知見）                                                                                                                 |
+
+---
+
+## 📚 関連ドキュメント
+
+- [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md) - 本番デプロイ前のチェックリスト
+- [MONITORING.md](MONITORING.md) - 監視とアラート設定
+- [docs/ENDPOINTS.md](docs/ENDPOINTS.md) - 各環境のエンドポイント一覧
+- [docs/CICD_SETUP.md](docs/CICD_SETUP.md) - CI/CDパイプラインセットアップ
+- [CHANGELOG.md](CHANGELOG.md) - 詳細な変更履歴
+
+---
+
+## 🆘 サポート
+
+問題が解決しない場合は：
+
+1. **GitHub Issues**: [新しいIssueを作成](https://github.com/PLAYER1-r7/multicloud-auto-deploy/issues/new)
+2. **ログの確認**: 
+   - GitHub Actions: ワークフロー実行ログの全文をコピー
+   - CloudWatch/Azure Monitor/GCP Logging: 直近5分のエラーログ
+3. **再現手順**: 問題を再現できる最小限の手順を記載
+4. **環境情報**: OS、クラウドプロバイダー、使用しているツールのバージョン
+
+**報告時のテンプレート**:
+```markdown
+### 問題の概要
+[簡潔な説明]
+
+### エラーメッセージ
+```
+[エラーの全文]
+```
+
+### 再現手順
+1. [手順1]
+2. [手順2]
+3. [エラー発生]
+
+### 環境
+- クラウド: AWS / Azure / GCP
+- 環境: staging / production
+- ワークフロー: [ワークフロー名]
+- コミットハッシュ: [hash]
+
+### 試したこと
+- [試した解決策1]
+- [試した解決策2]
+```

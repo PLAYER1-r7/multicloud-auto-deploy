@@ -9,7 +9,7 @@ from decimal import Decimal
 import logging
 
 from app.backends.base import BackendBase
-from app.models import Post, CreatePostBody, ProfileResponse, ProfileUpdateRequest
+from app.models import Post, CreatePostBody, UpdatePostBody, ProfileResponse, ProfileUpdateRequest
 from app.auth import UserInfo
 
 logger = logging.getLogger(__name__)

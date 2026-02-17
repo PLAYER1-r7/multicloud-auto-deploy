@@ -11,7 +11,7 @@ from typing import Optional
 import logging
 
 from app.config import settings
-from app.models import HealthResponse, ListPostsResponse, CreatePostBody
+from app.models import HealthResponse, ListPostsResponse, CreatePostBody, UpdatePostBody
 from app.routes import posts, profile, uploads
 from app.backends import get_backend
 from app.auth import UserInfo, require_user, get_current_user
@@ -111,6 +111,40 @@ def legacy_delete_message(
         )
     backend = get_backend()
     return backend.delete_post(post_id, user)
+
+@app.put("/api/messages/{post_id}")
+def legacy_update_message(
+    post_id: str,
+    body: UpdatePostBody,
+    user: Optional[UserInfo] = Depends(get_current_user),
+) -> dict:
+    """旧フロントエンド互換: 投稿を更新 (PUT /api/messages/{id})"""
+    # staging環境では認証をオプショナルに
+    if not user:
+        user = UserInfo(
+            user_id="anonymous",
+            email="anonymous@example.com",
+            groups=None,
+        )
+    backend = get_backend()
+    return backend.update_post(post_id, body, user)
+
+@app.put("/api/messages/{post_id}")
+def legacy_update_message(
+    post_id: str,
+    body: UpdatePostBody,
+    user: Optional[UserInfo] = Depends(get_current_user),
+) -> dict:
+    """旧フロントエンド互換: 投稿を更新 (PUT /api/messages/{id})"""
+    # staging環境では認証をオプショナルに
+    if not user:
+        user = UserInfo(
+            user_id="anonymous",
+            email="anonymous@example.com",
+            groups=None,
+        )
+    backend = get_backend()
+    return backend.update_post(post_id, body, user)
 
 
 @app.on_event("startup")

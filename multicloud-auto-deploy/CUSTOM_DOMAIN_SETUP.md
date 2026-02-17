@@ -4,11 +4,21 @@
 
 ## 📋 現在のエンドポイント
 
-| クラウド | 種類 | 現在のエンドポイント |
-|---------|------|---------------------|
-| **AWS** | CloudFront | `d1tf3uumcm4bo1.cloudfront.net` |
-| **Azure** | Front Door | `mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net` |
-| **GCP** | Cloud CDN | `34.117.111.182` (IP address) |
+### Staging環境
+
+| クラウド | 種類 | 現在のエンドポイント | Distribution ID |
+|---------|------|---------------------|-----------------|
+| **AWS** | CloudFront | `d1tf3uumcm4bo1.cloudfront.net` | E1TBH4R432SZBZ |
+| **Azure** | Front Door | `mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net` | mcad-staging-d45ihd |
+| **GCP** | Cloud CDN | `34.117.111.182` (IP address) | - |
+
+### Production環境
+
+| クラウド | 種類 | 現在のエンドポイント | Distribution ID |
+|---------|------|---------------------|-----------------|
+| **AWS** | CloudFront | `d1qob7569mn5nw.cloudfront.net` | E214XONKTXJEJD |
+| **Azure** | Front Door | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | mcad-production-diev0w |
+| **GCP** | Cloud CDN | `34.8.38.222` (IP address) | - |
 
 ---
 
@@ -110,8 +120,17 @@ pulumi up
 
 #### ステップ5: DNSにCNAMEレコードを追加
 
+**Pulumi環境（production/staging）のCloudFrontドメインを確認**:
 ```bash
-# Route 53の場合
+cd infrastructure/pulumi/aws
+pulumi stack select production  # または staging
+CLOUDFRONT_DOMAIN=$(pulumi stack output cloudfront_domain)
+echo "CloudFront Domain: $CLOUDFRONT_DOMAIN"
+```
+
+**Route 53の場合**:
+```bash
+# production環境の例
 aws route53 change-resource-record-sets \
   --hosted-zone-id YOUR_ZONE_ID \
   --change-batch '{
@@ -121,7 +140,7 @@ aws route53 change-resource-record-sets \
         "Name": "aws.yourdomain.com",
         "Type": "CNAME",
         "TTL": 300,
-        "ResourceRecords": [{"Value": "d1tf3uumcm4bo1.cloudfront.net"}]
+        "ResourceRecords": [{"Value": "d1qob7569mn5nw.cloudfront.net"}]
       }
     }]
   }'
@@ -130,7 +149,9 @@ aws route53 change-resource-record-sets \
 **外部DNSプロバイダーの場合**:
 - レコードタイプ: `CNAME`
 - 名前: `aws.yourdomain.com`
-- 値: `d1tf3uumcm4bo1.cloudfront.net`
+- 値: 
+  - Production: `d1qob7569mn5nw.cloudfront.net`
+  - Staging: `d1tf3uumcm4bo1.cloudfront.net`
 
 ---
 
@@ -144,10 +165,26 @@ aws route53 change-resource-record-sets \
 
 #### ステップ1: カスタムドメインの追加
 
+**環境のリソース情報を取得**:
 ```bash
-# リソース情報を取得
-RESOURCE_GROUP="multicloud-auto-deploy-staging-rg"
-PROFILE_NAME="multicloud-auto-deploy-staging-fd"
+# Pulumi outputsから確認
+cd infrastructure/pulumi/azure
+pulumi stack select production  # または staging
+FRONTDOOR_HOSTNAME=$(pulumi stack output frontdoor_hostname)
+FRONTDOOR_PROFILE=$(pulumi stack output frontdoor_profile_name)
+FRONTDOOR_ENDPOINT=$(pulumi stack output frontdoor_endpoint_name)
+RESOURCE_GROUP=$(pulumi stack output resource_group_name)
+
+echo "Front Door Hostname: $FRONTDOOR_HOSTNAME"
+echo "Profile Name: $FRONTDOOR_PROFILE"
+```
+
+**カスタムドメインを作成**:
+```bash
+# Environment: production または staging
+ENVIRONMENT="production"
+RESOURCE_GROUP="multicloud-auto-deploy-${ENVIRONMENT}-rg"
+PROFILE_NAME="multicloud-auto-deploy-${ENVIRONMENT}-fd"
 CUSTOM_DOMAIN_NAME="azure-yourdomain"
 HOSTNAME="azure.yourdomain.com"
 
@@ -185,11 +222,15 @@ az afd custom-domain show \
 #### ステップ3: エンドポイントへの関連付け
 
 ```bash
+# Endpoint名を取得（production/stagingで異なる）
+ENDPOINT_NAME=$(pulumi stack output frontdoor_endpoint_name)
+echo "Endpoint Name: $ENDPOINT_NAME"
+
 # カスタムドメインをエンドポイントに関連付け
 az afd route create \
   --resource-group $RESOURCE_GROUP \
   --profile-name $PROFILE_NAME \
-  --endpoint-name mcad-staging-d45ihd \
+  --endpoint-name $ENDPOINT_NAME \
   --route-name custom-domain-route \
   --origin-group-name default-origin-group \
   --supported-protocols Https \
@@ -200,19 +241,29 @@ az afd route create \
 
 #### ステップ4: DNSにCNAMEレコードを追加
 
+**Front Door Hostnameを確認**:
+```bash
+cd infrastructure/pulumi/azure
+pulumi stack select production  # または staging
+FRONTDOOR_HOSTNAME=$(pulumi stack output frontdoor_hostname)
+echo "Front Door Hostname: $FRONTDOOR_HOSTNAME"
+```
+
 **Azure DNSの場合**:
 ```bash
 az network dns record-set cname set-record \
   --resource-group YOUR_DNS_RG \
   --zone-name yourdomain.com \
   --record-set-name azure \
-  --cname mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net
+  --cname $FRONTDOOR_HOSTNAME
 ```
 
 **外部DNSプロバイダーの場合**:
 - レコードタイプ: `CNAME`
 - 名前: `azure.yourdomain.com`
-- 値: `mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net`
+- 値: 
+  - Production: `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net`
+  - Staging: `mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net`
 
 #### ステップ5: HTTPSの有効化を確認
 
@@ -266,19 +317,29 @@ pulumi up
 
 #### ステップ3: DNSにAレコードを追加
 
+**CDN IPアドレスを確認**:
+```bash
+cd infrastructure/pulumi/gcp
+pulumi stack select production  # または staging
+CDN_IP=$(pulumi stack output cdn_ip_address)
+echo "CDN IP Address: $CDN_IP"
+```
+
 **Google Cloud DNSの場合**:
 ```bash
 gcloud dns record-sets create gcp.yourdomain.com. \
   --zone=YOUR_ZONE_NAME \
   --type=A \
   --ttl=300 \
-  --rrdatas=34.117.111.182
+  --rrdatas=$CDN_IP
 ```
 
 **外部DNSプロバイダーの場合**:
 - レコードタイプ: `A`
 - 名前: `gcp.yourdomain.com`
-- 値: `34.117.111.182` (Load BalancerのIPアドレス)
+- 値: 
+  - Production: `34.8.38.222`
+  - Staging: `34.117.111.182`
 
 #### ステップ4: SSL証明書のプロビジョニング確認
 

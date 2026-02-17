@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple
-from app.models import Post, CreatePostBody, ProfileResponse, ProfileUpdateRequest
+from app.models import Post, CreatePostBody, UpdatePostBody, ProfileResponse, ProfileUpdateRequest
 from app.auth import UserInfo
 
 
@@ -56,6 +56,21 @@ class BackendBase(ABC):
             
         Returns:
             削除結果
+        """
+        pass
+    
+    @abstractmethod
+    def update_post(self, post_id: str, body: UpdatePostBody, user: UserInfo) -> dict:
+        """
+        投稿を更新
+        
+        Args:
+            post_id: 投稿ID
+            body: 更新内容
+            user: ユーザー情報
+            
+        Returns:
+            更新された投稿情報
         """
         pass
     

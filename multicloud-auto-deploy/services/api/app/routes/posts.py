@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from app.auth import UserInfo, require_user
 from app.backends import get_backend
-from app.models import CreatePostBody, ListPostsResponse
+from app.models import CreatePostBody, UpdatePostBody, ListPostsResponse
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
@@ -36,3 +36,14 @@ def delete_post(
     """投稿を削除"""
     backend = get_backend()
     return backend.delete_post(post_id, user)
+
+
+@router.put("/{post_id}")
+def update_post(
+    post_id: str,
+    body: UpdatePostBody,
+    user: UserInfo = Depends(require_user),
+) -> dict:
+    """投稿を更新"""
+    backend = get_backend()
+    return backend.update_post(post_id, body, user)

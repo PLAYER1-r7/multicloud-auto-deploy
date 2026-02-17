@@ -327,7 +327,13 @@ lambda_function = aws.lambda_.Function(
     role=lambda_role.arn,
     memory_size=256 if stack == "staging" else 512,  # Cost optimization for staging
     timeout=30,
-    architectures=["x86_64"],
+    architectures=["x86_64"],  # Use x86_64 for compatibility with custom layers
+    # Custom Lambda Layer with all dependencies (FastAPI, Pydantic, Mangum, boto3)
+    # Built with x86_64 platform for Lambda compatibility
+    # Note: Update layer ARN if a new version is published
+    layers=[
+        "arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-dependencies:2",
+    ],
     # Use inline code or skip code updates
     # Code will be uploaded separately via deploy-lambda-aws.sh
     code=pulumi.AssetArchive({"index.py": pulumi.StringAsset(placeholder_code)}),
