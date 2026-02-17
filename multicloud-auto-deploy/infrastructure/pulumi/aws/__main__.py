@@ -709,11 +709,16 @@ pulumi.export("images_bucket_arn", images_bucket.arn)
 # Monitoring exports
 if monitoring_resources["sns_topic"]:
     pulumi.export("monitoring_sns_topic_arn", monitoring_resources["sns_topic"].arn)
-pulumi.export("monitoring_lambda_alarms", list(monitoring_resources["lambda_alarms"].keys()))
-pulumi.export("monitoring_api_alarms", list(monitoring_resources["api_gateway_alarms"].keys()))
-pulumi.export("monitoring_cloudfront_alarms", list(monitoring_resources["cloudfront_alarms"].keys()))
-if monitoring_resources["cost_anomaly_detector"]:
-    pulumi.export("monitoring_cost_detector_arn", monitoring_resources["cost_anomaly_detector"].arn)
+pulumi.export(
+    "monitoring_lambda_alarms", list(monitoring_resources["lambda_alarms"].keys())
+)
+pulumi.export(
+    "monitoring_api_alarms", list(monitoring_resources["api_gateway_alarms"].keys())
+)
+pulumi.export(
+    "monitoring_cloudfront_alarms",
+    list(monitoring_resources["cloudfront_alarms"].keys()),
+)
 
 # Cost estimation
 pulumi.export(

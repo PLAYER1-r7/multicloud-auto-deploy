@@ -308,10 +308,14 @@ frontdoor_route = azure.cdn.Route(
 alarm_email = config.get("alarmEmail")
 
 # Note: Function App ID is derived from the manually-managed app
+client_config = azure.authorization.get_client_config()
 function_app_id = pulumi.Output.concat(
-    "/subscriptions/", azure.get_client_config().subscription_id,
-    "/resourceGroups/", resource_group.name,
-    "/providers/Microsoft.Web/sites/", f"{project_name}-{stack}-func"
+    "/subscriptions/",
+    client_config.subscription_id,
+    "/resourceGroups/",
+    resource_group.name,
+    "/providers/Microsoft.Web/sites/",
+    f"{project_name}-{stack}-func",
 )
 
 monitoring_resources = monitoring.setup_monitoring(
@@ -320,7 +324,7 @@ monitoring_resources = monitoring.setup_monitoring(
     resource_group_name=resource_group.name,
     location=location,
     function_app_id=function_app_id,
-    cosmos_account_id=cosmos_account.id,
+    cosmos_account_id=None,  # Not using Cosmos DB
     frontdoor_profile_id=frontdoor_profile.id,
     alarm_email=alarm_email,
 )
@@ -373,9 +377,16 @@ pulumi.export("key_vault_uri", key_vault.properties.vault_uri)
 # Monitoring exports
 if monitoring_resources["action_group"]:
     pulumi.export("monitoring_action_group_id", monitoring_resources["action_group"].id)
-pulumi.export("monitoring_function_alerts", list(monitoring_resources["function_app_alerts"].keys()))
-pulumi.export("monitoring_cosmos_alerts", list(monitoring_resources["cosmos_db_alerts"].keys()))
-pulumi.export("monitoring_frontdoor_alerts", list(monitoring_resources["frontdoor_alerts"].keys()))
+pulumi.export(
+    "monitoring_function_alerts",
+    list(monitoring_resources["function_alerts"].keys()),
+)
+pulumi.export(
+    "monitoring_cosmos_alerts", list(monitoring_resources["cosmos_alerts"].keys())
+)
+pulumi.export(
+    "monitoring_frontdoor_alerts", list(monitoring_resources["frontdoor_alerts"].keys())
+)
 
 # Cost estimation
 pulumi.export(

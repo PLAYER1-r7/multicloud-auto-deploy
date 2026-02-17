@@ -423,11 +423,21 @@ pulumi.export("function_name", f"{project_name}-{stack}-api")
 
 # Monitoring exports
 if monitoring_resources["notification_channel"]:
-    pulumi.export("monitoring_notification_channel_id", monitoring_resources["notification_channel"].id)
-pulumi.export("monitoring_function_alerts", list(monitoring_resources["function_alerts"].keys()))
-pulumi.export("monitoring_firestore_alerts", list(monitoring_resources["firestore_alerts"].keys()))
+    pulumi.export(
+        "monitoring_notification_channel_id",
+        monitoring_resources["notification_channel"].id,
+    )
+pulumi.export(
+    "monitoring_function_alerts", list(monitoring_resources["function_alerts"].keys())
+)
+pulumi.export(
+    "monitoring_firestore_alerts", list(monitoring_resources["firestore_alerts"].keys())
+)
 if monitoring_resources["billing_budget"]:
-    pulumi.export("monitoring_billing_budget_name", monitoring_resources["billing_budget"].display_name)
+    pulumi.export(
+        "monitoring_billing_budget_name",
+        monitoring_resources["billing_budget"].display_name,
+    )
 
 # Cost estimation
 cost_estimate_base = (

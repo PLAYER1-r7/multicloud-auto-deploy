@@ -21,10 +21,10 @@ def create_notification_channel(
     email: Optional[str] = None,
 ) -> Optional[gcp.monitoring.NotificationChannel]:
     """Create Notification Channel for alert notifications"""
-    
+
     if not email:
         return None
-    
+
     channel = gcp.monitoring.NotificationChannel(
         "alert-notification-channel",
         display_name=f"{project_name}-{stack}-email",
@@ -38,7 +38,7 @@ def create_notification_channel(
             "managed_by": "pulumi",
         },
     )
-    
+
     return channel
 
 
@@ -51,9 +51,9 @@ def create_cloud_function_alerts(
     notification_channels: List[pulumi.Output[str]],
 ) -> dict:
     """Create Cloud Monitoring Alerts for Cloud Functions"""
-    
+
     alerts = {}
-    
+
     # Alert 1: High error rate
     alerts["error_rate"] = gcp.monitoring.AlertPolicy(
         "function-error-rate-alert",
@@ -89,7 +89,7 @@ def create_cloud_function_alerts(
             "managed_by": "pulumi",
         },
     )
-    
+
     # Alert 2: High execution time
     alerts["execution_time"] = gcp.monitoring.AlertPolicy(
         "function-execution-time-alert",
@@ -108,7 +108,7 @@ def create_cloud_function_alerts(
                     aggregations=[
                         gcp.monitoring.AlertPolicyConditionConditionThresholdAggregationArgs(
                             alignment_period="300s",
-                            per_series_aligner="ALIGN_MEAN",
+                            per_series_aligner="ALIGN_DELTA",  # For DISTRIBUTION metrics
                             cross_series_reducer="REDUCE_MEAN",
                         )
                     ],
@@ -125,7 +125,7 @@ def create_cloud_function_alerts(
             "managed_by": "pulumi",
         },
     )
-    
+
     # Alert 3: Low memory available
     alerts["memory_usage"] = gcp.monitoring.AlertPolicy(
         "function-memory-alert",
@@ -144,7 +144,7 @@ def create_cloud_function_alerts(
                     aggregations=[
                         gcp.monitoring.AlertPolicyConditionConditionThresholdAggregationArgs(
                             alignment_period="300s",
-                            per_series_aligner="ALIGN_MAX",
+                            per_series_aligner="ALIGN_DELTA",  # For DISTRIBUTION metrics
                             cross_series_reducer="REDUCE_MEAN",
                         )
                     ],
@@ -161,7 +161,7 @@ def create_cloud_function_alerts(
             "managed_by": "pulumi",
         },
     )
-    
+
     return alerts
 
 
@@ -172,9 +172,9 @@ def create_firestore_alerts(
     notification_channels: List[pulumi.Output[str]],
 ) -> dict:
     """Create Cloud Monitoring Alerts for Firestore"""
-    
+
     alerts = {}
-    
+
     # Alert: High read/write operations (potential cost issue)
     alerts["operations"] = gcp.monitoring.AlertPolicy(
         "firestore-operations-alert",
@@ -208,7 +208,7 @@ def create_firestore_alerts(
             "managed_by": "pulumi",
         },
     )
-    
+
     return alerts
 
 
@@ -221,14 +221,14 @@ def create_billing_budget(
 ) -> gcp.billing.Budget:
     """
     Create billing budget with alerts
-    
+
     Args:
         monthly_budget_usd: Monthly budget in USD (default: $50)
     """
-    
+
     # Get billing account (requires permission)
     # Note: This might fail if the service account doesn't have billing.accounts.list permission
-    
+
     budget = gcp.billing.Budget(
         "billing-budget",
         display_name=f"{project_name}-{stack}-budget",
@@ -263,7 +263,7 @@ def create_billing_budget(
             disable_default_iam_recipients=False,
         ),
     )
-    
+
     return budget
 
 
@@ -278,20 +278,20 @@ def setup_monitoring(
 ) -> dict:
     """
     Setup complete monitoring stack for GCP
-    
+
     Returns:
         dict: Dictionary containing all monitoring resources
     """
-    
+
     # Create notification channel
     notification_channel = create_notification_channel(
         project_name,
         stack,
         alarm_email,
     )
-    
+
     notification_channels = [notification_channel.id] if notification_channel else []
-    
+
     # Create Cloud Function alerts
     function_alerts = create_cloud_function_alerts(
         project_name,
@@ -301,15 +301,16 @@ def setup_monitoring(
         project_id,
         notification_channels,
     )
-    
-    # Create Firestore alerts
-    firestore_alerts = create_firestore_alerts(
-        project_name,
-        stack,
-        project_id,
-        notification_channels,
-    )
-    
+
+    # Create Firestore alerts (disabled - not using Firestore yet)
+    firestore_alerts = {}
+    # firestore_alerts = create_firestore_alerts(
+    #     project_name,
+    #     stack,
+    #     project_id,
+    #     notification_channels,
+    # )
+
     # Create billing budget (production only)
     billing_budget = None
     if stack == "production":
@@ -323,7 +324,7 @@ def setup_monitoring(
             )
         except Exception as e:
             pulumi.log.warn(f"Could not create billing budget: {e}")
-    
+
     return {
         "notification_channel": notification_channel,
         "function_alerts": function_alerts,
