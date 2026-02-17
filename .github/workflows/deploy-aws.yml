@@ -96,7 +96,7 @@ jobs:
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
 
       - name: Build Lambda Layer
-        if: ${{ github.event.inputs.use_klayers == 'false' }}
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.use_klayers == 'false') }}
         id: build_layer
         run: |
           cd multicloud-auto-deploy/services/api
@@ -142,7 +142,7 @@ jobs:
           fi
 
       - name: Get Klayers ARNs
-        if: ${{ github.event.inputs.use_klayers == 'true' || github.event.inputs.use_klayers == '' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.use_klayers == 'true' }}
         id: get_klayers
         run: |
           echo "📦 Getting latest Klayers ARNs..."
@@ -165,7 +165,7 @@ jobs:
           echo "  Requests: $REQUESTS_ARN"
 
       - name: Deploy Lambda Layer (Custom)
-        if: ${{ github.event.inputs.use_klayers == 'false' }}
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.use_klayers == 'false') }}
         id: deploy_layer
         run: |
           set -e
@@ -192,11 +192,14 @@ jobs:
           LAMBDA_FUNCTION="${{ steps.pulumi_outputs.outputs.lambda_function_name }}"
           
           # Determine which layers to use
-          if [ "${{ github.event.inputs.use_klayers }}" == "true" ] || [ -z "${{ github.event.inputs.use_klayers }}" ]; then
+          if [ "${{ github.event_name }}" == "push" ]; then
+            echo "🔧 Using custom Lambda Layer (push event)"
+            LAYER_ARNS="${{ steps.deploy_layer.outputs.layer_arn }}"
+          elif [ "${{ github.event.inputs.use_klayers }}" == "true" ]; then
             echo "🌐 Using Klayers (public Lambda Layers)"
             LAYER_ARNS="${{ steps.get_klayers.outputs.klayers_arns }}"
           else
-            echo "🔧 Using custom Lambda Layer"
+            echo "🔧 Using custom Lambda Layer (manual)"
             LAYER_ARNS="${{ steps.deploy_layer.outputs.layer_arn }}"
           fi
           
