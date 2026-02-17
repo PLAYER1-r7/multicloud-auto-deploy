@@ -1,6 +1,6 @@
 """
-Multi-cloud Simple SNS API (v1.2.3)
-CORS-hardened version for production deployment - Azure CORS fix
+Multi-cloud Simple SNS API (v1.2.4)
+CORS-hardened version for production deployment - AWS Lambda Layer permissions fix
 """
 
 from fastapi import FastAPI
