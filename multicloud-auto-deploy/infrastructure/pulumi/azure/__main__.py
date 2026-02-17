@@ -140,6 +140,23 @@ app_secret = azure.keyvault.Secret(
 )
 
 # ========================================
+# Authentication Setup
+# ========================================
+# Azure AD / Azure AD B2C authentication is configured manually.
+# See: docs/AUTHENTICATION_SETUP.md for detailed setup instructions.
+#
+# Required environment variables for Function App:
+# - AUTH_PROVIDER=azure
+# - AZURE_TENANT_ID=<your-tenant-id>
+# - AZURE_CLIENT_ID=<your-client-id>
+#
+# Configure via Azure CLI:
+# az functionapp config appsettings set \
+#   --name multicloud-auto-deploy-staging-func \
+#   --resource-group multicloud-auto-deploy-staging-rg \
+#   --settings AUTH_PROVIDER=azure AZURE_TENANT_ID=<id> AZURE_CLIENT_ID=<id>
+
+# ========================================
 # Note: Function App is managed manually
 # ========================================
 # Function App and App Service Plan are created and managed manually

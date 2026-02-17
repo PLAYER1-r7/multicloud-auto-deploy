@@ -171,13 +171,14 @@ git push origin main
 
 ### 必読ガイド
 - 📖 [セットアップガイド](docs/SETUP.md) - 初期セットアップ手順
+- � [認証セットアップガイド](docs/AUTHENTICATION_SETUP.md) - AWS Cognito / Azure AD / Firebase Auth設定 🆕
 - 🚀 [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定
 - ✅ [CI/CDテスト結果](docs/CICD_TEST_RESULTS.md) - パイプライン検証レポート
 - 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策
 - 🌐 [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のエンドポイント情報
 - 🌍 [CDNセットアップガイド](docs/CDN_SETUP.md) - CloudFront/Front Door/Cloud CDN設定 🆕
-- � [関数サイズ最適化](docs/FUNCTION_SIZE_OPTIMIZATION.md) - デプロイパッケージサイズ削減（AWS 97%削減！） 🆕
-- �📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
+- 📦 [関数サイズ最適化](docs/FUNCTION_SIZE_OPTIMIZATION.md) - デプロイパッケージサイズ削減（AWS 97%削減！） 🆕
+- 📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
 
 ### プロバイダー別デプロイ
 - [AWS デプロイ](docs/AWS_DEPLOYMENT.md)

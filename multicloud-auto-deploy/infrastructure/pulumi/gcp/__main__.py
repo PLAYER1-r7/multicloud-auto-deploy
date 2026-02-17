@@ -62,6 +62,25 @@ for service in services:
     enabled_services.append(svc)
 
 # ========================================
+# Authentication Setup
+# ========================================
+# Firebase Authentication is configured manually.
+# See: docs/AUTHENTICATION_SETUP.md for detailed setup instructions.
+#
+# Required environment variables for Cloud Functions:
+# - AUTH_PROVIDER=firebase
+# - GCP_PROJECT_ID=<your-project-id>
+#
+# Firebase Console: https://console.firebase.google.com/
+# 1. Enable Authentication
+# 2. Configure Google Sign-In provider
+# 3. Add authorized domains
+#
+# Configure via gcloud (when function is deployed):
+# gcloud functions update <function-name> \
+#   --set-env-vars AUTH_PROVIDER=firebase,GCP_PROJECT_ID=<project-id>
+
+# ========================================
 # Secret Manager
 # ========================================
 # Create a secret for application configuration
