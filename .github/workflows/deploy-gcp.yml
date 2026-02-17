@@ -58,12 +58,12 @@ jobs:
 
       - name: Install Pulumi Python Dependencies
         run: |
-          cd infrastructure/pulumi/gcp
+          cd multicloud-auto-deploy/infrastructure/pulumi/gcp
           pip install -r requirements.txt
 
       - name: Initialize Pulumi Stack
         run: |
-          cd infrastructure/pulumi/gcp
+          cd multicloud-auto-deploy/infrastructure/pulumi/gcp
           pulumi login
           pulumi stack select staging 2>/dev/null || pulumi stack init staging
           pulumi config set gcp:project ${{ secrets.GCP_PROJECT_ID }}
@@ -77,7 +77,7 @@ jobs:
         with:
           command: up
           stack-name: staging
-          work-dir: infrastructure/pulumi/gcp
+          work-dir: multicloud-auto-deploy/infrastructure/pulumi/gcp
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
@@ -85,14 +85,14 @@ jobs:
       - name: Get Pulumi Outputs
         id: pulumi_outputs
         run: |
-          cd infrastructure/pulumi/gcp
+          cd multicloud-auto-deploy/infrastructure/pulumi/gcp
           echo "function_source_bucket=$(pulumi stack output function_source_bucket)" >> $GITHUB_OUTPUT
           echo "frontend_bucket=$(pulumi stack output frontend_bucket)" >> $GITHUB_OUTPUT
           echo "function_name=$(pulumi stack output function_name)" >> $GITHUB_OUTPUT
 
       - name: Package Cloud Function
         run: |
-          cd services/api
+          cd multicloud-auto-deploy/services/api
           
           echo "📦 Creating optimized deployment package..."
           
@@ -190,7 +190,7 @@ jobs:
           
           echo "Building frontend with API URL: $API_URL"
 
-          cd services/frontend_react
+          cd multicloud-auto-deploy/services/frontend_react
           npm install
           VITE_API_URL=$API_URL npm run build
 

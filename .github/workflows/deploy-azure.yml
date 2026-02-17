@@ -108,7 +108,7 @@ jobs:
 
       - name: Package Function App
         run: |
-          cd services/api
+          cd multicloud-auto-deploy/services/api
           
           echo "📦 Creating optimized deployment package..."
           
@@ -298,7 +298,7 @@ jobs:
 
       - name: Build Frontend
         run: |
-          cd services/frontend_react
+          cd multicloud-auto-deploy/services/frontend_react
           
           API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
           echo "🔧 Building frontend with API_URL: $API_URL"
