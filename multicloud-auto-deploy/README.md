@@ -662,6 +662,26 @@ aws backup create-backup-selection \
 - フロントエンドAPI接続問題（ビルド順序、API URL設定）
 - 権限エラー（IAM、RBAC設定）
 
+### 📚 関連ドキュメント
+
+**デプロイ & 運用**:
+- [デプロイ検証レポート](docs/DEPLOYMENT_VERIFICATION_REPORT.md) - Staging/Production環境の検証結果
+- [環境ステータス](docs/ENVIRONMENT_STATUS.md) - 各環境のリアルタイム状態
+- [環境診断ガイド](docs/ENVIRONMENT_DIAGNOSTICS.md) - トラブルシューティングコマンド集
+
+**AWS Lambda最適化**:
+- [Lambda Layer戦略](docs/AWS_LAMBDA_LAYER_STRATEGY.md) - 依存関係管理の最適化戦略
+- [Lambda依存関係修正レポート](docs/AWS_LAMBDA_DEPENDENCY_FIX_REPORT.md) - Layer v6実装詳細
+- [デプロイ失敗調査](docs/DEPLOYMENT_FAILURE_INVESTIGATION.md) - mgnum エラーの調査記録
+
+**CI/CD & セットアップ**:
+- [CI/CDセットアップガイド](docs/CICD_SETUP.md) - GitHub Actions設定
+- [CDNセットアップガイド](docs/CDN_SETUP.md) - CloudFront/Front Door/Cloud CDN設定
+- [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のURL一覧
+
+**トラブルシューティング**:
+- [トラブルシューティングガイド](docs/TROUBLESHOOTING.md) - 開発環境認証、Azure/GCP問題解決
+
 ## 🤝 貢献
 
 コントリビューションを歓迎します！詳細は [CONTRIBUTING.md](CONTRIBUTING.md) をご覧ください。
