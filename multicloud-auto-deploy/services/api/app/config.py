@@ -1,6 +1,8 @@
 from typing import Optional
+from pydantic import Field, AliasChoices
 from pydantic_settings import BaseSettings
 from app.models import CloudProvider
+import os
 
 
 class Settings(BaseSettings):
@@ -39,10 +41,23 @@ class Settings(BaseSettings):
     azure_storage_account_name: Optional[str] = None
     azure_storage_account_key: Optional[str] = None
     azure_storage_container: str = "images"
-    cosmos_db_endpoint: Optional[str] = None
-    cosmos_db_key: Optional[str] = None
-    cosmos_db_database: str = "simple-sns"
-    cosmos_db_container: str = "items"
+    # Cosmos DB設定 - AZURE_COSMOS_* と COSMOS_DB_* の両方をサポート
+    cosmos_db_endpoint: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("cosmos_db_endpoint", "azure_cosmos_endpoint")
+    )
+    cosmos_db_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("cosmos_db_key", "azure_cosmos_key")
+    )
+    cosmos_db_database: str = Field(
+        default="simple-sns",
+        validation_alias=AliasChoices("cosmos_db_database", "azure_cosmos_database")
+    )
+    cosmos_db_container: str = Field(
+        default="items",
+        validation_alias=AliasChoices("cosmos_db_container", "azure_cosmos_container")
+    )
 
     # GCP設定
     gcp_project_id: Optional[str] = None

@@ -102,6 +102,80 @@ app_insights = azure.insights.Component(
 )
 
 # ========================================
+# Cosmos DB for NoSQL Database
+# ========================================
+cosmos_account = azure.documentdb.DatabaseAccount(
+    "cosmos-account",
+    account_name=storage_suffix.result.apply(lambda suffix: f"mcad-cosmos-{suffix}"),
+    resource_group_name=resource_group.name,
+    location=location,
+    database_account_offer_type="Standard",
+    locations=[
+        azure.documentdb.LocationArgs(
+            location_name=location,
+            failover_priority=0,
+        )
+    ],
+    consistency_policy=azure.documentdb.ConsistencyPolicyArgs(
+        default_consistency_level="Session",  # Session consistency for balance
+        max_interval_in_seconds=5,
+        max_staleness_prefix=100,
+    ),
+    enable_automatic_failover=False,
+    capabilities=[
+        azure.documentdb.CapabilityArgs(name="EnableServerless"),  # Serverless mode for cost efficiency
+    ],
+    tags=common_tags,
+)
+
+# Cosmos DB Database
+cosmos_database = azure.documentdb.SqlResourceSqlDatabase(
+    "cosmos-database",
+    database_name="messages",
+    resource_group_name=resource_group.name,
+    account_name=cosmos_account.name,
+    resource=azure.documentdb.SqlDatabaseResourceArgs(
+        id="messages",
+    ),
+    opts=pulumi.ResourceOptions(depends_on=[cosmos_account]),
+)
+
+# Cosmos DB Container for messages
+cosmos_container = azure.documentdb.SqlResourceSqlContainer(
+    "cosmos-container",
+    container_name="messages",
+    resource_group_name=resource_group.name,
+    account_name=cosmos_account.name,
+    database_name=cosmos_database.name,
+    resource=azure.documentdb.SqlContainerResourceArgs(
+        id="messages",
+        partition_key=azure.documentdb.ContainerPartitionKeyArgs(
+            paths=["/userId"],
+            kind="Hash",
+        ),
+        indexing_policy=azure.documentdb.IndexingPolicyArgs(
+            automatic=True,
+            indexing_mode="Consistent",
+            included_paths=[
+                azure.documentdb.IncludedPathArgs(path="/*")
+            ],
+            excluded_paths=[
+                azure.documentdb.ExcludedPathArgs(path='/"_etag"/?')
+            ],
+        ),
+    ),
+    opts=pulumi.ResourceOptions(depends_on=[cosmos_database]),
+)
+
+# Get Cosmos DB keys
+cosmos_keys = pulumi.Output.all(resource_group.name, cosmos_account.name).apply(
+    lambda args: azure.documentdb.list_database_account_keys(
+        resource_group_name=args[0],
+        account_name=args[1],
+    )
+)
+
+# ========================================
 # Azure Key Vault for Secret Management
 # ========================================
 # Get current Azure client configuration for tenant ID
@@ -324,7 +398,7 @@ monitoring_resources = monitoring.setup_monitoring(
     resource_group_name=resource_group.name,
     location=location,
     function_app_id=function_app_id,
-    cosmos_account_id=None,  # Not using Cosmos DB
+    cosmos_account_id=cosmos_account.id,
     frontdoor_profile_id=frontdoor_profile.id,
     alarm_email=alarm_email,
 )
@@ -373,6 +447,32 @@ pulumi.export(
 pulumi.export("app_insights_instrumentation_key", app_insights.instrumentation_key)
 pulumi.export("key_vault_name", key_vault.name)
 pulumi.export("key_vault_uri", key_vault.properties.vault_uri)
+
+# Cosmos DB exports
+pulumi.export("cosmos_account_name", cosmos_account.name)
+pulumi.export("cosmos_db_endpoint", cosmos_account.document_endpoint)
+pulumi.export(
+    "cosmos_db_key",
+    pulumi.Output.secret(cosmos_keys.apply(lambda k: k.primary_master_key)),
+)
+pulumi.export("cosmos_database_name", cosmos_database.name)
+pulumi.export("cosmos_container_name", cosmos_container.name)
+pulumi.export(
+    "cosmos_connection_instructions",
+    pulumi.Output.concat(
+        "Configure Function App with these environment variables:\\n",
+        "  COSMOS_DB_ENDPOINT=",
+        cosmos_account.document_endpoint,
+        "\\n",
+        "  COSMOS_DB_KEY=<from-pulumi-output>\\n",
+        "  COSMOS_DB_DATABASE=",
+        cosmos_database.name,
+        "\\n",
+        "  COSMOS_DB_CONTAINER=",
+        cosmos_container.name,
+        "\\n",
+    ),
+)
 
 # Monitoring exports
 if monitoring_resources["action_group"]:

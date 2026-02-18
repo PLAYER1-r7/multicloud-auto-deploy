@@ -125,6 +125,12 @@ jobs:
           echo "azure_ad_client_id=$(pulumi stack output azure_ad_client_id)" >> $GITHUB_OUTPUT
           echo "azure_ad_object_id=$(pulumi stack output azure_ad_object_id)" >> $GITHUB_OUTPUT
 
+          # Get Cosmos DB outputs
+          echo "cosmos_account_name=$(pulumi stack output cosmos_account_name)" >> $GITHUB_OUTPUT
+          echo "cosmos_db_endpoint=$(pulumi stack output cosmos_db_endpoint)" >> $GITHUB_OUTPUT
+          echo "cosmos_database_name=$(pulumi stack output cosmos_database_name)" >> $GITHUB_OUTPUT
+          echo "cosmos_container_name=$(pulumi stack output cosmos_container_name)" >> $GITHUB_OUTPUT
+
           # Get Front Door hostname for CORS
           echo "frontdoor_hostname=$(pulumi stack output frontdoor_hostname)" >> $GITHUB_OUTPUT
 
@@ -149,6 +155,7 @@ jobs:
 
           echo "📍 Configured API URL: ${API_URL}"
           echo "🔐 Azure AD Client ID: $(pulumi stack output azure_ad_client_id)"
+          echo "🗄️  Cosmos DB Account: $(pulumi stack output cosmos_account_name)"
 
       - name: Package Function App
         run: |
@@ -209,9 +216,10 @@ jobs:
         run: |
           FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
           RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
-          COSMOS_ACCOUNT="multicloud-auto-deploy-staging"
+          COSMOS_ACCOUNT="${{ steps.pulumi_outputs.outputs.cosmos_account_name }}"
 
           echo "🚀 Deploying to Function App: $FUNCTION_APP"
+          echo "🗄️  Cosmos DB Account: $COSMOS_ACCOUNT"
 
           # Check for ongoing deployments and wait if necessary
           echo "🔍 Checking for ongoing deployments..."
@@ -242,12 +250,22 @@ jobs:
 
           # Get Cosmos DB endpoint and keys directly from the resource
           echo "🔑 Getting Cosmos DB credentials..."
-          COSMOS_ENDPOINT=$(az cosmosdb show \
-            --name $COSMOS_ACCOUNT \
-            --resource-group $RESOURCE_GROUP \
-            --query documentEndpoint -o tsv)
+          COSMOS_ENDPOINT="${{ steps.pulumi_outputs.outputs.cosmos_db_endpoint }}"
 
           COSMOS_KEY=$(az cosmosdb keys list \
+            --name $COSMOS_ACCOUNT \
+            --resource-group $RESOURCE_GROUP \
+            --type keys \
+            --query primaryMasterKey -o tsv)
+
+          if [ -z "$COSMOS_ENDPOINT" ] || [ -z "$COSMOS_KEY" ]; then
+            echo "❌ Failed to retrieve Cosmos DB credentials"
+            echo "   Endpoint: $COSMOS_ENDPOINT"
+            echo "   Key: ${COSMOS_KEY:0:20}..."
+            exit 1
+          fi
+
+          echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
             --name $COSMOS_ACCOUNT \
             --resource-group $RESOURCE_GROUP \
             --type keys \
@@ -284,10 +302,10 @@ jobs:
             --settings \
               CLOUD_PROVIDER=azure \
               ENVIRONMENT=staging \
-              AZURE_COSMOS_ENDPOINT="${COSMOS_ENDPOINT}" \
-              AZURE_COSMOS_KEY="${COSMOS_KEY}" \
-              AZURE_COSMOS_DATABASE=multicloud-db \
-              AZURE_COSMOS_CONTAINER=messages \
+              COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" \
+              COSMOS_DB_KEY="${COSMOS_KEY}" \
+              COSMOS_DB_DATABASE="${{ steps.pulumi_outputs.outputs.cosmos_database_name }}" \
+              COSMOS_DB_CONTAINER="${{ steps.pulumi_outputs.outputs.cosmos_container_name }}" \
               AUTH_PROVIDER=azure \
               AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
               AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
@@ -297,6 +315,9 @@ jobs:
           echo "🔐 Azure AD Authentication configured:"
           echo "  Tenant ID: ${{ steps.azure_env.outputs.tenant_id }}"
           echo "  Client ID: ${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
+          echo "🗄️  Cosmos DB configured:"
+          echo "  Database: ${{ steps.pulumi_outputs.outputs.cosmos_database_name }}"
+          echo "  Container: ${{ steps.pulumi_outputs.outputs.cosmos_container_name }}"
 
           echo "📦 Deploying function app package (with retry logic)..."
 

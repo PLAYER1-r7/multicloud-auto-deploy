@@ -9,11 +9,11 @@
 
 ## 📊 最終結果サマリー
 
-| プロバイダー        | テスト結果 | 成功率  | 主な残存問題                   | ステータス       |
-| ------------------- | ---------- | ------- | ------------------------------ | ---------------- |
-| **AWS**             | 5/6        | 83.3%   | -                              | ✅ **RESOLVED**  |
-| **GCP Cloud Run**   | 5/6        | 83.3%   | GET single message (405エラー) | ✅ **IMPROVED**  |
-| **Azure Functions** | 3/6        | 50.0%   | 500 Internal Server Error      | ⚠️ **PENDING**   |
+| プロバイダー        | テスト結果 | 成功率 | 主な残存問題                   | ステータス      |
+| ------------------- | ---------- | ------ | ------------------------------ | --------------- |
+| **AWS**             | 5/6        | 83.3%  | -                              | ✅ **RESOLVED** |
+| **GCP Cloud Run**   | 5/6        | 83.3%  | GET single message (405エラー) | ✅ **IMPROVED** |
+| **Azure Functions** | 3/6        | 50.0%  | 500 Internal Server Error      | ⚠️ **PENDING**  |
 
 ### GCP改善詳細
 
@@ -37,6 +37,7 @@ GCPでは**インフラ**と**アプリケーションコード**が別々に管
 2. **gcloud CLI** → Cloud Functionコードデプロイ
 
 コメント（`infrastructure/pulumi/gcp/__main__.py:10`）：
+
 ```python
 # Cloud Functions is deployed via gcloud CLI, not Pulumi
 # Reason: Pulumi requires the ZIP file to exist before creating the function
@@ -45,6 +46,7 @@ GCPでは**インフラ**と**アプリケーションコード**が別々に管
 ### デプロイプロセス
 
 #### Phase 1: インフラ更新（Pulumi）
+
 ```bash
 cd infrastructure/pulumi/gcp
 pulumi stack select staging
@@ -56,6 +58,7 @@ pulumi up -y
 #### Phase 2: アプリケーションコードデプロイ
 
 1. **パッケージング**:
+
 ```bash
 cd services/api
 rm -rf .deployment function-source.zip
@@ -76,12 +79,14 @@ cd .deployment && zip -r9 -q ../function-source.zip .
 ```
 
 2. **GCSアップロード**:
+
 ```bash
 gsutil cp function-source.zip \
   gs://ashnova-multicloud-auto-deploy-staging-function-source/function-source.zip
 ```
 
 3. **環境変数ファイル作成**:
+
 ```bash
 cat > /tmp/env-vars.yaml << EOF
 ENVIRONMENT: "staging"
@@ -93,6 +98,7 @@ EOF
 ```
 
 4. **Cloud Functionデプロイ**:
+
 ```bash
 gcloud functions deploy multicloud-auto-deploy-staging-api \
   --gen2 \
@@ -110,6 +116,7 @@ gcloud functions deploy multicloud-auto-deploy-staging-api \
 ```
 
 **デプロイ履歴**:
+
 - Revision 00041: 初回デプロイ（`NotImplementedError`解消）
 - Revision 00042: `isMarkdown`フィールド修正
 - Revision 00043: `UserInfo.nickname`エラー修正
