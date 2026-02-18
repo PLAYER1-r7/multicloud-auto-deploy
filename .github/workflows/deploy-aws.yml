@@ -252,6 +252,30 @@ jobs:
           echo '  }' >> /tmp/lambda-env.json
           echo '}' >> /tmp/lambda-env.json
 
+          # Wait for Lambda to finish any in-progress update before configuration update
+          echo "⏳ Waiting for Lambda to be ready for configuration update..."
+          MAX_WAIT=90
+          WAIT_COUNT=0
+          while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+            UPDATE_STATUS=$(aws lambda get-function \
+              --function-name $LAMBDA_FUNCTION \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Configuration.LastUpdateStatus' \
+              --output text 2>/dev/null || echo "Unknown")
+            STATE=$(aws lambda get-function \
+              --function-name $LAMBDA_FUNCTION \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Configuration.State' \
+              --output text 2>/dev/null || echo "Unknown")
+            if [ "$STATE" == "Active" ] && [ "$UPDATE_STATUS" != "InProgress" ]; then
+              echo "✅ Lambda is ready (State: $STATE, UpdateStatus: $UPDATE_STATUS)"
+              break
+            fi
+            echo "  State: $STATE, UpdateStatus: $UPDATE_STATUS, waiting... ($((WAIT_COUNT+1))/$MAX_WAIT)"
+            sleep 3
+            WAIT_COUNT=$((WAIT_COUNT+1))
+          done
+
           # Update configuration with environment variables and Layer(s)
           echo "🔗 Updating Lambda configuration..."
           aws lambda update-function-configuration \
