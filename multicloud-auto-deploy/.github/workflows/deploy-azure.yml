@@ -248,10 +248,14 @@ jobs:
 
           sleep 10  # Additional safety buffer
 
-          # Get Cosmos DB endpoint and keys directly from the resource
-          echo "🔑 Getting Cosmos DB credentials..."
+          # Get Cosmos DB endpoint and keys directly from Pulumi outputs
+          echo "🔑 Getting Cosmos DB credentials from Pulumi..."
           COSMOS_ENDPOINT="${{ steps.pulumi_outputs.outputs.cosmos_db_endpoint }}"
+          COSMOS_DATABASE="${{ steps.pulumi_outputs.outputs.cosmos_database_name }}"
+          COSMOS_CONTAINER="${{ steps.pulumi_outputs.outputs.cosmos_container_name }}"
+          COSMOS_ACCOUNT="${{ steps.pulumi_outputs.outputs.cosmos_account_name }}"
 
+          # Get Cosmos DB key from Azure
           COSMOS_KEY=$(az cosmosdb keys list \
             --name $COSMOS_ACCOUNT \
             --resource-group $RESOURCE_GROUP \
@@ -262,10 +266,13 @@ jobs:
             echo "❌ Failed to retrieve Cosmos DB credentials"
             echo "   Endpoint: $COSMOS_ENDPOINT"
             echo "   Key: ${COSMOS_KEY:0:20}..."
+            echo "   Account: $COSMOS_ACCOUNT"
             exit 1
           fi
 
+          echo "✅ Cosmos DB Account: $COSMOS_ACCOUNT"
           echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
+
             --name $COSMOS_ACCOUNT \
             --resource-group $RESOURCE_GROUP \
             --type keys \
