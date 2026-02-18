@@ -97,6 +97,7 @@ jobs:
           command: up
           stack-name: ${{ steps.set_stack.outputs.stack_name }}
           work-dir: infrastructure/pulumi/gcp
+          options: --no-refresh  # Avoid SecretVersion 403 (secretmanager.versions.access not granted to Pulumi SA)
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}

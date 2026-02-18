@@ -86,13 +86,6 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
-      - name: Build Lambda Layer
-        run: |
-          echo "🔨 Building Lambda Layer..."
-          ./scripts/build-lambda-layer.sh
-          echo "✅ Lambda Layer built successfully"
-          ls -lh services/api/lambda-layer.zip
-
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5
@@ -116,7 +109,6 @@ jobs:
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
 
       - name: Build Lambda Layer
-        if: ${{ github.event.inputs.use_klayers == 'false' }}
         id: build_layer
         run: |
           cd multicloud-auto-deploy/services/api
