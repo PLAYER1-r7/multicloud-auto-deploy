@@ -112,6 +112,12 @@ jobs:
           echo "azure_ad_client_id=$(pulumi stack output azure_ad_client_id)" >> $GITHUB_OUTPUT
           echo "azure_ad_object_id=$(pulumi stack output azure_ad_object_id)" >> $GITHUB_OUTPUT
           
+          # Get Cosmos DB outputs
+          echo "cosmos_account_name=$(pulumi stack output cosmos_account_name)" >> $GITHUB_OUTPUT
+          echo "cosmos_db_endpoint=$(pulumi stack output cosmos_db_endpoint)" >> $GITHUB_OUTPUT
+          echo "cosmos_database_name=$(pulumi stack output cosmos_database_name)" >> $GITHUB_OUTPUT
+          echo "cosmos_container_name=$(pulumi stack output cosmos_container_name)" >> $GITHUB_OUTPUT
+          
           # Get Front Door hostname for CORS
           echo "frontdoor_hostname=$(pulumi stack output frontdoor_hostname)" >> $GITHUB_OUTPUT
           
@@ -136,6 +142,7 @@ jobs:
           
           echo "📍 Configured API URL: ${API_URL}"
           echo "🔐 Azure AD Client ID: $(pulumi stack output azure_ad_client_id)"
+          echo "🗄️  Cosmos DB Account: $(pulumi stack output cosmos_account_name)"
 
       - name: Package Function App
         run: |
@@ -196,9 +203,10 @@ jobs:
         run: | 
           FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
           RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
-          COSMOS_ACCOUNT="multicloud-auto-deploy-staging"
+          COSMOS_ACCOUNT="${{ steps.pulumi_outputs.outputs.cosmos_account_name }}"
           
           echo "🚀 Deploying to Function App: $FUNCTION_APP"
+          echo "🗄️  Cosmos DB Account: $COSMOS_ACCOUNT"
           
           # Check for ongoing deployments and wait if necessary
           echo "🔍 Checking for ongoing deployments..."
@@ -227,13 +235,14 @@ jobs:
           
           sleep 10  # Additional safety buffer
           
-          # Get Cosmos DB endpoint and keys directly from the resource
-          echo "🔑 Getting Cosmos DB credentials..."
-          COSMOS_ENDPOINT=$(az cosmosdb show \
-            --name $COSMOS_ACCOUNT \
-            --resource-group $RESOURCE_GROUP \
-            --query documentEndpoint -o tsv)
+          # Get Cosmos DB endpoint and keys directly from Pulumi outputs
+          echo "🔑 Getting Cosmos DB credentials from Pulumi outputs..."
+          COSMOS_ENDPOINT="${{ steps.pulumi_outputs.outputs.cosmos_db_endpoint }}"
+          COSMOS_DATABASE="${{ steps.pulumi_outputs.outputs.cosmos_database_name }}"
+          COSMOS_CONTAINER="${{ steps.pulumi_outputs.outputs.cosmos_container_name }}"
+          COSMOS_ACCOUNT="${{ steps.pulumi_outputs.outputs.cosmos_account_name }}"
           
+          # Get Cosmos DB key from Azure
           COSMOS_KEY=$(az cosmosdb keys list \
             --name $COSMOS_ACCOUNT \
             --resource-group $RESOURCE_GROUP \
@@ -242,9 +251,13 @@ jobs:
           
           if [ -z "$COSMOS_ENDPOINT" ] || [ -z "$COSMOS_KEY" ]; then
             echo "❌ Failed to retrieve Cosmos DB credentials"
+            echo "   Endpoint: $COSMOS_ENDPOINT"
+            echo "   Key: ${COSMOS_KEY:0:20}..."
+            echo "   Account: $COSMOS_ACCOUNT"
             exit 1
           fi
           
+          echo "✅ Cosmos DB Account: $COSMOS_ACCOUNT"
           echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
           
           # Get Front Door URL for CORS from Pulumi outputs
