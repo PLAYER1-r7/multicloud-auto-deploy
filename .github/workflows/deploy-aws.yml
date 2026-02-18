@@ -23,7 +23,12 @@ on:
 env:
   AWS_REGION: ap-northeast-1
   NODE_VERSION: "24"
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "3.13"
+
+# Prevent concurrent Pulumi updates on the same stack (causes ResourceConflictException)
+concurrency:
+  group: deploy-aws-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -59,21 +64,41 @@ jobs:
           cd multicloud-auto-deploy/infrastructure/pulumi/aws
           pip install -r requirements.txt
 
+      - name: Determine Pulumi Stack Name
+        id: set_stack
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            STACK_NAME="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            STACK_NAME="production"
+          else
+            STACK_NAME="staging"
+          fi
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "📦 Using Pulumi stack: $STACK_NAME"
+
       - name: Initialize Pulumi Stack
         run: |
           cd multicloud-auto-deploy/infrastructure/pulumi/aws
           pulumi login
-          pulumi stack select staging 2>/dev/null || pulumi stack init staging
+          pulumi stack select ${{ steps.set_stack.outputs.stack_name }} 2>/dev/null || pulumi stack init ${{ steps.set_stack.outputs.stack_name }}
           pulumi config set aws:region ${{ env.AWS_REGION }}
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Build Lambda Layer
+        run: |
+          echo "🔨 Building Lambda Layer..."
+          ./scripts/build-lambda-layer.sh
+          echo "✅ Lambda Layer built successfully"
+          ls -lh services/api/lambda-layer.zip
 
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5
         with:
           command: up
-          stack-name: staging
+          stack-name: ${{ steps.set_stack.outputs.stack_name }}
           work-dir: multicloud-auto-deploy/infrastructure/pulumi/aws
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
@@ -89,10 +114,9 @@ jobs:
           echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$(pulumi stack output cognito_user_pool_id)" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
-          echo "posts_table_name=$(pulumi stack output posts_table_name)" >> $GITHUB_OUTPUT
-          echo "images_bucket_name=$(pulumi stack output images_bucket_name)" >> $GITHUB_OUTPUT
 
       - name: Build Lambda Layer
+        if: ${{ github.event.inputs.use_klayers == 'false' }}
         id: build_layer
         run: |
           cd multicloud-auto-deploy/services/api
@@ -137,11 +161,7 @@ jobs:
             echo "use_direct_upload=false" >> $GITHUB_OUTPUT
           fi
 
-      # Klayers removed: Cross-account access not supported
-      # Always use custom Lambda Layer for reliability
-      # See docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md for details
-
-      - name: Deploy Lambda Layer (Custom)
+      - name: Deploy Lambda Layer
         id: deploy_layer
         run: |
           set -e
@@ -151,9 +171,9 @@ jobs:
           echo "🚀 Publishing Custom Lambda Layer: $LAYER_NAME"
           LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
             --layer-name $LAYER_NAME \
-            --description "Dependencies for FastAPI + Mangum + JWT (Python 3.12)" \
+            --description "Dependencies for FastAPI + Mangum + JWT (Python 3.13)" \
             --zip-file fileb://multicloud-auto-deploy/services/api/lambda-layer.zip \
-            --compatible-runtimes python3.12 \
+            --compatible-runtimes python3.13 \
             --region ${{ env.AWS_REGION }} \
             --query LayerVersionArn \
             --output text)
@@ -167,7 +187,7 @@ jobs:
           set -e
           LAMBDA_FUNCTION="${{ steps.pulumi_outputs.outputs.lambda_function_name }}"
 
-          # Always use custom Lambda Layer (Klayers not supported due to cross-account limitations)
+          # Use custom Lambda Layer (optimized, no Klayers)
           echo "🔧 Using custom Lambda Layer"
           LAYER_ARNS="${{ steps.deploy_layer.outputs.layer_arn }}"
 
@@ -202,31 +222,6 @@ jobs:
               --output json || { echo "❌ Lambda update failed!"; exit 1; }
           fi
 
-          # Wait for Lambda function to become Active after code update
-          echo "⏳ Waiting for Lambda function to become Active..."
-          MAX_WAIT=60
-          WAIT_COUNT=0
-          while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-            STATUS=$(aws lambda get-function \
-              --function-name $LAMBDA_FUNCTION \
-              --region ${{ env.AWS_REGION }} \
-              --query 'Configuration.State' \
-              --output text)
-            
-            if [ "$STATUS" == "Active" ]; then
-              echo "✅ Lambda function is Active"
-              break
-            fi
-            
-            echo "  Status: $STATUS, waiting... ($((WAIT_COUNT+1))/$MAX_WAIT)"
-            sleep 2
-            WAIT_COUNT=$((WAIT_COUNT+1))
-          done
-
-          if [ $WAIT_COUNT -eq $MAX_WAIT ]; then
-            echo "⚠️  Timeout waiting for Lambda to become Active, but continuing..."
-          fi
-
           # Get CloudFront domain for CORS
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
           CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},http://localhost:5173"
@@ -238,43 +233,32 @@ jobs:
           CLIENT_ID="${{ steps.pulumi_outputs.outputs.cognito_client_id }}"
           POSTS_TABLE="${{ steps.pulumi_outputs.outputs.posts_table_name }}"
           IMAGES_BUCKET="${{ steps.pulumi_outputs.outputs.images_bucket_name }}"
+          SECRET_NAME="${{ steps.pulumi_outputs.outputs.secret_name }}"
+
+          # Determine environment and auth settings
+          DEPLOY_ENV="${{ steps.set_stack.outputs.stack_name }}"
+          # Disable auth in staging for testability; keep auth enabled in production
+          if [[ "$DEPLOY_ENV" == "staging" ]]; then
+            AUTH_DISABLED_VALUE="true"
+          else
+            AUTH_DISABLED_VALUE="false"
+          fi
 
           echo '{' > /tmp/lambda-env.json
           echo '  "Variables": {' >> /tmp/lambda-env.json
           echo '    "CLOUD_PROVIDER": "aws",' >> /tmp/lambda-env.json
-          echo '    "ENVIRONMENT": "staging",' >> /tmp/lambda-env.json
+          echo "    \"ENVIRONMENT\": \"$DEPLOY_ENV\"," >> /tmp/lambda-env.json
+          echo "    \"AUTH_DISABLED\": \"$AUTH_DISABLED_VALUE\"," >> /tmp/lambda-env.json
           echo '    "AUTH_PROVIDER": "cognito",' >> /tmp/lambda-env.json
-          echo "    \"POSTS_TABLE_NAME\": \"$POSTS_TABLE\"," >> /tmp/lambda-env.json
-          echo "    \"IMAGES_BUCKET_NAME\": \"$IMAGES_BUCKET\"," >> /tmp/lambda-env.json
           echo "    \"AWS_COGNITO_USER_POOL_ID\": \"$USER_POOL_ID\"," >> /tmp/lambda-env.json
           echo "    \"AWS_COGNITO_CLIENT_ID\": \"$CLIENT_ID\"," >> /tmp/lambda-env.json
+          echo "    \"COGNITO_REGION\": \"${{ env.AWS_REGION }}\"," >> /tmp/lambda-env.json
+          echo "    \"POSTS_TABLE_NAME\": \"$POSTS_TABLE\"," >> /tmp/lambda-env.json
+          echo "    \"IMAGES_BUCKET_NAME\": \"$IMAGES_BUCKET\"," >> /tmp/lambda-env.json
+          echo "    \"SECRET_NAME\": \"$SECRET_NAME\"," >> /tmp/lambda-env.json
           echo "    \"CORS_ORIGINS\": \"$CORS_ORIGINS\"" >> /tmp/lambda-env.json
           echo '  }' >> /tmp/lambda-env.json
           echo '}' >> /tmp/lambda-env.json
-
-          # Wait for Lambda to finish any in-progress update before configuration update
-          echo "⏳ Waiting for Lambda to be ready for configuration update..."
-          MAX_WAIT=90
-          WAIT_COUNT=0
-          while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-            UPDATE_STATUS=$(aws lambda get-function \
-              --function-name $LAMBDA_FUNCTION \
-              --region ${{ env.AWS_REGION }} \
-              --query 'Configuration.LastUpdateStatus' \
-              --output text 2>/dev/null || echo "Unknown")
-            STATE=$(aws lambda get-function \
-              --function-name $LAMBDA_FUNCTION \
-              --region ${{ env.AWS_REGION }} \
-              --query 'Configuration.State' \
-              --output text 2>/dev/null || echo "Unknown")
-            if [ "$STATE" == "Active" ] && [ "$UPDATE_STATUS" != "InProgress" ]; then
-              echo "✅ Lambda is ready (State: $STATE, UpdateStatus: $UPDATE_STATUS)"
-              break
-            fi
-            echo "  State: $STATE, UpdateStatus: $UPDATE_STATUS, waiting... ($((WAIT_COUNT+1))/$MAX_WAIT)"
-            sleep 3
-            WAIT_COUNT=$((WAIT_COUNT+1))
-          done
 
           # Update configuration with environment variables and Layer(s)
           echo "🔗 Updating Lambda configuration..."

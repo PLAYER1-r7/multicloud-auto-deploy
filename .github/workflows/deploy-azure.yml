@@ -23,7 +23,12 @@ on:
 env:
   AZURE_REGION: japaneast
   NODE_VERSION: "24"
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "3.13"
+
+# Prevent concurrent Pulumi updates on the same stack (causes 409 Conflict)
+concurrency:
+  group: deploy-azure-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -58,11 +63,24 @@ jobs:
           cd multicloud-auto-deploy/infrastructure/pulumi/azure
           pip install -r requirements.txt
 
+      - name: Determine Pulumi Stack Name
+        id: set_stack
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            STACK_NAME="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            STACK_NAME="production"
+          else
+            STACK_NAME="staging"
+          fi
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "📦 Using Pulumi stack: $STACK_NAME"
+
       - name: Initialize Pulumi Stack
         run: |
           cd multicloud-auto-deploy/infrastructure/pulumi/azure
           pulumi login
-          pulumi stack select staging 2>/dev/null || pulumi stack init staging
+          pulumi stack select ${{ steps.set_stack.outputs.stack_name }} 2>/dev/null || pulumi stack init ${{ steps.set_stack.outputs.stack_name }}
           pulumi config set azure-native:location japaneast
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
@@ -90,7 +108,7 @@ jobs:
         uses: pulumi/actions@v5
         with:
           command: up
-          stack-name: staging
+          stack-name: ${{ steps.set_stack.outputs.stack_name }}
           work-dir: multicloud-auto-deploy/infrastructure/pulumi/azure
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
@@ -122,7 +140,10 @@ jobs:
           echo "frontdoor_hostname=$(pulumi stack output frontdoor_hostname)" >> $GITHUB_OUTPUT
 
           # Manual Function App reference (not managed by Pulumi)
-          echo "function_app_name=multicloud-auto-deploy-staging-func" >> $GITHUB_OUTPUT
+          # Function App name is environment-specific
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          FUNC_APP_NAME="multicloud-auto-deploy-${STACK_NAME}-func"
+          echo "function_app_name=${FUNC_APP_NAME}" >> $GITHUB_OUTPUT
 
           # Get storage account names dynamically from Azure (fallback if Pulumi outputs not available)
           RG_NAME=$(pulumi stack output resource_group_name)
@@ -134,7 +155,7 @@ jobs:
 
           # Get Function App URL
           FUNC_HOSTNAME=$(az functionapp config hostname list \
-            --webapp-name multicloud-auto-deploy-staging-func \
+            --webapp-name ${FUNC_APP_NAME} \
             --resource-group $RG_NAME \
             --query '[0].name' -o tsv)
           API_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
@@ -260,6 +281,18 @@ jobs:
           echo "✅ Cosmos DB Account: $COSMOS_ACCOUNT"
           echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
 
+            --name $COSMOS_ACCOUNT \
+            --resource-group $RESOURCE_GROUP \
+            --type keys \
+            --query primaryMasterKey -o tsv)
+
+          if [ -z "$COSMOS_ENDPOINT" ] || [ -z "$COSMOS_KEY" ]; then
+            echo "❌ Failed to retrieve Cosmos DB credentials"
+            exit 1
+          fi
+
+          echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
+
           # Get Front Door URL for CORS from Pulumi outputs
           FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
           CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
@@ -277,45 +310,39 @@ jobs:
           sleep 3
 
           # Set environment variables (including Azure AD authentication)
-          echo "⚙️  Setting environment variables..."
+          # Determine environment and auth settings
+          DEPLOY_ENV="${{ steps.set_stack.outputs.stack_name }}"
+          # Disable auth in staging for testability; keep auth enabled in production
+          if [[ "$DEPLOY_ENV" == "staging" ]]; then
+            AUTH_DISABLED_VALUE="true"
+          else
+            AUTH_DISABLED_VALUE="false"
+          fi
 
-          # Set all environment variables in a single command
-          # Azure CLI expects: --settings KEY1=VALUE1 KEY2=VALUE2 (space-separated)
-          echo "Setting all environment variables (Database: ${COSMOS_DATABASE}, Container: ${COSMOS_CONTAINER})..."
+          echo "⚙️  Setting environment variables (ENVIRONMENT=$DEPLOY_ENV, AUTH_DISABLED=$AUTH_DISABLED_VALUE)..."
           az functionapp config appsettings set \
-            --name "$FUNCTION_APP" \
-            --resource-group "$RESOURCE_GROUP" \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
             --settings \
               CLOUD_PROVIDER=azure \
-              ENVIRONMENT=staging \
-              COSMOS_DB_ENDPOINT="$COSMOS_ENDPOINT" \
-              COSMOS_DB_KEY="$COSMOS_KEY" \
-              COSMOS_DB_DATABASE="$COSMOS_DATABASE" \
-              COSMOS_DB_CONTAINER="$COSMOS_CONTAINER" \
+              ENVIRONMENT="${DEPLOY_ENV}" \
+              AUTH_DISABLED="${AUTH_DISABLED_VALUE}" \
+              COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" \
+              COSMOS_DB_KEY="${COSMOS_KEY}" \
+              COSMOS_DB_DATABASE="${{ steps.pulumi_outputs.outputs.cosmos_database_name }}" \
+              COSMOS_DB_CONTAINER="${{ steps.pulumi_outputs.outputs.cosmos_container_name }}" \
               AUTH_PROVIDER=azure \
               AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
               AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
-              CORS_ORIGINS="$CORS_ORIGINS" \
-            > /dev/null 2>&1
-
-          echo "✅ Environment variables set"
-
-          # Verify settings were applied
-          echo "🔍 Verifying Cosmos DB environment variables..."
-          az functionapp config appsettings list \
-            --name "$FUNCTION_APP" \
-            --resource-group "$RESOURCE_GROUP" \
-            -o json | jq '.[] | select(.name | startswith("COSMOS_DB_")) | {name, value}'
-
-          echo ""
-          echo "🔍 Verifying Cosmos DB environment variables:"
-          echo "  Database: ${COSMOS_DATABASE}"
-          echo "  Container: ${COSMOS_CONTAINER}"
-          echo "  Account: ${COSMOS_ACCOUNT}"
+              CORS_ORIGINS="${CORS_ORIGINS}" \
+            > /dev/null
 
           echo "🔐 Azure AD Authentication configured:"
           echo "  Tenant ID: ${{ steps.azure_env.outputs.tenant_id }}"
           echo "  Client ID: ${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
+          echo "🗄️  Cosmos DB configured:"
+          echo "  Database: ${{ steps.pulumi_outputs.outputs.cosmos_database_name }}"
+          echo "  Container: ${{ steps.pulumi_outputs.outputs.cosmos_container_name }}"
 
           echo "📦 Deploying function app package (with retry logic)..."
 

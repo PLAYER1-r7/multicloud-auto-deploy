@@ -23,7 +23,12 @@ on:
 env:
   GCP_REGION: asia-northeast1
   NODE_VERSION: "24"
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "3.13"
+
+# Prevent concurrent Pulumi updates on the same stack (causes 409 Conflict)
+concurrency:
+  group: deploy-gcp-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -62,11 +67,24 @@ jobs:
           cd multicloud-auto-deploy/infrastructure/pulumi/gcp
           pip install -r requirements.txt
 
+      - name: Determine Pulumi Stack Name
+        id: set_stack
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            STACK_NAME="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            STACK_NAME="production"
+          else
+            STACK_NAME="staging"
+          fi
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "📦 Using Pulumi stack: $STACK_NAME"
+
       - name: Initialize Pulumi Stack
         run: |
           cd multicloud-auto-deploy/infrastructure/pulumi/gcp
           pulumi login
-          pulumi stack select staging 2>/dev/null || pulumi stack init staging
+          pulumi stack select ${{ steps.set_stack.outputs.stack_name }} 2>/dev/null || pulumi stack init ${{ steps.set_stack.outputs.stack_name }}
           pulumi config set gcp:project ${{ secrets.GCP_PROJECT_ID }}
           pulumi config set gcp:region asia-northeast1
         env:
@@ -77,7 +95,7 @@ jobs:
         uses: pulumi/actions@v5
         with:
           command: up
-          stack-name: staging
+          stack-name: ${{ steps.set_stack.outputs.stack_name }}
           work-dir: multicloud-auto-deploy/infrastructure/pulumi/gcp
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
@@ -170,23 +188,31 @@ jobs:
 
           echo "🔒 CORS Origins: $CORS_ORIGINS"
 
+          # Determine environment
+          DEPLOY_ENV="${{ steps.set_stack.outputs.stack_name }}"
+          # Disable auth in staging for testability; keep auth enabled in production
+          if [[ "$DEPLOY_ENV" == "staging" ]]; then
+            AUTH_DISABLED_VALUE="true"
+          else
+            AUTH_DISABLED_VALUE="false"
+          fi
+
           # Create env vars file to avoid escaping issues with special characters
-          echo "ENVIRONMENT: staging" > /tmp/env-vars.yaml
+          echo "ENVIRONMENT: ${DEPLOY_ENV}" > /tmp/env-vars.yaml
           echo "CLOUD_PROVIDER: gcp" >> /tmp/env-vars.yaml
           echo "GCP_PROJECT_ID: $PROJECT_ID" >> /tmp/env-vars.yaml
           echo "GCP_POSTS_COLLECTION: posts" >> /tmp/env-vars.yaml
           echo "GCP_PROFILES_COLLECTION: profiles" >> /tmp/env-vars.yaml
-          echo "FIRESTORE_COLLECTION: messages" >> /tmp/env-vars.yaml
-          echo "AUTH_DISABLED: 'true'" >> /tmp/env-vars.yaml
+          echo "AUTH_DISABLED: \"$AUTH_DISABLED_VALUE\"" >> /tmp/env-vars.yaml
           echo "CORS_ORIGINS: \"$CORS_ORIGINS\"" >> /tmp/env-vars.yaml
 
-          echo "📝 Environment variables file created"
+          echo "📝 Environment variables file created (ENVIRONMENT=$DEPLOY_ENV, AUTH_DISABLED=$AUTH_DISABLED_VALUE)"
 
           # Deploy function with env vars from file
           gcloud functions deploy $FUNCTION_NAME \
             --gen2 \
             --region=$REGION \
-            --runtime=python311 \
+            --runtime=python313 \
             --source=gs://$FUNCTION_BUCKET/function-source.zip \
             --entry-point=handler \
             --trigger-http \
@@ -222,7 +248,7 @@ jobs:
           echo "Deploying frontend to bucket: $BUCKET_NAME"
 
           # Upload frontend to Cloud Storage
-          gsutil -m cp -r multicloud-auto-deploy/services/frontend_react/dist/* gs://$BUCKET_NAME/
+          gsutil -m cp -r services/frontend_react/dist/* gs://$BUCKET_NAME/
 
           # Make objects public
           gsutil -m acl ch -u AllUsers:R gs://$BUCKET_NAME/** || true
