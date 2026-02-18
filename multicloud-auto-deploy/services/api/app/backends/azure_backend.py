@@ -245,7 +245,17 @@ class AzureBackend(BackendBase):
             logger.error(f"Failed to write post {post_id}: {type(e).__name__}: {e}")
             raise
         
-        return {"item": item}
+        # Return response in same format as other backends (AWS, GCP)
+        return {
+            "post_id": post_id,
+            "postId": post_id,
+            "user_id": user.user_id,
+            "userId": user.user_id,
+            "content": body.content,
+            "tags": body.tags or [],
+            "created_at": created_at,
+            "createdAt": created_at,
+        }
     
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
         """Delete a post from Cosmos DB"""
