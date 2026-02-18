@@ -3,8 +3,8 @@ name: Deploy to Azure
 on:
   push:
     branches:
-      - develop  # staging自動デプロイ
-      - main     # production自動デプロイ
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
     paths:
       - "multicloud-auto-deploy/services/**"
       - "multicloud-auto-deploy/infrastructure/pulumi/azure/**"
@@ -84,7 +84,7 @@ jobs:
       # Deploy Azure AD resources with Pulumi (Function App remains manual)
       # Azure Portal quota limitations prevent IaC-based App Service Plan creation
       # Function App created manually: multicloud-auto-deploy-staging-func (FC1 Flex Consumption)
-      
+
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5
@@ -98,40 +98,40 @@ jobs:
           ARM_CLIENT_SECRET: ${{ steps.azure_env.outputs.client_secret }}
           ARM_TENANT_ID: ${{ steps.azure_env.outputs.tenant_id }}
           ARM_SUBSCRIPTION_ID: ${{ steps.azure_env.outputs.subscription_id }}
-          AZURE_STORAGE_ACCOUNT: ""  # Required for Pulumi state backend
+          AZURE_STORAGE_ACCOUNT: "" # Required for Pulumi state backend
 
       - name: Get Pulumi Outputs
         id: pulumi_outputs
         run: |
           cd multicloud-auto-deploy/infrastructure/pulumi/azure
-          
+
           # Get resource names from Pulumi
           echo "resource_group_name=$(pulumi stack output resource_group_name)" >> $GITHUB_OUTPUT
-          
+
           # Get Azure AD outputs
           echo "azure_ad_client_id=$(pulumi stack output azure_ad_client_id)" >> $GITHUB_OUTPUT
           echo "azure_ad_object_id=$(pulumi stack output azure_ad_object_id)" >> $GITHUB_OUTPUT
-          
+
           # Get Cosmos DB outputs
           echo "cosmos_account_name=$(pulumi stack output cosmos_account_name)" >> $GITHUB_OUTPUT
           echo "cosmos_db_endpoint=$(pulumi stack output cosmos_db_endpoint)" >> $GITHUB_OUTPUT
           echo "cosmos_database_name=$(pulumi stack output cosmos_database_name)" >> $GITHUB_OUTPUT
           echo "cosmos_container_name=$(pulumi stack output cosmos_container_name)" >> $GITHUB_OUTPUT
-          
+
           # Get Front Door hostname for CORS
           echo "frontdoor_hostname=$(pulumi stack output frontdoor_hostname)" >> $GITHUB_OUTPUT
-          
+
           # Manual Function App reference (not managed by Pulumi)
           echo "function_app_name=multicloud-auto-deploy-staging-func" >> $GITHUB_OUTPUT
-          
+
           # Get storage account names dynamically from Azure (fallback if Pulumi outputs not available)
           RG_NAME=$(pulumi stack output resource_group_name)
           FUNC_STORAGE=$(az storage account list --resource-group $RG_NAME --query "[?contains(name, 'func')].name | [0]" -o tsv)
           WEB_STORAGE=$(az storage account list --resource-group $RG_NAME --query "[?contains(name, 'web')].name | [0]" -o tsv)
-          
+
           echo "functions_storage_name=${FUNC_STORAGE}" >> $GITHUB_OUTPUT
           echo "frontend_storage_name=${WEB_STORAGE}" >> $GITHUB_OUTPUT
-          
+
           # Get Function App URL
           FUNC_HOSTNAME=$(az functionapp config hostname list \
             --webapp-name multicloud-auto-deploy-staging-func \
@@ -139,7 +139,7 @@ jobs:
             --query '[0].name' -o tsv)
           API_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
           echo "api_url=${API_URL}" >> $GITHUB_OUTPUT
-          
+
           echo "📍 Configured API URL: ${API_URL}"
           echo "🔐 Azure AD Client ID: $(pulumi stack output azure_ad_client_id)"
           echo "🗄️  Cosmos DB Account: $(pulumi stack output cosmos_account_name)"
@@ -147,17 +147,17 @@ jobs:
       - name: Package Function App
         run: |
           cd multicloud-auto-deploy/services/api
-          
+
           echo "📦 Creating optimized deployment package..."
-          
+
           # Create deployment directory
           rm -rf .deployment
           mkdir -p .deployment
-          
+
           # Install dependencies to deployment directory (Azure-specific only)
           echo "Installing Azure-specific dependencies..."
           pip install --target .deployment --no-cache-dir -r requirements-azure.txt
-          
+
           # Aggressive cleanup of unnecessary files
           echo "Cleaning up unnecessary files..."
           find .deployment -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
@@ -167,47 +167,47 @@ jobs:
           find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
           find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
           find .deployment -type f -name "*.so" -delete 2>/dev/null || true
-          
+
           # Remove test and documentation files
           find .deployment -type f -name "test_*.py" -delete 2>/dev/null || true
           find .deployment -type f -name "*_test.py" -delete 2>/dev/null || true
           find .deployment -type d -name "docs" -exec rm -rf {} + 2>/dev/null || true
           find .deployment -type d -name "examples" -exec rm -rf {} + 2>/dev/null || true
-          
+
           # Copy application code
           cp -r app .deployment/
           cp function_app.py .deployment/
           cp host.json .deployment/
           cp requirements-azure.txt .deployment/requirements.txt
-          
+
           # Clean up app __pycache__
           find .deployment/app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-          
+
           # Create ZIP package with maximum compression
           cd .deployment
           zip -r9 -q ../function-app.zip .
           cd ..
-          
+
           echo "✅ Package created:"
           ls -lh function-app.zip
           PACKAGE_SIZE=$(du -h function-app.zip | cut -f1)
           PACKAGE_SIZE_KB=$(du -k function-app.zip | cut -f1)
           echo "📦 Package size: $PACKAGE_SIZE ($PACKAGE_SIZE_KB KB)"
-          
+
           # Show size breakdown
           echo ""
           echo "📊 Top 10 largest items in package:"
           unzip -l function-app.zip | sort -k4 -n -r | head -n 11
 
       - name: Deploy Function App
-        run: | 
+        run: |
           FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
           RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
           COSMOS_ACCOUNT="${{ steps.pulumi_outputs.outputs.cosmos_account_name }}"
-          
+
           echo "🚀 Deploying to Function App: $FUNCTION_APP"
           echo "🗄️  Cosmos DB Account: $COSMOS_ACCOUNT"
-          
+
           # Check for ongoing deployments and wait if necessary
           echo "🔍 Checking for ongoing deployments..."
           MAX_WAIT=300  # 5 minutes max wait
@@ -228,27 +228,27 @@ jobs:
               break
             fi
           done
-          
+
           if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
             echo "⚠️  Timeout waiting for previous deployment, proceeding anyway..."
           fi
-          
+
           sleep 10  # Additional safety buffer
-          
+
           # Get Cosmos DB endpoint and keys directly from Pulumi outputs
           echo "🔑 Getting Cosmos DB credentials from Pulumi outputs..."
           COSMOS_ENDPOINT="${{ steps.pulumi_outputs.outputs.cosmos_db_endpoint }}"
           COSMOS_DATABASE="${{ steps.pulumi_outputs.outputs.cosmos_database_name }}"
           COSMOS_CONTAINER="${{ steps.pulumi_outputs.outputs.cosmos_container_name }}"
           COSMOS_ACCOUNT="${{ steps.pulumi_outputs.outputs.cosmos_account_name }}"
-          
+
           # Get Cosmos DB key from Azure
           COSMOS_KEY=$(az cosmosdb keys list \
             --name $COSMOS_ACCOUNT \
             --resource-group $RESOURCE_GROUP \
             --type keys \
             --query primaryMasterKey -o tsv)
-          
+
           if [ -z "$COSMOS_ENDPOINT" ] || [ -z "$COSMOS_KEY" ]; then
             echo "❌ Failed to retrieve Cosmos DB credentials"
             echo "   Endpoint: $COSMOS_ENDPOINT"
@@ -256,49 +256,42 @@ jobs:
             echo "   Account: $COSMOS_ACCOUNT"
             exit 1
           fi
-          
+
           echo "✅ Cosmos DB Account: $COSMOS_ACCOUNT"
           echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
-          
+
           # Get Front Door URL for CORS from Pulumi outputs
           FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
           CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
-          
+
           echo "🔒 CORS Origins: $CORS_ORIGINS"
-          
+
           # Remove existing CORS settings (both uppercase and lowercase)
           echo "🔧 Removing existing CORS settings if present..."
           az functionapp config appsettings delete \
             --name $FUNCTION_APP \
             --resource-group $RESOURCE_GROUP \
             --setting-names CORS_ORIGINS cors_origins 2>/dev/null || true
-          
+
           # Wait for delete to propagate
           sleep 3
-          
+
           # Set environment variables (including Azure AD authentication)
           echo "⚙️  Setting environment variables..."
-          
+
           # Set Cosmos DB environment variables individually for better debugging
           echo "Setting AZURE_COSMOS_DATABASE=${COSMOS_DATABASE}..."
           az functionapp config appsettings set \
             --name $FUNCTION_APP \
             --resource-group $RESOURCE_GROUP \
-            --settings AZURE_COSMOS_DATABASE="${COSMOS_DATABASE}" \
+            --settings "AZURE_COSMOS_DATABASE=${COSMOS_DATABASE}" \
             -o json | jq '.[] | select(.name=="AZURE_COSMOS_DATABASE") | {name, value}'
-          
+
           echo "Setting AZURE_COSMOS_CONTAINER=${COSMOS_CONTAINER}..."
           az functionapp config appsettings set \
             --name $FUNCTION_APP \
             --resource-group $RESOURCE_GROUP \
-            --settings AZURE_COSMOS_CONTAINER="${COSMOS_CONTAINER}" \
-            -o json | jq '.[] | select(.name=="AZURE_COSMOS_CONTAINER") | {name, value}'
-          
-          # Set all other environment variables at once
-          echo "Setting remaining environment variables..."
-          az functionapp config appsettings set \
-            --name $FUNCTION_APP \
-            --resource-group $RESOURCE_GROUP \
+            --settings "AZURE_COSMOS_CONTAINER=${COSMOS_CONTAINER}" \
             --settings \
               CLOUD_PROVIDER=azure \
               ENVIRONMENT=staging \
@@ -309,24 +302,24 @@ jobs:
               AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
               CORS_ORIGINS="${CORS_ORIGINS}" \
             > /dev/null
-          
+
           echo ""
           echo "🔍 Verifying Cosmos DB environment variables:"
           echo "  Database: ${COSMOS_DATABASE}"
           echo "  Container: ${COSMOS_CONTAINER}"
           echo "  Account: ${COSMOS_ACCOUNT}"
-          
+
           echo "🔐 Azure AD Authentication configured:"
           echo "  Tenant ID: ${{ steps.azure_env.outputs.tenant_id }}"
           echo "  Client ID: ${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
-          
+
           echo "📦 Deploying function app package (with retry logic)..."
-          
+
           # Retry deployment up to 3 times to handle Kudu restarts
           MAX_RETRIES=3
           RETRY_COUNT=0
           DEPLOY_SUCCESS=false
-          
+
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             echo "Attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
             
@@ -379,7 +372,7 @@ jobs:
               sleep 30
             fi
           done
-          
+
           if [ "$DEPLOY_SUCCESS" = false ]; then
             echo "⚠️  Deployment uncertain after $MAX_RETRIES attempts, checking function health..."
           else
@@ -389,13 +382,13 @@ jobs:
       - name: Build Frontend
         run: |
           cd multicloud-auto-deploy/services/frontend_react
-          
+
           API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
           echo "🔧 Building frontend with API_URL: $API_URL"
-          
+
           npm install
           npm run build
-          
+
           # Verify the API URL was embedded
           echo "🔍 Verifying built assets..."
           grep -r "multicloud-auto-deploy-staging-func" dist/ || echo "⚠️ API URL not found in build - check VITE_API_URL"
@@ -405,15 +398,15 @@ jobs:
       - name: Enable Static Website Hosting
         run: |
           STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
-          
+
           echo "🌐 Enabling static website hosting on $STORAGE_ACCOUNT..."
-          
+
           # Get storage account key
           STORAGE_KEY=$(az storage account keys list \
             --resource-group multicloud-auto-deploy-staging-rg \
             --account-name $STORAGE_ACCOUNT \
             --query '[0].value' -o tsv)
-          
+
           az storage blob service-properties update \
             --account-name $STORAGE_ACCOUNT \
             --account-key $STORAGE_KEY \
@@ -425,7 +418,7 @@ jobs:
         run: |
           # Use storage account from Pulumi output
           STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
-          
+
           # Get storage account key
           STORAGE_KEY=$(az storage account keys list \
             --resource-group multicloud-auto-deploy-staging-rg \
@@ -444,16 +437,16 @@ jobs:
         run: |
           FUNCTION_APP="multicloud-auto-deploy-staging-func"
           RESOURCE_GROUP="multicloud-auto-deploy-staging-rg"
-          
+
           echo "🔍 Verifying API deployment..."
           echo "Getting Function App hostname..."
-          
+
           # Get hostname - for Flex Consumption plan, use config hostname list
           # (defaultHostName is not reliable for Flex Consumption SKU)
           max_hostname_attempts=10
           hostname_attempt=0
           FUNC_HOSTNAME=""
-          
+
           while [ $hostname_attempt -lt $max_hostname_attempts ]; do
             FUNC_HOSTNAME=$(az functionapp config hostname list \
               --webapp-name $FUNCTION_APP \
@@ -469,21 +462,21 @@ jobs:
               hostname_attempt=$((hostname_attempt+1))
             fi
           done
-          
+
           if [ -z "$FUNC_HOSTNAME" ] || [ "$FUNC_HOSTNAME" = "None" ]; then
             echo "❌ Failed to get Function App hostname after waiting"
             echo "Try checking manually: az functionapp config hostname list --webapp-name $FUNCTION_APP --resource-group $RESOURCE_GROUP"
             exit 1
           fi
-          
+
           FUNC_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
           echo "Testing: ${FUNC_URL}/health"
-          
+
           # Wait for function to be ready (max 3 minutes)
           max_attempts=36
           attempt=0
           health_check_passed=false
-          
+
           while [ $attempt -lt $max_attempts ]; do
             if response=$(curl -sf "${FUNC_URL}/health" 2>&1); then
               echo "✅ API is responding!"
@@ -496,7 +489,7 @@ jobs:
               attempt=$((attempt+1))
             fi
           done
-          
+
           if [ "$health_check_passed" = true ]; then
             echo ""
             echo "✅ Azure Function deployment verified successfully!"
