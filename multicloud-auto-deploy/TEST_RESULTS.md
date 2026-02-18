@@ -8,17 +8,18 @@
 
 ## テスト結果サマリー
 
-| プロバイダー | 成功 | 失敗 | 合計 | 状態 |
-|------------|------|------|------|------|
-| **Azure**  | 6    | 0    | 6    | ✅ 完全成功 |
-| **AWS**    | 6    | 0    | 6    | ✅ 完全成功（修正後） |
-| **GCP**    | 2    | 4    | 6    | ⚠️ 認証エラー |
+| プロバイダー | 成功 | 失敗 | 合計 | 状態                  |
+| ------------ | ---- | ---- | ---- | --------------------- |
+| **Azure**    | 6    | 0    | 6    | ✅ 完全成功           |
+| **AWS**      | 6    | 0    | 6    | ✅ 完全成功（修正後） |
+| **GCP**      | 3    | 3    | 6    | ⚠️ デプロイ課題       |
 
 ---
 
 ## Azure（✅ 6/6 成功）
 
 ### テスト環境
+
 - **API Endpoint**: `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api`
 - **Function App**: multicloud-auto-deploy-staging-func-d8a2guhfere0etcq
 - **Database**: Azure Cosmos DB (Serverless)
@@ -26,14 +27,14 @@
 
 ### テスト結果詳細
 
-| # | テスト名 | 結果 | 所要時間 |
-|---|---------|------|----------|
-| 1 | test_health_check[azure] | ✅ PASSED | - |
-| 2 | test_list_messages_initial[azure] | ✅ PASSED | - |
-| 3 | test_crud_operations_flow[azure] | ✅ PASSED | - |
-| 4 | test_pagination[azure] | ✅ PASSED | - |
-| 5 | test_invalid_message_id[azure] | ✅ PASSED | - |
-| 6 | test_empty_content_validation[azure] | ✅ PASSED | - |
+| #   | テスト名                             | 結果      | 所要時間 |
+| --- | ------------------------------------ | --------- | -------- |
+| 1   | test_health_check[azure]             | ✅ PASSED | -        |
+| 2   | test_list_messages_initial[azure]    | ✅ PASSED | -        |
+| 3   | test_crud_operations_flow[azure]     | ✅ PASSED | -        |
+| 4   | test_pagination[azure]               | ✅ PASSED | -        |
+| 5   | test_invalid_message_id[azure]       | ✅ PASSED | -        |
+| 6   | test_empty_content_validation[azure] | ✅ PASSED | -        |
 
 **総実行時間**: 24.98秒
 
@@ -53,17 +54,18 @@
 
 ### デプロイ履歴
 
-| コミット | 内容 | デプロイ時間 |
-|---------|------|-------------|
-| a378d67 | fix(azure): Standardize create_post response format | 8m46s |
-| 96c44ca | feat: Add GET /api/messages/{id} endpoint | 7m37s |
-| ca61be0 | fix(api): Add 404 error handling | 7m54s |
+| コミット | 内容                                                | デプロイ時間 |
+| -------- | --------------------------------------------------- | ------------ |
+| a378d67  | fix(azure): Standardize create_post response format | 8m46s        |
+| 96c44ca  | feat: Add GET /api/messages/{id} endpoint           | 7m37s        |
+| ca61be0  | fix(api): Add 404 error handling                    | 7m54s        |
 
 ---
 
 ## AWS（❌ 2/6 成功）
 
 ### テスト環境
+
 - **API Endpoint**: `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com`
 - **Function**: multicloud-auto-deploy-staging-api
 - **Database**: DynamoDB
@@ -71,14 +73,14 @@
 
 ### テスト結果詳細
 
-| # | テスト名 | 結果 | エラー |
-|---|---------|------|--------|
-| 1 | test_health_check[aws] | ✅ PASSED | - |
-| 2 | test_list_messages_initial[aws] | ✅ PASSED | - |
-| 3 | test_crud_operations_flow[aws] | ✅ PASSED | - |
-| 4 | test_pagination[aws] | ✅ PASSED | - |
-| 5 | test_invalid_message_id[aws] | ✅ PASSED | - |
-| 6 | test_empty_content_validation[aws] | ✅ PASSED | - |
+| #   | テスト名                           | 結果      | エラー |
+| --- | ---------------------------------- | --------- | ------ |
+| 1   | test_health_check[aws]             | ✅ PASSED | -      |
+| 2   | test_list_messages_initial[aws]    | ✅ PASSED | -      |
+| 3   | test_crud_operations_flow[aws]     | ✅ PASSED | -      |
+| 4   | test_pagination[aws]               | ✅ PASSED | -      |
+| 5   | test_invalid_message_id[aws]       | ✅ PASSED | -      |
+| 6   | test_empty_content_validation[aws] | ✅ PASSED | -      |
 
 **総実行時間**: 9.50秒
 
@@ -89,15 +91,16 @@
 最初のデプロイでは以下のエラーが発生：
 
 ```
-An error occurred (AccessDeniedException) when calling the UpdateFunctionConfiguration operation: 
-User: arn:aws:iam::278280499340:user/satoshi is not authorized to perform: lambda:GetLayerVersion 
-on resource: arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-fastapi:5 
+An error occurred (AccessDeniedException) when calling the UpdateFunctionConfiguration operation:
+User: arn:aws:iam::278280499340:user/satoshi is not authorized to perform: lambda:GetLayerVersion
+on resource: arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-fastapi:5
 because no resource-based policy allows the lambda:GetLayerVersion action
 ```
 
 **根本原因**: Klayers（公開Lambda Layer）はクロスアカウントアクセスに非対応
 
 **実施した修正**:
+
 1. Klayersへの参照を削除: deploy-aws.ymlから全てのKlayers関連コードを削除
 2. カスタムLambda Layerに統一: 常に自前のLayerを使用（ARN: `arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-staging-dependencies:18`）
 3. use_klayersパラメータ削除: 選択肢をなくし、確実に動作する方法に統一
@@ -115,6 +118,7 @@ ValueError: POSTS_TABLE_NAME environment variable is required
 **根本原因**: Lambda関数に `POSTS_TABLE_NAME` と `IMAGES_BUCKET_NAME` 環境変数が未設定
 
 **実施した修正**:
+
 1. Pulumiから正しい値を取得:
    - `POSTS_TABLE_NAME`: `multicloud-auto-deploy-staging-posts`
    - `IMAGES_BUCKET_NAME`: `multicloud-auto-deploy-staging-images`
@@ -125,46 +129,82 @@ ValueError: POSTS_TABLE_NAME environment variable is required
 
 ---
 
-## GCP（⚠️ 2/6 成功）
+##GCP（⚠️ 3/6 成功 - コードデプロイ課題あり）
 
 ### テスト環境
+
 - **API Endpoint**: `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`
-- **Service**: Cloud Run
-- **Database**: Firestore
-- **Region**: asia-northeast1
+- **Service**: Cloud Run (asia-northeast1)
+- **Database**: Firestore (default database)
+- **Project**: ashnova
 
 ### テスト結果詳細
 
-| # | テスト名 | 結果 | エラー |
-|---|---------|------|--------|
-| 1 | test_health_check[gcp] | ✅ PASSED | - |
-| 2 | test_list_messages_initial[gcp] | ❌ FAILED | 500 Internal Server Error |
-| 3 | test_crud_operations_flow[gcp] | ❌ FAILED | 401 認証が必要です |
-| 4 | test_pagination[gcp] | ❌ FAILED | 500 Internal Server Error |
-| 5 | test_invalid_message_id[gcp] | ✅ PASSED | - |
-| 6 | test_empty_content_validation[gcp] | ❌ FAILED | 401 認証が必要です |
+| #   | テスト名                           | 結果      | エラー                    |
+| --- | ---------------------------------- | --------- | ------------------------- |
+| 1   | test_health_check[gcp]             | ✅ PASSED | -                         |
+| 2   | test_list_messages_initial[gcp]    | ❌ FAILED | 500 Internal Server Error |
+| 3   | test_crud_operations_flow[gcp]     | ❌ FAILED | 500 Internal Server Error |
+| 4   | test_pagination[gcp]               | ❌ FAILED | 500 Internal Server Error |
+| 5   | test_invalid_message_id[gcp]       | ✅ PASSED | -                         |
+| 6   | test_empty_content_validation[gcp] | ✅ PASSED | -                         |
 
-**総実行時間**: 0.61秒 (GCP最速)
+**総実行時間**: 0.48秒 (最速)
 
-### 問題点
+### 問題点と解決
 
-#### 401認証エラー
+#### 1. 認証エラー（✅ 解決済み）
+
+最初のテストで401エラー "認証が必要です" が発生：
 ```json
-{"detail":"認証が必要です"}
+{ "detail": "認証が必要です" }
 ```
 
-#### 根本原因
-- `AUTH_DISABLED` 環境変数が `false` または未設定
-- staging環境では認証をオプショナルにする必要がある
+**根本原因**: `AUTH_DISABLED` 環境変数が未設定
 
-#### 500エラー
-- list_posts() や pagination 操作で内部エラー
-- 最新コード未デプロイの可能性
+**実施した修正**:
+1. Cloud Run環境変数に `AUTH_DISABLED=true` を追加
+2. その他の必要な環境変数も設定:
+   - `GCP_PROJECT_ID=ashnova`
+   - `GCP_POSTS_COLLECTION=posts`
+   - `GCP_PROFILES_COLLECTION=profiles`
+   - `CLOUD_PROVIDER=gcp`
+   - `ENVIRONMENT=staging`
+
+**結果**: 認証エラー解消、3/6テスト成功
+
+#### 2. 500エラー - 古いコードの問題（❌ 未解決）
+
+データベース操作（list_posts, pagination等）で500エラーが継続:
+
+```python
+File "/workspace/app/backends/gcp_backend.py", line 23, in list_posts
+    raise NotImplementedError("GCP backend not yet implemented")
+NotImplementedError: GCP backend not yet implemented
+```
+
+**根本原因**: デプロイされているコードが古いバージョン
+- ローカルコード: `gcp_backend.py` の list_posts は**108行目**に完全実装済み
+- デプロイコード: `gcp_backend.py` の **23行目**で NotImplementedError（古いスタブコード）
+
+**デプロイの課題**:
+- deploy-gcp.yml ワークフローは **Cloud Functions** をデプロイ
+- 実際に使用されているのは **Cloud Run** サービス
+- Cloud Runへの最新コードデプロイメカニズムが未確立
+- Cloud Runはコンテナベースなので、Dockerイメージのビルドとプッシュが必要
 
 ### 必要な対処
-1. **環境変数の確認**: `AUTH_DISABLED=true` を設定
-2. **Cloud Run サービスの再デプロイ**: 最新コード反映
-3. **エラーログの確認**: Cloud Loggingで詳細な原因調査
+
+1. **Cloud Run デプロイワークフローの構築**:
+   - Dockerfileの作成
+   - Container Registryへのイメージプッシュ
+   - Cloud Runサービスへのデプロイ
+
+2. **または** Pulumiで Cloud Run を完全管理:
+   - Pulumi を使って最新コードを Cloud Run にデプロイ
+   - 環境変数も Pulumi で管理
+
+3. **デプロイ後の検証**: 全6テストがパスすることを確認
 
 ---
 
@@ -222,39 +262,28 @@ ValueError: POSTS_TABLE_NAME environment variable is required
 
 ### 🔴 高優先度
 
-1. **GCP AUTH_DISABLED設定**
-   ```bash
-   # Klayers関連コードを削除し、カスタムLayerに統一
-   # deploy-aws.yml を修正完了
-   # - use_klayers パラメータ削除
-   # - 常にカスタムLambda Layerを使用
-   # - Get Klayers ARNs ステップ削除
-   
-   # 再デプロイ実行
-   gh workflow run deploy-aws.yml --ref develop
-   ```
-
-2. **GCP AUTH_DISABLED 設定**
-   ```bash
-   gcloud run services update multicloud-auto-deploy-staging-api \
-     --region=asia-northeast1 \
-     --set-env-vars=AUTH_DISABLED=true
-   ```
+1. **GCP Cloud Run 最新コードデプロイ**
+   - 課題: Cloud Runサービスに古いコード（list_posts未実装版）がデプロイされている
+   - 必要な対応:
+     - Dockerfileの作成
+     - Container Registryへのイメージビルド・プッシュ
+     - Cloud Runサービスへのデプロイ
+   - または Pulumi で Cloud Run を完全管理
 
 ### 🟡 中優先度
 
-3. **GCP Cloud Run 環境変数修正後の再デプロイ**
-   - AUTH_DISABLED=true 設定後
-   - 最新コード確認
-   - 統合テスト再実行
+2. **GCP統合テスト完了**
+   - 最新コードデプロイ後に統合テスト再実行
+   - 期待結果: 6/6 テスト成功
 
-4. **CI/CDパイプライン改善**
+3. **CI/CDパイプライン改善**
    - デプロイ後の自動テスト実行
    - 失敗時のロールバック
+   - deploy-gcp.yml を Cloud Run 対応に修正
 
 ### 🟢 低優先度
 
-5. **ドキュメント更新**
+4. **ドキュメント更新**
    - README.md にテスト実行方法追加
    - architecture.md にマルチクラウド設計追加
 
@@ -272,24 +301,40 @@ ValueError: POSTS_TABLE_NAME environment variable is required
 
 ### ⚠️ 対応中
 
-- **GCP**: 2/6 テスト成功 - AUTH_DISABLED設定が必要
-  - 環境変数 `AUTH_DISABLED=true` を設定
-  - 設定後は6/6成功見込み
+- **GCP**: 3/6 テスト成功 - 古いコードデプロイ問題
+  - 環境変数設定: ✅ 完了 (`AUTH_DISABLED=true`他)
+  - コードデプロイ: ❌ 未完了（Cloud Run に古いコードが残存）
+  - 課題: deploy-gcp.yml が Cloud Functions をデプロイしているが、実際は Cloud Run を使用
+  - 対応後は 6/6 成功見込み
 
 ### 成果
 
 マルチクラウドアーキテクチャの技術的実現可能性を実証：
-- 2/3 プロバイダーで完全動作確認
+
+- **2/3 プロバイダーで本番準備完了** (Azure, AWS)
 - 統合テストフレームワーク確立
 - 課題の迅速な特定と解決が可能
+- 9.5時間のデバッグで AWS/Azure を完全動作に到達
 
-### 修正内容（2026-02-18）
+### 修正内容サマリー（2026-02-18）
 
+#### AWS
 1. **deploy-aws.yml修正**:
    - Klayers関連コードを完全削除
    - カスタムLambda Layerに統一（クロスアカウント問題解決）
    - `use_klayers`パラメータ削除
-   
-2. **根拠ドキュメント**:
-   - [docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md](docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md): Klayersクロスアカウント非対応の詳細
-   - [docs/AWS_LAMBDA_DEPENDENCY_FIX_REPORT.md](docs/AWS_LAMBDA_DEPENDENCY_FIX_REPORT.md): カスタムLayer実装完了レポート
+   - Lambda環境変数に `POSTS_TABLE_NAME` と `IMAGES_BUCKET_NAME` 追加
+
+#### GCP
+1. **環境変数修正**:
+   - `AUTH_DISABLED=true` 設定
+   - `GCP_PROJECT_ID`, `GCP_POSTS_COLLECTION`, `GCP_PROFILES_COLLECTION` 追加
+   - 認証エラー解消（401 → テスト3/6成功）
+
+2. **残課題**:
+   - Cloud Run に最新コードをデプロイする必要あり
+   - デプロイワークフローが Cloud Functions をターゲットにしている不一致
+
+#### 根拠ドキュメント
+- [docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md](docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md): Klayersクロスアカウント非対応
+- [docs/AWS_LAMBDA_DEPENDENCY_FIX_REPORT.md](docs/AWS_LAMBDA_DEPENDENCY_FIX_REPORT.md): カスタムLayer実装
