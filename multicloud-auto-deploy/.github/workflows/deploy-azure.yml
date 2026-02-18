@@ -249,7 +249,7 @@ jobs:
           sleep 10  # Additional safety buffer
 
           # Get Cosmos DB endpoint and keys directly from Pulumi outputs
-          echo "🔑 Getting Cosmos DB credentials from Pulumi..."
+          echo "🔑 Getting Cosmos DB credentials from Pulumi outputs..."
           COSMOS_ENDPOINT="${{ steps.pulumi_outputs.outputs.cosmos_db_endpoint }}"
           COSMOS_DATABASE="${{ steps.pulumi_outputs.outputs.cosmos_database_name }}"
           COSMOS_CONTAINER="${{ steps.pulumi_outputs.outputs.cosmos_container_name }}"
