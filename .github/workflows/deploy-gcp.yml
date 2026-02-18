@@ -23,7 +23,7 @@ on:
 env:
   GCP_REGION: asia-northeast1
   NODE_VERSION: "24"
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.12"
 
 # Prevent concurrent Pulumi updates on the same stack (causes 409 Conflict)
 concurrency:
@@ -225,7 +225,7 @@ jobs:
           gcloud functions deploy $FUNCTION_NAME \
             --gen2 \
             --region=$REGION \
-            --runtime=python313 \
+            --runtime=python312 \
             --source=gs://$FUNCTION_BUCKET/function-source.zip \
             --entry-point=handler \
             --trigger-http \
