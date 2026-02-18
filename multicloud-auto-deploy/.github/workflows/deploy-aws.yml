@@ -23,7 +23,12 @@ on:
 env:
   AWS_REGION: ap-northeast-1
   NODE_VERSION: "24"
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "3.13"
+
+# Prevent concurrent Pulumi updates on the same stack (causes ResourceConflictException)
+concurrency:
+  group: deploy-aws-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -166,9 +171,9 @@ jobs:
           echo "🚀 Publishing Custom Lambda Layer: $LAYER_NAME"
           LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
             --layer-name $LAYER_NAME \
-            --description "Dependencies for FastAPI + Mangum + JWT (Python 3.12)" \
+            --description "Dependencies for FastAPI + Mangum + JWT (Python 3.13)" \
             --zip-file fileb://multicloud-auto-deploy/services/api/lambda-layer.zip \
-            --compatible-runtimes python3.12 \
+            --compatible-runtimes python3.13 \
             --region ${{ env.AWS_REGION }} \
             --query LayerVersionArn \
             --output text)
@@ -230,10 +235,20 @@ jobs:
           IMAGES_BUCKET="${{ steps.pulumi_outputs.outputs.images_bucket_name }}"
           SECRET_NAME="${{ steps.pulumi_outputs.outputs.secret_name }}"
 
+          # Determine environment and auth settings
+          DEPLOY_ENV="${{ steps.set_stack.outputs.stack_name }}"
+          # Disable auth in staging for testability; keep auth enabled in production
+          if [[ "$DEPLOY_ENV" == "staging" ]]; then
+            AUTH_DISABLED_VALUE="true"
+          else
+            AUTH_DISABLED_VALUE="false"
+          fi
+
           echo '{' > /tmp/lambda-env.json
           echo '  "Variables": {' >> /tmp/lambda-env.json
           echo '    "CLOUD_PROVIDER": "aws",' >> /tmp/lambda-env.json
-          echo '    "ENVIRONMENT": "staging",' >> /tmp/lambda-env.json
+          echo "    \"ENVIRONMENT\": \"$DEPLOY_ENV\"," >> /tmp/lambda-env.json
+          echo "    \"AUTH_DISABLED\": \"$AUTH_DISABLED_VALUE\"," >> /tmp/lambda-env.json
           echo '    "AUTH_PROVIDER": "cognito",' >> /tmp/lambda-env.json
           echo "    \"AWS_COGNITO_USER_POOL_ID\": \"$USER_POOL_ID\"," >> /tmp/lambda-env.json
           echo "    \"AWS_COGNITO_CLIENT_ID\": \"$CLIENT_ID\"," >> /tmp/lambda-env.json

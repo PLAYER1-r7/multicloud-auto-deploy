@@ -23,7 +23,12 @@ on:
 env:
   AZURE_REGION: japaneast
   NODE_VERSION: "24"
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "3.13"
+
+# Prevent concurrent Pulumi updates on the same stack (causes 409 Conflict)
+concurrency:
+  group: deploy-azure-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -135,7 +140,10 @@ jobs:
           echo "frontdoor_hostname=$(pulumi stack output frontdoor_hostname)" >> $GITHUB_OUTPUT
 
           # Manual Function App reference (not managed by Pulumi)
-          echo "function_app_name=multicloud-auto-deploy-staging-func" >> $GITHUB_OUTPUT
+          # Function App name is environment-specific
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          FUNC_APP_NAME="multicloud-auto-deploy-${STACK_NAME}-func"
+          echo "function_app_name=${FUNC_APP_NAME}" >> $GITHUB_OUTPUT
 
           # Get storage account names dynamically from Azure (fallback if Pulumi outputs not available)
           RG_NAME=$(pulumi stack output resource_group_name)
@@ -147,7 +155,7 @@ jobs:
 
           # Get Function App URL
           FUNC_HOSTNAME=$(az functionapp config hostname list \
-            --webapp-name multicloud-auto-deploy-staging-func \
+            --webapp-name ${FUNC_APP_NAME} \
             --resource-group $RG_NAME \
             --query '[0].name' -o tsv)
           API_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
@@ -302,13 +310,23 @@ jobs:
           sleep 3
 
           # Set environment variables (including Azure AD authentication)
-          echo "⚙️  Setting environment variables..."
+          # Determine environment and auth settings
+          DEPLOY_ENV="${{ steps.set_stack.outputs.stack_name }}"
+          # Disable auth in staging for testability; keep auth enabled in production
+          if [[ "$DEPLOY_ENV" == "staging" ]]; then
+            AUTH_DISABLED_VALUE="true"
+          else
+            AUTH_DISABLED_VALUE="false"
+          fi
+
+          echo "⚙️  Setting environment variables (ENVIRONMENT=$DEPLOY_ENV, AUTH_DISABLED=$AUTH_DISABLED_VALUE)..."
           az functionapp config appsettings set \
             --name $FUNCTION_APP \
             --resource-group $RESOURCE_GROUP \
             --settings \
               CLOUD_PROVIDER=azure \
-              ENVIRONMENT=staging \
+              ENVIRONMENT="${DEPLOY_ENV}" \
+              AUTH_DISABLED="${AUTH_DISABLED_VALUE}" \
               COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" \
               COSMOS_DB_KEY="${COSMOS_KEY}" \
               COSMOS_DB_DATABASE="${{ steps.pulumi_outputs.outputs.cosmos_database_name }}" \
