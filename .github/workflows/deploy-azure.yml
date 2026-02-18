@@ -278,6 +278,26 @@ jobs:
           
           # Set environment variables (including Azure AD authentication)
           echo "⚙️  Setting environment variables..."
+          
+          # Set Cosmos DB environment variables individually for better debugging
+          echo "Setting AZURE_COSMOS_DATABASE=${COSMOS_DATABASE}..."
+          az functionapp config appsettings set \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --settings AZURE_COSMOS_DATABASE="${COSMOS_DATABASE}" \
+            --query "[?name=='AZURE_COSMOS_DATABASE'].{name:name, value:value}" \
+            -o table
+          
+          echo "Setting AZURE_COSMOS_CONTAINER=${COSMOS_CONTAINER}..."
+          az functionapp config appsettings set \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --settings AZURE_COSMOS_CONTAINER="${COSMOS_CONTAINER}" \
+            --query "[?name=='AZURE_COSMOS_CONTAINER'].{name:name, value:value}" \
+            -o table
+          
+          # Set all other environment variables at once
+          echo "Setting remaining environment variables..."
           az functionapp config appsettings set \
             --name $FUNCTION_APP \
             --resource-group $RESOURCE_GROUP \
@@ -286,14 +306,11 @@ jobs:
               ENVIRONMENT=staging \
               AZURE_COSMOS_ENDPOINT="${COSMOS_ENDPOINT}" \
               AZURE_COSMOS_KEY="${COSMOS_KEY}" \
-              AZURE_COSMOS_DATABASE="${COSMOS_DATABASE}" \
-              AZURE_COSMOS_CONTAINER="${COSMOS_CONTAINER}" \
               AUTH_PROVIDER=azure \
               AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
               AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
               CORS_ORIGINS="${CORS_ORIGINS}" \
-            --query "[?name=='AZURE_COSMOS_DATABASE' || name=='AZURE_COSMOS_CONTAINER'].{name:name, value:value}" \
-            -o table
+            > /dev/null
           
           echo ""
           echo "🔍 Verifying Cosmos DB environment variables:"
