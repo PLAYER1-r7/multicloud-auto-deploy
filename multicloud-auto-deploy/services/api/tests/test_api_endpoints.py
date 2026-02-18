@@ -13,7 +13,7 @@ from typing import Optional
 ENDPOINTS = {
     "aws": os.getenv("AWS_API_ENDPOINT", "https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com"),
     "gcp": os.getenv("GCP_API_ENDPOINT", "https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app"),
-    "azure": os.getenv("AZURE_API_ENDPOINT", "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger"),
+    "azure": os.getenv("AZURE_API_ENDPOINT", "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api"),
 }
 
 
