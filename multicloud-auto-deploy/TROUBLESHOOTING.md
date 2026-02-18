@@ -46,7 +46,8 @@
 | ----------------------------------------------------- | ------------------------ | -------------------------------------------------------------------- |
 | `mapping values are not allowed in this context`      | YAML構文エラー           | [GitHub Actions YAML](#github-actions-yaml構文エラー)                |
 | `Application setting already exists`                  | CORS設定の競合           | [Azure CORS設定](#azure-cors設定の名前競合)                          |
-| `AZURE_COSMOS_DATABASE value is null`                 | Azure予約変数名          | [Azure環境変数予約名](#azure環境変数の予約名問題)                    |
+| `AZURE_COSMOS_DATABASE value is null`                 | Azure CLI書式問題        | [Azure CLI --settings書式](#azure-cli---settings-yaml-multi-line書式問題) |
+| `environment variables all null`                      | Azure CLI書式問題        | [Azure CLI --settings書式](#azure-cli---settings-yaml-multi-line書式問題) |
 | `AccessDeniedException ... PublishLayerVersion`       | Lambda Layer権限不足     | [Lambda Layer権限](#aws-lambda-layer権限エラー)                      |
 | `ResourceConflictException ... update is in progress` | Lambda更新の競合         | [Lambda ResourceConflict](#aws-lambda-resourceconflictexception)     |
 | `Resource ... not found`                              | リソース名のハードコード | [Azureリソース名](#azureリソース名のハードコード問題)                |
@@ -78,7 +79,8 @@
 #### Azure
 
 - [Azure CORS設定の名前競合](#azure-cors設定の名前競合)
-- [Azure環境変数の予約名問題](#azure環境変数の予約名問題)
+- [Azure CLI --settings YAML Multi-line書式問題](#azure-cli---settings-yaml-multi-line書式問題)
+- [Azure環境変数の予約名問題](#azure環境変数の予約名問題) ⚠️ 誤解だったケース
 - [Azure Front Doorエンドポイント取得](#azure-front-doorエンドポイント取得)
 - [Azureリソース名のハードコード問題](#azureリソース名のハードコード問題)
 - [Azure Function Appデプロイメント競合](#azure-function-appデプロイメント競合)
@@ -730,9 +732,257 @@ az functionapp config appsettings set \
 
 ---
 
+## Azure CLI --settings YAML Multi-line書式問題
+
+**解決時間**: ⏱️ 3時間（デバッグ）→ 5分（修正）  
+**試行回数**: 12回のデプロイメント
+
+### 症状
+
+```bash
+# Bashでは正しい値が表示される
+echo "DATABASE=${COSMOS_DATABASE}"  # Output: messages
+
+# しかしAzure Function Appの環境変数は全てnullになる
+az functionapp config appsettings set \
+  --name $FUNCTION_APP \
+  --resource-group $RESOURCE_GROUP \
+  --settings \
+    COSMOS_DB_DATABASE="${COSMOS_DATABASE}" \
+    COSMOS_DB_CONTAINER="${COSMOS_CONTAINER}"
+
+# 結果確認
+az functionapp config appsettings list ... | jq '.[] | {name, value}'
+# Output: {"name": "COSMOS_DB_DATABASE", "value": null}
+# Output: {"name": "COSMOS_DB_CONTAINER", "value": null}
+
+# ハードコード値でも同様にnull
+az functionapp config appsettings set --settings COSMOS_DB_DATABASE=messages
+# Output: {"name": "COSMOS_DB_DATABASE", "value": null}
+```
+
+**全ての環境変数が常に`null`になる。** ハードコード文字列でも、変数展開でも、引用符の有無に関わらず、常にnull。
+
+### 誤った仮説（試行錯誤の過程）
+
+❌ **仮説1: 変数名が予約語**
+- `AZURE_COSMOS_DATABASE` → `COSMOS_DB_DATABASE` に変更
+- 結果: 変わらずnull（10分の試行）
+
+❌ **仮説2: 変数展開の問題**  
+- `"${VAR}"` → `'${VAR}'` → `$VAR` と様々な引用符を試行
+- 結果: 変わらずnull（20分の試行）
+
+❌ **仮説3: 複数の--settingsフラグの競合**
+- 2つの`--settings`を1つに統合
+- 結果: 変わらずnull（15分の試行）
+
+❌ **仮説4: YAML multi-lineが原因**
+- 全てを1行に書き換え（読みにくい長大な行）
+- 結果: 変わらずnull（30分の試行）
+
+❌ **仮説5: GitHub Actions環境の問題**
+- ローカルで同じコマンドを試行しようとするも権限エラー
+- 結果: 確認できず（15分の試行）
+
+### 真の原因
+
+**YAML multi-lineの書式が間違っていた。**
+
+```yaml
+# ❌ 間違い - 継続行が適切にインデントされていない
+az functionapp config appsettings set \
+  --name $FUNCTION_APP \
+  --resource-group $RESOURCE_GROUP \
+  --settings \
+    KEY1=value1 \
+    KEY2=value2
+
+# これはYAMLとして以下のように解釈される:
+# "--settings \ KEY1=value1 \ KEY2=value2"
+# （バックスラッシュとスペースが含まれてしまう）
+
+# ✅ 正しい - 適切なインデント付き
+az functionapp config appsettings set \
+  --name "$FUNCTION_APP" \
+  --resource-group "$RESOURCE_GROUP" \
+  --settings \
+    KEY1=value1 \
+    KEY2=value2 \
+    KEY3=value3
+```
+
+**重要**: GitHub Actions YAMLでは、`\` による継続行の後のインデントが重要。インデントがない場合、Azure CLIは引数を正しくパースできない。
+
+### 解決策
+
+#### 修正前（全て null になる）
+
+```yaml
+az functionapp config appsettings set \
+  --name $FUNCTION_APP \
+  --resource-group $RESOURCE_GROUP \
+  --settings COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" COSMOS_DB_KEY="${COSMOS_KEY}" COSMOS_DB_DATABASE="${COSMOS_DATABASE}" COSMOS_DB_CONTAINER="${COSMOS_CONTAINER}" AUTH_PROVIDER=azure
+```
+
+または
+
+```yaml
+az functionapp config appsettings set \
+  --name $FUNCTION_APP \
+  --resource-group $RESOURCE_GROUP \
+  --settings \
+COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" \
+COSMOS_DB_KEY="${COSMOS_KEY}"
+```
+
+#### 修正後（正常動作）
+
+```yaml
+az functionapp config appsettings set \
+  --name "$FUNCTION_APP" \
+  --resource-group "$RESOURCE_GROUP" \
+  --settings \
+    CLOUD_PROVIDER=azure \
+    ENVIRONMENT=staging \
+    COSMOS_DB_ENDPOINT="$COSMOS_ENDPOINT" \
+    COSMOS_DB_KEY="$COSMOS_KEY" \
+    COSMOS_DB_DATABASE="$COSMOS_DATABASE" \
+    COSMOS_DB_CONTAINER="$COSMOS_CONTAINER" \
+    AUTH_PROVIDER=azure \
+    AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
+    AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
+    CORS_ORIGINS="$CORS_ORIGINS" \
+  > /dev/null 2>&1
+```
+
+**ポイント**:
+- `--settings` の後の各行を**2スペースまたは4スペースでインデント**
+- 変数は `"$VAR"` 形式で引用符で囲む
+- 各設定は `KEY=value` 形式（スペースなし）
+
+### 検証方法
+
+設定後、必ず以下で確認:
+
+```bash
+az functionapp config appsettings list \
+  --name "$FUNCTION_APP" \
+  --resource-group "$RESOURCE_GROUP" \
+  -o json | jq '.[] | select(.name | startswith("COSMOS_DB_")) | {name, value}'
+```
+
+期待される出力:
+```json
+{
+  "name": "COSMOS_DB_DATABASE",
+  "value": "messages"
+}
+{
+  "name": "COSMOS_DB_CONTAINER",
+  "value": "messages"
+}
+```
+
+### デバッグのノウハウ
+
+1. **ハードコード値でテスト**:
+   ```bash
+   az functionapp config appsettings set --settings TEST_VAR=hardcoded_value
+   ```
+   これでもnullなら、構文問題が濃厚。
+
+2. **段階的に変数を減らす**:
+   まず1つだけ設定して動作確認。動いたら徐々に増やす。
+
+3. **出力を確認**:
+   `> /dev/null` を外して、Azure CLIの実際の出力を確認。
+
+4. **公式ヘルプを確認**:
+   ```bash
+   az functionapp config appsettings set --help
+   ```
+   Examples セクションに正しい書式が記載されている。
+
+5. **GitHub Actions固有の問題を除外**:
+   ローカルのbashでも同じコマンドを試す（権限があれば）。
+
+### 該当ファイル
+
+- `.github/workflows/deploy-azure.yml` (lines 286-303)
+
+### ベストプラクティス
+
+✅ **推奨する書き方**:
+```yaml
+az functionapp config appsettings set \
+  --name "$VAR" \        # 変数は引用符で囲む
+  --settings \           # 改行後はインデント必須
+    KEY1=value1 \        # 2-4スペースのインデント
+    KEY2="$VAR2" \       # 変数値も引用符で
+    KEY3="${{ secrets.SECRET }}"  # GitHub Actionsシークレット
+```
+
+❌ **避けるべき書き方**:
+```yaml
+# 1. インデントなし
+az functionapp config appsettings set \
+--settings \
+KEY1=value1   # ❌ インデントなし
+
+# 2. 超長い1行
+az functionapp config appsettings set --settings KEY1=val1 KEY2=val2 ... KEY10=val10  # ❌ 読みにくい
+
+# 3. 引用符なしの変数（スペースを含む値では問題）
+--settings KEY=$VAR   # ❌ $VARにスペースがあると分割される
+```
+
+### 関連問題
+
+- [GitHub Actions YAML構文エラー](#github-actions-yaml構文エラー) - YAML基本構文
+- [環境変数の引用符とエスケープ](#環境変数の引用符とエスケープ) - シェル変数の扱い
+- [Azure CORS設定の名前競合](#azure-cors設定の名前競合) - 設定の上書き問題
+
+### 教訓
+
+1. **公式ドキュメントを最初に確認**:  
+   `--help` や公式Examples を見れば30分で解決できた問題に3時間費やした。
+
+2. **仮説の優先順位付け**:  
+   「変数名が予約語」という珍しいケースから調査するのではなく、「構文問題」という基本から確認すべきだった。
+
+3. **ハードコードテストの重要性**:  
+   変数展開を疑う前に、まずハードコード値でテストして切り分けるべき。
+
+4. **段階的デバッグ**:  
+   一度に全ての変数を設定するのではなく、1つずつ増やして問題箇所を特定。
+
+5. **ドキュメント化の価値**:  
+   同じ問題で悩む人（未来の自分を含む）のために、試行錯誤の過程も含めて記録する。
+
+### 参考: 試行錯誤の完全な履歴
+
+| 試行 | アプローチ                     | 結果 | 所要時間 |
+| ---- | ------------------------------ | ---- | -------- |
+| 1-3  | AZURE_COSMOS_* → COSMOS_DB_*   | ❌   | 30分     |
+| 4-5  | 引用符のバリエーション         | ❌   | 20分     |
+| 6    | --settingsフラグ統合           | ❌   | 15分     |
+| 7-8  | ハードコード値テスト           | ❌   | 20分     |
+| 9-10 | 1行形式に書き換え              | ❌   | 30分     |
+| 11   | 公式ヘルプ確認 → インデント発見 | ✅   | 5分      |
+| 12   | 正しい書式でデプロイ           | ✅   | 8分      |
+
+**合計**: 約3時間のデバッグ + 12回のデプロイメント（各8-10分）= **約5時間**
+
+---
+
 ## Azure環境変数の予約名問題
 
-**解決時間**: ⏱️ 1分（環境変数名変更のみ）
+> ⚠️ **注意**: この問題は最終的に**誤解**であることが判明しました。
+> 真の原因は上記の「[Azure CLI --settings YAML Multi-line書式問題](#azure-cli---settings-yaml-multi-line書式問題)」です。
+> 以下の内容は、間違った仮説の記録として残しています（同じミスを繰り返さないため）。
+
+**解決時間**: ⏱️ ~~1分（環境変数名変更のみ）~~ → 実際は0分（不要だった）
 
 ### 症状
 
@@ -756,10 +1006,12 @@ az functionapp config appsettings set --settings AZURE_COSMOS_DATABASE=messages
 以下の環境変数名は**Azure CLIまたはFunction Appで予約されている**可能性があり、使用できません：
 
 ❌ **使用不可**:
+
 - `AZURE_COSMOS_DATABASE`
 - `AZURE_COSMOS_CONTAINER`
 
 ✅ **代替案（正常動作）**:
+
 - `COSMOS_DB_DATABASE`
 - `COSMOS_DB_CONTAINER`
 - `COSMOS_DB_ENDPOINT`
@@ -770,8 +1022,9 @@ az functionapp config appsettings set --settings AZURE_COSMOS_DATABASE=messages
 Azure CLIまたはAzure Function Appの内部で、`AZURE_COSMOS_DATABASE`と`AZURE_COSMOS_CONTAINER`という名前が特別な意味を持つか、予約されている可能性があります。
 
 **検証結果**:
+
 - ✅ `AZURE_COSMOS_ENDPOINT` → 正常に設定可能
-- ✅ `AZURE_COSMOS_KEY` → 正常に設定可能  
+- ✅ `AZURE_COSMOS_KEY` → 正常に設定可能
 - ❌ `AZURE_COSMOS_DATABASE` → 常にnull（ハードコード値でも）
 - ❌ `AZURE_COSMOS_CONTAINER` → 常にnull（ハードコード値でも）
 - ✅ `COSMOS_DB_DATABASE` → 正常に設定可能
@@ -785,11 +1038,11 @@ Azure CLIまたはAzure Function Appの内部で、`AZURE_COSMOS_DATABASE`と`AZ
 
 ```yaml
 az functionapp config appsettings set \
-  --settings \
-    COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" \
-    COSMOS_DB_KEY="${COSMOS_KEY}" \
-    COSMOS_DB_DATABASE="${COSMOS_DATABASE}" \
-    COSMOS_DB_CONTAINER="${COSMOS_CONTAINER}"
+--settings \
+COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" \
+COSMOS_DB_KEY="${COSMOS_KEY}" \
+COSMOS_DB_DATABASE="${COSMOS_DATABASE}" \
+COSMOS_DB_CONTAINER="${COSMOS_CONTAINER}"
 ```
 
 #### 2. config.pyで両方をサポート（互換性維持）
@@ -814,7 +1067,7 @@ cosmos_db_container: str = Field(
 ### 該当ファイル
 
 - `.github/workflows/deploy-azure.yml` (lines 290-295)
-- `services/api/app/config.py` (lines 44-62)  
+- `services/api/app/config.py` (lines 44-62)
 - `services/api/app/backends/factory.py` (lines 27-30)
 
 ### ベストプラクティス
@@ -831,6 +1084,7 @@ cosmos_db_container: str = Field(
    - `CUSTOM_*` - カスタム設定
 
 3. **検証方法**:
+
    ```bash
    # 設定後に必ず確認
    az functionapp config appsettings list \
