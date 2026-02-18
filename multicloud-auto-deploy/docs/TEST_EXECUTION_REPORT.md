@@ -344,6 +344,172 @@ pytest tests/test_api_endpoints.py::TestAPIEndpoints -v -k "aws"
 ./scripts/run-integration-tests.sh --coverage
 ```
 
+---
+
+## 🌐 GCP/Azure API エンドポイントテスト
+
+### GCP Staging テスト結果
+
+**エンドポイント**: `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`
+
+| テスト | 結果 | HTTPステータス | エラー内容 |
+|---|---|---|---|
+| Health Check (/) | ✅ **PASSED** | 200 OK | - |
+| List Messages Initial | ❌ **FAILED** | 500 | Internal Server Error |
+| CRUD Operations Flow | ❌ **FAILED** | 401 | `{"detail":"認証が必要です"}` |
+| Pagination | ❌ **FAILED** | 500 | Internal Server Error |
+| Invalid Message ID | ✅ **PASSED** | 405 | Method Not Allowed (期待通り) |
+| Empty Content Validation | ❌ **FAILED** | 401 | 認証エラー |
+
+**総計**: **2/6 passed (33.3%)**
+
+**実行コマンド**:
+```bash
+export GCP_API_ENDPOINT="https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app"
+pytest services/api/tests/test_api_endpoints.py -v -k "gcp"
+```
+
+### Azure Staging テスト結果 
+
+**エンドポイント**: `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api`
+
+| テスト | 結果 | HTTPステータス | エラー内容 |
+|---|---|---|---|
+| Health Check (/api/) | ✅ **PASSED** | 200 OK | - |
+| List Messages Initial | ❌ **FAILED** | 500 | Internal Server Error |
+| CRUD Operations Flow | ❌ **FAILED** | 500 | Internal Server Error |
+| Pagination | ❌ **FAILED** | 500 | Internal Server Error |
+| Invalid Message ID | ✅ **PASSED** | 405 | Method Not Allowed (期待通り) |
+| Empty Content Validation | ✅ **PASSED** | 422 | Unprocessable Entity (期待通り) |
+
+**総計**: **3/6 passed (50.0%)**
+
+**実行コマンド**:
+```bash
+export AZURE_API_ENDPOINT="https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api"
+pytest services/api/tests/test_api_endpoints.py -v -k "azure"
+```
+
+---
+
+## 📈 統合テスト結果比較
+
+### プロバイダー別成功率
+
+| プロバイダー | 成功/総数 | 成功率 | 備考 |
+|---|---|---|---|
+| **AWS** | 5/6 | **83.3%** | ✅ CRUD操作以外は正常 |
+| **GCP** | 2/6 | **33.3%** | ⚠️ 認証エラー・500エラー多発 |
+| **Azure** | 3/6 | **50.0%** | ⚠️ 500エラー多発 |
+
+### 機能別成功率
+
+| 機能 | AWS | GCP | Azure |
+|---|---|---|---|
+| ヘルスチェック | ✅ | ✅ | ✅ |
+| メッセージ一覧 | ✅ | ❌ 500 | ❌ 500 |
+| CRUD操作 | ❌ | ❌ 401 | ❌ 500 |
+| ページネーション | ✅ | ❌ 500 | ❌ 500 |
+| エラーハンドリング | ✅ | ✅ | ✅ |
+| バリデーション | ✅ | ❌ 401 | ✅ |
+
+---
+
+## 🐛 検出された問題
+
+### GCP Cloud Run
+
+**問題1: 認証エラー（401）**
+- **症状**: POST/PUTリクエストで `{"detail":"認証が必要です"}` エラー
+- **原因**: GCPの認証機構がAWSと異なり、トークンなしでは操作不可
+- **影響**: メッセージ作成・更新操作ができない
+- **対策**: Firebase AuthまたはService Accountトークンの取得が必要
+
+**問題2: 内部サーバーエラー（500）**
+- **症状**: GET `/api/messages/` で500エラー
+- **推測される原因**:
+  - Firestoreデータベースの初期化不足
+  - コレクションまたはインデックスが未作成
+  - 環境変数の設定不備（`GCP_PROJECT_ID`, `GCP_FIRESTORE_DATABASE`）
+- **影響**: メッセージ一覧取得・ページネーションが利用不可
+- **対策**: 
+  - Firestoreコンソールでデータベース状態確認
+  - Cloud Runログの詳細確認
+  - 環境変数の再設定
+
+### Azure Functions
+
+**問題1: Web App起動ページ問題**
+- **症状**: `/`にアクセスすると "Your Azure Function App is up and running" HTML
+- **原因**: Azure Functionsのデフォルトルートは `/api/`
+- **対応**: テストで `/api/` プレフィックスを追加して解決済み
+
+**問題2: 内部サーバーエラー（500）**
+- **症状**: GET `/api/messages/` で500エラー（レスポンスボディなし）
+- **推測される原因**:
+  - Cosmos DBの接続エラー
+  - データベースまたはコンテナが未作成
+  - 環境変数の設定不備（`COSMOS_DB_ENDPOINT`, `COSMOS_DB_KEY`）
+- **影響**: メッセージ一覧取得・CRUD操作が利用不可
+- **対策**:
+  - Azure Portalでfunction AppのApplication Insightsログ確認
+  - Cosmos DB Data Explorerでデータベース/コンテナ確認
+  - 環境変数の再設定
+
+---
+
+## 💡 改善提案
+
+### 短期的対応（1-2日）
+
+1. **GCP/Azureのログ確認**
+   ```bash
+   # GCP Cloud Run ログ
+   gcloud run services logs read multicloud-auto-deploy-staging-api \
+     --region=asia-northeast1 --limit 50
+   
+   # Azure Function App ログ
+   az monitor app-insights query \
+     --app multicloud-auto-deploy-staging-func \
+     --analytics-query "traces | order by timestamp desc | limit 50"
+   ```
+
+2. **データベース初期化スクリプト作成**
+   - Firestoreコレクション/インデックス作成
+   - Cosmos DBコンテナ作成
+
+3. **認証の統一化**
+   - GCP/Azureでも認証トークンなしでテスト可能な設定
+
+### 中期的対応（1週間）
+
+1. **環境変数のバリデーション**
+   - 起動時に必須環境変数チェック
+   - 不足している場合は明確なエラーメッセージ
+
+2. **ヘルスチェックの拡張**
+   - データベース接続確認
+   - ストレージ接続確認
+
+3. **詳細なエラーレスポンス**
+   - 500エラー時にスタックトレースまたはエラーIDを返す
+
+### 長期的対応（1ヶ月）
+
+1. **CI/CDパイプライン統合**
+   - デプロイ後の自動ヘルスチェック
+   - テスト失敗時のロールバック
+
+2. **モニタリング・アラート設定**
+   - 500エラーが発生したらSlack/Email通知
+   - レスポンスタイム監視
+
+3. **E2Eテストスイート**
+   - 実際のブラウザを使った操作テスト
+   - 認証フロー含む完全なテスト
+
+---
+
 **関連ドキュメント**:
 - [INTEGRATION_TESTS_GUIDE.md](INTEGRATION_TESTS_GUIDE.md)
 - [DEPLOYMENT_VERIFICATION_REPORT.md](DEPLOYMENT_VERIFICATION_REPORT.md)
