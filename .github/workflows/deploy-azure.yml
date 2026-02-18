@@ -279,17 +279,33 @@ jobs:
           # Set environment variables (including Azure AD authentication)
           echo "⚙️  Setting environment variables..."
 
-          # Set all environment variables in a single command  
-          # WORKAROUND: Use COSMOS_DB_* instead of AZURE_COSMOS_* (Azure CLI bug with AZURE_COSMOS_DATABASE/CONTAINER names)
-          # NOTE: All settings must be on one line or Azure CLI fails to parse them correctly
+          # Set all environment variables in a single command
+          # Azure CLI expects: --settings KEY1=VALUE1 KEY2=VALUE2 (space-separated)
           echo "Setting all environment variables (Database: ${COSMOS_DATABASE}, Container: ${COSMOS_CONTAINER})..."
           az functionapp config appsettings set \
-            --name $FUNCTION_APP \
-            --resource-group $RESOURCE_GROUP \
-            --settings CLOUD_PROVIDER=azure ENVIRONMENT=staging COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" COSMOS_DB_KEY="${COSMOS_KEY}" COSMOS_DB_DATABASE="${COSMOS_DATABASE}" COSMOS_DB_CONTAINER="${COSMOS_CONTAINER}" AUTH_PROVIDER=azure AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" CORS_ORIGINS="${CORS_ORIGINS}" \
-            -o json | jq '.[] | select(.name | startswith("COSMOS_")) | {name, value}'
+            --name "$FUNCTION_APP" \
+            --resource-group "$RESOURCE_GROUP" \
+            --settings \
+              CLOUD_PROVIDER=azure \
+              ENVIRONMENT=staging \
+              COSMOS_DB_ENDPOINT="$COSMOS_ENDPOINT" \
+              COSMOS_DB_KEY="$COSMOS_KEY" \
+              COSMOS_DB_DATABASE="$COSMOS_DATABASE" \
+              COSMOS_DB_CONTAINER="$COSMOS_CONTAINER" \
+              AUTH_PROVIDER=azure \
+              AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
+              AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
+              CORS_ORIGINS="$CORS_ORIGINS" \
+            > /dev/null 2>&1
 
           echo "✅ Environment variables set"
+
+          # Verify settings were applied
+          echo "🔍 Verifying Cosmos DB environment variables..."
+          az functionapp config appsettings list \
+            --name "$FUNCTION_APP" \
+            --resource-group "$RESOURCE_GROUP" \
+            -o json | jq '.[] | select(.name | startswith("COSMOS_DB_")) | {name, value}'
 
           echo ""
           echo "🔍 Verifying Cosmos DB environment variables:"
