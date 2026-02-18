@@ -214,7 +214,8 @@ class AzureBackend(BackendBase):
         if profile:
             nickname = profile.get("nickname")
         if not nickname:
-            nickname = user.nickname
+            # Use email or user_id as fallback since UserInfo doesn't have nickname attribute
+            nickname = user.email if user.email else user.user_id
         
         # Build post document
         item: dict[str, Any] = {
