@@ -510,7 +510,28 @@ pytest services/api/tests/test_api_endpoints.py -v -k "azure"
 
 ---
 
+## 🔗 詳細調査レポート
+
+**GCP/Azure ログ詳細分析**: [LOG_INVESTIGATION_REPORT.md](LOG_INVESTIGATION_REPORT.md)
+
+### 主要な発見事項
+
+#### GCP Cloud Run
+- **根本原因**: 古いコードがデプロイされている（`NotImplementedError`）
+- **解決策**: Pulumi経由で最新コードを再デプロイ
+- **影響**: すべてのAPI操作が利用不可（ヘルスチェック以外）
+
+#### Azure Functions  
+- **根本原因**: Cosmos DB接続エラーまたは環境変数未設定
+- **解決策**: 環境変数確認、Cosmos DB初期化、再デプロイ
+- **影響**: メッセージ一覧取得とCRUD操作が利用不可
+
+詳細なスタックトレース、解決手順、検証計画は上記レポートを参照してください。
+
+---
+
 **関連ドキュメント**:
+- [LOG_INVESTIGATION_REPORT.md](LOG_INVESTIGATION_REPORT.md) ⭐ **NEW**
 - [INTEGRATION_TESTS_GUIDE.md](INTEGRATION_TESTS_GUIDE.md)
 - [DEPLOYMENT_VERIFICATION_REPORT.md](DEPLOYMENT_VERIFICATION_REPORT.md)
 - [AWS_BACKEND_COMPLETE_FIX_REPORT.md](AWS_BACKEND_COMPLETE_FIX_REPORT.md)
