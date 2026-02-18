@@ -23,12 +23,12 @@
 
 ### テストの種類
 
-| テスト種別 | 説明 | ツール |
-|---|---|---|
-| **ユニットテスト** | バックエンドクラスの個別メソッドテスト | pytest (mocked) |
-| **統合テスト** | CRUD操作の完全フローテスト | pytest (mocked) |
-| **APIエンドポイントテスト** | 実際のデプロイ済みAPI HTTPテスト | pytest + requests |
-| **E2Eテスト** | 全クラウドのエンドツーエンドテスト | bash + curl |
+| テスト種別                  | 説明                                   | ツール            |
+| --------------------------- | -------------------------------------- | ----------------- |
+| **ユニットテスト**          | バックエンドクラスの個別メソッドテスト | pytest (mocked)   |
+| **統合テスト**              | CRUD操作の完全フローテスト             | pytest (mocked)   |
+| **APIエンドポイントテスト** | 実際のデプロイ済みAPI HTTPテスト       | pytest + requests |
+| **E2Eテスト**               | 全クラウドのエンドツーエンドテスト     | bash + curl       |
 
 ---
 
@@ -58,12 +58,14 @@ scripts/
 #### 1. `conftest.py` - pytest設定
 
 **機能**:
+
 - テスト用フィクスチャ定義
 - ユーザー認証情報モック
 - サンプルデータ生成
 - クリーンアップ処理
 
 **主要フィクスチャ**:
+
 ```python
 test_user()              # 一般ユーザー
 admin_user()             # 管理者ユーザー
@@ -81,7 +83,9 @@ azure_config()           # Azure設定
 **テストクラス**:
 
 ##### `TestBackendBase` (基底クラス)
+
 全バックエンド共通のテストケース:
+
 - ✅ `test_backend_initialization()` - バックエンド初期化
 - ✅ `test_create_post_success()` - 投稿作成
 - ✅ `test_list_posts_empty()` - 投稿一覧（空）
@@ -98,14 +102,17 @@ azure_config()           # Azure設定
 - ✅ `test_generate_upload_urls()` - アップロードURL生成
 
 ##### `TestAwsBackend` (AWS特化)
+
 - DynamoDB + S3 のモックテスト
 - マーカー: `@pytest.mark.aws`
 
 ##### `TestGcpBackend` (GCP特化)
+
 - Firestore + Cloud Storage のモックテスト
 - マーカー: `@pytest.mark.gcp`
 
 ##### `TestAzureBackend` (Azure特化)
+
 - Cosmos DB + Blob Storage のモックテスト
 - マーカー: `@pytest.mark.azure`
 
@@ -114,7 +121,9 @@ azure_config()           # Azure設定
 **テストクラス**:
 
 ##### `TestAPIEndpoints`
+
 実際のデプロイ済みAPIエンドポイントをテスト:
+
 - ✅ `test_health_check()` - ヘルスチェック
 - ✅ `test_list_messages_initial()` - メッセージ一覧取得
 - ✅ `test_crud_operations_flow()` - CRUD完全フロー
@@ -125,11 +134,13 @@ azure_config()           # Azure設定
 **参考**: `scripts/test-api.sh` のテストケース 1-12
 
 ##### `TestMultiCloudEndpoints`
+
 - ✅ `test_all_cloud_health_checks()` - 全クラウドヘルスチェック
 
 **参考**: `scripts/test-endpoints.sh`
 
 ##### `TestCrossCloudConsistency`
+
 - ✅ `test_response_format_consistency()` - レスポンス形式の一貫性
 - ✅ `test_api_version_consistency()` - APIバージョンの一貫性
 
@@ -142,38 +153,45 @@ azure_config()           # Azure設定
 ### 方法1: Python pytest直接実行
 
 #### 全テスト実行（モックテストのみ）
+
 ```bash
 cd services/api
 pytest tests/
 ```
 
 #### AWS バックエンドのみテスト
+
 ```bash
 pytest tests/ -m aws
 ```
 
 #### GCP バックエンドのみテスト
+
 ```bash
 pytest tests/ -m gcp
 ```
 
 #### Azure バックエンドのみテスト
+
 ```bash
 pytest tests/ -m azure
 ```
 
 #### 詳細出力
+
 ```bash
 pytest tests/ -vv
 ```
 
 #### カバレッジレポート生成
+
 ```bash
 pytest tests/ --cov=app --cov-report=html
 # レポート: htmlcov/index.html
 ```
 
 #### 特定のテストのみ実行
+
 ```bash
 pytest tests/ -k "test_create_post"
 ```
@@ -181,21 +199,25 @@ pytest tests/ -k "test_create_post"
 ### 方法2: シェルスクリプト実行（推奨）
 
 #### Pythonテスト実行
+
 ```bash
 ./scripts/run-integration-tests.sh
 ```
 
 #### 詳細出力で実行
+
 ```bash
 ./scripts/run-integration-tests.sh -v
 ```
 
 #### 特定のマーカーでテスト
+
 ```bash
 ./scripts/run-integration-tests.sh -m aws
 ```
 
 #### 実際のAPIエンドポイントをテスト
+
 ```bash
 # 環境変数設定
 export AWS_API_ENDPOINT="https://abc123.execute-api.ap-northeast-1.amazonaws.com"
@@ -207,6 +229,7 @@ export AZURE_API_ENDPOINT="https://func-xyz.azurewebsites.net/api/HttpTrigger"
 ```
 
 #### カバレッジ付きで実行
+
 ```bash
 ./scripts/run-integration-tests.sh --coverage
 ```
@@ -214,16 +237,19 @@ export AZURE_API_ENDPOINT="https://func-xyz.azurewebsites.net/api/HttpTrigger"
 ### 方法3: 既存のシェルスクリプト実行
 
 #### 単一APIテスト
+
 ```bash
 ./scripts/test-api.sh -e https://your-api-endpoint.com
 ```
 
 #### マルチクラウドE2Eテスト
+
 ```bash
 ./scripts/test-e2e.sh
 ```
 
 #### エンドポイントヘルスチェック
+
 ```bash
 ./scripts/test-endpoints.sh
 ```
@@ -234,31 +260,31 @@ export AZURE_API_ENDPOINT="https://func-xyz.azurewebsites.net/api/HttpTrigger"
 
 ### バックエンドメソッド
 
-| メソッド | AWS | GCP | Azure | テスト数 |
-|---|:---:|:---:|:---:|:---:|
-| `list_posts()` | ✅ | ✅ | ✅ | 3 |
-| `create_post()` | ✅ | ✅ | ✅ | 3 |
-| `update_post()` | ✅ | ✅ | ✅ | 9 |
-| `delete_post()` | ✅ | ✅ | ✅ | 9 |
-| `get_profile()` | ✅ | ✅ | ✅ | 3 |
-| `update_profile()` | ✅ | ✅ | ✅ | 6 |
-| `generate_upload_urls()` | ✅ | ✅ | ✅ | 3 |
+| メソッド                 | AWS | GCP | Azure | テスト数 |
+| ------------------------ | :-: | :-: | :---: | :------: |
+| `list_posts()`           | ✅  | ✅  |  ✅   |    3     |
+| `create_post()`          | ✅  | ✅  |  ✅   |    3     |
+| `update_post()`          | ✅  | ✅  |  ✅   |    9     |
+| `delete_post()`          | ✅  | ✅  |  ✅   |    9     |
+| `get_profile()`          | ✅  | ✅  |  ✅   |    3     |
+| `update_profile()`       | ✅  | ✅  |  ✅   |    6     |
+| `generate_upload_urls()` | ✅  | ✅  |  ✅   |    3     |
 
 **合計**: 108テストケース（36ケース × 3クラウド）
 
 ### APIエンドポイント
 
-| エンドポイント | メソッド | テスト | 参考スクリプト |
-|---|---|---|---|
-| `/` | GET | ヘルスチェック | test-api.sh #1 |
-| `/api/messages/` | GET | 一覧取得 | test-api.sh #2, #4 |
-| `/api/messages/` | POST | 作成 | test-api.sh #3 |
-| `/api/messages/{id}` | GET | 個別取得 | test-api.sh #5 |
-| `/api/messages/{id}` | PUT | 更新 | test-api.sh #6, #7 |
-| `/api/messages/{id}` | DELETE | 削除 | test-api.sh #8, #9 |
-| `/api/messages/?page=1` | GET | ページネーション | test-api.sh #10 |
-| `/api/messages/invalid-id` | GET | エラー404 | test-api.sh #11 |
-| `/api/messages/` | POST | バリデーションエラー | test-api.sh #12 |
+| エンドポイント             | メソッド | テスト               | 参考スクリプト     |
+| -------------------------- | -------- | -------------------- | ------------------ |
+| `/`                        | GET      | ヘルスチェック       | test-api.sh #1     |
+| `/api/messages/`           | GET      | 一覧取得             | test-api.sh #2, #4 |
+| `/api/messages/`           | POST     | 作成                 | test-api.sh #3     |
+| `/api/messages/{id}`       | GET      | 個別取得             | test-api.sh #5     |
+| `/api/messages/{id}`       | PUT      | 更新                 | test-api.sh #6, #7 |
+| `/api/messages/{id}`       | DELETE   | 削除                 | test-api.sh #8, #9 |
+| `/api/messages/?page=1`    | GET      | ページネーション     | test-api.sh #10    |
+| `/api/messages/invalid-id` | GET      | エラー404            | test-api.sh #11    |
+| `/api/messages/`           | POST     | バリデーションエラー | test-api.sh #12    |
 
 **合計**: 27エンドポイントテスト（9エンドポイント × 3クラウド）
 
@@ -268,16 +294,16 @@ export AZURE_API_ENDPOINT="https://func-xyz.azurewebsites.net/api/HttpTrigger"
 
 テストを分類・フィルタリングするためのマーカー:
 
-| マーカー | 説明 | 使用例 |
-|---|---|---|
-| `@pytest.mark.aws` | AWS特化テスト | `pytest -m aws` |
-| `@pytest.mark.gcp` | GCP特化テスト | `pytest -m gcp` |
-| `@pytest.mark.azure` | Azure特化テスト | `pytest -m azure` |
-| `@pytest.mark.integration` | 統合テスト | `pytest -m integration` |
-| `@pytest.mark.unit` | ユニットテスト | `pytest -m unit` |
-| `@pytest.mark.slow` | 時間のかかるテスト | `pytest -m "not slow"` |
-| `@pytest.mark.requires_network` | ネットワーク必須 | `pytest -m requires_network` |
-| `@pytest.mark.requires_credentials` | 認証情報必須 | デフォルトで除外 |
+| マーカー                            | 説明               | 使用例                       |
+| ----------------------------------- | ------------------ | ---------------------------- |
+| `@pytest.mark.aws`                  | AWS特化テスト      | `pytest -m aws`              |
+| `@pytest.mark.gcp`                  | GCP特化テスト      | `pytest -m gcp`              |
+| `@pytest.mark.azure`                | Azure特化テスト    | `pytest -m azure`            |
+| `@pytest.mark.integration`          | 統合テスト         | `pytest -m integration`      |
+| `@pytest.mark.unit`                 | ユニットテスト     | `pytest -m unit`             |
+| `@pytest.mark.slow`                 | 時間のかかるテスト | `pytest -m "not slow"`       |
+| `@pytest.mark.requires_network`     | ネットワーク必須   | `pytest -m requires_network` |
+| `@pytest.mark.requires_credentials` | 認証情報必須       | デフォルトで除外             |
 
 ---
 
@@ -286,6 +312,7 @@ export AZURE_API_ENDPOINT="https://func-xyz.azurewebsites.net/api/HttpTrigger"
 ### 問題: pytest が見つからない
 
 **解決方法**:
+
 ```bash
 pip install pytest pytest-mock pytest-asyncio requests
 ```
@@ -293,6 +320,7 @@ pip install pytest pytest-mock pytest-asyncio requests
 ### 問題: ImportError: No module named 'app'
 
 **解決方法**:
+
 ```bash
 # services/api ディレクトリから実行
 cd /workspaces/ashnova/multicloud-auto-deploy/services/api
@@ -302,6 +330,7 @@ pytest tests/
 ### 問題: モックエラー (MagicMock related)
 
 **解決方法**:
+
 ```bash
 pip install pytest-mock
 ```
@@ -311,6 +340,7 @@ pip install pytest-mock
 **原因**: エンドポイントが未設定または未デプロイ
 
 **解決方法**:
+
 ```bash
 # 環境変数を設定
 export AWS_API_ENDPOINT="https://your-endpoint.com"
@@ -324,6 +354,7 @@ pytest tests/ -m "not requires_network"
 **原因**: テストスクリプトに実行権限がない
 
 **解決方法**:
+
 ```bash
 chmod +x scripts/run-integration-tests.sh
 ```
@@ -341,32 +372,32 @@ name: Integration Tests
 
 on:
   push:
-    branches: [ develop, main ]
+    branches: [develop, main]
   pull_request:
-    branches: [ develop, main ]
+    branches: [develop, main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
-      
+          python-version: "3.12"
+
       - name: Install dependencies
         run: |
           cd services/api
           pip install -r requirements.txt
           pip install pytest pytest-mock pytest-asyncio requests
-      
+
       - name: Run integration tests
         run: |
           ./scripts/run-integration-tests.sh -v
-      
+
       - name: Run endpoint tests (if deployed)
         if: env.AWS_API_ENDPOINT != ''
         env:
@@ -416,11 +447,11 @@ pytest tests/ -v
 # ========================================
 # Python統合テスト実行
 # ========================================
-# 
+#
 # Python: 3.12.0
 # pytest: pytest 7.4.3
 # マーカー: -m aws
-# 
+#
 # tests/test_backends_integration.py::TestAwsBackend::test_backend_initialization PASSED
 # tests/test_backends_integration.py::TestAwsBackend::test_create_post_success PASSED
 # ...
@@ -442,18 +473,18 @@ export AWS_API_ENDPOINT="https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws
 # ========================================
 # Python統合テスト実行
 # ========================================
-# 
+#
 # エンドポイントテスト: 有効
-# 
+#
 # 環境変数:
 #   AWS_API_ENDPOINT=https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 #   GCP_API_ENDPOINT=未設定
 #   AZURE_API_ENDPOINT=未設定
-# 
+#
 # tests/ test_api_endpoints.py::TestAPIEndpoints::test_health_check[aws] PASSED
 # tests/test_api_endpoints.py::TestAPIEndpoints::test_crud_operations_flow[aws] PASSED
 # ...
-# 
+#
 # === Multi-Cloud Health Check Results ===
 # ✅ aws: {'status_code': 200, 'accessible': True, 'response': {...}}
 # ❌ gcp: {'status_code': None, 'accessible': False, 'error': '...'}
@@ -477,7 +508,7 @@ export AWS_API_ENDPOINT="https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws
 # app/backends/azure_backend.py           148     14    91%
 # ---------------------------------------------------------
 # TOTAL                                   453     41    91%
-# 
+#
 # カバレッジレポート: htmlcov/index.html
 ```
 
@@ -513,6 +544,7 @@ export AWS_API_ENDPOINT="https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws
 **作成者**: GitHub Copilot  
 **最終更新**: 2026-02-18  
 **関連ドキュメント**:
+
 - [API_OPERATION_VERIFICATION_REPORT.md](API_OPERATION_VERIFICATION_REPORT.md)
 - [AWS_BACKEND_COMPLETE_FIX_REPORT.md](AWS_BACKEND_COMPLETE_FIX_REPORT.md)
 - [BACKEND_IMPLEMENTATION_INVESTIGATION.md](BACKEND_IMPLEMENTATION_INVESTIGATION.md)

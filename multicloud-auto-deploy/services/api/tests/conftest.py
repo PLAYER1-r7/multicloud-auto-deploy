@@ -22,9 +22,8 @@ def test_user() -> UserInfo:
     """Create a test user"""
     return UserInfo(
         user_id="test-user-1",
-        nickname="Test User",
         email="test@example.com",
-        is_admin=False,
+        groups=None,
     )
 
 
@@ -33,9 +32,8 @@ def admin_user() -> UserInfo:
     """Create an admin user"""
     return UserInfo(
         user_id="admin-user-1",
-        nickname="Admin User",
         email="admin@example.com",
-        is_admin=True,
+        groups=["Admins"],
     )
 
 
@@ -44,9 +42,8 @@ def another_user() -> UserInfo:
     """Create another test user"""
     return UserInfo(
         user_id="test-user-2",
-        nickname="Another User",
         email="another@example.com",
-        is_admin=False,
+        groups=None,
     )
 
 
@@ -75,7 +72,8 @@ def sample_update_body() -> UpdatePostBody:
 def sample_profile_update() -> ProfileUpdateRequest:
     """Create sample profile update data"""
     return ProfileUpdateRequest(
-        nickname="Updated Nickname",
+        bio="Updated bio for testing",
+        avatar_key="avatar.jpg",
     )
 
 

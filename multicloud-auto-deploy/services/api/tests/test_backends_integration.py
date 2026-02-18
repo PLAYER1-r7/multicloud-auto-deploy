@@ -234,13 +234,12 @@ class TestAwsBackend(TestBackendBase):
             # Mock S3 client
             mock_boto3.client.return_value = mock_s3_client or MagicMock()
             
-            # Set required config
-            with patch('app.backends.aws_backend.settings') as mock_settings:
-                mock_settings.posts_table_name = "test-posts"
-                mock_settings.images_bucket_name = "test-images"
-                mock_settings.aws_region = "ap-northeast-1"
-                mock_settings.presigned_url_expiry = 300
-                
+            # Set required environment variables
+            with patch.dict('os.environ', {
+                'POSTS_TABLE_NAME': 'test-posts',
+                'IMAGES_BUCKET_NAME': 'test-images',
+                'AWS_REGION': 'ap-northeast-1',
+            }):
                 backend = AwsBackend()
                 return backend
     
