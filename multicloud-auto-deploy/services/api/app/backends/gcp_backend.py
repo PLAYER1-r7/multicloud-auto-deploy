@@ -155,7 +155,7 @@ class GcpBackend(BackendBase):
                 content=data.get("content"),
                 createdAt=data.get("createdAt"),
                 updatedAt=data.get("updatedAt") or data.get("createdAt"),
-                isMarkdown=data.get("isMarkdown"),
+                isMarkdown=data.get("isMarkdown", False),
                 tags=data.get("tags"),
                 imageUrls=_build_image_urls(image_keys),
             )
@@ -189,7 +189,8 @@ class GcpBackend(BackendBase):
         profile = profile_doc.to_dict() if profile_doc.exists else None
         nickname = profile.get("nickname") if profile else None
         if not nickname:
-            nickname = user.nickname
+            # Use user_id as fallback if nickname not found
+            nickname = user.user_id
         
         # Build post document
         item: dict[str, Any] = {
@@ -213,7 +214,16 @@ class GcpBackend(BackendBase):
         logger.info(f"Writing post {post_id} to Firestore collection {settings.gcp_posts_collection}")
         db.collection(settings.gcp_posts_collection).document(post_id).set(item)
         
-        return {"item": item}
+        return {
+            "post_id": post_id,
+            "postId": post_id,
+            "user_id": user.user_id,
+            "userId": user.user_id,
+            "content": body.content,
+            "tags": body.tags or [],
+            "created_at": created_at,
+            "createdAt": created_at,
+        }
     
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
         """Delete a post from Firestore"""

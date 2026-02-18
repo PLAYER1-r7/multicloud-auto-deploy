@@ -1,17 +1,128 @@
-# GCP/Azure ログ調査レポート
+# GCP/Azure ログ調査 & デプロイレポート
 
 **実施日**: 2026-02-18  
 **対象環境**: GCP Cloud Run (staging) / Azure Functions (staging)  
 **調査者**: GitHub Copilot
+**更新**: 2026-02-18 02:51 - GCPデプロイ完了、テスト結果更新
 
 ---
 
-## 📋 調査サマリー
+## 📊 最終結果サマリー
 
-| プロバイダー | 主な問題 | 根本原因 | 重要度 |
-|---|---|---|---|
-| **GCP Cloud Run** | `NotImplementedError: GCP backend not yet implemented` | 古いコードがデプロイされている | 🔴 **HIGH** |
-| **Azure Functions** | 500 Internal Server Error（詳細不明） | Cosmos DB接続エラーまたは設定不備 | 🟡 **MEDIUM** |
+| プロバイダー        | テスト結果 | 成功率  | 主な残存問題                   | ステータス       |
+| ------------------- | ---------- | ------- | ------------------------------ | ---------------- |
+| **AWS**             | 5/6        | 83.3%   | -                              | ✅ **RESOLVED**  |
+| **GCP Cloud Run**   | 5/6        | 83.3%   | GET single message (405エラー) | ✅ **IMPROVED**  |
+| **Azure Functions** | 3/6        | 50.0%   | 500 Internal Server Error      | ⚠️ **PENDING**   |
+
+### GCP改善詳細
+
+- **初期状態**: 2/6 (33.3%) - `NotImplementedError`で全API失敗
+- **デプロイ後**: 5/6 (83.3%) - CRUD操作の大部分が動作
+- **修正内容**:
+  - `isMarkdown`フィールドのデフォルト値設定
+  - `UserInfo.nickname`属性エラーの修正
+  - レスポンス形式の統一（AWS/GCPで互換性確保）
+- **デプロイリビジョン**: 00044 (最終)
+
+---
+
+## 🔧 GCP デプロイ手順（実施済み）
+
+### アーキテクチャ理解
+
+GCPでは**インフラ**と**アプリケーションコード**が別々に管理されています：
+
+1. **Pulumi** → インフラ管理（Storage, IAM, Firebase, Monitoring）
+2. **gcloud CLI** → Cloud Functionコードデプロイ
+
+コメント（`infrastructure/pulumi/gcp/__main__.py:10`）：
+```python
+# Cloud Functions is deployed via gcloud CLI, not Pulumi
+# Reason: Pulumi requires the ZIP file to exist before creating the function
+```
+
+### デプロイプロセス
+
+#### Phase 1: インフラ更新（Pulumi）
+```bash
+cd infrastructure/pulumi/gcp
+pulumi stack select staging
+pulumi up -y
+```
+
+**結果**: Firebase Auth、Monitoring Alert Policiesなど8リソース追加
+
+#### Phase 2: アプリケーションコードデプロイ
+
+1. **パッケージング**:
+```bash
+cd services/api
+rm -rf .deployment function-source.zip
+mkdir -p .deployment
+pip install --target .deployment --no-cache-dir -r requirements-gcp.txt
+
+# クリーンアップ
+find .deployment -type d -name "__pycache__" -exec rm -rf {} +
+find .deployment -type d -name "*.dist-info" -exec rm -rf {} +
+
+# コードコピー
+cp -r app .deployment/
+cp function.py .deployment/main.py
+cp requirements-gcp.txt .deployment/requirements.txt
+
+# ZIP作成
+cd .deployment && zip -r9 -q ../function-source.zip .
+```
+
+2. **GCSアップロード**:
+```bash
+gsutil cp function-source.zip \
+  gs://ashnova-multicloud-auto-deploy-staging-function-source/function-source.zip
+```
+
+3. **環境変数ファイル作成**:
+```bash
+cat > /tmp/env-vars.yaml << EOF
+ENVIRONMENT: "staging"
+CLOUD_PROVIDER: "gcp"
+GCP_PROJECT_ID: "ashnova"
+FIRESTORE_COLLECTION: "messages"
+CORS_ORIGINS: "http://localhost:5173,https://localhost:5173"
+EOF
+```
+
+4. **Cloud Functionデプロイ**:
+```bash
+gcloud functions deploy multicloud-auto-deploy-staging-api \
+  --gen2 \
+  --region=asia-northeast1 \
+  --runtime=python311 \
+  --source=gs://ashnova-multicloud-auto-deploy-staging-function-source/function-source.zip \
+  --entry-point=handler \
+  --trigger-http \
+  --allow-unauthenticated \
+  --max-instances=10 \
+  --memory=512MB \
+  --timeout=60s \
+  --env-vars-file=/tmp/env-vars.yaml \
+  --project=ashnova
+```
+
+**デプロイ履歴**:
+- Revision 00041: 初回デプロイ（`NotImplementedError`解消）
+- Revision 00042: `isMarkdown`フィールド修正
+- Revision 00043: `UserInfo.nickname`エラー修正
+- Revision 00044: レスポンス形式修正（最終）
+
+---
+
+## 📋 調査サマリー（初期）
+
+| プロバイダー        | 主な問題                                               | 根本原因                          | 重要度        |
+| ------------------- | ------------------------------------------------------ | --------------------------------- | ------------- |
+| **GCP Cloud Run**   | `NotImplementedError: GCP backend not yet implemented` | 古いコードがデプロイされている    | 🔴 **HIGH**   |
+| **Azure Functions** | 500 Internal Server Error（詳細不明）                  | Cosmos DB接続エラーまたは設定不備 | 🟡 **MEDIUM** |
 
 ---
 
@@ -48,6 +159,7 @@ NotImplementedError: GCP backend not yet implemented
 ### 実装状況確認
 
 **ローカルコード**（最新）:
+
 ```bash
 services/api/app/backends/gcp_backend.py (行 108-140)
 ✅ list_posts() - 完全実装済み（Firestore クエリ、ページネーション対応）
@@ -58,6 +170,7 @@ services/api/app/backends/gcp_backend.py (行 108-140)
 ```
 
 **Git履歴**:
+
 - `b83bf48`: "feat: implement complete GCP backend with Firestore and Cloud Storage"
 - デプロイ確認: **未実施**（最新コミット `d8d85db` でもデプロイ記録なし）
 
@@ -107,11 +220,12 @@ Function App: multicloud-auto-deploy-staging-func
    - ネットワーク/ファイアウォール設定問題
 
 2. **実装済みコードの確認**
+
    ```bash
    services/api/app/backends/azure_backend.py (行 140-180)
    ✅ list_posts() - 完全実装済み（Cosmos DB クエリ対応）
    ```
-   
+
    **Git履歴**:
    - `987da77`: "feat: implement complete Azure backend with Cosmos DB and Blob Storage"
    - デプロイ確認: **未確認**
@@ -155,6 +269,7 @@ curl https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app/api/mess
 ```
 
 **期待される結果**:
+
 - ✅ `NotImplementedError`が解消され、Firestoreクエリが実行される
 - ⚠️ Firestoreが初期化されていない場合は空配列 `{"items": [], "nextToken": null}` が返る
 
@@ -184,6 +299,7 @@ az functionapp config appsettings list \
 ```
 
 **必須環境変数**:
+
 - `COSMOS_DB_ENDPOINT`: Cosmos DBのエンドポイントURL
 - `COSMOS_DB_KEY`: アクセスキー（Primary KeyまたはSecondary Key）
 - `COSMOS_DB_DATABASE_NAME`: データベース名（デフォルト: `multicloud-auto-deploy-db`）
@@ -231,6 +347,7 @@ FunctionAppLogs
 ### Phase 1: GCP 再デプロイとテスト
 
 **実施項目**:
+
 1. ✅ GCP Cloud Runに最新コードをデプロイ
 2. ✅ ヘルスチェック確認
 3. ✅ `/api/messages/` エンドポイントテスト（空応答でも可）
@@ -238,6 +355,7 @@ FunctionAppLogs
 5. ✅ 結果ドキュメント化
 
 **成功基準**:
+
 - `NotImplementedError`が発生しない
 - 500エラーが解消される（または明確なエラーメッセージが返る）
 - ヘルスチェック以外のテストが実行可能になる
@@ -245,6 +363,7 @@ FunctionAppLogs
 ### Phase 2: Azure 調査と修正
 
 **実施項目**:
+
 1. ✅ Azure Functionsに最新コードをデプロイ
 2. ✅ 環境変数確認と設定
 3. ✅ Cosmos DB初期化確認
@@ -253,6 +372,7 @@ FunctionAppLogs
 6. ✅ 結果ドキュメント化
 
 **成功基準**:
+
 - 500エラーが解消される
 - メッセージ一覧取得が正常動作
 - 統合テストで50%以上の成功率
@@ -260,12 +380,14 @@ FunctionAppLogs
 ### Phase 3: 完全統合テスト
 
 **実施項目**:
+
 1. 全プロバイダーでCRUD操作テスト
 2. 認証フロー確認（GCPの401エラー対応）
 3. エラーハンドリング確認
 4. パフォーマンステスト
 
 **成功基準**:
+
 - 全プロバイダーで80%以上のテスト成功率
 - 主要なCRUD操作が正常動作
 
@@ -273,16 +395,16 @@ FunctionAppLogs
 
 ## 🎯 優先順位と推定時間
 
-| タスク | 優先度 | 推定時間 | 担当 |
-|---|---|---|---|
-| GCP 再デプロイ | 🔴 **HIGH** | 10分 | Ops |
-| GCP 統合テスト再実行 | 🔴 **HIGH** | 5分 | QA |
-| Azure 再デプロイ | 🟡 **MEDIUM** | 10分 | Ops |
-| Azure 環境変数確認 | 🟡 **MEDIUM** | 15分 | Ops |
-| Azure ログ詳細調査 | 🟡 **MEDIUM** | 20分 | Dev |
-| Azure 修正とテスト | 🟡 **MEDIUM** | 30分 | Dev |
-| 認証エラー対応（GCP） | 🟢 **LOW** | 1時間 | Dev |
-| 完全統合テスト | 🟢 **LOW** | 20分 | QA |
+| タスク                | 優先度        | 推定時間 | 担当 |
+| --------------------- | ------------- | -------- | ---- |
+| GCP 再デプロイ        | 🔴 **HIGH**   | 10分     | Ops  |
+| GCP 統合テスト再実行  | 🔴 **HIGH**   | 5分      | QA   |
+| Azure 再デプロイ      | 🟡 **MEDIUM** | 10分     | Ops  |
+| Azure 環境変数確認    | 🟡 **MEDIUM** | 15分     | Ops  |
+| Azure ログ詳細調査    | 🟡 **MEDIUM** | 20分     | Dev  |
+| Azure 修正とテスト    | 🟡 **MEDIUM** | 30分     | Dev  |
+| 認証エラー対応（GCP） | 🟢 **LOW**    | 1時間    | Dev  |
+| 完全統合テスト        | 🟢 **LOW**    | 20分     | QA   |
 
 **合計推定時間**: 約2-3時間
 
