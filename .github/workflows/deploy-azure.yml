@@ -279,8 +279,14 @@ jobs:
           # Set environment variables (including Azure AD authentication)
           echo "⚙️  Setting environment variables..."
           
+          # Debug: Print variable values before setting
+          echo "DEBUG: COSMOS_DATABASE='${COSMOS_DATABASE}' (length: ${#COSMOS_DATABASE})"
+          echo "DEBUG: COSMOS_CONTAINER='${COSMOS_CONTAINER}' (length: ${#COSMOS_CONTAINER})"
+          echo "DEBUG: COSMOS_ENDPOINT='${COSMOS_ENDPOINT}' (length: ${#COSMOS_ENDPOINT})"
+
           # Set all environment variables in a single command
           # CRITICAL: Multiple --settings flags overwrite each other - use single --settings with all values
+          # Testing with hardcoded values first to verify Azure CLI behavior
           echo "Setting all environment variables (Database: ${COSMOS_DATABASE}, Container: ${COSMOS_CONTAINER})..."
           az functionapp config appsettings set \
             --name $FUNCTION_APP \
@@ -290,13 +296,13 @@ jobs:
               ENVIRONMENT=staging \
               AZURE_COSMOS_ENDPOINT="${COSMOS_ENDPOINT}" \
               AZURE_COSMOS_KEY="${COSMOS_KEY}" \
-              AZURE_COSMOS_DATABASE="${COSMOS_DATABASE}" \
-              AZURE_COSMOS_CONTAINER="${COSMOS_CONTAINER}" \
+              AZURE_COSMOS_DATABASE=messages \
+              AZURE_COSMOS_CONTAINER=messages \
               AUTH_PROVIDER=azure \
               AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
               AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
               CORS_ORIGINS="${CORS_ORIGINS}" \
-            > /dev/null
+            -o json | jq '.[] | select(.name | startswith("AZURE_COSMOS")) | {name, value}'
           
           echo "✅ Environment variables set"
 
