@@ -417,12 +417,13 @@ jobs:
       - name: Enable Static Website Hosting
         run: |
           STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
 
           echo "🌐 Enabling static website hosting on $STORAGE_ACCOUNT..."
 
           # Get storage account key
           STORAGE_KEY=$(az storage account keys list \
-            --resource-group multicloud-auto-deploy-staging-rg \
+            --resource-group $RESOURCE_GROUP \
             --account-name $STORAGE_ACCOUNT \
             --query '[0].value' -o tsv)
 
@@ -437,10 +438,11 @@ jobs:
         run: |
           # Use storage account from Pulumi output
           STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
 
           # Get storage account key
           STORAGE_KEY=$(az storage account keys list \
-            --resource-group multicloud-auto-deploy-staging-rg \
+            --resource-group $RESOURCE_GROUP \
             --account-name $STORAGE_ACCOUNT \
             --query '[0].value' -o tsv)
 
@@ -454,8 +456,8 @@ jobs:
 
       - name: Verify Deployment
         run: |
-          FUNCTION_APP="multicloud-auto-deploy-staging-func"
-          RESOURCE_GROUP="multicloud-auto-deploy-staging-rg"
+          FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
 
           echo "🔍 Verifying API deployment..."
           echo "Getting Function App hostname..."
