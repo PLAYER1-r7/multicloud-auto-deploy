@@ -6,7 +6,7 @@ CORS-hardened version for production deployment - AWS Lambda Layer permissions f
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi import Query, Depends
+from fastapi import Query, Depends, HTTPException
 from typing import Optional
 import logging
 
@@ -119,7 +119,10 @@ def legacy_get_message(
 ) -> dict:
     """旧フロントエンド互換: 投稿を取得 (GET /api/messages/{id})"""
     backend = get_backend()
-    return backend.get_post(post_id)
+    try:
+        return backend.get_post(post_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @app.put("/api/messages/{post_id}")
 def legacy_update_message(
