@@ -146,9 +146,9 @@ class AzureBackend(BackendBase):
         """List posts from Cosmos DB"""
         container = _get_container()
         
-        # Query posts with partition key
-        query = "SELECT * FROM c WHERE c.pk = @pk ORDER BY c.createdAt DESC"
-        params = [{"name": "@pk", "value": "POSTS"}]
+        # Query posts across all partitions
+        query = "SELECT * FROM c WHERE c.docType = @docType ORDER BY c.createdAt DESC"
+        params = [{"name": "@docType", "value": "post"}]
         
         # Decode continuation token
         continuation = _decode_token(next_token)
@@ -205,7 +205,7 @@ class AzureBackend(BackendBase):
         try:
             profile = container.read_item(
                 item=f"USER_{user.user_id}",
-                partition_key=f"USER_{user.user_id}"
+                partition_key=user.user_id
             )
         except Exception:
             profile = None
@@ -219,9 +219,8 @@ class AzureBackend(BackendBase):
         # Build post document
         item: dict[str, Any] = {
             "id": post_id,
-            "pk": "POSTS",
-            "postId": post_id,
             "userId": user.user_id,
+            "postId": post_id,
             "content": body.content,
             "createdAt": created_at,
             "updatedAt": created_at,
@@ -246,9 +245,17 @@ class AzureBackend(BackendBase):
         """Delete a post from Cosmos DB"""
         container = _get_container()
         
+        # First query to find the post and get its userId
         try:
-            post = container.read_item(item=post_id, partition_key="POSTS")
-        except Exception:
+            query = "SELECT * FROM c WHERE c.id = @id AND c.docType = @docType"
+            params = [{"name": "@id", "value": post_id}, {"name": "@docType", "value": "post"}]
+            items = list(container.query_items(query=query, parameters=params, enable_cross_partition_query=True))
+            if not items:
+                raise ValueError(f"Post not found: {post_id}")
+            post = items[0]
+        except Exception as e:
+            if "Post not found" in str(e):
+                raise
             raise ValueError(f"Post not found: {post_id}")
         
         # Check permissions
@@ -271,7 +278,7 @@ class AzureBackend(BackendBase):
         
         # Delete post document
         try:
-            container.delete_item(item=post_id, partition_key="POSTS")
+            container.delete_item(item=post_id, partition_key=post.get("userId"))
             logger.info(f"Deleted post {post_id}")
         except Exception as e:
             logger.error(f"Failed to delete post: {e}")
@@ -286,9 +293,17 @@ class AzureBackend(BackendBase):
         """Update a post in Cosmos DB"""
         container = _get_container()
         
+        # First query to find the post and get its userId
         try:
-            post = container.read_item(item=post_id, partition_key="POSTS")
-        except Exception:
+            query = "SELECT * FROM c WHERE c.id = @id AND c.docType = @docType"
+            params = [{"name": "@id", "value": post_id}, {"name": "@docType", "value": "post"}]
+            items = list(container.query_items(query=query, parameters=params, enable_cross_partition_query=True))
+            if not items:
+                raise ValueError(f"Post not found: {post_id}")
+            post = items[0]
+        except Exception as e:
+            if "Post not found" in str(e):
+                raise
             raise ValueError(f"Post not found: {post_id}")
         
         # Check permissions
@@ -323,7 +338,7 @@ class AzureBackend(BackendBase):
         try:
             item = container.read_item(
                 item=f"USER_{user_id}",
-                partition_key=f"USER_{user_id}"
+                partition_key=user_id
             )
         except Exception:
             item = None
@@ -352,7 +367,7 @@ class AzureBackend(BackendBase):
         try:
             existing = container.read_item(
                 item=f"USER_{user.user_id}",
-                partition_key=f"USER_{user.user_id}"
+                partition_key=user.user_id
             )
             created_at = existing.get("createdAt") or created_at
         except Exception:
@@ -360,7 +375,6 @@ class AzureBackend(BackendBase):
         
         item = {
             "id": f"USER_{user.user_id}",
-            "pk": f"USER_{user.user_id}",
             "userId": user.user_id,
             "nickname": body.nickname,
             "updatedAt": now,
