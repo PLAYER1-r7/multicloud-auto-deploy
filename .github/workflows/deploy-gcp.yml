@@ -3,8 +3,8 @@ name: Deploy to GCP
 on:
   push:
     branches:
-      - develop  # staging自動デプロイ
-      - main     # production自動デプロイ
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
     paths:
       - "multicloud-auto-deploy/services/**"
       - "multicloud-auto-deploy/infrastructure/pulumi/gcp/**"
@@ -95,17 +95,17 @@ jobs:
       - name: Package Cloud Function
         run: |
           cd services/api
-          
+
           echo "📦 Creating optimized deployment package..."
-          
+
           # Create deployment directory
           rm -rf .deployment
           mkdir -p .deployment
-          
+
           # Install GCP-specific dependencies only
           echo "Installing GCP-specific dependencies..."
           pip install --target .deployment --no-cache-dir -r requirements-gcp.txt
-          
+
           # Aggressive cleanup of unnecessary files
           echo "Cleaning up unnecessary files..."
           find .deployment -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
@@ -115,33 +115,33 @@ jobs:
           find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
           find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
           find .deployment -type f -name "*.so" -delete 2>/dev/null || true
-          
+
           # Remove test and documentation files
           find .deployment -type f -name "test_*.py" -delete 2>/dev/null || true
           find .deployment -type f -name "*_test.py" -delete 2>/dev/null || true
           find .deployment -type d -name "docs" -exec rm -rf {} + 2>/dev/null || true
           find .deployment -type d -name "examples" -exec rm -rf {} + 2>/dev/null || true
-          
+
           # Copy application code
           cp -r app .deployment/
           # Rename function.py to main.py for Cloud Functions
           cp function.py .deployment/main.py
           cp requirements-gcp.txt .deployment/requirements.txt
-          
+
           # Clean up app __pycache__
           find .deployment/app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-          
+
           # Create ZIP package with maximum compression
           cd .deployment
           zip -r9 -q ../function-source.zip .
           cd ..
-          
+
           echo "✅ Package created:"
           ls -lh function-source.zip
           PACKAGE_SIZE=$(du -h function-source.zip | cut -f1)
           PACKAGE_SIZE_KB=$(du -k function-source.zip | cut -f1)
           echo "📦 Package size: $PACKAGE_SIZE ($PACKAGE_SIZE_KB KB)"
-          
+
           # Show size breakdown
           echo ""
           echo "📊 Top 10 largest items in package:"
@@ -155,21 +155,21 @@ jobs:
           FUNCTION_NAME="${{ steps.pulumi_outputs.outputs.function_name }}"
           FUNCTION_BUCKET="${{ steps.pulumi_outputs.outputs.function_source_bucket }}"
           REGION=${{ env.GCP_REGION }}
-          
+
           echo "🚀 Deploying Cloud Function: $FUNCTION_NAME"
           echo "  Project: $PROJECT_ID"
           echo "  Bucket: $FUNCTION_BUCKET"
           echo "  Region: $REGION"
-          
+
           # Upload source to GCS
           gsutil cp services/api/function-source.zip gs://$FUNCTION_BUCKET/function-source.zip
-          
+
           # Get CDN IP from Pulumi outputs for CORS
           CDN_URL="${{ steps.pulumi_outputs.outputs.cdn_ip_address }}"
           CORS_ORIGINS="https://${CDN_URL},http://localhost:5173"
-          
+
           echo "🔒 CORS Origins: $CORS_ORIGINS"
-          
+
           # Create env vars file to avoid escaping issues with special characters
           echo "ENVIRONMENT: staging" > /tmp/env-vars.yaml
           echo "CLOUD_PROVIDER: gcp" >> /tmp/env-vars.yaml
@@ -177,11 +177,11 @@ jobs:
           echo "GCP_POSTS_COLLECTION: posts" >> /tmp/env-vars.yaml
           echo "GCP_PROFILES_COLLECTION: profiles" >> /tmp/env-vars.yaml
           echo "FIRESTORE_COLLECTION: messages" >> /tmp/env-vars.yaml
-          echo "AUTH_DISABLED: true" >> /tmp/env-vars.yaml
+          echo "AUTH_DISABLED: 'true'" >> /tmp/env-vars.yaml
           echo "CORS_ORIGINS: \"$CORS_ORIGINS\"" >> /tmp/env-vars.yaml
-          
+
           echo "📝 Environment variables file created"
-          
+
           # Deploy function with env vars from file
           gcloud functions deploy $FUNCTION_NAME \
             --gen2 \
@@ -195,11 +195,11 @@ jobs:
             --memory=512MB \
             --timeout=60s \
             --env-vars-file=/tmp/env-vars.yaml
-          
+
           # Get function URL
           FUNCTION_URL=$(gcloud functions describe $FUNCTION_NAME --region=$REGION --gen2 --format="value(serviceConfig.uri)")
           echo "api_url=$FUNCTION_URL" >> $GITHUB_OUTPUT
-          
+
           echo "✅ Cloud Function deployed successfully"
           echo "  URL: $FUNCTION_URL"
 
@@ -207,7 +207,7 @@ jobs:
         run: |
           # Use API URL from Cloud Functions deployment
           API_URL="${{ steps.deploy_function.outputs.api_url }}"
-          
+
           echo "Building frontend with API URL: $API_URL"
 
           cd services/frontend_react
@@ -218,7 +218,7 @@ jobs:
         run: |
           # Use bucket name from Pulumi output
           BUCKET_NAME="${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
-          
+
           echo "Deploying frontend to bucket: $BUCKET_NAME"
 
           # Upload frontend to Cloud Storage

@@ -3,8 +3,8 @@ name: Deploy to AWS
 on:
   push:
     branches:
-      - develop  # staging自動デプロイ
-      - main     # production自動デプロイ
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
     paths:
       - "multicloud-auto-deploy/services/**"
       - "multicloud-auto-deploy/infrastructure/pulumi/aws/**"
@@ -89,17 +89,19 @@ jobs:
           echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$(pulumi stack output cognito_user_pool_id)" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
+          echo "posts_table_name=$(pulumi stack output posts_table_name)" >> $GITHUB_OUTPUT
+          echo "images_bucket_name=$(pulumi stack output images_bucket_name)" >> $GITHUB_OUTPUT
 
       - name: Build Lambda Layer
         id: build_layer
         run: |
           cd multicloud-auto-deploy/services/api
           rm -rf .build-layer lambda-layer.zip
-          
+
           # Build Lambda Layer (dependencies only)
           echo "📦 Building Lambda Layer (dependencies)..."
           bash ../../scripts/build-lambda-layer.sh
-          
+
           # Show layer info
           echo "✅ Layer package created:"
           ls -lh lambda-layer.zip
@@ -109,24 +111,24 @@ jobs:
           cd multicloud-auto-deploy/services/api
           rm -rf .build lambda.zip
           mkdir -p .build/package
-          
+
           # Copy application code only (no dependencies - they're in the Layer)
           echo "📁 Copying application code..."
           cp -r app .build/package/
           cp index.py .build/package/
-          
+
           # Create zip (application code only - lightweight!)
           echo "🗜️  Creating lambda package (code only)..."
           cd .build/package
           zip -r ../../lambda.zip .
           cd ../..
-          
+
           # Show package info
           echo "✅ Package created:"
           ls -lh lambda.zip
           SIZE_MB=$(du -m lambda.zip | cut -f1)
           echo "📊 Package size: ${SIZE_MB}MB"
-          
+
           if [ $SIZE_MB -lt 50 ]; then
             echo "✅ Package is under 50MB - direct upload possible!"
             echo "use_direct_upload=true" >> $GITHUB_OUTPUT
@@ -143,9 +145,9 @@ jobs:
         id: deploy_layer
         run: |
           set -e
-          
+
           LAYER_NAME="multicloud-auto-deploy-${{ github.event.inputs.environment || 'staging' }}-dependencies"
-          
+
           echo "🚀 Publishing Custom Lambda Layer: $LAYER_NAME"
           LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
             --layer-name $LAYER_NAME \
@@ -155,7 +157,7 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --query LayerVersionArn \
             --output text)
-          
+
           echo "✅ Layer published: $LAYER_VERSION_ARN"
           echo "layer_arn=$LAYER_VERSION_ARN" >> $GITHUB_OUTPUT
 
@@ -164,17 +166,17 @@ jobs:
         run: |
           set -e
           LAMBDA_FUNCTION="${{ steps.pulumi_outputs.outputs.lambda_function_name }}"
-          
+
           # Always use custom Lambda Layer (Klayers not supported due to cross-account limitations)
           echo "🔧 Using custom Lambda Layer"
           LAYER_ARNS="${{ steps.deploy_layer.outputs.layer_arn }}"
-          
+
           # Debug: Check lambda.zip exists and show size
           echo "📦 Checking lambda.zip..."
           ls -lh multicloud-auto-deploy/services/api/lambda.zip || { echo "❌ lambda.zip not found!"; exit 1; }
-          
+
           SIZE_MB=$(du -m multicloud-auto-deploy/services/api/lambda.zip | cut -f1)
-          
+
           if [ $SIZE_MB -lt 50 ]; then
             # Direct upload (faster!)
             echo "🚀 Direct upload to Lambda (${SIZE_MB}MB < 50MB)"
@@ -199,7 +201,7 @@ jobs:
               --s3-key $S3_KEY \
               --output json || { echo "❌ Lambda update failed!"; exit 1; }
           fi
-          
+
           # Wait for Lambda function to become Active after code update
           echo "⏳ Waiting for Lambda function to become Active..."
           MAX_WAIT=60
@@ -220,23 +222,23 @@ jobs:
             sleep 2
             WAIT_COUNT=$((WAIT_COUNT+1))
           done
-          
+
           if [ $WAIT_COUNT -eq $MAX_WAIT ]; then
             echo "⚠️  Timeout waiting for Lambda to become Active, but continuing..."
           fi
-          
+
           # Get CloudFront domain for CORS
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
           CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},http://localhost:5173"
-          
+
           echo "🔒 CORS Origins: $CORS_ORIGINS"
-          
+
           # Create environment variables JSON to avoid escaping issues
           USER_POOL_ID="${{ steps.pulumi_outputs.outputs.cognito_user_pool_id }}"
           CLIENT_ID="${{ steps.pulumi_outputs.outputs.cognito_client_id }}"
           POSTS_TABLE="${{ steps.pulumi_outputs.outputs.posts_table_name }}"
           IMAGES_BUCKET="${{ steps.pulumi_outputs.outputs.images_bucket_name }}"
-          
+
           echo '{' > /tmp/lambda-env.json
           echo '  "Variables": {' >> /tmp/lambda-env.json
           echo '    "CLOUD_PROVIDER": "aws",' >> /tmp/lambda-env.json
@@ -249,7 +251,7 @@ jobs:
           echo "    \"CORS_ORIGINS\": \"$CORS_ORIGINS\"" >> /tmp/lambda-env.json
           echo '  }' >> /tmp/lambda-env.json
           echo '}' >> /tmp/lambda-env.json
-          
+
           # Update configuration with environment variables and Layer(s)
           echo "🔗 Updating Lambda configuration..."
           aws lambda update-function-configuration \
@@ -258,7 +260,7 @@ jobs:
             --layers $LAYER_ARNS \
             --environment file:///tmp/lambda-env.json \
             --output json || { echo "❌ Lambda configuration update failed!"; exit 1; }
-          
+
           echo "✅ Lambda function updated successfully with Layer(s) and environment variables"
           echo "api_endpoint=${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}" >> $GITHUB_OUTPUT
 
