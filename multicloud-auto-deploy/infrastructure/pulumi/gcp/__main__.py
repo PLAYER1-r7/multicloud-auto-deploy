@@ -124,21 +124,10 @@ app_secret = gcp.secretmanager.Secret(
 #         --member="serviceAccount:github-actions-deploy@ashnova.iam.gserviceaccount.com" \
 #         --role="roles/secretmanager.secretAccessor"
 
-# Store initial secret value (example - should be updated with actual values)
-# Note: Use ignore_changes=["*"] to prevent Pulumi from reading back the secret
-# (requires secretmanager.versions.access IAM permission which SA may not have)
-app_secret_version = gcp.secretmanager.SecretVersion(
-    "app-secret-version",
-    secret=app_secret.id,
-    secret_data=pulumi.Output.secret(
-        '{"database_url":"changeme","api_key":"changeme"}'
-    ),
-    opts=pulumi.ResourceOptions(
-        depends_on=[app_secret],
-        ignore_changes=["secret_data", "enabled"],  # Prevent refresh read requiring secretmanager.versions.access
-        retain_on_delete=True,  # Don't delete existing secret versions on stack destroy
-    ),
-)
+# NOTE: SecretVersion resource intentionally removed from Pulumi management.
+# Pulumi SA lacks 'secretmanager.versions.access' permission (read-back after create causes 403).
+# Secret versions are managed manually via gcloud:
+#   gcloud secrets versions add {project_name}-{stack}-app-config --data-file=secret.json
 
 # ========================================
 # Cloud Storage Bucket for Function Source

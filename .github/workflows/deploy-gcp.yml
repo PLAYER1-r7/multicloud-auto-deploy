@@ -90,6 +90,19 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
+      - name: Remove SecretVersion from Pulumi state (IAM permission workaround)
+        run: |
+          cd multicloud-auto-deploy/infrastructure/pulumi/gcp
+          STACK="${{ steps.set_stack.outputs.stack_name }}"
+          # Remove SecretVersion from Pulumi state to prevent 403 on create/refresh
+          # (Pulumi SA lacks secretmanager.versions.access permission)
+          # This is idempotent: fails silently if resource is not in state
+          pulumi state delete \
+            "urn:pulumi:${STACK}::multicloud-auto-deploy-gcp::gcp:secretmanager/secretVersion:SecretVersion::app-secret-version" \
+            --yes 2>/dev/null && echo "✅ Removed SecretVersion from state" || echo "✅ SecretVersion not in state (already clean)"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5
@@ -97,7 +110,6 @@ jobs:
           command: up
           stack-name: ${{ steps.set_stack.outputs.stack_name }}
           work-dir: multicloud-auto-deploy/infrastructure/pulumi/gcp
-          options: --no-refresh  # Avoid SecretVersion 403 (secretmanager.versions.access not granted to Pulumi SA)
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}

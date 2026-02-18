@@ -281,18 +281,6 @@ jobs:
           echo "✅ Cosmos DB Account: $COSMOS_ACCOUNT"
           echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
 
-            --name $COSMOS_ACCOUNT \
-            --resource-group $RESOURCE_GROUP \
-            --type keys \
-            --query primaryMasterKey -o tsv)
-
-          if [ -z "$COSMOS_ENDPOINT" ] || [ -z "$COSMOS_KEY" ]; then
-            echo "❌ Failed to retrieve Cosmos DB credentials"
-            exit 1
-          fi
-
-          echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
-
           # Get Front Door URL for CORS from Pulumi outputs
           FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
           CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
