@@ -11,7 +11,7 @@
 | プロバイダー | 成功 | 失敗 | 合計 | 状態 |
 |------------|------|------|------|------|
 | **Azure**  | 6    | 0    | 6    | ✅ 完全成功 |
-| **AWS**    | 2    | 4    | 6    | ❌ デプロイエラー |
+| **AWS**    | 6    | 0    | 6    | ✅ 完全成功（修正後） |
 | **GCP**    | 2    | 4    | 6    | ⚠️ 認証エラー |
 
 ---
@@ -74,17 +74,17 @@
 | # | テスト名 | 結果 | エラー |
 |---|---------|------|--------|
 | 1 | test_health_check[aws] | ✅ PASSED | - |
-| 2 | test_list_messages_initial[aws] | ❌ FAILED | 500 Internal Server Error |
-| 3 | test_crud_operations_flow[aws] | ❌ FAILED | 500 Internal Server Error |
-| 4 | test_pagination[aws] | ❌ FAILED | 500 Internal Server Error |
-| 5 | test_invalid_message_id[aws] | ❌ FAILED | 500 (expected 404/405) |
+| 2 | test_list_messages_initial[aws] | ✅ PASSED | - |
+| 3 | test_crud_operations_flow[aws] | ✅ PASSED | - |
+| 4 | test_pagination[aws] | ✅ PASSED | - |
+| 5 | test_invalid_message_id[aws] | ✅ PASSED | - |
 | 6 | test_empty_content_validation[aws] | ✅ PASSED | - |
 
-**総実行時間**: 5.90秒
+**総実行時間**: 9.50秒
 
-### 問題点
+### 問題点と解決
 
-#### デプロイエラー（修正済み）
+#### 1. デプロイエラー（✅ 解決済み）
 
 最初のデプロイでは以下のエラーが発生：
 
@@ -95,27 +95,33 @@ on resource: arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-fasta
 because no resource-based policy allows the lambda:GetLayerVersion action
 ```
 
-#### 根本原因
-- Klayers（公開Lambda Layer）はクロスアカウントアクセスに非対応
-- リソースベースポリシーによりアクセスが制限されている
-- 詳細: [docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md](docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md)
+**根本原因**: Klayers（公開Lambda Layer）はクロスアカウントアクセスに非対応
 
-#### 実施した修正
-1. **Klayersへの参照を削除**: deploy-aws.ymlから全てのKlayers関連コードを削除
-2. **カスタムLambda Layerに統一**: 常に自前のLayerを使用（既にビルド・デプロイ済み）
-3. **use_klayersパラメータ削除**: 選択肢をなくし、確実に動作する方法に統一
+**実施した修正**:
+1. Klayersへの参照を削除: deploy-aws.ymlから全てのKlayers関連コードを削除
+2. カスタムLambda Layerに統一: 常に自前のLayerを使用（ARN: `arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-staging-dependencies:18`）
+3. use_klayersパラメータ削除: 選択肢をなくし、確実に動作する方法に統一
 
-#### 500エラーの詳細
-Lambda実行時のエラーログ（修正前）:
+#### 2. ランタイムエラー（✅ 解決済み）
+
+デプロイ後、500エラーが発生：
+
 ```
-File "/opt/python/fastapi/routing.py", line 214, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
+File "/var/task/app/backends/aws_backend.py", line 30, in __init__
+    raise ValueError("POSTS_TABLE_NAME environment variable is required")
+ValueError: POSTS_TABLE_NAME environment variable is required
 ```
 
-### 必要な対処
-1. **再デプロイ**: 修正済みワークフローで再実行
-2. **カスタムLayerの確認**: ARN `arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-staging-dependencies:*`
-3. **最新コードの反映**: get_post() エンドポイント追加
+**根本原因**: Lambda関数に `POSTS_TABLE_NAME` と `IMAGES_BUCKET_NAME` 環境変数が未設定
+
+**実施した修正**:
+1. Pulumiから正しい値を取得:
+   - `POSTS_TABLE_NAME`: `multicloud-auto-deploy-staging-posts`
+   - `IMAGES_BUCKET_NAME`: `multicloud-auto-deploy-staging-images`
+2. Lambda環境変数に追加
+3. deploy-aws.ymlを修正して、今後のデプロイで自動設定されるようにした
+
+**結果**: 全テスト通過（6/6）✅
 
 ---
 
@@ -202,9 +208,21 @@ File "/opt/python/fastapi/routing.py", line 214, in run_endpoint_function
 
 ## 次のアクション
 
+### � AWS問題解決完了
+
+1. **✅ Klayers削除とカスタムLayer統一**
+   - deploy-aws.ymlからKlayers参照を完全削除
+   - カスタムLambda Layer（ARN: `multicloud-auto-deploy-staging-dependencies:18`）に統一
+   - Commit: 3551dda
+
+2. **✅ Lambda環境変数の修正**
+   - `POSTS_TABLE_NAME` と `IMAGES_BUCKET_NAME` を追加
+   - deploy-aws.ymlを修正して自動設定されるように改善
+   - 全テスト通過（6/6）確認済み
+
 ### 🔴 高優先度
 
-1. **AWS ワークフロー修正（完了）**
+1. **GCP AUTH_DISABLED設定**
    ```bash
    # Klayers関連コードを削除し、カスタムLayerに統一
    # deploy-aws.yml を修正完了
@@ -225,25 +243,18 @@ File "/opt/python/fastapi/routing.py", line 214, in run_endpoint_function
 
 ### 🟡 中優先度
 
-3. **AWS Lambda 再デプロイ**
-   - ワークフロー修正済み（Klayers削除、カスタムLayer統一）
-   - 最新コード反映（get_post エンドポイント追加）
-   - 手動トリガーで再実行: `gh workflow run deploy-aws.yml --ref develop`
+3. **GCP Cloud Run 環境変数修正後の再デプロイ**
+   - AUTH_DISABLED=true 設定後
+   - 最新コード確認
+   - 統合テスト再実行
 
-4. **GCP Cloud Run 再デプロイ**
-   - 最新コード反映
-   - 環境変数確認
-
-5. **統合テストの再実行**
-   - 全プロバイダーでgreen確認
-
-### 🟢 低優先度
-
-6. **CI/CDパイプライン改善**
+4. **CI/CDパイプライン改善**
    - デプロイ後の自動テスト実行
    - 失敗時のロールバック
 
-7. **ドキュメント更新**
+### 🟢 低優先度
+
+5. **ドキュメント更新**
    - README.md にテスト実行方法追加
    - architecture.md にマルチクラウド設計追加
 
@@ -251,13 +262,26 @@ File "/opt/python/fastapi/routing.py", line 214, in run_endpoint_function
 
 ## 結論
 
-**Azure は完全に動作**しており、本番環境デプロイ可能な状態です。
+### ✅ 完全動作確認済み
 
-AWS/GCPは以下の対応が必要:
-- **AWS**: ✅ Klayers問題解決（ワークフロー修正完了） → 再デプロイ実行
-- **GCP**: 環境変数設定 + 再デプロイ
+- **Azure**: 6/6 テスト成功 - 本番環境デプロイ可能
+- **AWS**: 6/6 テスト成功 - 本番環境デプロイ可能
+  - Klayers問題解決（カスタムLayer統一）
+  - 環境変数問題解決（POSTS_TABLE_NAME等追加）
+  - deploy-aws.yml修正完了
 
-全体として、マルチクラウドアーキテクチャの技術的実現可能性は実証されました。
+### ⚠️ 対応中
+
+- **GCP**: 2/6 テスト成功 - AUTH_DISABLED設定が必要
+  - 環境変数 `AUTH_DISABLED=true` を設定
+  - 設定後は6/6成功見込み
+
+### 成果
+
+マルチクラウドアーキテクチャの技術的実現可能性を実証：
+- 2/3 プロバイダーで完全動作確認
+- 統合テストフレームワーク確立
+- 課題の迅速な特定と解決が可能
 
 ### 修正内容（2026-02-18）
 

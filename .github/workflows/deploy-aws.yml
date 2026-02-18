@@ -234,12 +234,16 @@ jobs:
           # Create environment variables JSON to avoid escaping issues
           USER_POOL_ID="${{ steps.pulumi_outputs.outputs.cognito_user_pool_id }}"
           CLIENT_ID="${{ steps.pulumi_outputs.outputs.cognito_client_id }}"
+          POSTS_TABLE="${{ steps.pulumi_outputs.outputs.posts_table_name }}"
+          IMAGES_BUCKET="${{ steps.pulumi_outputs.outputs.images_bucket_name }}"
           
           echo '{' > /tmp/lambda-env.json
           echo '  "Variables": {' >> /tmp/lambda-env.json
           echo '    "CLOUD_PROVIDER": "aws",' >> /tmp/lambda-env.json
           echo '    "ENVIRONMENT": "staging",' >> /tmp/lambda-env.json
           echo '    "AUTH_PROVIDER": "cognito",' >> /tmp/lambda-env.json
+          echo "    \"POSTS_TABLE_NAME\": \"$POSTS_TABLE\"," >> /tmp/lambda-env.json
+          echo "    \"IMAGES_BUCKET_NAME\": \"$IMAGES_BUCKET\"," >> /tmp/lambda-env.json
           echo "    \"AWS_COGNITO_USER_POOL_ID\": \"$USER_POOL_ID\"," >> /tmp/lambda-env.json
           echo "    \"AWS_COGNITO_CLIENT_ID\": \"$CLIENT_ID\"," >> /tmp/lambda-env.json
           echo "    \"CORS_ORIGINS\": \"$CORS_ORIGINS\"" >> /tmp/lambda-env.json
