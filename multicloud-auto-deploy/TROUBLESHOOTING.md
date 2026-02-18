@@ -46,6 +46,7 @@
 | ----------------------------------------------------- | ------------------------ | -------------------------------------------------------------------- |
 | `mapping values are not allowed in this context`      | YAML構文エラー           | [GitHub Actions YAML](#github-actions-yaml構文エラー)                |
 | `Application setting already exists`                  | CORS設定の競合           | [Azure CORS設定](#azure-cors設定の名前競合)                          |
+| `AZURE_COSMOS_DATABASE value is null`                 | Azure予約変数名          | [Azure環境変数予約名](#azure環境変数の予約名問題)                    |
 | `AccessDeniedException ... PublishLayerVersion`       | Lambda Layer権限不足     | [Lambda Layer権限](#aws-lambda-layer権限エラー)                      |
 | `ResourceConflictException ... update is in progress` | Lambda更新の競合         | [Lambda ResourceConflict](#aws-lambda-resourceconflictexception)     |
 | `Resource ... not found`                              | リソース名のハードコード | [Azureリソース名](#azureリソース名のハードコード問題)                |
@@ -77,6 +78,7 @@
 #### Azure
 
 - [Azure CORS設定の名前競合](#azure-cors設定の名前競合)
+- [Azure環境変数の予約名問題](#azure環境変数の予約名問題)
 - [Azure Front Doorエンドポイント取得](#azure-front-doorエンドポイント取得)
 - [Azureリソース名のハードコード問題](#azureリソース名のハードコード問題)
 - [Azure Function Appデプロイメント競合](#azure-function-appデプロイメント競合)
@@ -725,6 +727,136 @@ az functionapp config appsettings set \
 - Azure CLIは`--overwrite`フラグをサポートしていない
 - 常に`delete` → `set`のパターンを使う
 - 設定変更後は`sleep 3`で伝播待ち
+
+---
+
+## Azure環境変数の予約名問題
+
+**解決時間**: ⏱️ 1分（環境変数名変更のみ）
+
+### 症状
+
+```bash
+# Bashでは正しい値を表示
+echo "DATABASE=${COSMOS_DATABASE}"  # Output: DATABASE=messages
+
+# しかしAzure CLIでは常にnull
+az functionapp config appsettings set --settings AZURE_COSMOS_DATABASE="${COSMOS_DATABASE}"
+# Result: {"name": "AZURE_COSMOS_DATABASE", "value": null}
+
+# ハードコード値でもnull
+az functionapp config appsettings set --settings AZURE_COSMOS_DATABASE=messages
+# Result: {"name": "AZURE_COSMOS_DATABASE", "value": null}
+```
+
+**特定の環境変数名がAzure Function Appで常に`null`になる問題。**
+
+### 影響を受ける変数名
+
+以下の環境変数名は**Azure CLIまたはFunction Appで予約されている**可能性があり、使用できません：
+
+❌ **使用不可**:
+- `AZURE_COSMOS_DATABASE`
+- `AZURE_COSMOS_CONTAINER`
+
+✅ **代替案（正常動作）**:
+- `COSMOS_DB_DATABASE`
+- `COSMOS_DB_CONTAINER`
+- `COSMOS_DB_ENDPOINT`
+- `COSMOS_DB_KEY`
+
+### 原因
+
+Azure CLIまたはAzure Function Appの内部で、`AZURE_COSMOS_DATABASE`と`AZURE_COSMOS_CONTAINER`という名前が特別な意味を持つか、予約されている可能性があります。
+
+**検証結果**:
+- ✅ `AZURE_COSMOS_ENDPOINT` → 正常に設定可能
+- ✅ `AZURE_COSMOS_KEY` → 正常に設定可能  
+- ❌ `AZURE_COSMOS_DATABASE` → 常にnull（ハードコード値でも）
+- ❌ `AZURE_COSMOS_CONTAINER` → 常にnull（ハードコード値でも）
+- ✅ `COSMOS_DB_DATABASE` → 正常に設定可能
+- ✅ `COSMOS_DB_CONTAINER` → 正常に設定可能
+
+### 解決策（推奨）
+
+#### 1. 環境変数名を変更
+
+`.github/workflows/deploy-azure.yml`:
+
+```yaml
+az functionapp config appsettings set \
+  --settings \
+    COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" \
+    COSMOS_DB_KEY="${COSMOS_KEY}" \
+    COSMOS_DB_DATABASE="${COSMOS_DATABASE}" \
+    COSMOS_DB_CONTAINER="${COSMOS_CONTAINER}"
+```
+
+#### 2. config.pyで両方をサポート（互換性維持）
+
+`services/api/app/config.py`:
+
+```python
+from pydantic import Field, AliasChoices
+
+cosmos_db_database: str = Field(
+    default="simple-sns",
+    validation_alias=AliasChoices("cosmos_db_database", "azure_cosmos_database")
+)
+cosmos_db_container: str = Field(
+    default="items",
+    validation_alias=AliasChoices("cosmos_db_container", "azure_cosmos_container")
+)
+```
+
+これにより、`COSMOS_DB_*`と`AZURE_COSMOS_*`の両方の名前をサポートできます。
+
+### 該当ファイル
+
+- `.github/workflows/deploy-azure.yml` (lines 290-295)
+- `services/api/app/config.py` (lines 44-62)  
+- `services/api/app/backends/factory.py` (lines 27-30)
+
+### ベストプラクティス
+
+⚠️ **重要**: Azure Function Appで環境変数を設定する際の命名規則
+
+1. **避けるべきプレフィックス**:
+   - `AZURE_COSMOS_*` (DATABASE, CONTAINERは予約済み)
+   - その他のAzure内部変数と競合する可能性のある名前
+
+2. **推奨プレフィックス**:
+   - `COSMOS_DB_*` - Cosmos DB関連
+   - `APP_*` - アプリケーション固有
+   - `CUSTOM_*` - カスタム設定
+
+3. **検証方法**:
+   ```bash
+   # 設定後に必ず確認
+   az functionapp config appsettings list \
+     --name $FUNCTION_APP \
+     --resource-group $RESOURCE_GROUP \
+     -o json | jq '.[] | select(.name | startswith("COSMOS")) | {name, value}'
+   ```
+
+4. **エラーメッセージの更新**:
+   ユーザーに正しい変数名を案内するため、エラーメッセージも更新：
+   ```python
+   raise ValueError(
+       "Set COSMOS_DB_ENDPOINT and COSMOS_DB_KEY environment variables. "
+       "(Note: AZURE_COSMOS_* names are reserved and cannot be used)"
+   )
+   ```
+
+### 関連問題
+
+- [Azure CORS設定の名前競合](#azure-cors設定の名前競合) - 大文字小文字の区別問題
+- [環境変数の引用符とエスケープ](#環境変数の引用符とエスケープ) - 値の展開問題
+
+### 参考情報
+
+この問題は10回以上のデプロイメント試行を経て、ハードコード値でもnullになることを確認して発見されました。
+Azureの公式ドキュメントには明記されていませんが、実運用では`COSMOS_DB_*`プレフィックスの使用を強く推奨します。
 
 ---
 

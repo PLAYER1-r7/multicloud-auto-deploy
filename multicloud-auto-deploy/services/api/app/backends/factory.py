@@ -27,7 +27,8 @@ def get_backend() -> BaseBackend:
         if not settings.azure_cosmos_endpoint or not settings.azure_cosmos_key:
             raise ValueError(
                 "Azure Cosmos DB credentials not configured. "
-                "Set AZURE_COSMOS_ENDPOINT and AZURE_COSMOS_KEY environment variables."
+                "Set COSMOS_DB_ENDPOINT and COSMOS_DB_KEY environment variables. "
+                "(Note: AZURE_COSMOS_* names are reserved and cannot be used with Azure CLI)"
             )
 
         return AzureBackend(

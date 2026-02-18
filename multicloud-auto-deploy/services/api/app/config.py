@@ -41,7 +41,11 @@ class Settings(BaseSettings):
     azure_storage_account_name: Optional[str] = None
     azure_storage_account_key: Optional[str] = None
     azure_storage_container: str = "images"
-    # Cosmos DB設定 - AZURE_COSMOS_* と COSMOS_DB_* の両方をサポート
+    
+    # Cosmos DB設定
+    # NOTE: AZURE_COSMOS_DATABASE/CONTAINER names are reserved by Azure CLI/Function App
+    #       and always return null values. Use COSMOS_DB_* prefix instead.
+    #       Both naming conventions are supported via AliasChoices for compatibility.
     cosmos_db_endpoint: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("cosmos_db_endpoint", "azure_cosmos_endpoint")
