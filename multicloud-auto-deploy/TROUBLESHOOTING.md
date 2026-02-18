@@ -1021,6 +1021,7 @@ curl "https://<function-app>.azurewebsites.net/api/messages/"
 Cosmos DBコンテナーのパーティションキー定義とアプリケーションコードで使用するパーティションキー値が不一致。
 
 **コンテナー定義**:
+
 ```bash
 az cosmosdb sql container show --account-name <account> \
   --database-name messages --name messages \
@@ -1029,6 +1030,7 @@ az cosmosdb sql container show --account-name <account> \
 ```
 
 **アプリケーションコード（誤り）**:
+
 ```python
 # azure_backend.py (lines 195-245)
 item = {
@@ -1042,6 +1044,7 @@ container.upsert_item(item)
 ```
 
 **問題点**:
+
 - Cosmos DBは`/userId`をパーティションキーとして期待
 - コードは`"POSTS"`という固定値を使用
 - `upsert_item()`呼び出し時に適切なパーティションキー値を渡していない
@@ -1056,7 +1059,7 @@ container.upsert_item(item)
 def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
     container = _get_container()
     post_id = str(uuid.uuid4())
-    
+
     # ✅ userIdをパーティションキーとして使用
     item = {
         "id": post_id,
@@ -1066,7 +1069,7 @@ def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
         "docType": "post",  # ドキュメントタイプで分類
         # ...
     }
-    
+
     # upsert_itemは自動的にuserIdをパーティションキーとして使用
     container.upsert_item(item)
     return {"item": item}
@@ -1077,11 +1080,11 @@ def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
 ```python
 def list_posts(self, limit: int, next_token: Optional[str], tag: Optional[str]) -> Tuple[list[Post], Optional[str]]:
     container = _get_container()
-    
+
     # ✅ クロスパーティションクエリでdocTypeでフィルタ
     query = "SELECT * FROM c WHERE c.docType = @docType ORDER BY c.createdAt DESC"
     params = [{"name": "@docType", "value": "post"}]
-    
+
     items = container.query_items(
         query=query,
         parameters=params,
@@ -1096,7 +1099,7 @@ def list_posts(self, limit: int, next_token: Optional[str], tag: Optional[str]) 
 ```python
 def delete_post(self, post_id: str, user: UserInfo) -> dict:
     container = _get_container()
-    
+
     # ✅ まずクエリでpostを検索してuserIdを取得
     query = "SELECT * FROM c WHERE c.id = @id AND c.docType = @docType"
     params = [
@@ -1104,17 +1107,17 @@ def delete_post(self, post_id: str, user: UserInfo) -> dict:
         {"name": "@docType", "value": "post"}
     ]
     items = list(container.query_items(
-        query=query, 
-        parameters=params, 
+        query=query,
+        parameters=params,
         enable_cross_partition_query=True
     ))
-    
+
     if not items:
         raise ValueError(f"Post not found: {post_id}")
-    
+
     post = items[0]
     post_user_id = post.get("userId")
-    
+
     # ✅ 正しいパーティションキーで削除
     container.delete_item(item=post_id, partition_key=post_user_id)
 ```
@@ -1124,7 +1127,7 @@ def delete_post(self, post_id: str, user: UserInfo) -> dict:
 ```python
 def get_profile(self, user_id: str) -> ProfileResponse:
     container = _get_container()
-    
+
     try:
         # ✅ userIdをパーティションキーとして使用
         item = container.read_item(
@@ -1137,7 +1140,7 @@ def get_profile(self, user_id: str) -> ProfileResponse:
 
 def update_profile(self, user: UserInfo, body: ProfileUpdateRequest) -> ProfileResponse:
     container = _get_container()
-    
+
     item = {
         "id": f"USER_{user.user_id}",
         "userId": user.user_id,  # パーティションキー値
@@ -1151,6 +1154,7 @@ def update_profile(self, user: UserInfo, body: ProfileUpdateRequest) -> ProfileR
 ### デバッグ手順
 
 1. **Cosmos DBコンテナー設定を確認**:
+
    ```bash
    az cosmosdb sql container show \
      --account-name <account> \
@@ -1160,13 +1164,14 @@ def update_profile(self, user: UserInfo, body: ProfileUpdateRequest) -> ProfileR
    ```
 
 2. **ローカルでCosmos DB操作をテスト**:
+
    ```python
    from azure.cosmos import CosmosClient
-   
+
    client = CosmosClient(endpoint, key)
    database = client.get_database_client("messages")
    container = database.get_container_client("messages")
-   
+
    # テストドキュメント作成
    test_item = {
        "id": "test-123",
@@ -1174,7 +1179,7 @@ def update_profile(self, user: UserInfo, body: ProfileUpdateRequest) -> ProfileR
        "content": "Test",
        "docType": "post"
    }
-   
+
    result = container.upsert_item(test_item)
    print(f"Success: {result['id']}")
    ```
@@ -1209,11 +1214,12 @@ def update_profile(self, user: UserInfo, body: ProfileUpdateRequest) -> ProfileR
    - クエリ効率が向上（単一パーティション内検索）
 
 2. **ドキュメント構造**:
+
    ```json
    {
      "id": "unique-id",
-     "userId": "user-123",  // パーティションキー
-     "docType": "post",     // ドキュメント種別
+     "userId": "user-123", // パーティションキー
+     "docType": "post", // ドキュメント種別
      "content": "...",
      "createdAt": "2026-02-18T09:00:00Z"
    }
@@ -1261,6 +1267,7 @@ POST /messages/で500エラーが返り、エラーメッセージにより`User
 `UserInfo`データクラスには`nickname`属性が定義されていない。
 
 **UserInfo定義**:
+
 ```python
 # services/api/app/auth.py (lines 12-22)
 @dataclass
@@ -1272,6 +1279,7 @@ class UserInfo:
 ```
 
 **問題のコード**:
+
 ```python
 # services/api/app/backends/azure_backend.py
 def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
@@ -1291,7 +1299,7 @@ def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
     container = _get_container()
     post_id = str(uuid.uuid4())
     created_at = _now_iso()
-    
+
     # Get user's nickname from profile
     profile = None
     try:
@@ -1301,14 +1309,14 @@ def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
         )
     except Exception:
         profile = None
-    
+
     nickname = None
     if profile:
         nickname = profile.get("nickname")
     if not nickname:
         # ✅ UserInfoにはnickname属性がないため、emailまたはuser_idを使用
         nickname = user.email if user.email else user.user_id
-    
+
     item = {
         "id": post_id,
         "userId": user.user_id,
@@ -1340,7 +1348,6 @@ def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
          nickname: Optional[str] = None  # 追加
          groups: Optional[list[str]] = None
      ```
-   
    - **Option B**: フォールバック値を使用（今回採用）
      ```python
      nickname = user.email if user.email else user.user_id
@@ -1383,6 +1390,7 @@ POST成功後、GET /messages/でPydanticの検証エラーが発生。
 `Post`モデルで`is_markdown`が必須の`bool`として定義されているが、Cosmos DBに保存されたドキュメントには`isMarkdown`フィールドが存在しない場合がある。
 
 **Post モデル定義（誤り）**:
+
 ```python
 # services/api/app/models.py (lines 16-28)
 class Post(BaseModel):
@@ -1394,11 +1402,12 @@ class Post(BaseModel):
 ```
 
 **Cosmos DBドキュメント**:
+
 ```json
 {
   "id": "94cdca98-0e7f-4b77-b067-a9abdfff0b36",
   "userId": "test-user-1",
-  "content": "Test message",
+  "content": "Test message"
   // isMarkdownフィールドなし（または明示的にNone）
 }
 ```
@@ -1448,6 +1457,7 @@ class Post(BaseModel):
    - デフォルト値が必要な場合はシリアライズ時に設定
 
 2. **データベーススキーマとの整合性**:
+
    ```python
    # 新規作成時は明示的に値を設定
    item = {

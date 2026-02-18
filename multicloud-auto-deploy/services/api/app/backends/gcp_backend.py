@@ -263,6 +263,34 @@ class GcpBackend(BackendBase):
             "post_id": post_id,
         }
     
+    def get_post(self, post_id: str) -> dict:
+        """Get a single post from Firestore"""
+        db = _get_firestore()
+        post_ref = db.collection(settings.gcp_posts_collection).document(post_id)
+        doc = post_ref.get()
+        
+        if not doc.exists:
+            raise ValueError(f"Post not found: {post_id}")
+        
+        data = doc.to_dict() or {}
+        
+        # Return in consistent format
+        return {
+            "id": post_id,
+            "postId": post_id,
+            "post_id": post_id,
+            "userId": data.get("userId"),
+            "user_id": data.get("userId"),
+            "content": data.get("content"),
+            "tags": data.get("tags", []),
+            "createdAt": data.get("createdAt"),
+            "created_at": data.get("createdAt"),
+            "updatedAt": data.get("updatedAt"),
+            "updated_at": data.get("updatedAt"),
+            "imageUrls": data.get("imageKeys", []),
+            "image_urls": data.get("imageKeys", []),
+        }
+    
     def update_post(self, post_id: str, body: UpdatePostBody, user: UserInfo) -> dict:
         """Update a post in Firestore"""
         db = _get_firestore()

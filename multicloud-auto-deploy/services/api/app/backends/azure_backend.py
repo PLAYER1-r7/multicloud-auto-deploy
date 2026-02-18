@@ -305,6 +305,40 @@ class AzureBackend(BackendBase):
             "post_id": post_id,
         }
     
+    def get_post(self, post_id: str) -> dict:
+        """Get a single post from Cosmos DB"""
+        container = _get_container()
+        
+        # Query to find the post
+        try:
+            query = "SELECT * FROM c WHERE c.id = @id AND c.docType = @docType"
+            params = [{"name": "@id", "value": post_id}, {"name": "@docType", "value": "post"}]
+            items = list(container.query_items(query=query, parameters=params, enable_cross_partition_query=True))
+            if not items:
+                raise ValueError(f"Post not found: {post_id}")
+            post = items[0]
+        except Exception as e:
+            if "Post not found" in str(e):
+                raise
+            raise ValueError(f"Post not found: {post_id}")
+        
+        # Return in consistent format
+        return {
+            "id": post_id,
+            "postId": post_id,
+            "post_id": post_id,
+            "userId": post.get("userId"),
+            "user_id": post.get("userId"),
+            "content": post.get("content"),
+            "tags": post.get("tags", []),
+            "createdAt": post.get("createdAt"),
+            "created_at": post.get("createdAt"),
+            "updatedAt": post.get("updatedAt"),
+            "updated_at": post.get("updatedAt"),
+            "imageUrls": post.get("imageKeys", []),
+            "image_urls": post.get("imageKeys", []),
+        }
+    
     def update_post(self, post_id: str, body: UpdatePostBody, user: UserInfo) -> dict:
         """Update a post in Cosmos DB"""
         container = _get_container()

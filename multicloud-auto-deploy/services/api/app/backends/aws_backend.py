@@ -144,6 +144,42 @@ class AwsBackend(BackendBase):
         except Exception as e:
             logger.error(f"Error deleting post: {e}")
             raise
+    
+    def get_post(self, post_id: str) -> dict:
+        """投稿を取得 (DynamoDB Query by postId)"""
+        try:
+            # postId から投稿を取得
+            response = self.table.query(
+                IndexName="PostIdIndex",
+                KeyConditionExpression="postId = :postId",
+                ExpressionAttributeValues={":postId": post_id},
+            )
+
+            if not response.get("Items"):
+                raise ValueError(f"Post not found: {post_id}")
+
+            item = response["Items"][0]
+            
+            # レスポンス形式を統一
+            return {
+                "id": item["postId"],
+                "postId": item["postId"],
+                "post_id": item["postId"],
+                "userId": item.get("userId"),
+                "user_id": item.get("userId"),
+                "content": item.get("content"),
+                "tags": item.get("tags", []),
+                "createdAt": item.get("createdAt"),
+                "created_at": item.get("createdAt"),
+                "updatedAt": item.get("updatedAt"),
+                "updated_at": item.get("updatedAt"),
+                "imageUrls": item.get("imageUrls", []),
+                "image_urls": item.get("imageUrls", []),
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting post: {e}")
+            raise
 
     def update_post(self, post_id: str, body: UpdatePostBody, user: UserInfo) -> dict:
         """投稿を更新 (DynamoDB UpdateItem)"""

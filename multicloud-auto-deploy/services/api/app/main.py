@@ -112,22 +112,14 @@ def legacy_delete_message(
     backend = get_backend()
     return backend.delete_post(post_id, user)
 
-@app.put("/api/messages/{post_id}")
-def legacy_update_message(
+@app.get("/api/messages/{post_id}")
+def legacy_get_message(
     post_id: str,
-    body: UpdatePostBody,
     user: Optional[UserInfo] = Depends(get_current_user),
 ) -> dict:
-    """旧フロントエンド互換: 投稿を更新 (PUT /api/messages/{id})"""
-    # staging環境では認証をオプショナルに
-    if not user:
-        user = UserInfo(
-            user_id="anonymous",
-            email="anonymous@example.com",
-            groups=None,
-        )
+    """旧フロントエンド互換: 投稿を取得 (GET /api/messages/{id})"""
     backend = get_backend()
-    return backend.update_post(post_id, body, user)
+    return backend.get_post(post_id)
 
 @app.put("/api/messages/{post_id}")
 def legacy_update_message(
