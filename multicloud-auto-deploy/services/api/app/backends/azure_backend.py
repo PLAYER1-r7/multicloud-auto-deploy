@@ -236,8 +236,13 @@ class AzureBackend(BackendBase):
         if nickname:
             item["nickname"] = nickname
         
-        logger.info(f"Writing post {post_id} to Cosmos DB")
-        container.upsert_item(item)
+        logger.info(f"Writing post {post_id} to Cosmos DB with userId={user.user_id}")
+        try:
+            container.upsert_item(item)
+            logger.info(f"Successfully wrote post {post_id}")
+        except Exception as e:
+            logger.error(f"Failed to write post {post_id}: {type(e).__name__}: {e}")
+            raise
         
         return {"item": item}
     
