@@ -261,7 +261,7 @@ jobs:
           echo "Deploying frontend to bucket: $BUCKET_NAME"
 
           # Upload frontend to Cloud Storage
-          gsutil -m cp -r services/frontend_react/dist/* gs://$BUCKET_NAME/
+          gsutil -m cp -r multicloud-auto-deploy/services/frontend_react/dist/* gs://$BUCKET_NAME/
 
           # Make objects public
           gsutil -m acl ch -u AllUsers:R gs://$BUCKET_NAME/** || true
