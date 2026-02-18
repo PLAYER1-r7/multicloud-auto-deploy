@@ -97,7 +97,18 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
             body_parts.append(message.get("body", b""))
 
     # FastAPI アプリケーション実行
-    await fastapi_app(scope, receive, send)
+    try:
+        await fastapi_app(scope, receive, send)
+    except Exception as e:
+        logging.error(f"Error in FastAPI application: {type(e).__name__}: {e}", exc_info=True)
+        return func.HttpResponse(
+            body=f'{{"error": "{type(e).__name__}", "message": "{str(e)}"}}',
+            status_code=500,
+            headers={
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+            },
+        )
 
     # レスポンス構築
     response_body = b"".join(body_parts)

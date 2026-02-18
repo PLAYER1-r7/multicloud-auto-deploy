@@ -144,6 +144,94 @@ class AwsBackend(BackendBase):
         except Exception as e:
             logger.error(f"Error deleting post: {e}")
             raise
+    
+    def get_post(self, post_id: str) -> dict:
+        """投稿を取得 (DynamoDB Query by postId)"""
+        try:
+            # postId から投稿を取得
+            response = self.table.query(
+                IndexName="PostIdIndex",
+                KeyConditionExpression="postId = :postId",
+                ExpressionAttributeValues={":postId": post_id},
+            )
+
+            if not response.get("Items"):
+                raise ValueError(f"Post not found: {post_id}")
+
+            item = response["Items"][0]
+            
+            # レスポンス形式を統一
+            return {
+                "id": item["postId"],
+                "postId": item["postId"],
+                "post_id": item["postId"],
+                "userId": item.get("userId"),
+                "user_id": item.get("userId"),
+                "content": item.get("content"),
+                "tags": item.get("tags", []),
+                "createdAt": item.get("createdAt"),
+                "created_at": item.get("createdAt"),
+                "updatedAt": item.get("updatedAt"),
+                "updated_at": item.get("updatedAt"),
+                "imageUrls": item.get("imageUrls", []),
+                "image_urls": item.get("imageUrls", []),
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting post: {e}")
+            raise
+
+    def update_post(self, post_id: str, body: UpdatePostBody, user: UserInfo) -> dict:
+        """投稿を更新 (DynamoDB UpdateItem)"""
+        try:
+            # まず postId から SK を取得
+            response = self.table.query(
+                IndexName="PostIdIndex",
+                KeyConditionExpression="postId = :postId",
+                ExpressionAttributeValues={":postId": post_id},
+            )
+
+            if not response.get("Items"):
+                raise ValueError(f"Post not found: {post_id}")
+
+            item = response["Items"][0]
+
+            # ユーザー権限チェック
+            if item["userId"] != user.user_id and not user.is_admin:
+                raise PermissionError("You do not have permission to update this post")
+
+            # 更新
+            now = datetime.now(timezone.utc).isoformat()
+            update_expr = "SET updatedAt = :updatedAt"
+            expr_values = {":updatedAt": now}
+
+            if body.content is not None:
+                update_expr += ", content = :content"
+                expr_values[":content"] = body.content
+
+            if body.tags is not None:
+                update_expr += ", tags = :tags"
+                expr_values[":tags"] = body.tags
+
+            if body.image_keys is not None:
+                update_expr += ", imageUrls = :imageUrls"
+                expr_values[":imageUrls"] = body.image_keys
+
+            self.table.update_item(
+                Key={"PK": "POSTS", "SK": item["SK"]},
+                UpdateExpression=update_expr,
+                ExpressionAttributeValues=expr_values,
+            )
+
+            return {
+                "status": "updated",
+                "post_id": post_id,
+                "updated_at": now,
+            }
+
+        except Exception as e:
+            logger.error(f"Error updating post: {e}")
+            raise
 
     def get_profile(self, user_id: str) -> ProfileResponse:
         """プロフィールを取得"""

@@ -301,6 +301,58 @@ lambda_policy = aws.iam.RolePolicy(
 )
 
 # ========================================
+# Lambda Layer (Dependencies)
+# ========================================
+# Lambda Layer with all dependencies (FastAPI, Pydantic, Mangum, etc.)
+# Build with: ./scripts/build-lambda-layer.sh
+# The layer ZIP is automatically managed by Pulumi
+
+import os
+import pathlib
+
+# Path to Lambda Layer ZIP
+# Strategy: Use GITHUB_WORKSPACE env var in CI, fallback to relative path for local development
+workspace_root = os.environ.get("GITHUB_WORKSPACE")
+if workspace_root:
+    # GitHub Actions: GITHUB_WORKSPACE points to repository root (/home/runner/work/multicloud-auto-deploy/multicloud-auto-deploy)
+    # Build step creates ZIP at services/api/lambda-layer.zip (relative to repository root)
+    layer_zip_path = pathlib.Path(workspace_root) / "services" / "api" / "lambda-layer.zip"
+else:
+    # Local development: Calculate relative path from this file
+    # __file__ -> infrastructure/pulumi/aws/__main__.py
+    # Go up 3 levels to reach project root, then down to services/api
+    layer_zip_path = pathlib.Path(__file__).parent.parent.parent / "services" / "api" / "lambda-layer.zip"
+
+# Check if layer ZIP exists
+if not layer_zip_path.exists():
+    pulumi.log.warn(
+        f"Lambda Layer ZIP not found at {layer_zip_path}. "
+        "Run './scripts/build-lambda-layer.sh' to build the layer. "
+        "Using placeholder for now."
+    )
+    # Create a minimal placeholder if ZIP doesn't exist
+    layer_zip_path = None
+else:
+    pulumi.log.info(f"Lambda Layer ZIP found: {layer_zip_path} ({os.path.getsize(layer_zip_path) / 1024 / 1024:.2f} MB)")
+
+# Create Lambda Layer (only if ZIP exists)
+lambda_layer = None
+if layer_zip_path:
+    lambda_layer = aws.lambda_.LayerVersion(
+        "dependencies-layer",
+        layer_name=f"{project_name}-{stack}-dependencies",
+        code=pulumi.FileArchive(str(layer_zip_path)),
+        compatible_runtimes=["python3.12"],
+        description=f"Dependencies for {project_name} {stack} (FastAPI, Mangum, Pydantic, etc.)",
+        opts=pulumi.ResourceOptions(
+            # Delete old versions automatically (keeps only latest)
+            delete_before_replace=True,
+        ),
+    )
+    pulumi.export("lambda_layer_arn", lambda_layer.arn)
+    pulumi.export("lambda_layer_version", lambda_layer.version)
+
+# ========================================
 # Lambda Function (FastAPI with Mangum)
 # ========================================
 # Note: Lambda function code is deployed separately using deploy-lambda-aws.sh script
@@ -323,17 +375,15 @@ lambda_function = aws.lambda_.Function(
     "api-function",
     name=f"{project_name}-{stack}-api",
     runtime="python3.12",
-    handler="index.handler",
+    handler="app.main.handler",  # FastAPI application entry point with Mangum
     role=lambda_role.arn,
     memory_size=256 if stack == "staging" else 512,  # Cost optimization for staging
     timeout=30,
     architectures=["x86_64"],  # Use x86_64 for compatibility with custom layers
-    # Custom Lambda Layer with all dependencies (FastAPI, Pydantic, Mangum, boto3)
-    # Built with x86_64 platform for Lambda compatibility
-    # Note: Update layer ARN if a new version is published
-    layers=[
-        "arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-dependencies:2",
-    ],
+    # Lambda Layer is automatically managed by Pulumi
+    # If lambda-layer.zip exists, it will be deployed as a Layer Version
+    # and automatically attached to this function
+    layers=[lambda_layer.arn] if lambda_layer else [],
     # Use inline code or skip code updates
     # Code will be uploaded separately via deploy-lambda-aws.sh
     code=pulumi.AssetArchive({"index.py": pulumi.StringAsset(placeholder_code)}),

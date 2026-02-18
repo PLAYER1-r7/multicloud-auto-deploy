@@ -1,40 +1,66 @@
-# Lambda Layer 最適化ガイド
+# Lambda Layer 公開リソース活用ガイド
 
 ## 概要
 
-このプロジェクトでは**カスタムLambda Layer**を使用してLambda関数のサイズを最適化しています。
+カスタムLayerをビルドする代わりに、公開されているLambda Layerを使用することで：
+- ✅ ビルド時間を削減
+- ✅ メンテナンス不要
+- ✅ 最適化済みのパッケージ
+- ✅ 定期的な更新
 
-### なぜカスタムLayerなのか
+## ⚠️ 重要な注意事項（2026年2月時点）
 
-- ✅ **確実に動作**: リソースベースポリシーの制限なし
-- ✅ **完全な制御**: 依存関係のバージョンを固定可能
-- ✅ **サイズ最適化**: 必要なパッケージのみ含める
-- ✅ **直接アップロード**: S3不要で50MB未満を実現
-- ✅ **プライベート環境**: どの環境でも使用可能
-- ✅ **低レイテンシー**: 同一アカウント内でのアクセス
+**Klayers（公開Lambda Layer）へのアクセスについて：**
 
-### 最適化結果
-
-- **Layer サイズ**: ~8-10MB (圧縮後)
-- **Lambda コード**: ~78KB (アプリケーションのみ)
-- **デプロイ方式**: 直接ZIPアップロード (S3不要)
-- **デプロイ時間**: 数秒
-
----
-
-## ⚠️ Klayersについて
-
-**Klayers** は人気のPythonライブラリをLambda Layer形式で提供するパブリックプロジェクトですが、現在はリソースベースポリシーの制限により利用できません。
+現在、Klayersは**リソースベースポリシーの制限**により、他のAWSアカウントからのアクセスが制限されている可能性があります。
 
 ```
 エラー例：
-User is not authorized to perform: lambda:GetLayerVersion
+User is not authorized to perform: lambda:GetLayerVersion 
 because no resource-based policy allows the lambda:GetLayerVersion action
 ```
 
-**このプロジェクトでは Klayers を使用しません。**
+**原因の可能性：**
+1. Python 3.12 のサポートがまだ限定的
+2. 特定リージョン（ap-northeast-1など）での公開が未完了
+3. Klayers側のポリシー設定変更
+4. クロスアカウントアクセスの制限
 
-詳細は本ドキュメントの「Klayers（参考）」セクションを参照してください。
+**推奨アプローチ：**
+現時点では**カスタムLambda Layer**の使用を推奨します。
+- ✅ 確実に動作
+- ✅ 完全な制御
+- ✅ プライベート環境対応
+- ✅ サイズ最適化可能
+
+詳細は本ドキュメントの「カスタムLayerの作成」セクションを参照してください。
+
+---
+
+## Klayers について（参考情報）
+
+### Klayers とは
+
+**Klayers** は Keith Rozario 氏が管理する、人気のPythonライブラリをLambda Layer形式で提供するプロジェクトです。
+
+- 🌐 GitHub: https://github.com/keithrozario/Klayers
+- 📊 Layer検索: https://api.klayers.cloud/
+
+### 対応状況
+
+当プロジェクトで必要な依存関係の対応状況：
+
+| パッケージ | Klayers対応 | 用途 |
+|-----------|-------------|------|
+| fastapi | ✅ | Webフレームワーク |
+| pydantic | ✅ | データバリデーション |
+| mangum | ✅ | FastAPI→Lambda変換 |
+| python-jose | ✅ | JWT検証 |
+| PyJWT | ✅ | JWT処理 |
+| requests | ✅ | HTTP クライアント |
+| python-multipart | ✅ | ファイルアップロード |
+
+## カスタムLayerの作成（推奨）
 
 ### メリット
 
@@ -195,12 +221,12 @@ lambda_function = aws.lambda_.Function(
     arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-requests:10
     EOF
     )
-
+    
     # Lambda 更新（Layerなし、直接アップロード）
     aws lambda update-function-code \
       --function-name $LAMBDA_FUNCTION \
       --zip-file fileb://services/api/lambda.zip
-
+    
     # Klayers をアタッチ
     aws lambda update-function-configuration \
       --function-name $LAMBDA_FUNCTION \
@@ -358,14 +384,14 @@ else:
 
 ## 比較: Klayers vs カスタム Layer
 
-| 項目           | Klayers      | カスタム Layer |
-| -------------- | ------------ | -------------- |
-| ビルド時間     | 不要         | 5-10分         |
-| メンテナンス   | 自動         | 手動           |
-| カスタマイズ   | 制限あり     | 完全制御       |
-| サイズ最適化   | 標準         | 可能           |
-| バージョン管理 | コミュニティ | 自己管理       |
-| 利用コスト     | 無料         | 無料           |
+| 項目 | Klayers | カスタム Layer |
+|------|---------|---------------|
+| ビルド時間 | 不要 | 5-10分 |
+| メンテナンス | 自動 | 手動 |
+| カスタマイズ | 制限あり | 完全制御 |
+| サイズ最適化 | 標準 | 可能 |
+| バージョン管理 | コミュニティ | 自己管理 |
+| 利用コスト | 無料 | 無料 |
 
 ## まとめ
 
@@ -373,14 +399,14 @@ else:
 
 **🌟 カスタムLambda Layerの使用を強く推奨します**
 
-| 項目             | カスタムLayer      | Klayers             |
-| ---------------- | ------------------ | ------------------- |
-| 利用可能性       | ✅ 確実            | ❌ アクセス制限あり |
-| ビルド時間       | 5-10分（初回のみ） | N/A                 |
-| メンテナンス     | 自己管理           | N/A                 |
-| カスタマイズ     | ✅ 完全制御        | 制限あり            |
-| サイズ最適化     | ✅ 可能            | 標準                |
-| プライベート環境 | ✅ 対応            | 制限あり            |
+| 項目 | カスタムLayer | Klayers |
+|------|--------------|---------|
+| 利用可能性 | ✅ 確実 | ❌ アクセス制限あり |
+| ビルド時間 | 5-10分（初回のみ） | N/A |
+| メンテナンス | 自己管理 | N/A |
+| カスタマイズ | ✅ 完全制御 | 制限あり |
+| サイズ最適化 | ✅ 可能 | 標準 |
+| プライベート環境 | ✅ 対応 | 制限あり |
 
 ### 実装済み・検証済み
 

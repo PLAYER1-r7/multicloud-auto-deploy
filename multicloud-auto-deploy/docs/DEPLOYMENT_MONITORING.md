@@ -9,6 +9,9 @@ GitHub Actionsのデプロイワークフローを監視する方法を説明し
 - [curlとGitHub APIで監視](#curlとgithub-apiで監視)
 - [リアルタイム監視スクリプト](#リアルタイム監視スクリプト)
 - [トラブルシューティング](#トラブルシューティング)
+- [デプロイ失敗調査](#デプロイ失敗調査)
+
+> 💡 **関連ドキュメント**: デプロイ失敗の詳細な調査方法は [デプロイ失敗調査レポート](./DEPLOYMENT_FAILURE_INVESTIGATION.md) を参照してください。
 
 ---
 
@@ -19,6 +22,7 @@ GitHub Actionsのデプロイワークフローを監視する方法を説明し
 ### 手順
 
 1. **GitHub Actionsページを開く**
+
 ```bash
 # ブラウザで開く
 $BROWSER https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions
@@ -68,6 +72,7 @@ gh run list --workflow="Deploy to AWS" --limit 5
 ```
 
 **出力例**:
+
 ```
 STATUS  TITLE                    WORKFLOW         BRANCH  EVENT  ID          ELAPSED  AGE
 ✓       Merge develop into main  Deploy to AWS    main    push   22107983145  2m 45s   10m
@@ -137,6 +142,7 @@ curl -s "https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/runs?br
 ```
 
 **出力例**:
+
 ```
 22107983147 | completed | failure | Deploy Landing Page to AWS | 2026-02-17T17:06:16Z
 22107983158 | completed | success | Deploy Landing Page to Azure | 2026-02-17T17:06:16Z
@@ -161,6 +167,7 @@ curl -s "https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/runs/${
 ```
 
 **出力例**:
+
 ```
 Run ID: 22107983145
 Status: completed
@@ -287,7 +294,9 @@ curl -s "https://api.github.com/rate_limit" | jq '.rate'
 ```
 
 **解決策**:
+
 - GitHub Personal Access Tokenを使用して認証
+
 ```bash
 export GITHUB_TOKEN="ghp_xxxxxxxxxxxxx"
 curl -H "Authorization: token $GITHUB_TOKEN" \
@@ -321,7 +330,23 @@ gh auth login --with-token < token.txt
 
 ---
 
-## 📚 参考リンク
+## � デプロイ失敗調査
+
+デプロイが失敗した場合の調査手順については、詳細な調査レポートを参照してください：
+
+📄 **[デプロイ失敗調査レポート](./DEPLOYMENT_FAILURE_INVESTIGATION.md)**
+
+主な内容：
+
+- 失敗状況の確認手順
+- 失敗ステップの特定方法
+- 根本原因の分析
+- 解決策の提案
+- 修正後の検証手順
+
+---
+
+## �📚 参考リンク
 
 - [GitHub Actions API Documentation](https://docs.github.com/en/rest/actions)
 - [GitHub CLI Manual](https://cli.github.com/manual/)

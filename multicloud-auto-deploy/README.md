@@ -20,24 +20,24 @@
 
 ### 本番環境（手動構築）
 
-| Cloud Provider | API Endpoint | Frontend (CDN) | Direct Storage |
-|---------------|--------------|----------------|----------------|
-| **AWS** (ap-northeast-1) | [API Gateway](https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com) | [CloudFront](https://d1tf3uumcm4bo1.cloudfront.net) ✅ | [S3 Static](http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com) |
-| **Azure** (japaneast) | [Functions](https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger) | [Front Door](https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net) 🆕 | [Blob Storage](https://mcadwebd45ihd.z11.web.core.windows.net) |
-| **GCP** (asia-northeast1) | [Cloud Functions](https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app) | [Cloud CDN](http://34.117.111.182) 🆕 | [Cloud Storage](https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html) |
+| Cloud Provider            | API Endpoint                                                                                                             | Frontend (CDN)                                                                | Direct Storage                                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **AWS** (ap-northeast-1)  | [API Gateway](https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com)                                               | [CloudFront](https://d1tf3uumcm4bo1.cloudfront.net) ✅                        | [S3 Static](http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com)        |
+| **Azure** (japaneast)     | [Functions](https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger) | [Front Door](https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net) 🆕 | [Blob Storage](https://mcadwebd45ihd.z11.web.core.windows.net)                                             |
+| **GCP** (asia-northeast1) | [Cloud Functions](https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app)                                    | [Cloud CDN](http://34.117.111.182) 🆕                                         | [Cloud Storage](https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html) |
 
 ### Pulumi管理環境 🎉
 
-| Cloud Provider | CDN URL | Distribution ID | 管理方法 |
-|---------------|---------|-----------------|----------|
-| **AWS** | [CloudFront](https://d1tf3uumcm4bo1.cloudfront.net) | E1TBH4R432SZBZ | Pulumi |
-| **Azure** | [Front Door](https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net) | mcad-staging-d45ihd | Pulumi |
-| **GCP** | [Cloud CDN](http://34.117.111.182) | 34.117.111.182 | Pulumi |
+| Cloud Provider | CDN URL                                                                    | Distribution ID     | 管理方法 |
+| -------------- | -------------------------------------------------------------------------- | ------------------- | -------- |
+| **AWS**        | [CloudFront](https://d1tf3uumcm4bo1.cloudfront.net)                        | E1TBH4R432SZBZ      | Pulumi   |
+| **Azure**      | [Front Door](https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net) | mcad-staging-d45ihd | Pulumi   |
+| **GCP**        | [Cloud CDN](http://34.117.111.182)                                         | 34.117.111.182      | Pulumi   |
 
 > 🌐 **全クラウドでCDN配信を実装！** CloudFront, Front Door, Cloud CDNによる高速・安全なコンテンツ配信
-> 
+>
 > 🛠️ **Infrastructure as Code**: Pulumiで全CDNリソースを管理（詳細: [CDNセットアップガイド](docs/CDN_SETUP.md)）
-> 
+>
 > 📋 詳細情報: [エンドポイント一覧](docs/ENDPOINTS.md)
 
 ## 🚀 特徴
@@ -81,31 +81,36 @@ multicloud-auto-deploy/
 ### 技術スタック
 
 **Frontend**
+
 - **Framework**: React 18+ (Vite)
 - **Hosting**: Static Site (S3 / Azure Blob / Cloud Storage)
 - **CDN**: CloudFront / Azure Front Door / Cloud CDN
 - **Build**: Vite 7.3+, TypeScript
 
 **Backend**
+
 - **Framework**: FastAPI 1.0+ (Python 3.12)
 - **AWS**: Lambda (x86_64) + API Gateway v2 (HTTP)
 - **Azure**: Azure Functions (Python)
 - **GCP**: Cloud Functions (Python 3.11)
 
 **Database**
+
 - **AWS**: DynamoDB (PAY_PER_REQUEST)
 - **Azure**: Cosmos DB (Serverless)
 - **GCP**: Firestore (Native Mode)
 
 **Infrastructure**
+
 - **IaC**: Pulumi 3.0+
   - Infrastructure as Code管理（`infrastructure/pulumi/`）
     - AWS: Lambda + API Gateway
-    - Azure: Functions + Cosmos DB  
+    - Azure: Functions + Cosmos DB
     - GCP: Cloud Functions
 - **CI/CD**: GitHub Actions
 
 **CI/CD**
+
 - GitHub Actions
 - Automated builds and deployments
 - Docker-based deployments
@@ -116,12 +121,14 @@ multicloud-auto-deploy/
 #### 🐍 Python Full Stack版（推奨）
 
 1. **リポジトリをクローン**
+
 ```bash
 git clone https://github.com/PLAYER1-r7/multicloud-auto-deploy.git
 cd multicloud-auto-deploy
 ```
 
 2. **ローカル開発環境起動**
+
 ```bash
 # バックエンド（FastAPI）
 docker-compose up -d api
@@ -137,6 +144,7 @@ npm run dev
 ```
 
 3. **Pulumiでデプロイ**
+
 ```bash
 # AWS例
 cd infrastructure/pulumi/aws/simple-sns
@@ -151,17 +159,20 @@ pulumi up
 ### クイックスタート
 
 1. **リポジトリをクローン**
+
 ```bash
 git clone https://github.com/PLAYER1-r7/multicloud-auto-deploy.git
 cd multicloud-auto-deploy
 ```
 
 2. **GitHub Secretsを設定**
+
 ```bash
 ./scripts/setup-github-secrets.sh
 ```
 
 3. **コードをプッシュして自動デプロイ**
+
 ```bash
 git push origin main
 # GitHub Actionsが自動的にデプロイを実行
@@ -170,10 +181,14 @@ git push origin main
 ## 📚 ドキュメント
 
 ### 必読ガイド
+
 - 📖 [セットアップガイド](docs/SETUP.md) - 初期セットアップ手順
 - 🔐 [認証セットアップガイド](docs/AUTHENTICATION_SETUP.md) - AWS Cognito / Azure AD / Firebase Auth（Pulumi自動化済み） ✨
 - 🚀 [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定
 - 📊 [デプロイ監視ガイド](docs/DEPLOYMENT_MONITORING.md) - GitHub Actions監視方法 🆕
+- 📈 [環境ステータスレポート](docs/ENVIRONMENT_STATUS.md) - Staging/Production環境の現状と問題点 🆕
+- 🔍 [環境診断ガイド](docs/ENVIRONMENT_DIAGNOSTICS.md) - トラブルシューティングコマンド集 🆕
+- ⚡ [Lambda Layer最適化戦略](docs/AWS_LAMBDA_LAYER_STRATEGY.md) - 公開Layer + カスタムLayerのベストプラクティス 🆕
 - ✅ [CI/CDテスト結果](docs/CICD_TEST_RESULTS.md) - パイプライン検証レポート
 - 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策
 - 🌐 [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のエンドポイント情報
@@ -181,12 +196,22 @@ git push origin main
 - 📦 [関数サイズ最適化](docs/FUNCTION_SIZE_OPTIMIZATION.md) - デプロイパッケージサイズ削減（AWS 97%削減！） 🆕
 - 📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
 
+### テスト・検証レポート
+
+- 🧪 [統合テスト実行レポート](docs/TEST_EXECUTION_REPORT.md) - AWS/GCP/Azure統合テスト結果 🆕
+- 🔎 [GCP/Azureログ調査レポート](docs/LOG_INVESTIGATION_REPORT.md) - エラー原因分析とスタックトレース ⭐ **NEW**
+- 📋 [デプロイ検証レポート](docs/DEPLOYMENT_VERIFICATION_REPORT.md) - 本番環境検証結果
+- 🛠️ [AWS Backend完全修正レポート](docs/AWS_BACKEND_COMPLETE_FIX_REPORT.md) - Lambda設定修正詳細
+- 📚 [統合テストガイド](docs/INTEGRATION_TESTS_GUIDE.md) - テスト実行方法とトラブルシューティング 🆕
+
 ### プロバイダー別デプロイ
+
 - [AWS デプロイ](docs/AWS_DEPLOYMENT.md)
 - [Azure デプロイ](docs/AZURE_DEPLOYMENT.md)
 - [GCP デプロイ](docs/GCP_DEPLOYMENT.md)
 
 ### アーキテクチャ
+
 - [システムアーキテクチャ](docs/ARCHITECTURE.md) - 完全版システム設計
 
 ## 🔄 GitHub Actions 自動デプロイ
@@ -199,29 +224,33 @@ git push origin main
 
 ### ワークフロー
 
-| ワークフロー | トリガー | デプロイ先 | 説明 |
-|------------|---------|-----------|------|
-| **deploy-aws.yml** | `main`へのpush / 手動 | AWS Lambda | Lambda + API Gateway更新 |
-| **deploy-azure.yml** | `main`へのpush / 手動 | Azure Functions | Functions + Cosmos DB更新 |
-| **deploy-gcp.yml** | `main`へのpush / 手動 | GCP Cloud Functions | Cloud Functions更新 |
+| ワークフロー         | トリガー              | デプロイ先          | 説明                      |
+| -------------------- | --------------------- | ------------------- | ------------------------- |
+| **deploy-aws.yml**   | `main`へのpush / 手動 | AWS Lambda          | Lambda + API Gateway更新  |
+| **deploy-azure.yml** | `main`へのpush / 手動 | Azure Functions     | Functions + Cosmos DB更新 |
+| **deploy-gcp.yml**   | `main`へのpush / 手動 | GCP Cloud Functions | Cloud Functions更新       |
 
 ### 必要なGitHub Secrets
 
 以下のシークレットを設定してください（詳細は [CI/CD設定ガイド](docs/CICD_SETUP.md) 参照）：
 
 **Pulumi（必須）**
+
 - `PULUMI_ACCESS_TOKEN` - Pulumi Cloud認証トークン（すべてのデプロイで必須）
 
 **Azure Functions**
+
 - `AZURE_CREDENTIALS` - Service Principal認証情報（JSON）
 - `AZURE_SUBSCRIPTION_ID` - Azure Subscription ID
 - `AZURE_RESOURCE_GROUP` - リソースグループ名
 
 **GCP Cloud Functions**
+
 - `GCP_CREDENTIALS` - サービスアカウントキー（JSON）
 - `GCP_PROJECT_ID` - プロジェクトID
 
 **AWS Lambda**
+
 - `AWS_ACCESS_KEY_ID` - AWS認証キーID
 - `AWS_SECRET_ACCESS_KEY` - AWS認証シークレットキー
 
@@ -245,6 +274,7 @@ Actions > Deploy to Multi-Cloud > Run workflow
 ## 🏗️ サポートされるアーキテクチャ
 
 ### AWS (ap-northeast-1) ✅ 運用中
+
 - **Frontend**: S3 Static Website Hosting
 - **Backend**: Lambda (Python 3.12) + API Gateway v2
 - **Database**: DynamoDB (PAY_PER_REQUEST)
@@ -252,6 +282,7 @@ Actions > Deploy to Multi-Cloud > Run workflow
 - **Deployment**: GitHub Actions
 
 ### Azure (japaneast) ✅ 運用中
+
 - **Frontend**: Blob Storage ($web) + Azure Front Door
 - **Backend**: Azure Functions (Python 3.12)
 - **Database**: Cosmos DB (Serverless)
@@ -260,6 +291,7 @@ Actions > Deploy to Multi-Cloud > Run workflow
 - **CDN**: Azure Front Door (Standard)
 
 ### GCP (asia-northeast1) ✅ 運用中
+
 - **Frontend**: Cloud Storage Static Website
 - **Backend**: Cloud Functions (Python 3.12)
 - **Database**: Firestore (Native Mode)
@@ -319,7 +351,7 @@ VS Codeの Dev Containerに対応しています：
 # 便利なエイリアス
 pulumi          # Pulumi CLI
 deploy-aws      # AWS環境にデプロイ
-deploy-azure    # Azure環境にデプロイ  
+deploy-azure    # Azure環境にデプロイ
 deploy-gcp      # GCP環境にデプロイ
 test-all        # 全エンドポイントテスト
 ```
@@ -419,9 +451,10 @@ PROJECT_NAME=myproject ENVIRONMENT=production ./deploy-lambda-aws.sh
 ```
 
 **テストカバレッジ**:
+
 - **Total**: 18テスト（3環境 × 6テスト）
 - **Health Checks**: 各環境のヘルスエンドポイント検証
-- **CRUD Operations**: 
+- **CRUD Operations**:
   - ✅ Create: メッセージ作成
   - ✅ List: 全メッセージ取得
   - ✅ Get: 特定メッセージ取得
@@ -429,10 +462,12 @@ PROJECT_NAME=myproject ENVIRONMENT=production ./deploy-lambda-aws.sh
   - ✅ Delete: メッセージ削除
 
 **クラウド固有のパス処理**:
+
 - AWS/GCP: `/api/messages/`
 - Azure: `/api/HttpTrigger/api/messages/`（Flex Consumption対応）
 
 **期待される出力例**:
+
 ```
 ═══════════════════════════════════════════════════════
         Multi-Cloud E2E Test Suite
@@ -459,6 +494,7 @@ All tests passed! ✓
 ```
 
 **データ永続性検証**:
+
 - AWS: DynamoDB (PAY_PER_REQUEST)
 - GCP: Firestore (Native Mode)
 - Azure: Cosmos DB (Serverless)
@@ -491,6 +527,7 @@ ALERT_EMAIL=your@email.com ./scripts/setup-monitoring.sh
 #### 1. AWS X-Ray（分散トレーシング）
 
 Lambda関数のトレーシング有効化:
+
 ```bash
 aws lambda update-function-configuration \
   --function-name YOUR_FUNCTION_NAME \
@@ -498,6 +535,7 @@ aws lambda update-function-configuration \
 ```
 
 FastAPIにX-Ray統合:
+
 ```python
 # requirements.txtに追加
 aws-xray-sdk==2.12.0
@@ -512,6 +550,7 @@ app.add_middleware(XRayMiddleware, recorder=xray_recorder)
 #### 2. AWS WAF（セキュリティ）
 
 API Gatewayへの攻撃防御:
+
 ```bash
 # WAF Web ACL作成
 aws wafv2 create-web-acl \
@@ -529,6 +568,7 @@ aws wafv2 associate-web-acl \
 #### 3. Route 53 + カスタムドメイン
 
 プロダクション用ドメイン設定:
+
 ```bash
 # ACM証明書作成
 aws acm request-certificate \
@@ -549,6 +589,7 @@ aws route53 change-resource-record-sets \
 #### 4. Parameter Store / Secrets Manager
 
 環境変数の安全な管理:
+
 ```bash
 # Secrets Managerに保存
 aws secretsmanager create-secret \
@@ -572,6 +613,7 @@ def get_secret():
 #### 5. Lambda Layers（依存関係最適化）
 
 共通ライブラリの分離でコールドスタート改善:
+
 ```bash
 # Lambda Layer作成
 mkdir python
@@ -592,20 +634,24 @@ aws lambda update-function-configuration \
 #### 6. CloudFront Functions（エッジ処理）
 
 リクエスト/レスポンスのエッジ処理:
+
 ```javascript
 // CloudFront Function: セキュリティヘッダ追加
 function handler(event) {
-    var response = event.response;
-    response.headers['strict-transport-security'] = { value: 'max-age=31536000; includeSubdomains' };
-    response.headers['x-content-type-options'] = { value: 'nosniff' };
-    response.headers['x-frame-options'] = { value: 'DENY' };
-    return response;
+  var response = event.response;
+  response.headers["strict-transport-security"] = {
+    value: "max-age=31536000; includeSubdomains",
+  };
+  response.headers["x-content-type-options"] = { value: "nosniff" };
+  response.headers["x-frame-options"] = { value: "DENY" };
+  return response;
 }
 ```
 
 #### 7. AWS Backup（データ保護）
 
 DynamoDBの自動バックアップ:
+
 ```bash
 aws backup create-backup-plan \
   --backup-plan file://backup-plan.json
@@ -623,6 +669,30 @@ aws backup create-backup-selection \
 - GCPリソース競合（State管理、リソースインポート）
 - フロントエンドAPI接続問題（ビルド順序、API URL設定）
 - 権限エラー（IAM、RBAC設定）
+
+### 📚 関連ドキュメント
+
+**デプロイ & 運用**:
+
+- [デプロイ検証レポート](docs/DEPLOYMENT_VERIFICATION_REPORT.md) - Staging/Production環境の検証結果
+- [環境ステータス](docs/ENVIRONMENT_STATUS.md) - 各環境のリアルタイム状態
+- [環境診断ガイド](docs/ENVIRONMENT_DIAGNOSTICS.md) - トラブルシューティングコマンド集
+
+**AWS Lambda最適化**:
+
+- [Lambda Layer戦略](docs/AWS_LAMBDA_LAYER_STRATEGY.md) - 依存関係管理の最適化戦略
+- [Lambda依存関係修正レポート](docs/AWS_LAMBDA_DEPENDENCY_FIX_REPORT.md) - Layer v6実装詳細
+- [デプロイ失敗調査](docs/DEPLOYMENT_FAILURE_INVESTIGATION.md) - mgnum エラーの調査記録
+
+**CI/CD & セットアップ**:
+
+- [CI/CDセットアップガイド](docs/CICD_SETUP.md) - GitHub Actions設定
+- [CDNセットアップガイド](docs/CDN_SETUP.md) - CloudFront/Front Door/Cloud CDN設定
+- [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のURL一覧
+
+**トラブルシューティング**:
+
+- [トラブルシューティングガイド](docs/TROUBLESHOOTING.md) - 開発環境認証、Azure/GCP問題解決
 
 ## 🤝 貢献
 

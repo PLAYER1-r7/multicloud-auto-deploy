@@ -42,31 +42,37 @@
 
 素早く解決策を見つけるために、エラーメッセージから検索してください。
 
-| エラーメッセージ | 問題 | セクション |
-|----------------|------|----------|
-| `mapping values are not allowed in this context` | YAML構文エラー | [GitHub Actions YAML](#github-actions-yaml構文エラー) |
-| `Application setting already exists` | CORS設定の競合 | [Azure CORS設定](#azure-cors設定の名前競合) |
-| `AccessDeniedException ... PublishLayerVersion` | Lambda Layer権限不足 | [Lambda Layer権限](#aws-lambda-layer権限エラー) |
-| `ResourceConflictException ... update is in progress` | Lambda更新の競合 | [Lambda ResourceConflict](#aws-lambda-resourceconflictexception) |
-| `Resource ... not found` | リソース名のハードコード | [Azureリソース名](#azureリソース名のハードコード問題) |
-| `Deployment was cancelled and another deployment` | 同時デプロイ | [Azure デプロイメント競合](#azure-function-appデプロイメント競合) |
-| `pathspec ... did not match any files` | Gitパス問題 | [Gitパス問題](#モノレポ構造でのgitパス問題) |
-| `no stack named ... found` | Pulumiディレクトリ | [Pulumiスタック](#pulumiスタックとディレクトリの混同) |
-| `invalid character ... after object key:value pair` | JSON構文エラー | [環境変数エスケープ](#環境変数の引用符とエスケープ) |
-| `invalid CloudFront distribution ids` | CloudFront ID | [CloudFront](#cloudフロントidの取得とキャッシュ無効化) |
-| `Could not find a version that satisfies` | pip依存関係 | [Lambda Layer依存関係](#lambda-layerビルド時の依存関係エラー) |
-| `unrecognized named-value: 'secrets'` | シークレット参照 | [GitHub Secretsエラー](#github-actionsシークレット参照エラー) |
-| `Deployment was partially successful` | Azure Flex特有 | [Partially Successful](#azure-flex-consumption-partially-successful) |
-| `defaultHostName returns null` | Azure Flex特有 | [defaultHostName null](#azure-flex-consumption-defaulthostname-null) |
-| `Kudu has been restarted` | Azure Flex特有 | [Kudu再起動](#azure-flex-consumption-kudu再起動) |
-| `Runtime.ImportModuleError` | Lambda entrypoint | [Lambda ImportError](#aws-lambda-runtime-errors) |
-| `ConnectionRefusedError: [Errno 111]` | GCP環境変数未設定 | [GCP Cloud Run 500](#gcp-cloud-run-500-errors) |
+| エラーメッセージ                                      | 問題                     | セクション                                                                |
+| ----------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------- |
+| `mapping values are not allowed in this context`      | YAML構文エラー           | [GitHub Actions YAML](#github-actions-yaml構文エラー)                     |
+| `Application setting already exists`                  | CORS設定の競合           | [Azure CORS設定](#azure-cors設定の名前競合)                               |
+| `AZURE_COSMOS_DATABASE value is null`                 | Azure CLI書式問題        | [Azure CLI --settings書式](#azure-cli---settings-yaml-multi-line書式問題) |
+| `environment variables all null`                      | Azure CLI書式問題        | [Azure CLI --settings書式](#azure-cli---settings-yaml-multi-line書式問題) |
+| `AccessDeniedException ... PublishLayerVersion`       | Lambda Layer権限不足     | [Lambda Layer権限](#aws-lambda-layer権限エラー)                           |
+| `ResourceConflictException ... update is in progress` | Lambda更新の競合         | [Lambda ResourceConflict](#aws-lambda-resourceconflictexception)          |
+| `Resource ... not found`                              | リソース名のハードコード | [Azureリソース名](#azureリソース名のハードコード問題)                     |
+| `Deployment was cancelled and another deployment`     | 同時デプロイ             | [Azure デプロイメント競合](#azure-function-appデプロイメント競合)         |
+| `pathspec ... did not match any files`                | Gitパス問題              | [Gitパス問題](#モノレポ構造でのgitパス問題)                               |
+| `no stack named ... found`                            | Pulumiディレクトリ       | [Pulumiスタック](#pulumiスタックとディレクトリの混同)                     |
+| `invalid character ... after object key:value pair`   | JSON構文エラー           | [環境変数エスケープ](#環境変数の引用符とエスケープ)                       |
+| `invalid CloudFront distribution ids`                 | CloudFront ID            | [CloudFront](#cloudフロントidの取得とキャッシュ無効化)                    |
+| `Could not find a version that satisfies`             | pip依存関係              | [Lambda Layer依存関係](#lambda-layerビルド時の依存関係エラー)             |
+| `unrecognized named-value: 'secrets'`                 | シークレット参照         | [GitHub Secretsエラー](#github-actionsシークレット参照エラー)             |
+| `Deployment was partially successful`                 | Azure Flex特有           | [Partially Successful](#azure-flex-consumption-partially-successful)      |
+| `defaultHostName returns null`                        | Azure Flex特有           | [defaultHostName null](#azure-flex-consumption-defaulthostname-null)      |
+| `Kudu has been restarted`                             | Azure Flex特有           | [Kudu再起動](#azure-flex-consumption-kudu再起動)                          |
+| `Runtime.ImportModuleError`                           | Lambda entrypoint        | [Lambda ImportError](#aws-lambda-runtime-errors)                          |
+| `ConnectionRefusedError: [Errno 111]`                 | GCP環境変数未設定        | [GCP Cloud Run 500](#gcp-cloud-run-500-errors)                            |
+| `PartitionKeyMismatchException` or 500 on POST        | Cosmos DBパーティション  | [Azure Cosmos DB Partition Key](#azure-cosmos-db-partition-key-mismatch)  |
+| `'UserInfo' object has no attribute 'nickname'`       | UserInfo属性エラー       | [Azure UserInfo AttributeError](#azure-userinfo-attributeerror)           |
+| `Input should be a valid boolean` for isMarkdown      | Pydantic検証エラー       | [Azure Post Model Validation](#azure-post-model-validation-error)         |
 
 ## 📑 目次
 
 ### クラウド別トラブルシューティング
 
 #### AWS
+
 - [AWS Lambda Layer権限エラー](#aws-lambda-layer権限エラー)
 - [AWS Lambda ResourceConflictException](#aws-lambda-resourceconflictexception)
 - [AWS Lambda Runtime Errors](#aws-lambda-runtime-errors)
@@ -74,7 +80,13 @@
 - [Lambda Layerビルド時の依存関係エラー](#lambda-layerビルド時の依存関係エラー)
 
 #### Azure
+
 - [Azure CORS設定の名前競合](#azure-cors設定の名前競合)
+- [Azure CLI --settings YAML Multi-line書式問題](#azure-cli---settings-yaml-multi-line書式問題)
+- [Azure環境変数の予約名問題](#azure環境変数の予約名問題) ⚠️ 誤解だったケース
+- [Azure Cosmos DB Partition Key Mismatch](#azure-cosmos-db-partition-key-mismatch)
+- [Azure UserInfo AttributeError](#azure-userinfo-attributeerror)
+- [Azure Post Model Validation Error](#azure-post-model-validation-error)
 - [Azure Front Doorエンドポイント取得](#azure-front-doorエンドポイント取得)
 - [Azureリソース名のハードコード問題](#azureリソース名のハードコード問題)
 - [Azure Function Appデプロイメント競合](#azure-function-appデプロイメント競合)
@@ -83,11 +95,13 @@
 - [Azure Flex Consumption: Kudu再起動](#azure-flex-consumption-kudu再起動)
 
 #### GCP
+
 - [GCP Cloud Run 500 Errors](#gcp-cloud-run-500-errors)
 - [GCP権限エラー](#gcp権限エラー)
 - [GCPリソース競合](#gcpリソース競合)
 
 ### 共通問題
+
 - [GitHub Actions YAML構文エラー](#github-actions-yaml構文エラー)
 - [GitHub Actionsシークレット参照エラー](#github-actionsシークレット参照エラー)
 - [GitHub Actionsワークフローがトリガーされない](#github-actionsワークフローがトリガーされない)
@@ -103,18 +117,23 @@
 ## ⏱️ 5分で解決：よくある問題トップ5
 
 ### 1. 🔴 Azure Functions: "Partially Successful" だが動作する
+
 **即座の解決策**: これは正常です。ヘルスチェックをパスすれば無視してOK。詳細は[こちら](#azure-flex-consumption-partially-successful)
 
 ### 2. 🔴 AWS Lambda: "ResourceConflictException"
+
 **即座の解決策**: Lambda関数のステータスが`Active`になるまで待機（2-10秒）。詳細は[こちら](#aws-lambda-resourceconflictexception)
 
 ### 3. 🔴 Azure: "Application setting already exists"
+
 **即座の解決策**: 設定を削除してから再設定。`az functionapp config appsettings delete` → `set`。詳細は[こちら](#azure-cors設定の名前競合)
 
 ### 4. 🔴 Pulumi: "no stack named 'staging' found"
+
 **即座の解決策**: 正しいディレクトリに移動。`cd infrastructure/pulumi/[aws|azure|gcp]`。詳細は[こちら](#pulumiスタックとディレクトリの混同)
 
 ### 5. 🔴 GitHub Actions: "YAML構文エラー"
+
 **即座の解決策**: `cat << EOF` を `echo` に置き換え、または `cat << 'EOF'` で引用符をエスケープ。詳細は[こちら](#github-actions-yaml構文エラー)
 
 ---
@@ -124,6 +143,7 @@
 **解決時間**: ⏱️ 2分
 
 ### 症状
+
 ```
 ERROR: Deployment was partially successful. These are the deployment logs:
 [***"message": "The logs you are looking for were not found. In flex consumption plans,
@@ -133,6 +153,7 @@ the instance will be recycled and logs will not be persisted after that..."***]
 しかし、Function Appは実際には正常に動作している。
 
 ### 原因
+
 - Azure Flex Consumptionプランではインスタンスがリサイクルされ、デプロイログが保持されない
 - `az functionapp deployment source config-zip`が"partially successful"を返すが、実際にはデプロイは成功している
 - 詳細なステップログ（`UploadPackageStep`, `OryxBuildStep`等）が出力されない
@@ -140,6 +161,7 @@ the instance will be recycled and logs will not be persisted after that..."***]
 ### 解決策
 
 1. **"Deployment was successful"メッセージを検出**:
+
 ```bash
 # 成功メッセージを最優先でチェック
 if grep -q "Deployment was successful" deploy_log.txt; then
@@ -150,6 +172,7 @@ fi
 ```
 
 2. **"partially successful"を無視**:
+
 ```bash
 # "partially successful"を無視し、critical errorのみ失敗扱い
 elif grep -q "ERROR:" deploy_log.txt && ! grep -q "partially successful" deploy_log.txt; then
@@ -160,6 +183,7 @@ fi
 ```
 
 3. **ヘルスチェックを必須検証に**:
+
 ```bash
 # デプロイ後のヘルスチェックで最終確認
 curl -f -s -o /dev/null -w "%{http_code}" "$FUNC_URL/health"
@@ -172,11 +196,13 @@ fi
 ```
 
 ### ベストプラクティス
+
 - "Partially Successful"は**正常な挙動**として扱う
 - デプロイ完了の判定はヘルスチェックで行う
 - Flex Consumptionプランでは詳細ログが取得できないことを前提にする
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-azure.yml` (lines 280-310)
 
 ---
@@ -186,6 +212,7 @@ fi
 **解決時間**: ⏱️ 1分
 
 ### 症状
+
 ```
 Testing: https:///api/HttpTrigger/health
 ❌ Health check failed
@@ -194,11 +221,13 @@ Testing: https:///api/HttpTrigger/health
 `az functionapp show --query defaultHostName`がnullを返し、URLが空になる。
 
 ### 原因
+
 Flex Consumptionプランでは`defaultHostName`フィールドがnullまたは未設定。
 
 ### 解決策
 
 **`az functionapp config hostname list`を使用**:
+
 ```bash
 # Flex Consumption対応のホスト名取得
 FUNC_HOSTNAME=$(az functionapp config hostname list \
@@ -217,17 +246,19 @@ fi
 
 ### 比較
 
-| コマンド | Consumption Y1 | Flex Consumption | Premium EP1 |
-|---------|---------------|------------------|-------------|
-| `show --query defaultHostName` | ✅ 動作 | ❌ null | ✅ 動作 |
-| `config hostname list` | ✅ 動作 | ✅ 動作 | ✅ 動作 |
+| コマンド                       | Consumption Y1 | Flex Consumption | Premium EP1 |
+| ------------------------------ | -------------- | ---------------- | ----------- |
+| `show --query defaultHostName` | ✅ 動作        | ❌ null          | ✅ 動作     |
+| `config hostname list`         | ✅ 動作        | ✅ 動作          | ✅ 動作     |
 
 ### ベストプラクティス
+
 - すべてのSKUで動作する`config hostname list`を使用
 - hostnameが取得できない場合はリトライロジックを実装
 - 取得後は必ず空チェック（`-n`）を実施
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-azure.yml` (lines 320-330)
 
 ---
@@ -237,6 +268,7 @@ fi
 **解決時間**: ⏱️ 5分
 
 ### 症状
+
 ```
 🔄 Kudu restart detected, retrying...
 Attempt 2/3...
@@ -245,6 +277,7 @@ Attempt 2/3...
 大きなデプロイパッケージでKuduが再起動し、デプロイが中断される。
 
 ### 原因
+
 - デプロイパッケージに不要なファイル（`__pycache__`, `.pyc`, `tests`, `.dist-info`）が含まれサイズが大きい
 - Flex Consumptionプランの動的スケーリングによりKuduインスタンスが再起動
 - リトライロジックが未実装
@@ -252,6 +285,7 @@ Attempt 2/3...
 ### 解決策
 
 #### 1. パッケージサイズの最適化
+
 ```bash
 # 依存関係インストール
 pip install --target .deployment --no-cache-dir -r requirements.txt
@@ -271,6 +305,7 @@ echo "✅ Package size: $(du -h ../function-app.zip | cut -f1)"
 ```
 
 #### 2. リトライロジックの実装
+
 ```bash
 MAX_RETRIES=3
 RETRY_COUNT=0
@@ -278,7 +313,7 @@ DEPLOY_SUCCESS=false
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
   echo "Attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
-  
+
   # デプロイ実行
   az functionapp deployment source config-zip \
     --resource-group $RESOURCE_GROUP \
@@ -286,7 +321,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     --src services/api/function-app.zip \
     --timeout 600 \
     2>&1 | tee deploy_log.txt || true
-  
+
   # Kudu再起動を検出
   if grep -q "Kudu has been restarted" deploy_log.txt; then
     echo "🔄 Kudu restart detected, retrying..."
@@ -294,20 +329,20 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     sleep 30  # Kudu安定化待ち
     continue
   fi
-  
+
   # 成功判定
   if grep -q "Deployment was successful" deploy_log.txt; then
     DEPLOY_SUCCESS=true
     break
   fi
-  
+
   # 失敗時は非Kuduエラーとして即座に終了
   if grep -q "ERROR:" deploy_log.txt && ! grep -q "Kudu\|partially successful" deploy_log.txt; then
     echo "❌ Non-transient error detected"
     cat deploy_log.txt
     exit 1
   fi
-  
+
   RETRY_COUNT=$((RETRY_COUNT+1))
   sleep 30
 done
@@ -321,16 +356,18 @@ fi
 ### パッケージサイズの目安
 
 | 最適化前 | 最適化後 | 削減率 |
-|---------|---------|--------|
-| 45 MB | 28 MB | 38% |
+| -------- | -------- | ------ |
+| 45 MB    | 28 MB    | 38%    |
 
 ### ベストプラクティス
+
 - パッケージサイズは30MB以下を目標
 - `--no-cache-dir`を使用してpipキャッシュを削除
 - リトライ間隔は30秒（Kuduの安定化時間）
 - 最大3回までリトライ
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-azure.yml` (lines 260-295)
 
 ---
@@ -340,11 +377,13 @@ fi
 **解決時間**: ⏱️ 3分
 
 ### 症状
+
 ```
 [ERROR] Runtime.ImportModuleError: Unable to import module 'index': No module named 'index'
 ```
 
 ### 原因
+
 - GitHub Actionsワークフローが`handler.py`を動的生成
 - Lambda関数設定では`index.handler`を期待
 - ファイル名のミスマッチ
@@ -352,6 +391,7 @@ fi
 ### 解決策
 
 **既存の`index.py`をコピー**:
+
 ```yaml
 # ❌ 動的生成（削除）
 # cat > package/handler.py << 'EOF'
@@ -371,6 +411,7 @@ fi
 ```
 
 ### `index.py`の内容
+
 ```python
 """AWS Lambda エントリーポイント"""
 from mangum import Mangum
@@ -381,6 +422,7 @@ handler = Mangum(app, lifespan="off")
 ```
 
 ### 確認方法
+
 ```bash
 # Zipの中身確認
 unzip -l lambda.zip | grep -E "(index.py|handler.py)"
@@ -393,6 +435,7 @@ aws lambda get-function-configuration \
 ```
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-aws.yml` (lines 200-220)
 - `services/api/index.py`
 
@@ -403,6 +446,7 @@ aws lambda get-function-configuration \
 **解決時間**: ⏱️ 2分
 
 ### 症状
+
 ```
 ConnectionRefusedError: [Errno 111] Connection refused
 File "/workspace/app/backends/local.py", line 30, in __init__
@@ -410,11 +454,13 @@ File "/workspace/app/backends/local.py", line 30, in __init__
 ```
 
 ### 原因
+
 `CLOUD_PROVIDER`環境変数が未設定で、アプリケーションがLocalBackend（MinIO localhost:9000）を使用しようとする。
 
 ### 解決策
 
 **環境変数を設定**:
+
 ```bash
 gcloud run services update $SERVICE_NAME \
   --region=$REGION \
@@ -423,14 +469,15 @@ gcloud run services update $SERVICE_NAME \
 
 ### 環境変数チェックリスト
 
-| 環境変数 | 必須 | 例 | 用途 |
-|---------|------|-----|------|
-| `CLOUD_PROVIDER` | ✅ | `gcp` | バックエンド選択 |
-| `GCP_PROJECT_ID` | ✅ | `my-project-123` | Firestoreプロジェクト |
-| `FIRESTORE_COLLECTION` | ✅ | `messages` | コレクション名 |
-| `ENVIRONMENT` | ⚠️ | `staging` | ログレベル |
+| 環境変数               | 必須 | 例               | 用途                  |
+| ---------------------- | ---- | ---------------- | --------------------- |
+| `CLOUD_PROVIDER`       | ✅   | `gcp`            | バックエンド選択      |
+| `GCP_PROJECT_ID`       | ✅   | `my-project-123` | Firestoreプロジェクト |
+| `FIRESTORE_COLLECTION` | ✅   | `messages`       | コレクション名        |
+| `ENVIRONMENT`          | ⚠️   | `staging`        | ログレベル            |
 
 ### 確認方法
+
 ```bash
 # 環境変数確認
 gcloud run services describe $SERVICE_NAME \
@@ -444,6 +491,7 @@ gcloud logging read "resource.type=cloud_run_revision AND severity>=ERROR" \
 ```
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-gcp.yml` (lines 190-200)
 
 ---
@@ -455,12 +503,14 @@ gcloud logging read "resource.type=cloud_run_revision AND severity>=ERROR" \
 ### Firestore Permission Denied
 
 **症状**:
+
 ```
-Error: Error creating database: googleapi: Error 403: 
+Error: Error creating database: googleapi: Error 403:
 The caller does not have permission
 ```
 
 **解決策**:
+
 ```bash
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:github-actions-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
@@ -470,11 +520,13 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 ### Cloud Run Permission Denied
 
 **症状**:
+
 ```
 Error 403: Permission 'run.services.setIamPolicy' denied
 ```
 
 **解決策**:
+
 ```bash
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:github-actions-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
@@ -483,14 +535,15 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 
 ### 必要な権限一覧
 
-| サービス | ロール | 用途 |
-|---------|--------|------|
-| Cloud Run | `roles/run.admin` | サービス管理 |
-| Firestore | `roles/datastore.owner` | データベース管理 |
+| サービス          | ロール                          | 用途             |
+| ----------------- | ------------------------------- | ---------------- |
+| Cloud Run         | `roles/run.admin`               | サービス管理     |
+| Firestore         | `roles/datastore.owner`         | データベース管理 |
 | Artifact Registry | `roles/artifactregistry.writer` | コンテナプッシュ |
-| Storage | `roles/storage.admin` | バケット管理 |
+| Storage           | `roles/storage.admin`           | バケット管理     |
 
 ### 確認方法
+
 ```bash
 # サービスアカウントの権限確認
 gcloud projects get-iam-policy $PROJECT_ID \
@@ -505,12 +558,14 @@ gcloud projects get-iam-policy $PROJECT_ID \
 **解決時間**: ⏱️ 10分（初回セットアップ）
 
 ### 症状
+
 ```
 Error: Error creating Repository: googleapi: Error 409: the repository already exists.
 Error: Error creating Service: googleapi: Error 409: Resource already exists.
 ```
 
 ### 原因
+
 - Pulumiがローカルstateファイルを使用
 - GitHub Actions実行ごとにクリーンな環境でstateが保存されない
 - 既存リソースを認識できず、毎回新規作成を試みる
@@ -518,6 +573,7 @@ Error: Error creating Service: googleapi: Error 409: Resource already exists.
 ### 解決策（Remote State使用）
 
 #### 1. GCSバケット作成
+
 ```bash
 gcloud storage buckets create gs://multicloud-auto-deploy-pulumi-state-gcp \
   --location=asia-northeast1 \
@@ -525,6 +581,7 @@ gcloud storage buckets create gs://multicloud-auto-deploy-pulumi-state-gcp \
 ```
 
 #### 2. サービスアカウントに権限付与
+
 ```bash
 gcloud storage buckets add-iam-policy-binding gs://multicloud-auto-deploy-pulumi-state-gcp \
   --member="serviceAccount:github-actions-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
@@ -532,6 +589,7 @@ gcloud storage buckets add-iam-policy-binding gs://multicloud-auto-deploy-pulumi
 ```
 
 #### 3. Pulumi backendの設定
+
 ```bash
 # GCS backendにログイン
 pulumi login gs://multicloud-auto-deploy-pulumi-state-gcp
@@ -541,6 +599,7 @@ export PULUMI_BACKEND_URL="gs://multicloud-auto-deploy-pulumi-state-gcp"
 ```
 
 #### 4. GitHub Actionsワークフローで設定
+
 ```yaml
 - name: Configure Pulumi
   run: |
@@ -548,6 +607,7 @@ export PULUMI_BACKEND_URL="gs://multicloud-auto-deploy-pulumi-state-gcp"
 ```
 
 ### ベストプラクティス
+
 - **AWS**: S3バケット (`pulumi login s3://bucket-name`)
 - **Azure**: Blob Storage (`pulumi login azblob://container`)
 - **GCP**: GCS (`pulumi login gs://bucket-name`)
@@ -637,6 +697,7 @@ Azureは設定名の**大文字・小文字を区別しない**。
 ### 解決策（3ステップ）
 
 #### 1. 既存設定を確認
+
 ```bash
 az functionapp config appsettings list \
   --name <function-app-name> \
@@ -646,6 +707,7 @@ az functionapp config appsettings list \
 ```
 
 #### 2. 両方の名前を削除
+
 ```bash
 az functionapp config appsettings delete \
   --name $FUNCTION_APP \
@@ -656,6 +718,7 @@ sleep 3  # 削除の伝播待ち
 ```
 
 #### 3. 新しい設定を追加
+
 ```bash
 az functionapp config appsettings set \
   --name $FUNCTION_APP \
@@ -664,12 +727,922 @@ az functionapp config appsettings set \
 ```
 
 ### 該当ファイル
+
 - `.github/workflows/deploy-azure.yml` (lines 257-265)
 
 ### ベストプラクティス
+
 - Azure CLIは`--overwrite`フラグをサポートしていない
 - 常に`delete` → `set`のパターンを使う
 - 設定変更後は`sleep 3`で伝播待ち
+
+---
+
+## Azure CLI --settings YAML Multi-line書式問題
+
+**解決時間**: ⏱️ 3時間（デバッグ）→ 5分（修正）  
+**試行回数**: 12回のデプロイメント
+
+### 症状
+
+```bash
+# Bashでは正しい値が表示される
+echo "DATABASE=${COSMOS_DATABASE}"  # Output: messages
+
+# しかしAzure Function Appの環境変数は全てnullになる
+az functionapp config appsettings set \
+  --name $FUNCTION_APP \
+  --resource-group $RESOURCE_GROUP \
+  --settings \
+    COSMOS_DB_DATABASE="${COSMOS_DATABASE}" \
+    COSMOS_DB_CONTAINER="${COSMOS_CONTAINER}"
+
+# 結果確認
+az functionapp config appsettings list ... | jq '.[] | {name, value}'
+# Output: {"name": "COSMOS_DB_DATABASE", "value": null}
+# Output: {"name": "COSMOS_DB_CONTAINER", "value": null}
+
+# ハードコード値でも同様にnull
+az functionapp config appsettings set --settings COSMOS_DB_DATABASE=messages
+# Output: {"name": "COSMOS_DB_DATABASE", "value": null}
+```
+
+**全ての環境変数が常に`null`になる。** ハードコード文字列でも、変数展開でも、引用符の有無に関わらず、常にnull。
+
+### 誤った仮説（試行錯誤の過程）
+
+❌ **仮説1: 変数名が予約語**
+
+- `AZURE_COSMOS_DATABASE` → `COSMOS_DB_DATABASE` に変更
+- 結果: 変わらずnull（10分の試行）
+
+❌ **仮説2: 変数展開の問題**
+
+- `"${VAR}"` → `'${VAR}'` → `$VAR` と様々な引用符を試行
+- 結果: 変わらずnull（20分の試行）
+
+❌ **仮説3: 複数の--settingsフラグの競合**
+
+- 2つの`--settings`を1つに統合
+- 結果: 変わらずnull（15分の試行）
+
+❌ **仮説4: YAML multi-lineが原因**
+
+- 全てを1行に書き換え（読みにくい長大な行）
+- 結果: 変わらずnull（30分の試行）
+
+❌ **仮説5: GitHub Actions環境の問題**
+
+- ローカルで同じコマンドを試行しようとするも権限エラー
+- 結果: 確認できず（15分の試行）
+
+### 真の原因
+
+**YAML multi-lineの書式が間違っていた。**
+
+```yaml
+# ❌ 間違い - 継続行が適切にインデントされていない
+az functionapp config appsettings set \
+  --name $FUNCTION_APP \
+  --resource-group $RESOURCE_GROUP \
+  --settings \
+    KEY1=value1 \
+    KEY2=value2
+
+# これはYAMLとして以下のように解釈される:
+# "--settings \ KEY1=value1 \ KEY2=value2"
+# （バックスラッシュとスペースが含まれてしまう）
+
+# ✅ 正しい - 適切なインデント付き
+az functionapp config appsettings set \
+  --name "$FUNCTION_APP" \
+  --resource-group "$RESOURCE_GROUP" \
+  --settings \
+    KEY1=value1 \
+    KEY2=value2 \
+    KEY3=value3
+```
+
+**重要**: GitHub Actions YAMLでは、`\` による継続行の後のインデントが重要。インデントがない場合、Azure CLIは引数を正しくパースできない。
+
+### 解決策
+
+#### 修正前（全て null になる）
+
+```yaml
+az functionapp config appsettings set \
+--name $FUNCTION_APP \
+--resource-group $RESOURCE_GROUP \
+--settings COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" COSMOS_DB_KEY="${COSMOS_KEY}" COSMOS_DB_DATABASE="${COSMOS_DATABASE}" COSMOS_DB_CONTAINER="${COSMOS_CONTAINER}" AUTH_PROVIDER=azure
+```
+
+または
+
+```yaml
+az functionapp config appsettings set \
+--name $FUNCTION_APP \
+--resource-group $RESOURCE_GROUP \
+--settings \
+COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" \
+COSMOS_DB_KEY="${COSMOS_KEY}"
+```
+
+#### 修正後（正常動作）
+
+```yaml
+az functionapp config appsettings set \
+--name "$FUNCTION_APP" \
+--resource-group "$RESOURCE_GROUP" \
+--settings \
+CLOUD_PROVIDER=azure \
+ENVIRONMENT=staging \
+COSMOS_DB_ENDPOINT="$COSMOS_ENDPOINT" \
+COSMOS_DB_KEY="$COSMOS_KEY" \
+COSMOS_DB_DATABASE="$COSMOS_DATABASE" \
+COSMOS_DB_CONTAINER="$COSMOS_CONTAINER" \
+AUTH_PROVIDER=azure \
+AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
+AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
+CORS_ORIGINS="$CORS_ORIGINS" \
+> /dev/null 2>&1
+```
+
+**ポイント**:
+
+- `--settings` の後の各行を**2スペースまたは4スペースでインデント**
+- 変数は `"$VAR"` 形式で引用符で囲む
+- 各設定は `KEY=value` 形式（スペースなし）
+
+### 検証方法
+
+設定後、必ず以下で確認:
+
+```bash
+az functionapp config appsettings list \
+  --name "$FUNCTION_APP" \
+  --resource-group "$RESOURCE_GROUP" \
+  -o json | jq '.[] | select(.name | startswith("COSMOS_DB_")) | {name, value}'
+```
+
+期待される出力:
+
+```json
+{
+  "name": "COSMOS_DB_DATABASE",
+  "value": "messages"
+}
+{
+  "name": "COSMOS_DB_CONTAINER",
+  "value": "messages"
+}
+```
+
+### デバッグのノウハウ
+
+1. **ハードコード値でテスト**:
+
+   ```bash
+   az functionapp config appsettings set --settings TEST_VAR=hardcoded_value
+   ```
+
+   これでもnullなら、構文問題が濃厚。
+
+2. **段階的に変数を減らす**:
+   まず1つだけ設定して動作確認。動いたら徐々に増やす。
+
+3. **出力を確認**:
+   `> /dev/null` を外して、Azure CLIの実際の出力を確認。
+
+4. **公式ヘルプを確認**:
+
+   ```bash
+   az functionapp config appsettings set --help
+   ```
+
+   Examples セクションに正しい書式が記載されている。
+
+5. **GitHub Actions固有の問題を除外**:
+   ローカルのbashでも同じコマンドを試す（権限があれば）。
+
+### 該当ファイル
+
+- `.github/workflows/deploy-azure.yml` (lines 286-303)
+
+### ベストプラクティス
+
+✅ **推奨する書き方**:
+
+```yaml
+az functionapp config appsettings set \
+  --name "$VAR" \        # 変数は引用符で囲む
+  --settings \           # 改行後はインデント必須
+    KEY1=value1 \        # 2-4スペースのインデント
+    KEY2="$VAR2" \       # 変数値も引用符で
+    KEY3="${{ secrets.SECRET }}"  # GitHub Actionsシークレット
+```
+
+❌ **避けるべき書き方**:
+
+```yaml
+# 1. インデントなし
+az functionapp config appsettings set \
+--settings \
+KEY1=value1   # ❌ インデントなし
+
+# 2. 超長い1行
+az functionapp config appsettings set --settings KEY1=val1 KEY2=val2 ... KEY10=val10  # ❌ 読みにくい
+
+# 3. 引用符なしの変数（スペースを含む値では問題）
+--settings KEY=$VAR   # ❌ $VARにスペースがあると分割される
+```
+
+### 関連問題
+
+- [GitHub Actions YAML構文エラー](#github-actions-yaml構文エラー) - YAML基本構文
+- [環境変数の引用符とエスケープ](#環境変数の引用符とエスケープ) - シェル変数の扱い
+- [Azure CORS設定の名前競合](#azure-cors設定の名前競合) - 設定の上書き問題
+
+### 教訓
+
+1. **公式ドキュメントを最初に確認**:  
+   `--help` や公式Examples を見れば30分で解決できた問題に3時間費やした。
+
+2. **仮説の優先順位付け**:  
+   「変数名が予約語」という珍しいケースから調査するのではなく、「構文問題」という基本から確認すべきだった。
+
+3. **ハードコードテストの重要性**:  
+   変数展開を疑う前に、まずハードコード値でテストして切り分けるべき。
+
+4. **段階的デバッグ**:  
+   一度に全ての変数を設定するのではなく、1つずつ増やして問題箇所を特定。
+
+5. **ドキュメント化の価値**:  
+   同じ問題で悩む人（未来の自分を含む）のために、試行錯誤の過程も含めて記録する。
+
+### 参考: 試行錯誤の完全な履歴
+
+| 試行 | アプローチ                      | 結果 | 所要時間 |
+| ---- | ------------------------------- | ---- | -------- |
+| 1-3  | AZURE*COSMOS*_ → COSMOS*DB*_    | ❌   | 30分     |
+| 4-5  | 引用符のバリエーション          | ❌   | 20分     |
+| 6    | --settingsフラグ統合            | ❌   | 15分     |
+| 7-8  | ハードコード値テスト            | ❌   | 20分     |
+| 9-10 | 1行形式に書き換え               | ❌   | 30分     |
+| 11   | 公式ヘルプ確認 → インデント発見 | ✅   | 5分      |
+| 12   | 正しい書式でデプロイ            | ✅   | 8分      |
+
+**合計**: 約3時間のデバッグ + 12回のデプロイメント（各8-10分）= **約5時間**
+
+---
+
+## Azure Cosmos DB Partition Key Mismatch
+
+**解決時間**: ⏱️ 2時間（調査+修正+デプロイ）  
+**デプロイ回数**: 3回
+
+### 症状
+
+```bash
+# POST /messages/ が 500 Internal Server Error
+curl -X POST "https://<function-app>.azurewebsites.net/api/messages/" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Test message"}' \
+# Response: HTTP 500 (no body)
+
+# GET /messages/ は正常に動作
+curl "https://<function-app>.azurewebsites.net/api/messages/"
+# Response: 200 OK, {"messages":[],"total":0}
+```
+
+**POSTのみ失敗、GETは成功**という不可解な状況。
+
+### 原因
+
+Cosmos DBコンテナーのパーティションキー定義とアプリケーションコードで使用するパーティションキー値が不一致。
+
+**コンテナー定義**:
+
+```bash
+az cosmosdb sql container show --account-name <account> \
+  --database-name messages --name messages \
+  --query "resource.partitionKey"
+# Output: {"paths": ["/userId"]}
+```
+
+**アプリケーションコード（誤り）**:
+
+```python
+# azure_backend.py (lines 195-245)
+item = {
+    "id": post_id,
+    "pk": "POSTS",  # ❌ 間違ったパーティションキー
+    "userId": user.user_id,
+    "content": body.content,
+    # ...
+}
+container.upsert_item(item)
+```
+
+**問題点**:
+
+- Cosmos DBは`/userId`をパーティションキーとして期待
+- コードは`"POSTS"`という固定値を使用
+- `upsert_item()`呼び出し時に適切なパーティションキー値を渡していない
+
+### 解決策
+
+#### 1. create_post メソッドの修正
+
+```python
+# services/api/app/backends/azure_backend.py
+
+def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
+    container = _get_container()
+    post_id = str(uuid.uuid4())
+
+    # ✅ userIdをパーティションキーとして使用
+    item = {
+        "id": post_id,
+        "userId": user.user_id,  # パーティションキー値
+        "postId": post_id,
+        "content": body.content,
+        "docType": "post",  # ドキュメントタイプで分類
+        # ...
+    }
+
+    # upsert_itemは自動的にuserIdをパーティションキーとして使用
+    container.upsert_item(item)
+    return {"item": item}
+```
+
+#### 2. list_posts メソッドの修正
+
+```python
+def list_posts(self, limit: int, next_token: Optional[str], tag: Optional[str]) -> Tuple[list[Post], Optional[str]]:
+    container = _get_container()
+
+    # ✅ クロスパーティションクエリでdocTypeでフィルタ
+    query = "SELECT * FROM c WHERE c.docType = @docType ORDER BY c.createdAt DESC"
+    params = [{"name": "@docType", "value": "post"}]
+
+    items = container.query_items(
+        query=query,
+        parameters=params,
+        enable_cross_partition_query=True,  # 重要！
+        max_item_count=limit,
+    )
+    # ...
+```
+
+#### 3. delete_post / update_post メソッドの修正
+
+```python
+def delete_post(self, post_id: str, user: UserInfo) -> dict:
+    container = _get_container()
+
+    # ✅ まずクエリでpostを検索してuserIdを取得
+    query = "SELECT * FROM c WHERE c.id = @id AND c.docType = @docType"
+    params = [
+        {"name": "@id", "value": post_id},
+        {"name": "@docType", "value": "post"}
+    ]
+    items = list(container.query_items(
+        query=query,
+        parameters=params,
+        enable_cross_partition_query=True
+    ))
+
+    if not items:
+        raise ValueError(f"Post not found: {post_id}")
+
+    post = items[0]
+    post_user_id = post.get("userId")
+
+    # ✅ 正しいパーティションキーで削除
+    container.delete_item(item=post_id, partition_key=post_user_id)
+```
+
+#### 4. Profile操作の修正
+
+```python
+def get_profile(self, user_id: str) -> ProfileResponse:
+    container = _get_container()
+
+    try:
+        # ✅ userIdをパーティションキーとして使用
+        item = container.read_item(
+            item=f"USER_{user_id}",
+            partition_key=user_id  # pkではなくuserIdを使用
+        )
+    except Exception:
+        item = None
+    # ...
+
+def update_profile(self, user: UserInfo, body: ProfileUpdateRequest) -> ProfileResponse:
+    container = _get_container()
+
+    item = {
+        "id": f"USER_{user.user_id}",
+        "userId": user.user_id,  # パーティションキー値
+        "nickname": body.nickname,
+        "docType": "profile",  # ドキュメントタイプ
+        # ...
+    }
+    container.upsert_item(item)
+```
+
+### デバッグ手順
+
+1. **Cosmos DBコンテナー設定を確認**:
+
+   ```bash
+   az cosmosdb sql container show \
+     --account-name <account> \
+     --database-name messages \
+     --name messages \
+     -o json | jq '.resource.partitionKey'
+   ```
+
+2. **ローカルでCosmos DB操作をテスト**:
+
+   ```python
+   from azure.cosmos import CosmosClient
+
+   client = CosmosClient(endpoint, key)
+   database = client.get_database_client("messages")
+   container = database.get_container_client("messages")
+
+   # テストドキュメント作成
+   test_item = {
+       "id": "test-123",
+       "userId": "test-user",  # パーティションキー
+       "content": "Test",
+       "docType": "post"
+   }
+
+   result = container.upsert_item(test_item)
+   print(f"Success: {result['id']}")
+   ```
+
+3. **Function Appにエラーハンドリングを追加**:
+   ```python
+   # function_app.py
+   try:
+       await fastapi_app(scope, receive, send)
+   except Exception as e:
+       logging.error(f"Error: {type(e).__name__}: {e}", exc_info=True)
+       return func.HttpResponse(
+           body=f'{{"error": "{type(e).__name__}", "message": "{str(e)}"}}',
+           status_code=500
+       )
+   ```
+
+### 該当ファイル
+
+- `services/api/app/backends/azure_backend.py` (lines 195-423)
+  - `create_post()` - パーティションキー修正
+  - `list_posts()` - クロスパーティションクエリ
+  - `delete_post()` - クエリでuserIdを取得
+  - `update_post()` - クエリでuserIdを取得
+  - `get_profile()` / `update_profile()` - パーティションキー修正
+
+### ベストプラクティス
+
+1. **パーティションキー設計**:
+   - `/userId`はマルチテナントアプリに適している
+   - 各ユーザーの投稿やプロフィールが同じパーティション内に保存される
+   - クエリ効率が向上（単一パーティション内検索）
+
+2. **ドキュメント構造**:
+
+   ```json
+   {
+     "id": "unique-id",
+     "userId": "user-123", // パーティションキー
+     "docType": "post", // ドキュメント種別
+     "content": "...",
+     "createdAt": "2026-02-18T09:00:00Z"
+   }
+   ```
+
+3. **クロスパーティションクエリ**:
+   - `enable_cross_partition_query=True`が必要
+   - RU（Request Units）コストが高い
+   - 可能な限りパーティションキーを指定したクエリを使用
+
+4. **エラーハンドリング**:
+   - `PartitionKeyMismatchException`を適切にキャッチ
+   - ログに詳細なエラー情報を出力
+
+### 関連問題
+
+- [Azure CLI --settings書式問題](#azure-cli---settings-yaml-multi-line書式問題) - 環境変数設定
+- [Azure UserInfo AttributeError](#azure-userinfo-attributeerror) - 次に遭遇した問題
+
+### 参考情報
+
+- [Azure Cosmos DB - Partitioning](https://learn.microsoft.com/azure/cosmos-db/partitioning-overview)
+- [Python SDK - Container operations](https://learn.microsoft.com/python/api/azure-cosmos/azure.cosmos.containerproxy)
+
+---
+
+## Azure UserInfo AttributeError
+
+**解決時間**: ⏱️ 5分  
+**デプロイ回数**: 1回
+
+### 症状
+
+```bash
+curl -X POST "https://<function-app>.azurewebsites.net/api/messages/" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Test message"}'
+# Response: {"error": "AttributeError", "message": "'UserInfo' object has no attribute 'nickname'"}
+```
+
+POST /messages/で500エラーが返り、エラーメッセージにより`UserInfo`オブジェクトに`nickname`属性がないことが判明。
+
+### 原因
+
+`UserInfo`データクラスには`nickname`属性が定義されていない。
+
+**UserInfo定義**:
+
+```python
+# services/api/app/auth.py (lines 12-22)
+@dataclass
+class UserInfo:
+    user_id: str
+    email: Optional[str] = None
+    groups: Optional[list[str]] = None
+    # ❌ nickname属性なし
+```
+
+**問題のコード**:
+
+```python
+# services/api/app/backends/azure_backend.py
+def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
+    # ...
+    if not nickname:
+        nickname = user.nickname  # ❌ AttributeError!
+```
+
+### 解決策
+
+`UserInfo`に`nickname`属性がないため、`email`または`user_id`をフォールバックとして使用。
+
+```python
+# services/api/app/backends/azure_backend.py
+
+def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
+    container = _get_container()
+    post_id = str(uuid.uuid4())
+    created_at = _now_iso()
+
+    # Get user's nickname from profile
+    profile = None
+    try:
+        profile = container.read_item(
+            item=f"USER_{user.user_id}",
+            partition_key=user.user_id
+        )
+    except Exception:
+        profile = None
+
+    nickname = None
+    if profile:
+        nickname = profile.get("nickname")
+    if not nickname:
+        # ✅ UserInfoにはnickname属性がないため、emailまたはuser_idを使用
+        nickname = user.email if user.email else user.user_id
+
+    item = {
+        "id": post_id,
+        "userId": user.user_id,
+        "content": body.content,
+        "nickname": nickname,  # ✅ フォールバック値を使用
+        # ...
+    }
+    # ...
+```
+
+### 該当ファイル
+
+- `services/api/app/auth.py` (lines 12-22) - UserInfo定義
+- `services/api/app/backends/azure_backend.py` (lines 195-245) - create_post修正
+
+### ベストプラクティス
+
+1. **データクラス属性の確認**:
+   - コード内で使用する前に、属性が定義されているか確認
+   - IDEの型チェック機能を活用（mypy, pylanceなど）
+
+2. **代替案の検討**:
+   - **Option A**: `UserInfo`に`nickname`属性を追加（影響範囲が大きい）
+     ```python
+     @dataclass
+     class UserInfo:
+         user_id: str
+         email: Optional[str] = None
+         nickname: Optional[str] = None  # 追加
+         groups: Optional[list[str]] = None
+     ```
+   - **Option B**: フォールバック値を使用（今回採用）
+     ```python
+     nickname = user.email if user.email else user.user_id
+     ```
+
+3. **エラーハンドリングの改善**:
+   ```python
+   # function_app.pyでキャッチしてJSON形式で返す
+   except Exception as e:
+       logging.error(f"Error: {type(e).__name__}: {e}", exc_info=True)
+       return func.HttpResponse(
+           body=f'{{"error": "{type(e).__name__}", "message": "{str(e)}"}}',
+           status_code=500
+       )
+   ```
+
+### 関連問題
+
+- [Azure Cosmos DB Partition Key Mismatch](#azure-cosmos-db-partition-key-mismatch) - 前に解決した問題
+- [Azure Post Model Validation Error](#azure-post-model-validation-error) - 次に遭遇した問題
+
+---
+
+## Azure Post Model Validation Error
+
+**解決時間**: ⏱️ 3分  
+**デプロイ回数**: 1回
+
+### 症状
+
+```bash
+curl "https://<function-app>.azurewebsites.net/api/messages/"
+# Response: {"error": "ValidationError", "message": "1 validation error for Post\nisMarkdown\n  Input should be a valid boolean [type=bool_type, input_value=None, input_type=NoneType]"}
+```
+
+POST成功後、GET /messages/でPydanticの検証エラーが発生。
+
+### 原因
+
+`Post`モデルで`is_markdown`が必須の`bool`として定義されているが、Cosmos DBに保存されたドキュメントには`isMarkdown`フィールドが存在しない場合がある。
+
+**Post モデル定義（誤り）**:
+
+```python
+# services/api/app/models.py (lines 16-28)
+class Post(BaseModel):
+    id: str = Field(..., alias="postId")
+    user_id: str = Field(..., alias="userId")
+    content: str
+    is_markdown: bool = Field(False, alias="isMarkdown")  # ❌ 必須のbool
+    # ...
+```
+
+**Cosmos DBドキュメント**:
+
+```json
+{
+  "id": "94cdca98-0e7f-4b77-b067-a9abdfff0b36",
+  "userId": "test-user-1",
+  "content": "Test message"
+  // isMarkdownフィールドなし（または明示的にNone）
+}
+```
+
+### 解決策
+
+`is_markdown`を`Optional[bool]`に変更し、シリアライズ時にデフォルト値を設定。
+
+```python
+# services/api/app/models.py
+
+class Post(BaseModel):
+    id: str = Field(..., alias="postId")
+    user_id: str = Field(..., alias="userId")
+    nickname: Optional[str] = None
+    content: str
+    is_markdown: Optional[bool] = Field(None, alias="isMarkdown")  # ✅ Optional
+    image_urls: Optional[list[str]] = Field(None, alias="imageUrls")
+    tags: Optional[list[str]] = None
+    created_at: str = Field(..., alias="createdAt")
+    updated_at: Optional[str] = Field(None, alias="updatedAt")
+
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        return {
+            "postId": self.id,
+            "userId": self.user_id,
+            "nickname": self.nickname,
+            "content": self.content,
+            "isMarkdown": self.is_markdown if self.is_markdown is not None else False,  # ✅ デフォルト値
+            "imageUrls": self.image_urls,
+            "tags": self.tags,
+            "createdAt": self.created_at,
+            "updatedAt": self.updated_at,
+            # ...
+        }
+```
+
+### 該当ファイル
+
+- `services/api/app/models.py` (lines 16-50) - Post モデル定義
+
+### ベストプラクティス
+
+1. **Optionalフィールドの適切な使用**:
+   - データベーススキーマが厳密でない場合は`Optional`を使用
+   - デフォルト値が必要な場合はシリアライズ時に設定
+
+2. **データベーススキーマとの整合性**:
+
+   ```python
+   # 新規作成時は明示的に値を設定
+   item = {
+       "id": post_id,
+       "userId": user.user_id,
+       "content": body.content,
+       "isMarkdown": body.is_markdown if body.is_markdown is not None else False,
+       # ...
+   }
+   ```
+
+3. **マイグレーション戦略**:
+   - 既存データに`isMarkdown`フィールドがない場合は段階的に対応
+   - Optionalにすることで後方互換性を維持
+
+### 関連問題
+
+- [Azure UserInfo AttributeError](#azure-userinfo-attributeerror) - 前に解決した問題
+- [Pydantic Validation Errors](#pydantic-validation-errors) - 一般的なPydantic検証エラー
+
+### 検証結果
+
+```bash
+# POST成功
+curl -X POST "https://<function-app>.azurewebsites.net/api/messages/" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Second test message - Azure Cosmos DB working!"}'
+# Response: 201 Created
+{
+  "item": {
+    "postId": "ce4ff603-0648-4580-8f20-c558c2562d93",
+    "content": "Second test message - Azure Cosmos DB working!",
+    "createdAt": "2026-02-18T09:33:35.772831+00:00"
+  }
+}
+
+# GET成功（2件のメッセージ）
+curl "https://<function-app>.azurewebsites.net/api/messages/"
+# Response: 200 OK
+{
+  "messages": [
+    {"postId": "94cdca98-...", "content": "Test after nickname fix", ...},
+    {"postId": "ce4ff603-...", "content": "Second test message - Azure Cosmos DB working!", ...}
+  ],
+  "total": 2
+}
+```
+
+---
+
+## Azure環境変数の予約名問題
+
+> ⚠️ **注意**: この問題は最終的に**誤解**であることが判明しました。
+> 真の原因は上記の「[Azure CLI --settings YAML Multi-line書式問題](#azure-cli---settings-yaml-multi-line書式問題)」です。
+> 以下の内容は、間違った仮説の記録として残しています（同じミスを繰り返さないため）。
+
+**解決時間**: ⏱️ ~~1分（環境変数名変更のみ）~~ → 実際は0分（不要だった）
+
+### 症状
+
+```bash
+# Bashでは正しい値を表示
+echo "DATABASE=${COSMOS_DATABASE}"  # Output: DATABASE=messages
+
+# しかしAzure CLIでは常にnull
+az functionapp config appsettings set --settings AZURE_COSMOS_DATABASE="${COSMOS_DATABASE}"
+# Result: {"name": "AZURE_COSMOS_DATABASE", "value": null}
+
+# ハードコード値でもnull
+az functionapp config appsettings set --settings AZURE_COSMOS_DATABASE=messages
+# Result: {"name": "AZURE_COSMOS_DATABASE", "value": null}
+```
+
+**特定の環境変数名がAzure Function Appで常に`null`になる問題。**
+
+### 影響を受ける変数名
+
+以下の環境変数名は**Azure CLIまたはFunction Appで予約されている**可能性があり、使用できません：
+
+❌ **使用不可**:
+
+- `AZURE_COSMOS_DATABASE`
+- `AZURE_COSMOS_CONTAINER`
+
+✅ **代替案（正常動作）**:
+
+- `COSMOS_DB_DATABASE`
+- `COSMOS_DB_CONTAINER`
+- `COSMOS_DB_ENDPOINT`
+- `COSMOS_DB_KEY`
+
+### 原因
+
+Azure CLIまたはAzure Function Appの内部で、`AZURE_COSMOS_DATABASE`と`AZURE_COSMOS_CONTAINER`という名前が特別な意味を持つか、予約されている可能性があります。
+
+**検証結果**:
+
+- ✅ `AZURE_COSMOS_ENDPOINT` → 正常に設定可能
+- ✅ `AZURE_COSMOS_KEY` → 正常に設定可能
+- ❌ `AZURE_COSMOS_DATABASE` → 常にnull（ハードコード値でも）
+- ❌ `AZURE_COSMOS_CONTAINER` → 常にnull（ハードコード値でも）
+- ✅ `COSMOS_DB_DATABASE` → 正常に設定可能
+- ✅ `COSMOS_DB_CONTAINER` → 正常に設定可能
+
+### 解決策（推奨）
+
+#### 1. 環境変数名を変更
+
+`.github/workflows/deploy-azure.yml`:
+
+```yaml
+az functionapp config appsettings set \
+--settings \
+COSMOS_DB_ENDPOINT="${COSMOS_ENDPOINT}" \
+COSMOS_DB_KEY="${COSMOS_KEY}" \
+COSMOS_DB_DATABASE="${COSMOS_DATABASE}" \
+COSMOS_DB_CONTAINER="${COSMOS_CONTAINER}"
+```
+
+#### 2. config.pyで両方をサポート（互換性維持）
+
+`services/api/app/config.py`:
+
+```python
+from pydantic import Field, AliasChoices
+
+cosmos_db_database: str = Field(
+    default="simple-sns",
+    validation_alias=AliasChoices("cosmos_db_database", "azure_cosmos_database")
+)
+cosmos_db_container: str = Field(
+    default="items",
+    validation_alias=AliasChoices("cosmos_db_container", "azure_cosmos_container")
+)
+```
+
+これにより、`COSMOS_DB_*`と`AZURE_COSMOS_*`の両方の名前をサポートできます。
+
+### 該当ファイル
+
+- `.github/workflows/deploy-azure.yml` (lines 290-295)
+- `services/api/app/config.py` (lines 44-62)
+- `services/api/app/backends/factory.py` (lines 27-30)
+
+### ベストプラクティス
+
+⚠️ **重要**: Azure Function Appで環境変数を設定する際の命名規則
+
+1. **避けるべきプレフィックス**:
+   - `AZURE_COSMOS_*` (DATABASE, CONTAINERは予約済み)
+   - その他のAzure内部変数と競合する可能性のある名前
+
+2. **推奨プレフィックス**:
+   - `COSMOS_DB_*` - Cosmos DB関連
+   - `APP_*` - アプリケーション固有
+   - `CUSTOM_*` - カスタム設定
+
+3. **検証方法**:
+
+   ```bash
+   # 設定後に必ず確認
+   az functionapp config appsettings list \
+     --name $FUNCTION_APP \
+     --resource-group $RESOURCE_GROUP \
+     -o json | jq '.[] | select(.name | startswith("COSMOS")) | {name, value}'
+   ```
+
+4. **エラーメッセージの更新**:
+   ユーザーに正しい変数名を案内するため、エラーメッセージも更新：
+   ```python
+   raise ValueError(
+       "Set COSMOS_DB_ENDPOINT and COSMOS_DB_KEY environment variables. "
+       "(Note: AZURE_COSMOS_* names are reserved and cannot be used)"
+   )
+   ```
+
+### 関連問題
+
+- [Azure CORS設定の名前競合](#azure-cors設定の名前競合) - 大文字小文字の区別問題
+- [環境変数の引用符とエスケープ](#環境変数の引用符とエスケープ) - 値の展開問題
+
+### 参考情報
+
+この問題は10回以上のデプロイメント試行を経て、ハードコード値でもnullになることを確認して発見されました。
+Azureの公式ドキュメントには明記されていませんが、実運用では`COSMOS_DB_*`プレフィックスの使用を強く推奨します。
 
 ---
 
@@ -2056,11 +3029,11 @@ gcloud functions describe <name> --region <region> --format json
 
 ## 更新履歴
 
-| 日付       | 内容                                                                                                                                                      |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 日付       | 内容                                                                                                                                                                                                                                                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-02-17 | 🎯 **大幅改善**: クイック診断フローチャート、エラーメッセージ別インデックス、よくある問題トップ5を追加。全セクションに解決時間を表示。Azure Flex Consumption特有の問題（Partially Successful、defaultHostName null、Kudu再起動）を詳細ドキュメント化。AWS Lambda Runtime Errors、GCP Cloud Run 500 Errors、GitHub Actionsシークレット参照エラーを追加。 |
-| 2026-02-17 | 追加: リソース名ハードコード、デプロイメント競合、Gitパス、Pulumiディレクトリ、環境変数エスケープ、CloudFront、Lambda Layer、GitHub Secretsの全11トピック |
-| 2026-02-17 | 初版作成（CORS hardening デプロイの知見）                                                                                                                 |
+| 2026-02-17 | 追加: リソース名ハードコード、デプロイメント競合、Gitパス、Pulumiディレクトリ、環境変数エスケープ、CloudFront、Lambda Layer、GitHub Secretsの全11トピック                                                                                                                                                                                               |
+| 2026-02-17 | 初版作成（CORS hardening デプロイの知見）                                                                                                                                                                                                                                                                                                               |
 
 ---
 
@@ -2079,20 +3052,24 @@ gcloud functions describe <name> --region <region> --format json
 問題が解決しない場合は：
 
 1. **GitHub Issues**: [新しいIssueを作成](https://github.com/PLAYER1-r7/multicloud-auto-deploy/issues/new)
-2. **ログの確認**: 
+2. **ログの確認**:
    - GitHub Actions: ワークフロー実行ログの全文をコピー
    - CloudWatch/Azure Monitor/GCP Logging: 直近5分のエラーログ
 3. **再現手順**: 問題を再現できる最小限の手順を記載
 4. **環境情報**: OS、クラウドプロバイダー、使用しているツールのバージョン
 
 **報告時のテンプレート**:
+
 ```markdown
 ### 問題の概要
+
 [簡潔な説明]
 
 ### エラーメッセージ
 ```
+
 [エラーの全文]
+
 ```
 
 ### 再現手順

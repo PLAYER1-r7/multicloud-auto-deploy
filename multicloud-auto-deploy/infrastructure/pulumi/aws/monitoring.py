@@ -38,6 +38,9 @@ def create_sns_topic(
             topic=topic.arn,
             protocol="email",
             endpoint=email,
+            opts=pulumi.ResourceOptions(
+                retain_on_delete=True,  # Don't delete subscription (requires SNS:Unsubscribe permission)
+            ),
         )
 
     return topic
@@ -298,3 +301,5 @@ def setup_monitoring(
         "api_gateway_alarms": api_alarms,
         "cloudfront_alarms": cloudfront_alarms,
     }
+# SNS:Unsubscribe permission added to satoshi user (2026-02-17)
+# SNS:GetSubscriptionAttributes permission added (2026-02-17)

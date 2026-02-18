@@ -174,7 +174,10 @@ jobs:
           echo "ENVIRONMENT: staging" > /tmp/env-vars.yaml
           echo "CLOUD_PROVIDER: gcp" >> /tmp/env-vars.yaml
           echo "GCP_PROJECT_ID: $PROJECT_ID" >> /tmp/env-vars.yaml
+          echo "GCP_POSTS_COLLECTION: posts" >> /tmp/env-vars.yaml
+          echo "GCP_PROFILES_COLLECTION: profiles" >> /tmp/env-vars.yaml
           echo "FIRESTORE_COLLECTION: messages" >> /tmp/env-vars.yaml
+          echo "AUTH_DISABLED: true" >> /tmp/env-vars.yaml
           echo "CORS_ORIGINS: \"$CORS_ORIGINS\"" >> /tmp/env-vars.yaml
           
           echo "📝 Environment variables file created"

@@ -124,11 +124,13 @@ aws lambda update-function-configuration \
 ```
 
 **サイズ比較:**
+
 - Layer（依存関係）: ~8-10MB
 - Lambda関数（アプリケーションのみ）: ~78KB
 - 合計: 50MB未満（直接アップロード可能）
 
 **メリット:**
+
 - ✅ S3経由のアップロード不要
 - ✅ デプロイ時間短縮
 - ✅ 依存関係の変更時のみLayerを更新
@@ -156,12 +158,12 @@ gcloud run deploy simple-sns-api \
 
 ## 🌐 エンドポイント
 
-| メソッド | パス | 説明 |
-|---------|------|------|
-| GET | `/` | ヘルスチェック |
-| GET | `/health` | ヘルスチェック |
-| GET | `/docs` | API文書（Swagger UI） |
-| GET | `/redoc` | API文書（ReDoc） |
+| メソッド | パス      | 説明                  |
+| -------- | --------- | --------------------- |
+| GET      | `/`       | ヘルスチェック        |
+| GET      | `/health` | ヘルスチェック        |
+| GET      | `/docs`   | API文書（Swagger UI） |
+| GET      | `/redoc`  | API文書（ReDoc）      |
 
 ## 🔗 関連リンク
 
