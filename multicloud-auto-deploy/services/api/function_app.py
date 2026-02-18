@@ -44,12 +44,9 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
         route_path = ""
 
     # FastAPIルーターのパス処理:
-    # - "/", "/health", "/docs", "/redoc" などはそのまま
-    # - "/messages/", "/uploads/" などは "/api/" プレフィックスを追加
-    if route_path and not route_path.startswith("api/"):
-        # ルートパスやヘルスチェック、ドキュメントはそのまま
-        if route_path not in ["", "health", "docs", "redoc", "openapi.json"]:
-            route_path = "api/" + route_path
+    # FastAPIのルーターは /posts, /uploads, /profile などのプレフィックスを使用
+    # Azure Functions の route は api/ プレフィックスなしで渡ってくるのでそのまま使う
+    # 変換不要 - route_path をそのまま FastAPI に渡す
 
     path = "/" + route_path if route_path else "/"
 
