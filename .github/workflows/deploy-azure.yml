@@ -285,16 +285,14 @@ jobs:
             --name $FUNCTION_APP \
             --resource-group $RESOURCE_GROUP \
             --settings AZURE_COSMOS_DATABASE="${COSMOS_DATABASE}" \
-            --query "[?name=='AZURE_COSMOS_DATABASE'].{name:name, value:value}" \
-            -o table
+            -o json | jq '.[] | select(.name=="AZURE_COSMOS_DATABASE") | {name, value}'
           
           echo "Setting AZURE_COSMOS_CONTAINER=${COSMOS_CONTAINER}..."
           az functionapp config appsettings set \
             --name $FUNCTION_APP \
             --resource-group $RESOURCE_GROUP \
             --settings AZURE_COSMOS_CONTAINER="${COSMOS_CONTAINER}" \
-            --query "[?name=='AZURE_COSMOS_CONTAINER'].{name:name, value:value}" \
-            -o table
+            -o json | jq '.[] | select(.name=="AZURE_COSMOS_CONTAINER") | {name, value}'
           
           # Set all other environment variables at once
           echo "Setting remaining environment variables..."
