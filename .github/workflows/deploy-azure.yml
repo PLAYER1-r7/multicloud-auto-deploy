@@ -286,8 +286,8 @@ jobs:
               ENVIRONMENT=staging \
               AZURE_COSMOS_ENDPOINT="${COSMOS_ENDPOINT}" \
               AZURE_COSMOS_KEY="${COSMOS_KEY}" \
-              AZURE_COSMOS_DATABASE=multicloud-db \
-              AZURE_COSMOS_CONTAINER=messages \
+              AZURE_COSMOS_DATABASE="${COSMOS_DATABASE}" \
+              AZURE_COSMOS_CONTAINER="${COSMOS_CONTAINER}" \
               AUTH_PROVIDER=azure \
               AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
               AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
