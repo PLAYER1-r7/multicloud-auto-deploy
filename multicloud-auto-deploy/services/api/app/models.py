@@ -19,7 +19,7 @@ class Post(BaseModel):
     user_id: str = Field(..., alias="userId")
     nickname: Optional[str] = None
     content: str
-    is_markdown: bool = Field(False, alias="isMarkdown")
+    is_markdown: Optional[bool] = Field(None, alias="isMarkdown")
     image_urls: Optional[list[str]] = Field(None, alias="imageUrls")
     tags: Optional[list[str]] = None
     created_at: str = Field(..., alias="createdAt")
@@ -36,7 +36,7 @@ class Post(BaseModel):
             "userId": self.user_id,
             "nickname": self.nickname,
             "content": self.content,
-            "isMarkdown": self.is_markdown,
+            "isMarkdown": self.is_markdown if self.is_markdown is not None else False,
             "imageUrls": self.image_urls,
             "tags": self.tags,
             "createdAt": self.created_at,
