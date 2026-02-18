@@ -19,11 +19,6 @@ on:
         options:
           - staging
           - production
-      use_klayers:
-        description: "Use Klayers (public Lambda Layers)"
-        required: false
-        default: true
-        type: boolean
 
 env:
   AWS_REGION: ap-northeast-1
@@ -96,7 +91,6 @@ jobs:
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
 
       - name: Build Lambda Layer
-        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.use_klayers == 'false') }}
         id: build_layer
         run: |
           cd multicloud-auto-deploy/services/api
@@ -141,31 +135,11 @@ jobs:
             echo "use_direct_upload=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Get Klayers ARNs
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.use_klayers == 'true' }}
-        id: get_klayers
-        run: |
-          echo "📦 Getting latest Klayers ARNs..."
-          
-          # FastAPI (includes Pydantic, Starlette)
-          FASTAPI_ARN="arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-fastapi:5"
-          # Mangum (FastAPI -> Lambda adapter)
-          MANGUM_ARN="arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-mangum:3"
-          # python-jose (JWT verification)
-          JOSE_ARN="arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-python-jose:4"
-          # Requests (HTTP client)
-          REQUESTS_ARN="arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-p312-requests:10"
-          
-          echo "klayers_arns=$FASTAPI_ARN $MANGUM_ARN $JOSE_ARN $REQUESTS_ARN" >> $GITHUB_OUTPUT
-          
-          echo "✅ Klayers ARNs:"
-          echo "  FastAPI: $FASTAPI_ARN"
-          echo "  Mangum: $MANGUM_ARN"
-          echo "  python-jose: $JOSE_ARN"
-          echo "  Requests: $REQUESTS_ARN"
+      # Klayers removed: Cross-account access not supported
+      # Always use custom Lambda Layer for reliability
+      # See docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md for details
 
       - name: Deploy Lambda Layer (Custom)
-        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.use_klayers == 'false') }}
         id: deploy_layer
         run: |
           set -e
@@ -191,17 +165,9 @@ jobs:
           set -e
           LAMBDA_FUNCTION="${{ steps.pulumi_outputs.outputs.lambda_function_name }}"
           
-          # Determine which layers to use
-          if [ "${{ github.event_name }}" == "push" ]; then
-            echo "🔧 Using custom Lambda Layer (push event)"
-            LAYER_ARNS="${{ steps.deploy_layer.outputs.layer_arn }}"
-          elif [ "${{ github.event.inputs.use_klayers }}" == "true" ]; then
-            echo "🌐 Using Klayers (public Lambda Layers)"
-            LAYER_ARNS="${{ steps.get_klayers.outputs.klayers_arns }}"
-          else
-            echo "🔧 Using custom Lambda Layer (manual)"
-            LAYER_ARNS="${{ steps.deploy_layer.outputs.layer_arn }}"
-          fi
+          # Always use custom Lambda Layer (Klayers not supported due to cross-account limitations)
+          echo "🔧 Using custom Lambda Layer"
+          LAYER_ARNS="${{ steps.deploy_layer.outputs.layer_arn }}"
           
           # Debug: Check lambda.zip exists and show size
           echo "📦 Checking lambda.zip..."

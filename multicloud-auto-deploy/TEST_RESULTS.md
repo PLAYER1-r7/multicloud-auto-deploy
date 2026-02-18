@@ -84,7 +84,10 @@
 
 ### 問題点
 
-#### デプロイエラー
+#### デプロイエラー（修正済み）
+
+最初のデプロイでは以下のエラーが発生：
+
 ```
 An error occurred (AccessDeniedException) when calling the UpdateFunctionConfiguration operation: 
 User: arn:aws:iam::278280499340:user/satoshi is not authorized to perform: lambda:GetLayerVersion 
@@ -93,20 +96,26 @@ because no resource-based policy allows the lambda:GetLayerVersion action
 ```
 
 #### 根本原因
-- Klayers（公開Lambda Layer）へのアクセス権限が不足
-- Lambda設定更新時にLayerのバージョン取得が失敗
+- Klayers（公開Lambda Layer）はクロスアカウントアクセスに非対応
+- リソースベースポリシーによりアクセスが制限されている
+- 詳細: [docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md](docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md)
+
+#### 実施した修正
+1. **Klayersへの参照を削除**: deploy-aws.ymlから全てのKlayers関連コードを削除
+2. **カスタムLambda Layerに統一**: 常に自前のLayerを使用（既にビルド・デプロイ済み）
+3. **use_klayersパラメータ削除**: 選択肢をなくし、確実に動作する方法に統一
 
 #### 500エラーの詳細
-Lambda実行時のエラーログ:
+Lambda実行時のエラーログ（修正前）:
 ```
 File "/opt/python/fastapi/routing.py", line 214, in run_endpoint_function
     return await run_in_threadpool(dependant.call, **values)
 ```
 
 ### 必要な対処
-1. **IAMポリシーの修正**: `lambda:GetLayerVersion` 権限を追加
-2. **または自前Lambda Layerの使用**: Klayersを使わず独自Layerをビルド
-3. **最新コードの再デプロイ**: get_post() エンドポイント追加
+1. **再デプロイ**: 修正済みワークフローで再実行
+2. **カスタムLayerの確認**: ARN `arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-staging-dependencies:*`
+3. **最新コードの反映**: get_post() エンドポイント追加
 
 ---
 
@@ -180,9 +189,10 @@ File "/opt/python/fastapi/routing.py", line 214, in run_endpoint_function
    - CI/CDパイプラインに統合テストを組み込む
    - デプロイ後の自動検証
 
-3. **IAM権限管理**
-   - AWS: Klayers権限の明確化
-   - 最小権限原則の徹底
+3. **Lambda Layer戦略**
+   - ✅ Klayers（公開Layer）からカスタムLayerに移行
+   - ✅ クロスアカウントアクセスの問題を解決
+   - ドキュメント: docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md
 
 4. **環境変数の一元管理**
    - 各プロバイダーで設定が異なる
@@ -194,19 +204,16 @@ File "/opt/python/fastapi/routing.py", line 214, in run_endpoint_function
 
 ### 🔴 高優先度
 
-1. **AWS IAM権限の修正**
+1. **AWS ワークフロー修正（完了）**
    ```bash
-   # lambda:GetLayerVersion 権限を追加
-   aws iam put-user-policy --user-name satoshi \
-     --policy-name LambdaLayerAccess \
-     --policy-document '{
-       "Version": "2012-10-17",
-       "Statement": [{
-         "Effect": "Allow",
-         "Action": "lambda:GetLayerVersion",
-         "Resource": "arn:aws:lambda:*:*:layer:*"
-       }]
-     }'
+   # Klayers関連コードを削除し、カスタムLayerに統一
+   # deploy-aws.yml を修正完了
+   # - use_klayers パラメータ削除
+   # - 常にカスタムLambda Layerを使用
+   # - Get Klayers ARNs ステップ削除
+   
+   # 再デプロイ実行
+   gh workflow run deploy-aws.yml --ref develop
    ```
 
 2. **GCP AUTH_DISABLED 設定**
@@ -219,8 +226,9 @@ File "/opt/python/fastapi/routing.py", line 214, in run_endpoint_function
 ### 🟡 中優先度
 
 3. **AWS Lambda 再デプロイ**
-   - Klayers権限修正後
-   - または自前Lambda Layer使用
+   - ワークフロー修正済み（Klayers削除、カスタムLayer統一）
+   - 最新コード反映（get_post エンドポイント追加）
+   - 手動トリガーで再実行: `gh workflow run deploy-aws.yml --ref develop`
 
 4. **GCP Cloud Run 再デプロイ**
    - 最新コード反映
@@ -246,7 +254,18 @@ File "/opt/python/fastapi/routing.py", line 214, in run_endpoint_function
 **Azure は完全に動作**しており、本番環境デプロイ可能な状態です。
 
 AWS/GCPは以下の対応が必要:
-- **AWS**: IAM権限修正 + 再デプロイ
+- **AWS**: ✅ Klayers問題解決（ワークフロー修正完了） → 再デプロイ実行
 - **GCP**: 環境変数設定 + 再デプロイ
 
 全体として、マルチクラウドアーキテクチャの技術的実現可能性は実証されました。
+
+### 修正内容（2026-02-18）
+
+1. **deploy-aws.yml修正**:
+   - Klayers関連コードを完全削除
+   - カスタムLambda Layerに統一（クロスアカウント問題解決）
+   - `use_klayers`パラメータ削除
+   
+2. **根拠ドキュメント**:
+   - [docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md](docs/LAMBDA_LAYER_PUBLIC_RESOURCES.md): Klayersクロスアカウント非対応の詳細
+   - [docs/AWS_LAMBDA_DEPENDENCY_FIX_REPORT.md](docs/AWS_LAMBDA_DEPENDENCY_FIX_REPORT.md): カスタムLayer実装完了レポート
