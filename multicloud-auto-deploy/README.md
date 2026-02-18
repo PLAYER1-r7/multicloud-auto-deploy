@@ -196,6 +196,14 @@ git push origin main
 - 📦 [関数サイズ最適化](docs/FUNCTION_SIZE_OPTIMIZATION.md) - デプロイパッケージサイズ削減（AWS 97%削減！） 🆕
 - 📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
 
+### テスト・検証レポート
+
+- 🧪 [統合テスト実行レポート](docs/TEST_EXECUTION_REPORT.md) - AWS/GCP/Azure統合テスト結果 🆕
+- 🔎 [GCP/Azureログ調査レポート](docs/LOG_INVESTIGATION_REPORT.md) - エラー原因分析とスタックトレース ⭐ **NEW**
+- 📋 [デプロイ検証レポート](docs/DEPLOYMENT_VERIFICATION_REPORT.md) - 本番環境検証結果
+- 🛠️ [AWS Backend完全修正レポート](docs/AWS_BACKEND_COMPLETE_FIX_REPORT.md) - Lambda設定修正詳細
+- 📚 [統合テストガイド](docs/INTEGRATION_TESTS_GUIDE.md) - テスト実行方法とトラブルシューティング 🆕
+
 ### プロバイダー別デプロイ
 
 - [AWS デプロイ](docs/AWS_DEPLOYMENT.md)
