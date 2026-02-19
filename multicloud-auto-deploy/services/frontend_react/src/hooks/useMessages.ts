@@ -1,61 +1,64 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { messagesApi } from '../api/client';
-import type { CreateMessageInput, UpdateMessageInput } from '../types/message';
+import { postsApi } from '../api/client';
+import type { CreatePostInput, UpdatePostInput } from '../types/message';
 
 // Query keys
-const MESSAGES_KEY = ['messages'] as const;
+const POSTS_KEY = ['posts'] as const;
 
-// Hook to get all messages
-export function useMessages(page: number = 1, pageSize: number = 20) {
+// 投稿一覧フック（カーソルページネーション）
+export function usePosts(limit: number = 20, nextToken?: string | null, tag?: string | null) {
   return useQuery({
-    queryKey: [...MESSAGES_KEY, page, pageSize],
-    queryFn: () => messagesApi.getMessages(page, pageSize),
-    staleTime: 30000, // 30 seconds
+    queryKey: [...POSTS_KEY, limit, nextToken, tag],
+    queryFn: () => postsApi.getPosts(limit, nextToken, tag),
+    staleTime: 30000,
   });
 }
 
-// Hook to get a single message
-export function useMessage(id: string) {
+// 単一投稿フック
+export function usePost(postId: string) {
   return useQuery({
-    queryKey: [...MESSAGES_KEY, id],
-    queryFn: () => messagesApi.getMessage(id),
-    enabled: !!id,
+    queryKey: [...POSTS_KEY, postId],
+    queryFn: () => postsApi.getPost(postId),
+    enabled: !!postId,
   });
 }
 
-// Hook to create a message
-export function useCreateMessage() {
+// 投稿作成フック
+export function useCreatePost() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (data: CreateMessageInput) => messagesApi.createMessage(data),
+    mutationFn: (data: CreatePostInput) => postsApi.createPost(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: MESSAGES_KEY });
+      queryClient.invalidateQueries({ queryKey: POSTS_KEY });
     },
   });
 }
 
-// Hook to update a message
-export function useUpdateMessage() {
+// 投稿更新フック
+export function useUpdatePost() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateMessageInput }) =>
-      messagesApi.updateMessage(id, data),
+    mutationFn: ({ postId, data }: { postId: string; data: UpdatePostInput }) =>
+      postsApi.updatePost(postId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: MESSAGES_KEY });
+      queryClient.invalidateQueries({ queryKey: POSTS_KEY });
     },
   });
 }
 
-// Hook to delete a message
-export function useDeleteMessage() {
+// 投稿削除フック
+export function useDeletePost() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (id: string) => messagesApi.deleteMessage(id),
+    mutationFn: (postId: string) => postsApi.deletePost(postId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: MESSAGES_KEY });
+      queryClient.invalidateQueries({ queryKey: POSTS_KEY });
     },
   });
 }
+
+// 後方互換エイリアス（既存コードが残っている場合用）
+export const useMessages = usePosts;
+export const useCreateMessage = useCreatePost;
+export const useUpdateMessage = useUpdatePost;
+export const useDeleteMessage = useDeletePost;

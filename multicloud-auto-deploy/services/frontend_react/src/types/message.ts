@@ -1,27 +1,30 @@
-export interface Message {
-  id: string;
+export interface Post {
+  postId: string;
+  userId: string;
+  nickname?: string | null;
   content: string;
-  author: string;
-  image_url?: string | null;
-  created_at: string;
-  updated_at?: string | null;
+  isMarkdown: boolean;
+  tags: string[];
+  imageUrls?: string[] | null;
+  createdAt: string;
+  updatedAt?: string | null;
 }
 
-export interface MessagesResponse {
-  messages: Message[];
+export interface PostsResponse {
+  items: Post[];
   total: number;
-  page: number;
-  page_size: number;
+  nextToken?: string | null;
+  limit: number;
 }
 
-export interface CreateMessageInput {
+export interface CreatePostInput {
   content: string;
-  author: string;
-  image_url?: string | null;
+  tags?: string[];
+  is_markdown?: boolean;
 }
 
-export interface UpdateMessageInput {
+export interface UpdatePostInput {
   content?: string;
-  author?: string;
-  image_url?: string | null;
+  tags?: string[];
+  is_markdown?: boolean;
 }
