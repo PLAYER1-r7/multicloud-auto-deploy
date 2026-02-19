@@ -1,8 +1,10 @@
 import axios from 'axios';
 import type { Post, PostsResponse, CreatePostInput, UpdatePostInput } from '../types/message';
 
-// API URL: dev = localhost:8000, cloud = VITE_API_URL env
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// API URL:
+//  - 本番ビルド: VITE_API_URL 環境変数 (例: https://api.example.com)
+//  - dev server: '' (空文字 = 相対URL、Vite proxy 経由で localhost:8000 へ転送)
+const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 const apiClient = axios.create({
   baseURL: API_URL,
