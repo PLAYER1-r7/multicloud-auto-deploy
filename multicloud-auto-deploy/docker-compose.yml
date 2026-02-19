@@ -68,6 +68,18 @@ services:
       - api
 
   # ========================================
+  # Static Site + Simple SNS at /sns/
+  # ========================================
+  static_site:
+    build:
+      context: .
+      dockerfile: static-site/Dockerfile
+    ports:
+      - "8090:8090"
+    depends_on:
+      - api
+
+  # ========================================
   # React SPA Frontend (Vite + Tailwind, served via nginx)
   # ========================================
   frontend_react:
