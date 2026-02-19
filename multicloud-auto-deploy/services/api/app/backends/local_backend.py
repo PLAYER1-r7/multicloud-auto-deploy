@@ -148,12 +148,9 @@ class LocalBackend(BackendBase):
     def _build_image_urls(self, image_keys: list[str]) -> Optional[list[str]]:
         if not image_keys:
             return None
-        if self.minio_client:
-            # ブラウザからアクセス可能な公開 URL を使用
-            endpoint = settings.minio_public_endpoint or settings.minio_endpoint
-            bucket = settings.minio_bucket
-            return [f"{endpoint}/{bucket}/{k}" for k in image_keys]
-        return [f"http://localhost:8000/storage/{k}" for k in image_keys]
+        # /storage/ プロキシ経由でブラウザからアクセス (ホスト非依存の相対 URL)
+        bucket = settings.minio_bucket
+        return [f"/storage/{bucket}/{k}" for k in image_keys]
 
     def _item_to_post(self, item: dict) -> Post:
         return Post(
@@ -401,13 +398,12 @@ class LocalBackend(BackendBase):
             return urls
 
         # boto3 で presigned URL を生成 (HTTP 接続なし・純粋なローカル計算)
-        # minio_public_endpoint があればブラウザからアクセス可能な URL を使用
+        # minio:9000 (Docker 内部ホスト) で署名し /storage/ プロキシ経由の相対 URL に変換
         import boto3
         from botocore.config import Config
-        public_ep = settings.minio_public_endpoint or settings.minio_endpoint
         s3_signing = boto3.client(
             "s3",
-            endpoint_url=public_ep,
+            endpoint_url="http://minio:9000",  # 内部ホストで署名
             aws_access_key_id=settings.minio_access_key or "minioadmin",
             aws_secret_access_key=settings.minio_secret_key or "minioadmin",
             region_name="us-east-1",
@@ -434,5 +430,7 @@ class LocalBackend(BackendBase):
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to generate upload URL",
                 )
-            urls.append({"url": upload_url, "key": key})
+            # http://minio:9000 → /storage (相対 URL) に変換してブラウザから使用可能にする
+            proxy_url = upload_url.replace("http://minio:9000", "/storage", 1)
+            urls.append({"url": proxy_url, "key": key})
         return urls

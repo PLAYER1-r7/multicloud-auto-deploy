@@ -1,6 +1,7 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response as _Response
 from fastapi.templating import Jinja2Templates
 import requests
 
@@ -349,3 +350,29 @@ async def uploads(request: Request, settings: Settings = Depends(get_settings)):
         headers,
     )
     return data
+
+
+@router.api_route("/storage/{path:path}", methods=["GET", "PUT", "HEAD"])
+async def storage_proxy(path: str, request: Request):
+    """MinIO リバースプロキシ（ローカル開発用：ブラウザからのストレージアクセスを中継）"""
+    body = await request.body()
+    headers = {
+        k: v for k, v in request.headers.items()
+        if k.lower() not in ("host", "content-length")
+    }
+    try:
+        resp = requests.request(
+            method=request.method,
+            url=f"http://minio:9000/{path}",
+            params=dict(request.query_params),
+            headers=headers,
+            data=body,
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    resp_headers = {
+        k: v for k, v in resp.headers.items()
+        if k.lower() not in ("transfer-encoding", "connection", "content-encoding")
+    }
+    return _Response(content=resp.content, status_code=resp.status_code, headers=resp_headers)
