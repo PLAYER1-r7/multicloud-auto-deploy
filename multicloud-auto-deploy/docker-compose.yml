@@ -68,6 +68,21 @@ services:
       - api
 
   # ========================================
+  # React SPA Frontend (Vite + Tailwind, served via nginx)
+  # ========================================
+  frontend_react:
+    build:
+      context: ./services/frontend_react
+      dockerfile: Dockerfile
+      args:
+        # Browser-side: uses host port (localhost:8000) not container hostname
+        - VITE_API_URL=http://localhost:8000
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+
+  # ========================================
   # DynamoDB Local (NoSQL, mirrors AWS DynamoDB)
   # ========================================
   dynamodb-local:
