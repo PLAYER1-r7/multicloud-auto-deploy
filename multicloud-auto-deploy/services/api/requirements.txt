@@ -20,9 +20,7 @@ python-multipart==0.0.9
 pyjwt==2.9.0
 requests==2.32.3
 
-# Database
-psycopg2-binary==2.9.9
-sqlalchemy==2.0.35
+# Database (NoSQL — DynamoDB Local uses boto3, already listed under AWS)
 
 # AWS
 boto3==1.35.0

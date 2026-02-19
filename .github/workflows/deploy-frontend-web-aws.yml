@@ -3,11 +3,11 @@ name: Deploy Frontend Web to AWS
 on:
   push:
     branches:
-      - develop  # staging自動デプロイ
-      - main     # production自動デプロイ
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
     paths:
-      - 'multicloud-auto-deploy/services/frontend_web/**'
-      - '.github/workflows/deploy-frontend-web-aws.yml'
+      - "multicloud-auto-deploy/services/frontend_web/**"
+      - ".github/workflows/deploy-frontend-web-aws.yml"
   workflow_dispatch:
     inputs:
       environment:
