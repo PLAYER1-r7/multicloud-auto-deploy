@@ -33,7 +33,8 @@ import requests
 # ---------------------------------------------------------------------------
 
 API = os.environ.get("API_BASE_URL", "http://localhost:8000").rstrip("/")
-STORAGE = os.environ.get("STORAGE_BASE_URL", "http://localhost:8080").rstrip("/")
+STORAGE = os.environ.get(
+    "STORAGE_BASE_URL", "http://localhost:8080").rstrip("/")
 USER = os.environ.get("TEST_USER_ID", "test-user-1")
 TIMEOUT = 10
 
@@ -58,7 +59,8 @@ def make_png(width: int = 4, height: int = 4, color: tuple = (255, 0, 0)) -> byt
             + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
         )
 
-    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+    ihdr = chunk(b"IHDR", struct.pack(
+        ">IIBBBBB", width, height, 8, 2, 0, 0, 0))
     raw = b"".join(b"\x00" + bytes(color) * width for _ in range(height))
     idat = chunk(b"IDAT", zlib.compress(raw))
     iend = chunk(b"IEND", b"")
@@ -91,8 +93,10 @@ def upload_images(images: list[tuple[str, bytes, str]], headers: dict) -> list[s
         url = entry["url"]
         if url.startswith("/"):
             url = STORAGE + url
-        put = requests.put(url, data=data, headers={"Content-Type": ctype}, timeout=TIMEOUT)
-        assert put.status_code in (200, 204), f"PUT {url}: {put.status_code} {put.text}"
+        put = requests.put(url, data=data, headers={
+                           "Content-Type": ctype}, timeout=TIMEOUT)
+        assert put.status_code in (
+            200, 204), f"PUT {url}: {put.status_code} {put.text}"
         keys.append(entry["key"])
     return keys
 
@@ -151,7 +155,8 @@ class TestHealthAndAuth:
         test user instead, so we accept 200 in that case.
         """
         r = session.get(f"{API}/profile", timeout=TIMEOUT)
-        assert r.status_code in (200, 401), f"Expected 200 or 401, got {r.status_code}"
+        assert r.status_code in (
+            200, 401), f"Expected 200 or 401, got {r.status_code}"
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +180,8 @@ class TestPostCRUD:
         assert body["content"] == "Hello from pytest"
 
         # cleanup
-        session.delete(f"{API}/posts/{body['postId']}", headers=auth(), timeout=TIMEOUT)
+        session.delete(
+            f"{API}/posts/{body['postId']}", headers=auth(), timeout=TIMEOUT)
 
     def test_list_posts(self, session):
         """GET /posts → 200, items is a list"""
@@ -196,10 +202,12 @@ class TestPostCRUD:
         assert r.status_code == 201
         post_id = r.json()["postId"]
 
-        del_r = session.delete(f"{API}/posts/{post_id}", headers=auth(), timeout=TIMEOUT)
+        del_r = session.delete(
+            f"{API}/posts/{post_id}", headers=auth(), timeout=TIMEOUT)
         assert del_r.status_code == 200
 
-        del_r2 = session.delete(f"{API}/posts/{post_id}", headers=auth(), timeout=TIMEOUT)
+        del_r2 = session.delete(
+            f"{API}/posts/{post_id}", headers=auth(), timeout=TIMEOUT)
         assert del_r2.status_code == 404
 
     def test_update_post_content(self, session):
@@ -222,7 +230,8 @@ class TestPostCRUD:
         assert upd.status_code == 200
         assert upd.json()["content"] == "Updated content"
 
-        session.delete(f"{API}/posts/{post_id}", headers=auth(), timeout=TIMEOUT)
+        session.delete(f"{API}/posts/{post_id}",
+                       headers=auth(), timeout=TIMEOUT)
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +282,8 @@ class TestImageUpload:
         assert body["imageUrls"] is not None
         assert len(body["imageUrls"]) == 1
 
-        session.delete(f"{API}/posts/{body['postId']}", headers=auth(), timeout=TIMEOUT)
+        session.delete(
+            f"{API}/posts/{body['postId']}", headers=auth(), timeout=TIMEOUT)
 
     def test_post_with_multiple_images(self, session, three_pngs):
         """Create a post with three images; all keys stored"""
@@ -289,9 +299,8 @@ class TestImageUpload:
         body = r.json()
         assert len(body["imageUrls"]) == 3
 
-        session.delete(f"{API}/posts/{body['postId']}", headers=auth(), timeout=TIMEOUT)
-
-
+        session.delete(
+            f"{API}/posts/{body['postId']}", headers=auth(), timeout=TIMEOUT)
 
     def test_image_urls_are_accessible(self, session, three_pngs):
         """Each imageUrl in the post response is reachable via GET /storage/"""
@@ -313,7 +322,8 @@ class TestImageUpload:
             assert get_r.status_code == 200, f"Image not accessible: {url} ({get_r.status_code})"
             assert len(get_r.content) > 0
 
-        session.delete(f"{API}/posts/{r.json()['postId']}", headers=auth(), timeout=TIMEOUT)
+        session.delete(
+            f"{API}/posts/{r.json()['postId']}", headers=auth(), timeout=TIMEOUT)
 
     def test_update_post_images(self, session, red_png, three_pngs):
         """PUT /posts/{id} can replace images: 1 image → 3 images"""
@@ -340,12 +350,14 @@ class TestImageUpload:
         assert upd.status_code == 200, upd.text
         assert len(upd.json()["imageUrls"]) == 3
 
-        session.delete(f"{API}/posts/{post_id}", headers=auth(), timeout=TIMEOUT)
+        session.delete(f"{API}/posts/{post_id}",
+                       headers=auth(), timeout=TIMEOUT)
 
     def test_post_with_max_images(self, session):
         """Upload 10 images (API max) and attach them to one post"""
         images = [
-            (f"img{i}.png", make_png(color=(i * 25 % 256, i * 13 % 256, 200)), "image/png")
+            (f"img{i}.png", make_png(color=(i * 25 %
+             256, i * 13 % 256, 200)), "image/png")
             for i in range(10)
         ]
         keys = upload_images(images, auth())
@@ -360,11 +372,13 @@ class TestImageUpload:
         assert r.status_code == 201, r.text
         assert len(r.json()["imageUrls"]) == 10
 
-        session.delete(f"{API}/posts/{r.json()['postId']}", headers=auth(), timeout=TIMEOUT)
+        session.delete(
+            f"{API}/posts/{r.json()['postId']}", headers=auth(), timeout=TIMEOUT)
 
 # ---------------------------------------------------------------------------
 # STEP 4 — Hashtags
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.local
 class TestHashtags:
@@ -382,7 +396,8 @@ class TestHashtags:
         body = r.json()
         assert set(body["tags"]) == set(tags)
 
-        session.delete(f"{API}/posts/{body['postId']}", headers=auth(), timeout=TIMEOUT)
+        session.delete(
+            f"{API}/posts/{body['postId']}", headers=auth(), timeout=TIMEOUT)
 
     def test_filter_posts_by_tag(self, session):
         """GET /posts?tag=<x> returns only posts with that tag"""
@@ -396,14 +411,16 @@ class TestHashtags:
         assert r.status_code == 201
         post_id = r.json()["postId"]
 
-        resp = session.get(f"{API}/posts", params={"tag": unique_tag}, timeout=TIMEOUT)
+        resp = session.get(
+            f"{API}/posts", params={"tag": unique_tag}, timeout=TIMEOUT)
         assert resp.status_code == 200
         items = resp.json()["items"]
         assert any(p["postId"] == post_id for p in items), (
             f"Post {post_id} not found in tag-filtered results"
         )
 
-        session.delete(f"{API}/posts/{post_id}", headers=auth(), timeout=TIMEOUT)
+        session.delete(f"{API}/posts/{post_id}",
+                       headers=auth(), timeout=TIMEOUT)
 
     def test_update_post_tags(self, session):
         """PUT /posts/{id} can replace tags"""
@@ -426,7 +443,8 @@ class TestHashtags:
         assert "after" in upd.json()["tags"]
         assert "before" not in upd.json()["tags"]
 
-        session.delete(f"{API}/posts/{post_id}", headers=auth(), timeout=TIMEOUT)
+        session.delete(f"{API}/posts/{post_id}",
+                       headers=auth(), timeout=TIMEOUT)
 
     def test_post_with_images_and_tags(self, session, three_pngs):
         """Create a post with both images and tags; all fields stored"""
@@ -447,4 +465,5 @@ class TestHashtags:
         assert len(body["imageUrls"]) == 3
         assert set(body["tags"]) == set(tags)
 
-        session.delete(f"{API}/posts/{body['postId']}", headers=auth(), timeout=TIMEOUT)
+        session.delete(
+            f"{API}/posts/{body['postId']}", headers=auth(), timeout=TIMEOUT)

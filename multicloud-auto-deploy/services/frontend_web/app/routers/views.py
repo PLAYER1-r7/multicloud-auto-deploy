@@ -219,22 +219,17 @@ async def post_create(request: Request, settings: Settings = Depends(get_setting
 
 @router.get("/posts/{post_id}", name="post_detail")
 def post_detail(post_id: str, request: Request, settings: Settings = Depends(get_settings)):
-    # Note: Fetching all posts to find one is inefficient but preserving existing logic.
-    # The original implementation fetched /posts?limit=50 and filtered in python.
-    # Ideally should be /posts/{post_id} if API supports it. Assuming consistent behavior for now.
-
     headers = {}
-    data = _fetch_json_with_headers(
-        f"{settings.clean_api_base_url}/posts", {"limit": 50}, headers)
-    items = data.get("items", [])
-
-    for item in items:
-        if item.get("postId") == post_id:
-            return templates.TemplateResponse(
-                "post.html",
-                _template_context(request, settings, post=item),
-            )
-    raise HTTPException(status_code=404, detail="Post not found")
+    try:
+        item = _fetch_json_with_headers(
+            f"{settings.clean_api_base_url}/posts/{post_id}", None, headers
+        )
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return templates.TemplateResponse(
+        "post.html",
+        _template_context(request, settings, post=item),
+    )
 
 
 @router.delete("/posts/{post_id}", name="post_delete")

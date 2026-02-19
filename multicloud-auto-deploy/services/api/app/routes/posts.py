@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import UserInfo, require_user
 from app.backends import get_backend
 from app.models import CreatePostBody, UpdatePostBody, ListPostsResponse
@@ -16,6 +16,18 @@ def list_posts(
     backend = get_backend()
     posts, output_next_token = backend.list_posts(limit, nextToken, tag)
     return ListPostsResponse(items=posts, limit=limit, nextToken=output_next_token)
+
+
+@router.get("/{post_id}")
+def get_post(post_id: str) -> dict:
+    """投稿を1件取得"""
+    backend = get_backend()
+    try:
+        return backend.get_post(post_id)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="Post not found") from exc
 
 
 @router.post("", status_code=201)

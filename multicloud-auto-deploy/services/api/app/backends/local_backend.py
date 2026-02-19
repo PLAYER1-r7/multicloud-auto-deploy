@@ -16,10 +16,11 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Optional, Tuple
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from fastapi import HTTPException, status
 
@@ -403,8 +404,6 @@ class LocalBackend(BackendBase):
 
         # boto3 で presigned URL を生成 (HTTP 接続なし・純粋なローカル計算)
         # minio:9000 (Docker 内部ホスト) で署名し /storage/ プロキシ経由の相対 URL に変換
-        import boto3
-        from botocore.config import Config
         s3_signing = boto3.client(
             "s3",
             endpoint_url="http://minio:9000",  # 内部ホストで署名

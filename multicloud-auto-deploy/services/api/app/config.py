@@ -3,7 +3,6 @@ from pydantic import Field, AliasChoices
 
 from pydantic_settings import BaseSettings
 from app.models import CloudProvider
-import os
 
 
 class Settings(BaseSettings):
@@ -23,12 +22,15 @@ class Settings(BaseSettings):
     # ローカル開発設定 (DynamoDB Local + MinIO)
     dynamodb_endpoint: Optional[str] = Field(default="http://localhost:8001")
     dynamodb_table_name: str = Field(default="simple-sns-local")
-    storage_path: str = "./storage"
     minio_endpoint: Optional[str] = None
     minio_access_key: Optional[str] = None
     minio_secret_key: Optional[str] = None
-    minio_bucket: str = "images"
-    # ブラウザから直接 PUT する際に使うパブリック URL (未設定時は minio_endpoint を使用)
+    # Accepts both MINIO_BUCKET and MINIO_BUCKET_NAME environment variables
+    minio_bucket: str = Field(
+        default="images",
+        validation_alias=AliasChoices("minio_bucket", "minio_bucket_name"),
+    )
+    # Public URL for browser-side PUT requests (falls back to minio_endpoint)
     minio_public_endpoint: Optional[str] = None
 
     # AWS設定

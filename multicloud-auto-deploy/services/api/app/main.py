@@ -3,10 +3,11 @@ Multi-cloud Simple SNS API (v1.2.4)
 CORS-hardened version for production deployment - AWS Lambda Layer permissions fix
 """
 
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Query, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi import Query, Depends, HTTPException
 from typing import Optional
 import logging
 
@@ -36,6 +37,23 @@ except ImportError:
     logger = logging.getLogger(__name__)
     powertools_available = False
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: startup and shutdown logic."""
+    logger.info(
+        "Starting Simple SNS API",
+        extra={
+            "version": "3.0.0",
+            "cloud_provider": settings.cloud_provider.value,
+            "auth_disabled": settings.auth_disabled,
+            "powertools_enabled": powertools_available,
+        },
+    )
+    yield
+    logger.info("Shutting down Simple SNS API")
+
+
 # FastAPIアプリケーション
 app = FastAPI(
     title="Simple SNS API",
@@ -43,10 +61,12 @@ app = FastAPI(
     version="3.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # CORS設定
-origins = settings.cors_origins.split(",") if settings.cors_origins != "*" else ["*"]
+origins = settings.cors_origins.split(
+    ",") if settings.cors_origins != "*" else ["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -112,6 +132,7 @@ def legacy_delete_message(
     backend = get_backend()
     return backend.delete_post(post_id, user)
 
+
 @app.get("/api/messages/{post_id}")
 def legacy_get_message(
     post_id: str,
@@ -123,6 +144,7 @@ def legacy_get_message(
         return backend.get_post(post_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
 
 @app.put("/api/messages/{post_id}")
 def legacy_update_message(
@@ -142,31 +164,12 @@ def legacy_update_message(
     return backend.update_post(post_id, body, user)
 
 
-@app.on_event("startup")
-async def startup_event():
-    """アプリケーション起動時の処理"""
-    logger.info(
-        "Starting Simple SNS API",
-        extra={
-            "version": "3.0.0",
-            "cloud_provider": settings.cloud_provider.value,
-            "auth_disabled": settings.auth_disabled,
-            "powertools_enabled": powertools_available,
-        },
-    )
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """アプリケーション終了時の処理"""
-    logger.info("Shutting down Simple SNS API")
-
-
 @app.get("/", response_model=HealthResponse)
 def root() -> HealthResponse:
     """ルートエンドポイント"""
     if powertools_available:
-        metrics.add_metric(name="RootEndpointCalled", unit=MetricUnit.Count, value=1)
+        metrics.add_metric(name="RootEndpointCalled",
+                           unit=MetricUnit.Count, value=1)
 
     return HealthResponse(
         status="ok",
@@ -178,9 +181,11 @@ def root() -> HealthResponse:
 def health() -> HealthResponse:
     """ヘルスチェックエンドポイント"""
     if powertools_available:
-        metrics.add_metric(name="HealthCheckCalled", unit=MetricUnit.Count, value=1)
+        metrics.add_metric(name="HealthCheckCalled",
+                           unit=MetricUnit.Count, value=1)
 
-    logger.info("Health check requested", extra={"provider": settings.cloud_provider.value})
+    logger.info("Health check requested", extra={
+                "provider": settings.cloud_provider.value})
 
     return HealthResponse(
         status="ok",
@@ -208,5 +213,6 @@ try:
         logger.info("Mangum handler initialized for AWS Lambda")
 
 except ImportError:
-    logger.warning("Mangum not available - AWS Lambda deployment not supported")
+    logger.warning(
+        "Mangum not available - AWS Lambda deployment not supported")
     handler = None

@@ -110,10 +110,15 @@ services:
         mc alias set local http://minio:9000 minioadmin minioadmin
         mc mb --ignore-existing local/images local/simple-sns 2>/dev/null || true
         mc anonymous set download local/images
+        mc anonymous set download local/simple-sns
+        mc cors set local/simple-sns /tmp/minio-cors.json 2>/dev/null ||
+          aws --endpoint-url http://minio:9000 s3api put-bucket-cors \
+            --bucket simple-sns --cors-configuration file:///tmp/minio-cors.json 2>/dev/null ||
+          echo 'CORS setup skipped for simple-sns bucket'
         mc cors set local/images /tmp/minio-cors.json 2>/dev/null ||
           aws --endpoint-url http://minio:9000 s3api put-bucket-cors \
             --bucket images --cors-configuration file:///tmp/minio-cors.json 2>/dev/null ||
-          echo 'CORS setup skipped (manual setup may be needed)'
+          echo 'CORS setup skipped for images bucket'
         echo 'MinIO setup complete'
       "
     restart: on-failure
