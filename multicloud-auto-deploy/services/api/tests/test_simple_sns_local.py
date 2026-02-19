@@ -292,6 +292,76 @@ class TestImageUpload:
         session.delete(f"{API}/posts/{body['postId']}", headers=auth(), timeout=TIMEOUT)
 
 
+
+    def test_image_urls_are_accessible(self, session, three_pngs):
+        """Each imageUrl in the post response is reachable via GET /storage/"""
+        keys = upload_images(three_pngs, auth())
+        r = session.post(
+            f"{API}/posts",
+            json={"content": "Accessibility check", "imageKeys": keys},
+            headers=auth(),
+            timeout=TIMEOUT,
+        )
+        assert r.status_code == 201, r.text
+        image_urls = r.json()["imageUrls"]
+        assert len(image_urls) == 3
+
+        for url in image_urls:
+            if url.startswith("/"):
+                url = STORAGE + url
+            get_r = requests.get(url, timeout=TIMEOUT)
+            assert get_r.status_code == 200, f"Image not accessible: {url} ({get_r.status_code})"
+            assert len(get_r.content) > 0
+
+        session.delete(f"{API}/posts/{r.json()['postId']}", headers=auth(), timeout=TIMEOUT)
+
+    def test_update_post_images(self, session, red_png, three_pngs):
+        """PUT /posts/{id} can replace images: 1 image → 3 images"""
+        # Create post with 1 image
+        keys1 = upload_images([("red.png", red_png, "image/png")], auth())
+        r = session.post(
+            f"{API}/posts",
+            json={"content": "Image replace test", "imageKeys": keys1},
+            headers=auth(),
+            timeout=TIMEOUT,
+        )
+        assert r.status_code == 201
+        post_id = r.json()["postId"]
+        assert len(r.json()["imageUrls"]) == 1
+
+        # Replace with 3 images
+        keys3 = upload_images(three_pngs, auth())
+        upd = session.put(
+            f"{API}/posts/{post_id}",
+            json={"imageKeys": keys3},
+            headers=auth(),
+            timeout=TIMEOUT,
+        )
+        assert upd.status_code == 200, upd.text
+        assert len(upd.json()["imageUrls"]) == 3
+
+        session.delete(f"{API}/posts/{post_id}", headers=auth(), timeout=TIMEOUT)
+
+    def test_post_with_max_images(self, session):
+        """Upload 10 images (API max) and attach them to one post"""
+        images = [
+            (f"img{i}.png", make_png(color=(i * 25 % 256, i * 13 % 256, 200)), "image/png")
+            for i in range(10)
+        ]
+        keys = upload_images(images, auth())
+        assert len(keys) == 10
+
+        r = session.post(
+            f"{API}/posts",
+            json={"content": "Max images post", "imageKeys": keys},
+            headers=auth(),
+            timeout=TIMEOUT,
+        )
+        assert r.status_code == 201, r.text
+        assert len(r.json()["imageUrls"]) == 10
+
+        session.delete(f"{API}/posts/{r.json()['postId']}", headers=auth(), timeout=TIMEOUT)
+
 # ---------------------------------------------------------------------------
 # STEP 4 — Hashtags
 # ---------------------------------------------------------------------------

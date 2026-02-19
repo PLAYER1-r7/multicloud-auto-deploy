@@ -314,6 +314,9 @@ class LocalBackend(BackendBase):
         if body.tags is not None:
             update_expr += ", tags = :tags"
             expr_values[":tags"] = body.tags
+        if body.image_keys is not None:
+            update_expr += ", imageKeys = :imageKeys"
+            expr_values[":imageKeys"] = body.image_keys
 
         self.table.update_item(
             Key={"PK": _POSTS_PK, "SK": item["SK"]},
