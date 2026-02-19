@@ -24,6 +24,24 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # ========================================
+  # FastAPI SSR Web Frontend (Simple SNS)
+  # ========================================
+  frontend_web:
+    build:
+      context: ./services/frontend_web
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - API_BASE_URL=http://api:8000
+      - AUTH_PROVIDER=local
+      - AUTH_DISABLED=true
+    volumes:
+      - ./services/frontend_web/app:/app/app
+    depends_on:
+      - api
+
+  # ========================================
   # Reflex Web Frontend (New Python implementation)
   # ========================================
   frontend_reflex:
