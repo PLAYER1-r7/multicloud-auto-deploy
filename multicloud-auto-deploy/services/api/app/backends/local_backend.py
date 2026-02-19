@@ -149,7 +149,8 @@ class LocalBackend(BackendBase):
         if not image_keys:
             return None
         if self.minio_client:
-            endpoint = settings.minio_endpoint
+            # ブラウザからアクセス可能な公開 URL を使用
+            endpoint = settings.minio_public_endpoint or settings.minio_endpoint
             bucket = settings.minio_bucket
             return [f"{endpoint}/{bucket}/{k}" for k in image_keys]
         return [f"http://localhost:8000/storage/{k}" for k in image_keys]
@@ -392,24 +393,46 @@ class LocalBackend(BackendBase):
     def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
         """画像アップロード用の署名付き URL を生成"""
         urls = []
+        if not self.minio_client:
+            # MinIO 未接続時はダミー URL
+            for _ in range(count):
+                key = f"images/{user.user_id}/{uuid.uuid4()}.jpg"
+                urls.append({"url": f"http://localhost:8000/uploads/{key}", "key": key})
+            return urls
+
+        # boto3 で presigned URL を生成 (HTTP 接続なし・純粋なローカル計算)
+        # minio_public_endpoint があればブラウザからアクセス可能な URL を使用
+        import boto3
+        from botocore.config import Config
+        public_ep = settings.minio_public_endpoint or settings.minio_endpoint
+        s3_signing = boto3.client(
+            "s3",
+            endpoint_url=public_ep,
+            aws_access_key_id=settings.minio_access_key or "minioadmin",
+            aws_secret_access_key=settings.minio_secret_key or "minioadmin",
+            region_name="us-east-1",
+            config=Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
+            ),
+        )
         for _ in range(count):
             key = f"images/{user.user_id}/{uuid.uuid4()}.jpg"
-            if self.minio_client:
-                try:
-                    upload_url = self.minio_client.presigned_put_object(
-                        settings.minio_bucket,
-                        key,
-                        expires=timedelta(
-                            seconds=settings.presigned_url_expiry),
-                    )
-                except Exception as exc:
-                    logger.error(
-                        f"Failed to generate MinIO presigned URL: {exc}")
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="Failed to generate upload URL",
-                    )
-            else:
-                upload_url = f"http://localhost:8000/uploads/{key}"
-            urls.append({"uploadUrl": upload_url, "key": key})
+            try:
+                upload_url = s3_signing.generate_presigned_url(
+                    "put_object",
+                    Params={
+                        "Bucket": settings.minio_bucket,
+                        "Key": key,
+                        "ContentType": "image/jpeg",
+                    },
+                    ExpiresIn=settings.presigned_url_expiry,
+                )
+            except Exception as exc:
+                logger.error(f"Failed to generate presigned URL: {exc}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to generate upload URL",
+                )
+            urls.append({"url": upload_url, "key": key})
         return urls

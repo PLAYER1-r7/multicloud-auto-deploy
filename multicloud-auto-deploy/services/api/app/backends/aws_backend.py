@@ -27,7 +27,8 @@ class AwsBackend(BackendBase):
         self.bucket_name = os.environ.get("IMAGES_BUCKET_NAME", "")
 
         if not self.table_name:
-            raise ValueError("POSTS_TABLE_NAME environment variable is required")
+            raise ValueError(
+                "POSTS_TABLE_NAME environment variable is required")
 
         self.table = self.dynamodb.Table(self.table_name)
         logger.info(
@@ -50,7 +51,8 @@ class AwsBackend(BackendBase):
             }
 
             if next_token:
-                query_kwargs["ExclusiveStartKey"] = {"PK": "POSTS", "SK": next_token}
+                query_kwargs["ExclusiveStartKey"] = {
+                    "PK": "POSTS", "SK": next_token}
 
             # タグフィルター
             if tag:
@@ -134,7 +136,8 @@ class AwsBackend(BackendBase):
 
             # ユーザー権限チェック
             if item["userId"] != user.user_id and not user.is_admin:
-                raise PermissionError("You do not have permission to delete this post")
+                raise PermissionError(
+                    "You do not have permission to delete this post")
 
             # 削除
             self.table.delete_item(Key={"PK": "POSTS", "SK": item["SK"]})
@@ -144,7 +147,7 @@ class AwsBackend(BackendBase):
         except Exception as e:
             logger.error(f"Error deleting post: {e}")
             raise
-    
+
     def get_post(self, post_id: str) -> dict:
         """投稿を取得 (DynamoDB Query by postId)"""
         try:
@@ -159,7 +162,7 @@ class AwsBackend(BackendBase):
                 raise ValueError(f"Post not found: {post_id}")
 
             item = response["Items"][0]
-            
+
             # レスポンス形式を統一
             return {
                 "id": item["postId"],
@@ -198,7 +201,8 @@ class AwsBackend(BackendBase):
 
             # ユーザー権限チェック
             if item["userId"] != user.user_id and not user.is_admin:
-                raise PermissionError("You do not have permission to update this post")
+                raise PermissionError(
+                    "You do not have permission to update this post")
 
             # 更新
             now = datetime.now(timezone.utc).isoformat()
@@ -278,14 +282,10 @@ class AwsBackend(BackendBase):
                 ExpiresIn=3600,  # 1時間
             )
 
-            # 公開URLも作成
-            public_url = f"https://{self.bucket_name}.s3.amazonaws.com/{key}"
-
             urls.append(
                 {
-                    "upload_url": presigned_url,
-                    "public_url": public_url,
-                    "image_id": image_id,
+                    "url": presigned_url,
+                    "key": key,
                 }
             )
 

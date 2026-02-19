@@ -18,7 +18,7 @@ def _auth_header(request: Request, settings: Settings | None = None) -> dict[str
         if local_user:
             return {"Authorization": f"Bearer local:{local_user}"}
         return {}
-    
+
     access_token = request.cookies.get("access_token")
     id_token = request.cookies.get("id_token")
     token = id_token or access_token
@@ -150,7 +150,7 @@ async def post_create(request: Request, settings: Settings = Depends(get_setting
                     content_types.append(content_type)
 
                 upload_res = _post_json_with_headers(
-                    f"{settings.clean_api_base_url}/uploads",
+                    f"{settings.clean_api_base_url}/uploads/presigned-urls",
                     {"count": len(files), "contentTypes": content_types},
                     headers,
                 )
@@ -243,21 +243,23 @@ def post_delete(post_id: str, request: Request, settings: Settings = Depends(get
     try:
         headers = _auth_header(request, settings)
         if not headers:
-            raise HTTPException(status_code=401, detail="Authentication required")
-        
+            raise HTTPException(
+                status_code=401, detail="Authentication required")
+
         delete_res = requests.delete(
             f"{settings.clean_api_base_url}/posts/{post_id}",
             headers=headers,
             timeout=10,
         )
-        
+
         if not delete_res.ok:
-            detail = delete_res.json().get("detail", "Delete failed") if delete_res.headers.get("content-type", "").startswith("application/json") else delete_res.text
+            detail = delete_res.json().get("detail", "Delete failed") if delete_res.headers.get(
+                "content-type", "").startswith("application/json") else delete_res.text
             raise HTTPException(
                 status_code=delete_res.status_code,
                 detail=detail,
             )
-        
+
         return delete_res.json()
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=str(exc))
@@ -342,7 +344,7 @@ async def uploads(request: Request, settings: Settings = Depends(get_settings)):
     count = payload.get("count")
     content_types = payload.get("contentTypes")
     data = _post_json_with_headers(
-        f"{settings.clean_api_base_url}/uploads",
+        f"{settings.clean_api_base_url}/uploads/presigned-urls",
         {"count": count, "contentTypes": content_types},
         headers,
     )

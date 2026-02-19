@@ -21,6 +21,7 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - MINIO_BUCKET_NAME=simple-sns
+      - MINIO_PUBLIC_ENDPOINT=http://localhost:9000
       - LOG_LEVEL=INFO
     volumes:
       - ./services/api/app:/app/app
@@ -93,6 +94,29 @@ services:
       - "3001:3001"
     depends_on:
       - api
+
+  # ========================================
+  # MinIO CORS setup (one-shot init container)
+  # ========================================
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./minio-cors.json:/tmp/minio-cors.json:ro
+    entrypoint: |
+      /bin/sh -c "
+        mc alias set local http://minio:9000 minioadmin minioadmin
+        mc mb --ignore-existing local/images local/simple-sns 2>/dev/null || true
+        mc anonymous set download local/images
+        mc cors set local/images /tmp/minio-cors.json 2>/dev/null ||
+          aws --endpoint-url http://minio:9000 s3api put-bucket-cors \
+            --bucket images --cors-configuration file:///tmp/minio-cors.json 2>/dev/null ||
+          echo 'CORS setup skipped (manual setup may be needed)'
+        echo 'MinIO setup complete'
+      "
+    restart: on-failure
 
   # ========================================
   # DynamoDB Local (NoSQL, mirrors AWS DynamoDB)

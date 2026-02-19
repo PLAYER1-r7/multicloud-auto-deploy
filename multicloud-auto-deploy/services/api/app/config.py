@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     minio_access_key: Optional[str] = None
     minio_secret_key: Optional[str] = None
     minio_bucket: str = "images"
+    # ブラウザから直接 PUT する際に使うパブリック URL (未設定時は minio_endpoint を使用)
+    minio_public_endpoint: Optional[str] = None
 
     # AWS設定
     aws_region: str = "ap-northeast-1"
