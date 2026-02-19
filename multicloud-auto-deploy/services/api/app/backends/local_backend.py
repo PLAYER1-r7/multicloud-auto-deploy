@@ -394,7 +394,8 @@ class LocalBackend(BackendBase):
             # MinIO 未接続時はダミー URL
             for _ in range(count):
                 key = f"images/{user.user_id}/{uuid.uuid4()}.jpg"
-                urls.append({"url": f"http://localhost:8000/uploads/{key}", "key": key})
+                urls.append(
+                    {"url": f"http://localhost:8000/uploads/{key}", "key": key})
             return urls
 
         # boto3 で presigned URL を生成 (HTTP 接続なし・純粋なローカル計算)
