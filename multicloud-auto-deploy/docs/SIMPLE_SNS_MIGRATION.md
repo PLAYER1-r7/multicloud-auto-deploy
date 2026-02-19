@@ -37,14 +37,15 @@ from `ashnova.v3/services/web`.
 
 A combined static site that serves:
 
-| Path | Content |
-|------|---------|
-| `/` | Static HTML site (`index.html`, `error.html`) |
-| `/sns/` | React SPA (compiled with `VITE_BASE_PATH=/sns/`) |
-| `/posts`, `/profiles`, `/uploads`, `/health` | Reverse proxy → `api:8000` |
-| `/storage/` | Reverse proxy → `minio:9000` (see §4) |
+| Path                                         | Content                                          |
+| -------------------------------------------- | ------------------------------------------------ |
+| `/`                                          | Static HTML site (`index.html`, `error.html`)    |
+| `/sns/`                                      | React SPA (compiled with `VITE_BASE_PATH=/sns/`) |
+| `/posts`, `/profiles`, `/uploads`, `/health` | Reverse proxy → `api:8000`                       |
+| `/storage/`                                  | Reverse proxy → `minio:9000` (see §4)            |
 
 Built with:
+
 - `static-site/Dockerfile`: multi-stage (`node:20-alpine` build → `nginx:alpine` serve)
 - `static-site/nginx.conf`: nginx on port 8090
 
@@ -59,10 +60,10 @@ SQLAlchemy/SQLite to use the same storage stack as the AWS production backend.
 
 ### DynamoDB Local
 
-| Item type | PK | SK |
-|-----------|----|----|
-| Post | `POSTS` | `<ISO timestamp>#<uuid>` |
-| Profile | `USER#<userId>` | `PROFILE` |
+| Item type | PK              | SK                       |
+| --------- | --------------- | ------------------------ |
+| Post      | `POSTS`         | `<ISO timestamp>#<uuid>` |
+| Profile   | `USER#<userId>` | `PROFILE`                |
 
 - GSI `PostIdIndex` (hash key: `postId`, projection: ALL) for post detail lookups
 - `_ensure_table()` auto-creates the table on startup (polling loop, no waiter)
@@ -77,11 +78,11 @@ SQLAlchemy/SQLite to use the same storage stack as the AWS production backend.
 
 **Config changes** (`config.py`):
 
-| Field removed | Field added |
-|---------------|-------------|
-| `database_url` | `dynamodb_endpoint` |
-| — | `dynamodb_table_name` |
-| — | `minio_public_endpoint` |
+| Field removed  | Field added             |
+| -------------- | ----------------------- |
+| `database_url` | `dynamodb_endpoint`     |
+| —              | `dynamodb_table_name`   |
+| —              | `minio_public_endpoint` |
 
 **Commit:** `2ea3273`
 
@@ -93,12 +94,12 @@ SQLAlchemy/SQLite to use the same storage stack as the AWS production backend.
 
 ### API Layer Changes
 
-| Before | After |
-|--------|-------|
-| `/messages/` endpoint | `/posts` endpoint |
-| `Message` / `MessagesResponse` types | `Post` / `PostsResponse` types |
-| Page/PageSize pagination | Cursor-based pagination (`nextToken`) |
-| `author` field | `nickname` / `userId` fields |
+| Before                               | After                                 |
+| ------------------------------------ | ------------------------------------- |
+| `/messages/` endpoint                | `/posts` endpoint                     |
+| `Message` / `MessagesResponse` types | `Post` / `PostsResponse` types        |
+| Page/PageSize pagination             | Cursor-based pagination (`nextToken`) |
+| `author` field                       | `nickname` / `userId` fields          |
 
 Backward-compatible aliases were exported from `useMessages.ts` to keep
 component imports stable during transition.
@@ -125,12 +126,14 @@ component imports stable during transition.
 ### Problem Chain
 
 Browser console errors:
+
 ```
 :9000/images/images/test-user-1/xxx.jpg  Failed to load resource: ERR_CONNECTION_REFUSED
 TypeError: Failed to fetch
 ```
 
 The upload flow:
+
 1. `uploads.js` (browser) → `POST /uploads` → get presigned URLs
 2. Browser → `PUT <presigned URL>` → upload file directly to MinIO
 
@@ -149,10 +152,10 @@ endpoint is `POST /uploads/presigned-urls`.
 
 Both backends returned inconsistent field names:
 
-| Component | Before | After |
-|-----------|--------|-------|
-| `local_backend.py` | `{ uploadUrl, ... }` | `{ url, key }` |
-| `aws_backend.py` | `{ upload_url, image_id, public_url }` | `{ url, key }` |
+| Component          | Before                                 | After          |
+| ------------------ | -------------------------------------- | -------------- |
+| `local_backend.py` | `{ uploadUrl, ... }`                   | `{ url, key }` |
+| `aws_backend.py`   | `{ upload_url, image_id, public_url }` | `{ url, key }` |
 
 **Fix:** Both backends standardised to `{ "url": "...", "key": "..." }`.
 
@@ -163,12 +166,12 @@ A presigned URL embedding that hostname is unreachable from the browser.
 
 **Approaches attempted:**
 
-| Approach | Outcome |
-|----------|---------|
-| String-replace `minio:9000` → `localhost:9000` in URL | FAIL — Host header is included in the AWS Signature (`X-Amz-SignedHeaders=host`); replacing hostname breaks the signature |
-| Separate `minio_signing_client` with `localhost:9000` | FAIL — `minio-py` v7.2.9 makes an actual HTTP connection to generate presigned URLs; `localhost:9000` is unreachable from inside the container |
-| `boto3 put_bucket_cors` | FAIL — MinIO returns `NotImplemented` |
-| **`boto3.generate_presigned_url` with `endpoint_url='http://localhost:9000'`** | **SUCCESS** — Pure local HMAC calculation, no HTTP connection; PUT returned `200 OK` |
+| Approach                                                                       | Outcome                                                                                                                                        |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| String-replace `minio:9000` → `localhost:9000` in URL                          | FAIL — Host header is included in the AWS Signature (`X-Amz-SignedHeaders=host`); replacing hostname breaks the signature                      |
+| Separate `minio_signing_client` with `localhost:9000`                          | FAIL — `minio-py` v7.2.9 makes an actual HTTP connection to generate presigned URLs; `localhost:9000` is unreachable from inside the container |
+| `boto3 put_bucket_cors`                                                        | FAIL — MinIO returns `NotImplemented`                                                                                                          |
+| **`boto3.generate_presigned_url` with `endpoint_url='http://localhost:9000'`** | **SUCCESS** — Pure local HMAC calculation, no HTTP connection; PUT returned `200 OK`                                                           |
 
 **Fix:** Replaced minio-py presigned URL generation with `boto3.generate_presigned_url`
 using `endpoint_url=http://localhost:9000`.  
@@ -181,7 +184,7 @@ Even with `localhost:9000` in the URL, the browser running inside a VS Code dev
 container (Codespaces / Remote Containers) could not reach port 9000 directly,
 resulting in `ERR_CONNECTION_REFUSED`.
 
-**Root cause:** The presigned URL must use a hostname the *browser* can reach,
+**Root cause:** The presigned URL must use a hostname the _browser_ can reach,
 which inside a dev container is the forwarded app port — not a raw MinIO port.
 
 **Fix:** Route all MinIO access through the application server:
@@ -196,12 +199,12 @@ After:   browser → PUT /storage/images/...   (relative URL, same origin)
 
 **Changes made:**
 
-| File | Change |
-|------|--------|
-| `local_backend.py` | Sign with `endpoint_url=http://minio:9000`; replace `http://minio:9000` with `/storage` in the returned URL |
-| `local_backend.py` | `_build_image_urls()` returns `/storage/{bucket}/{key}` (relative) |
-| `views.py` | Added `GET/PUT/HEAD /storage/{path}` reverse proxy handler |
-| `static-site/nginx.conf` | Added `location /storage/ { proxy_pass http://minio:9000/; Host: minio:9000; }` |
+| File                     | Change                                                                                                      |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `local_backend.py`       | Sign with `endpoint_url=http://minio:9000`; replace `http://minio:9000` with `/storage` in the returned URL |
+| `local_backend.py`       | `_build_image_urls()` returns `/storage/{bucket}/{key}` (relative)                                          |
+| `views.py`               | Added `GET/PUT/HEAD /storage/{path}` reverse proxy handler                                                  |
+| `static-site/nginx.conf` | Added `location /storage/ { proxy_pass http://minio:9000/; Host: minio:9000; }`                             |
 
 **Why the signature remains valid:** The presigned URL is signed with
 `Host: minio:9000`. The proxy forwards the request to `http://minio:9000/...`
@@ -214,14 +217,14 @@ so MinIO's signature verification passes.
 
 ## 5. Verified Working State
 
-| Endpoint | Method | Result |
-|----------|--------|--------|
-| `POST localhost:8000/uploads/presigned-urls` | Direct API | ✅ 200, returns `{ url: "/storage/...", key: "..." }` |
-| `POST localhost:8080/uploads` | frontend_web | ✅ 200, returns presigned URLs |
-| `PUT  localhost:8080/storage/<presigned path>` | frontend_web proxy | ✅ 200, file stored in MinIO |
-| `POST localhost:8090/uploads/presigned-urls` | static_site (nginx) | ✅ 200 |
-| `PUT  localhost:8090/storage/<presigned path>` | static_site proxy | ✅ 200 |
-| Browser image upload (frontend_web) | End-to-end | ✅ Confirmed |
+| Endpoint                                       | Method              | Result                                                |
+| ---------------------------------------------- | ------------------- | ----------------------------------------------------- |
+| `POST localhost:8000/uploads/presigned-urls`   | Direct API          | ✅ 200, returns `{ url: "/storage/...", key: "..." }` |
+| `POST localhost:8080/uploads`                  | frontend_web        | ✅ 200, returns presigned URLs                        |
+| `PUT  localhost:8080/storage/<presigned path>` | frontend_web proxy  | ✅ 200, file stored in MinIO                          |
+| `POST localhost:8090/uploads/presigned-urls`   | static_site (nginx) | ✅ 200                                                |
+| `PUT  localhost:8090/storage/<presigned path>` | static_site proxy   | ✅ 200                                                |
+| Browser image upload (frontend_web)            | End-to-end          | ✅ Confirmed                                          |
 
 ---
 

@@ -414,14 +414,15 @@ class LocalBackend(BackendBase):
             ),
         )
         for _ in range(count):
-            key = f"images/{user.user_id}/{uuid.uuid4()}.jpg"
+            key = f"images/{user.user_id}/{uuid.uuid4()}"
             try:
                 upload_url = s3_signing.generate_presigned_url(
                     "put_object",
                     Params={
                         "Bucket": settings.minio_bucket,
                         "Key": key,
-                        "ContentType": "image/jpeg",
+                        # ContentType を含めないことで署名に Content-Type ヘッダーが紛つかなくなり、
+                        # JPEG/PNG/HEIC 等任意のファイル形式をアップロードできる
                     },
                     ExpiresIn=settings.presigned_url_expiry,
                 )
