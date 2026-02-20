@@ -158,7 +158,7 @@ jobs:
             --webapp-name ${FUNC_APP_NAME} \
             --resource-group $RG_NAME \
             --query '[0].name' -o tsv)
-          API_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
+          API_URL="https://${FUNC_HOSTNAME}/api"
           echo "api_url=${API_URL}" >> $GITHUB_OUTPUT
 
           echo "📍 Configured API URL: ${API_URL}"
@@ -287,6 +287,26 @@ jobs:
 
           echo "🔒 CORS Origins: $CORS_ORIGINS"
 
+          # Get frontend storage key (used for image uploads)
+          FRONTEND_STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+          echo "📦 Getting storage key for image uploads: $FRONTEND_STORAGE_ACCOUNT"
+          FRONTEND_STORAGE_KEY=$(az storage account keys list \
+            --resource-group $RESOURCE_GROUP \
+            --account-name $FRONTEND_STORAGE_ACCOUNT \
+            --query '[0].value' -o tsv)
+
+          # Ensure images container exists with blob public access
+          az storage account update \
+            --name $FRONTEND_STORAGE_ACCOUNT \
+            --resource-group $RESOURCE_GROUP \
+            --allow-blob-public-access true 2>/dev/null || true
+          az storage container create \
+            --name "images" \
+            --account-name $FRONTEND_STORAGE_ACCOUNT \
+            --account-key "$FRONTEND_STORAGE_KEY" \
+            --public-access blob 2>/dev/null || true
+          echo "✅ Images container ready in $FRONTEND_STORAGE_ACCOUNT"
+
           # Remove existing CORS settings (both uppercase and lowercase)
           echo "🔧 Removing existing CORS settings if present..."
           az functionapp config appsettings delete \
@@ -319,6 +339,9 @@ jobs:
               AUTH_PROVIDER=azure \
               AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
               AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
+              AZURE_STORAGE_ACCOUNT_NAME="${FRONTEND_STORAGE_ACCOUNT}" \
+              AZURE_STORAGE_ACCOUNT_KEY="${FRONTEND_STORAGE_KEY}" \
+              AZURE_STORAGE_CONTAINER="images" \
               CORS_ORIGINS="${CORS_ORIGINS}" \
             > /dev/null
 
@@ -328,6 +351,9 @@ jobs:
           echo "🗄️  Cosmos DB configured:"
           echo "  Database: ${{ steps.pulumi_outputs.outputs.cosmos_database_name }}"
           echo "  Container: ${{ steps.pulumi_outputs.outputs.cosmos_container_name }}"
+          echo "🖼️  Image Storage configured:"
+          echo "  Account: $FRONTEND_STORAGE_ACCOUNT"
+          echo "  Container: images"
 
           echo "📦 Deploying function app package (with retry logic)..."
 
@@ -394,6 +420,79 @@ jobs:
           else
             echo "✅ Deployment completed successfully!"
           fi
+
+      - name: Deploy Frontend Web App (Simple SNS)
+        run: |
+          FUNC_WEB_APP="multicloud-auto-deploy-${{ steps.set_stack.outputs.stack_name }}-frontend-web"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
+          FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
+          API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
+
+          echo "🌐 Deploying Frontend Web App: $FUNC_WEB_APP"
+
+          # Set app settings for the frontend-web (Python SSR) app
+          echo "⚙️  Configuring app settings..."
+          az functionapp config appsettings set \
+            --name $FUNC_WEB_APP \
+            --resource-group $RESOURCE_GROUP \
+            --settings \
+              API_BASE_URL="${API_URL}" \
+              AUTH_PROVIDER=azure \
+              AUTH_DISABLED=false \
+              AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
+              AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
+              AZURE_REDIRECT_URI="https://${FRONTDOOR_URL}/sns/auth/callback" \
+              AZURE_LOGOUT_URI="https://${FRONTDOOR_URL}/sns/" \
+              STAGE_NAME=sns \
+            > /dev/null
+          echo "✅ App settings configured"
+          echo "  AUTH_PROVIDER: azure"
+          echo "  AZURE_REDIRECT_URI: https://${FRONTDOOR_URL}/sns/auth/callback"
+
+          # Package the frontend-web app using Docker linux/amd64 build
+          # (Azure Functions runs on x86_64; pip on aarch64 would produce incompatible C extensions)
+          echo "📦 Packaging frontend-web (linux/amd64)..."
+          FRONTEND_WEB_DIR="${GITHUB_WORKSPACE}/multicloud-auto-deploy/services/frontend_web"
+          rm -rf "${FRONTEND_WEB_DIR}/.deployment"
+          mkdir -p "${FRONTEND_WEB_DIR}/.deployment"
+
+          # Install dependencies inside a linux/amd64 container to get correct C extensions
+          echo "🐳 Building x86_64 packages via Docker..."
+          docker run --rm --platform linux/amd64 \
+            -v "${FRONTEND_WEB_DIR}:/workspace" \
+            python:3.12-slim \
+            bash -c "pip install --target /workspace/.deployment --no-cache-dir -r /workspace/requirements.txt --quiet"
+
+          # Copy application code into deployment directory
+          cp -r "${FRONTEND_WEB_DIR}/app"           "${FRONTEND_WEB_DIR}/.deployment/"
+          cp    "${FRONTEND_WEB_DIR}/function_app.py" "${FRONTEND_WEB_DIR}/.deployment/"
+          cp    "${FRONTEND_WEB_DIR}/host.json"       "${FRONTEND_WEB_DIR}/.deployment/"
+          cp    "${FRONTEND_WEB_DIR}/requirements.txt" "${FRONTEND_WEB_DIR}/.deployment/"
+
+          # Cleanup unnecessary files
+          find "${FRONTEND_WEB_DIR}/.deployment" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find "${FRONTEND_WEB_DIR}/.deployment" -type f -name "*.pyc" -delete 2>/dev/null || true
+
+          # Create ZIP package
+          cd "${FRONTEND_WEB_DIR}/.deployment"
+          zip -r9 -q ../frontend-web.zip .
+          cd "${FRONTEND_WEB_DIR}"
+
+          PACKAGE_SIZE=$(du -h frontend-web.zip | cut -f1)
+          echo "📦 Package size: $PACKAGE_SIZE"
+
+          # Deploy via config-zip (Kudu deploy - required for Dynamic Consumption + Python v2 model)
+          # NOTE: WEBSITE_RUN_FROM_PACKAGE with SAS URL does NOT register Python v2 functions
+          #       in Dynamic Consumption (Y1) plans. config-zip extracts to /home/site/wwwroot/.
+          echo "🚀 Deploying to $FUNC_WEB_APP via config-zip..."
+          az functionapp deployment source config-zip \
+            --resource-group $RESOURCE_GROUP \
+            --name $FUNC_WEB_APP \
+            --src "${FRONTEND_WEB_DIR}/frontend-web.zip" \
+            --build-remote false \
+            --timeout 300
+
+          echo "✅ Frontend Web App deployment complete"
 
       - name: Build Frontend
         run: |
@@ -487,7 +586,7 @@ jobs:
             exit 1
           fi
 
-          FUNC_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
+          FUNC_URL="https://${FUNC_HOSTNAME}/api"
           echo "Testing: ${FUNC_URL}/health"
 
           # Wait for function to be ready (max 3 minutes)
