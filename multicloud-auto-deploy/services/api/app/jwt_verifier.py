@@ -175,7 +175,8 @@ class JWTVerifier:
                 },
             )
 
-            logger.info(f"Token verified successfully for user: {claims.get('sub')}")
+            logger.info(
+                f"Token verified successfully for user: {claims.get('sub')}")
             return claims
 
         except JWTError as e:
@@ -207,7 +208,8 @@ class JWTVerifier:
             user_info["groups"] = claims.get("groups", [])
 
         elif self.provider == "azure":
-            user_info["email"] = claims.get("preferred_username") or claims.get("email")
+            user_info["email"] = claims.get(
+                "preferred_username") or claims.get("email")
             user_info["groups"] = claims.get("groups", [])
 
         return user_info

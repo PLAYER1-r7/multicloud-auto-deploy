@@ -265,14 +265,14 @@ API and the React frontend. All changes are on the same branch
 
 ### Overview
 
-| Area | Tool added | Purpose |
-|------|-----------|---------|
-| Python linting | **ruff 0.9.1** | Replaces flake8 + isort + pyupgrade + flake8-bugbear in one pass |
-| Python coverage | **pytest-cov 7.0.0** | HTML + terminal coverage reports for `app/` |
-| Frontend tests | **Vitest 3.2.4** | Unit / component test runner (replaces Jest) |
-| Frontend DOM | **jsdom 26.1.0** | Simulated browser environment for Vitest |
-| Frontend interactions | **@testing-library/react 16.3.0** + **user-event 14.6.1** | Component render + interaction helpers |
-| Frontend coverage | **@vitest/coverage-v8 3.2.4** | V8-based coverage provider |
+| Area                  | Tool added                                                | Purpose                                                          |
+| --------------------- | --------------------------------------------------------- | ---------------------------------------------------------------- |
+| Python linting        | **ruff 0.9.1**                                            | Replaces flake8 + isort + pyupgrade + flake8-bugbear in one pass |
+| Python coverage       | **pytest-cov 7.0.0**                                      | HTML + terminal coverage reports for `app/`                      |
+| Frontend tests        | **Vitest 3.2.4**                                          | Unit / component test runner (replaces Jest)                     |
+| Frontend DOM          | **jsdom 26.1.0**                                          | Simulated browser environment for Vitest                         |
+| Frontend interactions | **@testing-library/react 16.3.0** + **user-event 14.6.1** | Component render + interaction helpers                           |
+| Frontend coverage     | **@vitest/coverage-v8 3.2.4**                             | V8-based coverage provider                                       |
 
 ---
 
@@ -325,21 +325,21 @@ ruff format app/ tests/
 
 #### Resolution results
 
-| Stage | Violations |
-|-------|-----------|
-| Initial scan | **342** |
-| After `--fix --unsafe-fixes` | **18** |
-| After manual fixes | **0** |
+| Stage                        | Violations |
+| ---------------------------- | ---------- |
+| Initial scan                 | **342**    |
+| After `--fix --unsafe-fixes` | **18**     |
+| After manual fixes           | **0**      |
 
 The 18 remaining violations after auto-fix and how they were resolved:
 
-| Rule | Count | Resolution |
-|------|-------|-----------|
-| `N803` | many | Added to global `ignore` list — `nextToken` is part of the upstream API contract |
-| `B904` | 10 | Added `from None` / `from exc` to all `raise` statements inside `except` blocks (`azure_backend.py`, `gcp_backend.py`, `local_backend.py`, `main.py`) |
-| `B019` | 1 | Added `# noqa: B019` on the `@lru_cache` method in `jwt_verifier.py` (intentional cache on instance method) |
-| `SIM117` | 2 | Flattened nested `with patch(…)` blocks into parenthesised multi-context form in `test_backends_integration.py` |
-| `F401` | 1 | Changed `from app.backends.base import BackendBase` to `BackendBase as BackendBase` (explicit public re-export) in `backends/__init__.py` |
+| Rule     | Count | Resolution                                                                                                                                            |
+| -------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `N803`   | many  | Added to global `ignore` list — `nextToken` is part of the upstream API contract                                                                      |
+| `B904`   | 10    | Added `from None` / `from exc` to all `raise` statements inside `except` blocks (`azure_backend.py`, `gcp_backend.py`, `local_backend.py`, `main.py`) |
+| `B019`   | 1     | Added `# noqa: B019` on the `@lru_cache` method in `jwt_verifier.py` (intentional cache on instance method)                                           |
+| `SIM117` | 2     | Flattened nested `with patch(…)` blocks into parenthesised multi-context form in `test_backends_integration.py`                                       |
+| `F401`   | 1     | Changed `from app.backends.base import BackendBase` to `BackendBase as BackendBase` (explicit public re-export) in `backends/__init__.py`             |
 
 ---
 
@@ -407,18 +407,18 @@ URLs resolve correctly during local development:
 
 #### npm scripts (`services/frontend_react/package.json`)
 
-| Script | Command | Use |
-|--------|---------|-----|
-| `npm test` | `vitest run` | Single-pass CI run |
-| `npm run test:watch` | `vitest` | Interactive watch mode |
-| `npm run test:ui` | `vitest --ui` | Browser-based test explorer |
-| `npm run test:coverage` | `vitest run --coverage` | Coverage report |
+| Script                  | Command                 | Use                         |
+| ----------------------- | ----------------------- | --------------------------- |
+| `npm test`              | `vitest run`            | Single-pass CI run          |
+| `npm run test:watch`    | `vitest`                | Interactive watch mode      |
+| `npm run test:ui`       | `vitest --ui`           | Browser-based test explorer |
+| `npm run test:coverage` | `vitest run --coverage` | Coverage report             |
 
 #### Test helper files
 
-| File | Purpose |
-|------|---------|
-| `src/test/setup.ts` | Imports `@testing-library/jest-dom/vitest` matchers globally |
+| File                 | Purpose                                                                      |
+| -------------------- | ---------------------------------------------------------------------------- |
+| `src/test/setup.ts`  | Imports `@testing-library/jest-dom/vitest` matchers globally                 |
 | `src/test/utils.tsx` | `renderWithProviders()` — wraps UI in a fresh `QueryClientProvider` per test |
 
 `renderWithProviders` creates an isolated `QueryClient` with `retry: false` and
@@ -428,22 +428,22 @@ URLs resolve correctly during local development:
 
 **`src/components/MessageForm.test.tsx`** — 6 tests
 
-| Test | Assertion |
-|------|-----------|
-| renders form elements | textarea, tag input, and submit button are present |
-| submit disabled when empty | button has `disabled` attribute on mount |
-| submit enabled after typing | button becomes active after content is entered |
+| Test                                   | Assertion                                          |
+| -------------------------------------- | -------------------------------------------------- |
+| renders form elements                  | textarea, tag input, and submit button are present |
+| submit disabled when empty             | button has `disabled` attribute on mount           |
+| submit enabled after typing            | button becomes active after content is entered     |
 | calls mutateAsync with correct payload | `content` and `tags` are forwarded to the mutation |
-| clears fields after successful submit | both inputs reset to empty |
-| ignores blank-only input | submit via `fireEvent` does not call mutation |
+| clears fields after successful submit  | both inputs reset to empty                         |
+| ignores blank-only input               | submit via `fireEvent` does not call mutation      |
 
 **`src/components/MessageItem.test.tsx`** — 13 tests across 3 `describe` blocks
 
-| Block | Tests | What is covered |
-|-------|-------|----------------|
-| display | 8 | content, nickname, userId fallback, tag badges, no-tag case, image thumbnails, "編集済" label, no label when `createdAt === updatedAt` |
-| editing | 3 | enter edit mode, cancel restores original value, save calls `mutateAsync` |
-| deletion | 2 | confirm dialog → delete, cancel → no-op |
+| Block    | Tests | What is covered                                                                                                                        |
+| -------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| display  | 8     | content, nickname, userId fallback, tag badges, no-tag case, image thumbnails, "編集済" label, no label when `createdAt === updatedAt` |
+| editing  | 3     | enter edit mode, cancel restores original value, save calls `mutateAsync`                                                              |
+| deletion | 2     | confirm dialog → delete, cancel → no-op                                                                                                |
 
 **Notable fix during test authoring:** In the edit-mode cancel test,
 `getByRole('textbox', { name: '' })` was ambiguous because two textboxes are
@@ -460,12 +460,12 @@ rendered simultaneously (content and tag). Changed to
 19 passed in 1.65s
 ```
 
-| Test class | Tests | Status |
-|-----------|-------|--------|
-| `TestHealthAndAuth` | 3 | ✅ pass |
-| `TestPostCRUD` | 4 | ✅ pass |
-| `TestImageUpload` | 8 | ✅ pass |
-| `TestHashtags` | 4 | ✅ pass |
+| Test class          | Tests | Status  |
+| ------------------- | ----- | ------- |
+| `TestHealthAndAuth` | 3     | ✅ pass |
+| `TestPostCRUD`      | 4     | ✅ pass |
+| `TestImageUpload`   | 8     | ✅ pass |
+| `TestHashtags`      | 4     | ✅ pass |
 
 #### TypeScript
 
@@ -473,36 +473,36 @@ rendered simultaneously (content and tag). Changed to
 19 passed in 1.88s (2 test files)
 ```
 
-| Test file | Tests | Status |
-|-----------|-------|--------|
-| `MessageForm.test.tsx` | 6 | ✅ pass |
-| `MessageItem.test.tsx` | 13 | ✅ pass |
+| Test file              | Tests | Status  |
+| ---------------------- | ----- | ------- |
+| `MessageForm.test.tsx` | 6     | ✅ pass |
+| `MessageItem.test.tsx` | 13    | ✅ pass |
 
 ---
 
 ### New and Modified Files (Phase 2)
 
-| File | Status | Change |
-|------|--------|--------|
-| `services/api/ruff.toml` | **New** | Ruff linter / formatter configuration |
-| `services/api/.gitignore` | **New** | Excludes `.coverage`, `htmlcov/`, `.pytest_cache/` |
-| `services/api/requirements.txt` | Modified | Added `pytest-cov==7.0.0`, `ruff==0.9.1` |
-| `services/api/pytest.ini` | Modified | Added coverage flags to `addopts` |
-| `services/api/app/backends/__init__.py` | Modified | Explicit `BackendBase as BackendBase` re-export |
-| `services/api/app/backends/azure_backend.py` | Modified | 5× B904 `raise … from None` |
-| `services/api/app/backends/gcp_backend.py` | Modified | 3× B904 `raise … from None` |
-| `services/api/app/backends/local_backend.py` | Modified | B904 `raise … from exc` |
-| `services/api/app/jwt_verifier.py` | Modified | `# noqa: B019` on `@lru_cache` method |
-| `services/api/app/main.py` | Modified | B904 `raise … from e` |
-| `services/api/tests/test_backends_integration.py` | Modified | SIM117 context-manager flattening, import cleanup |
-| `services/api/tests/test_simple_sns_local.py` | Modified | Removed unused `import io` |
-| `services/frontend_react/vite.config.ts` | Modified | Vitest config + `/storage` proxy |
-| `services/frontend_react/package.json` | Modified | Test scripts + devDependencies |
-| `services/frontend_react/tsconfig.app.json` | Modified | Added `"types": ["vitest/globals"]` |
-| `services/frontend_react/src/test/setup.ts` | **New** | Vitest global setup (jest-dom matchers) |
-| `services/frontend_react/src/test/utils.tsx` | **New** | `renderWithProviders` helper |
-| `services/frontend_react/src/components/MessageForm.test.tsx` | **New** | 6 component tests |
-| `services/frontend_react/src/components/MessageItem.test.tsx` | **New** | 13 component tests |
+| File                                                          | Status   | Change                                             |
+| ------------------------------------------------------------- | -------- | -------------------------------------------------- |
+| `services/api/ruff.toml`                                      | **New**  | Ruff linter / formatter configuration              |
+| `services/api/.gitignore`                                     | **New**  | Excludes `.coverage`, `htmlcov/`, `.pytest_cache/` |
+| `services/api/requirements.txt`                               | Modified | Added `pytest-cov==7.0.0`, `ruff==0.9.1`           |
+| `services/api/pytest.ini`                                     | Modified | Added coverage flags to `addopts`                  |
+| `services/api/app/backends/__init__.py`                       | Modified | Explicit `BackendBase as BackendBase` re-export    |
+| `services/api/app/backends/azure_backend.py`                  | Modified | 5× B904 `raise … from None`                        |
+| `services/api/app/backends/gcp_backend.py`                    | Modified | 3× B904 `raise … from None`                        |
+| `services/api/app/backends/local_backend.py`                  | Modified | B904 `raise … from exc`                            |
+| `services/api/app/jwt_verifier.py`                            | Modified | `# noqa: B019` on `@lru_cache` method              |
+| `services/api/app/main.py`                                    | Modified | B904 `raise … from e`                              |
+| `services/api/tests/test_backends_integration.py`             | Modified | SIM117 context-manager flattening, import cleanup  |
+| `services/api/tests/test_simple_sns_local.py`                 | Modified | Removed unused `import io`                         |
+| `services/frontend_react/vite.config.ts`                      | Modified | Vitest config + `/storage` proxy                   |
+| `services/frontend_react/package.json`                        | Modified | Test scripts + devDependencies                     |
+| `services/frontend_react/tsconfig.app.json`                   | Modified | Added `"types": ["vitest/globals"]`                |
+| `services/frontend_react/src/test/setup.ts`                   | **New**  | Vitest global setup (jest-dom matchers)            |
+| `services/frontend_react/src/test/utils.tsx`                  | **New**  | `renderWithProviders` helper                       |
+| `services/frontend_react/src/components/MessageForm.test.tsx` | **New**  | 6 component tests                                  |
+| `services/frontend_react/src/components/MessageItem.test.tsx` | **New**  | 13 component tests                                 |
 
 ---
 
