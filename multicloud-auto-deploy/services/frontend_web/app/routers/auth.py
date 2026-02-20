@@ -202,8 +202,27 @@ async def session(request: Request, response: Response):
 
 
 @router.get("/logout", name="logout")
-def logout():
-    response = RedirectResponse(url="/login")
+def logout(settings: Settings = Depends(get_settings)):
+    base_path = f"/{settings.stage_name}" if settings.stage_name else ""
+
+    # Cognito セッションも無効化するため Cognito logout URL へリダイレクト
+    # Cognito は logout 後に logout_uri (COGNITO_LOGOUT_URI) へ戻す
+    if (
+        settings.cognito_domain
+        and settings.cognito_client_id
+        and settings.cognito_logout_uri
+    ):
+        cognito_logout = (
+            f"https://{settings.cognito_domain}/logout"
+            f"?client_id={settings.cognito_client_id}"
+            f"&logout_uri={settings.cognito_logout_uri}"
+        )
+        redirect_url = cognito_logout
+    else:
+        # Cognito 未設定の場合は simple-sns トップへ
+        redirect_url = f"{base_path}/" if base_path else "/"
+
+    response = RedirectResponse(url=redirect_url)
     response.delete_cookie("id_token", path="/")
     response.delete_cookie("access_token", path="/")
     response.delete_cookie("local_user", path="/")
