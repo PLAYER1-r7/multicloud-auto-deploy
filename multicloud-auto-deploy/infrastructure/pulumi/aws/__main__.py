@@ -400,6 +400,7 @@ lambda_function = aws.lambda_.Function(
             "ENVIRONMENT": stack,
             "CLOUD_PROVIDER": "aws",
             "AUTH_PROVIDER": "cognito",
+            "AUTH_DISABLED": "true" if stack == "staging" else "false",
             "SECRET_NAME": app_secret.name,
             "COGNITO_USER_POOL_ID": user_pool.id,
             "COGNITO_CLIENT_ID": user_pool_client.id,
