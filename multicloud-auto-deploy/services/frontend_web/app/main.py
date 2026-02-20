@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -5,6 +6,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import Settings
 from app.routers import auth, views
+
+# Azure Functions / Lambda では CWD が保証されないため __file__ 基準で解決
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # STAGE_NAME 環境変数でパスプレフィックスを決定
 # 例: STAGE_NAME=sns → prefix="/sns"（CDN /sns/ 配信時に使用）
@@ -32,7 +36,7 @@ app.add_middleware(COOPMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 _static_path = f"{prefix}/static" if prefix else "/static"
-app.mount(_static_path, StaticFiles(directory="app/static"), name="static")
+app.mount(_static_path, StaticFiles(directory=os.path.join(_APP_DIR, "static")), name="static")
 
 app.include_router(auth.router, prefix=prefix)
 app.include_router(views.router, prefix=prefix)

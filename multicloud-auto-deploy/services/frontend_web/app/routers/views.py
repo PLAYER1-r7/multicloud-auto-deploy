@@ -1,4 +1,5 @@
 from typing import Any
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response as _Response
@@ -9,7 +10,8 @@ from app.config import Settings, get_settings
 from app.routers.auth import _template_context, _get_auth_urls
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+_TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates")
+templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 
 
 def _auth_header(request: Request, settings: Settings | None = None) -> dict[str, str]:
@@ -47,7 +49,8 @@ def _post_json_with_headers(
     method: str = "POST",
 ) -> Any:
     try:
-        res = requests.request(method, url, json=payload, headers=headers, timeout=20)
+        res = requests.request(method, url, json=payload,
+                               headers=headers, timeout=20)
         if not res.ok:
             detail = res.text or res.reason or "Request failed"
             raise HTTPException(

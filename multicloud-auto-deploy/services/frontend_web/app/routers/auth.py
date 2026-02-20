@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -7,7 +8,8 @@ from fastapi.templating import Jinja2Templates
 from app.config import Settings, get_settings
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+_TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates")
+templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 
 
 def _base_path(request: Request, settings: Settings) -> str:
@@ -110,7 +112,7 @@ def login(request: Request, settings: Settings = Depends(get_settings)):
             ),
             headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
         )
-    
+
     login_url, logout_url, provider_label = _get_auth_urls(settings)
     return templates.TemplateResponse(
         "login.html",
@@ -151,18 +153,20 @@ def callback(request: Request, settings: Settings = Depends(get_settings)):
 async def login_post(request: Request, response: Response, settings: Settings = Depends(get_settings)):
     """ローカル開発モード用の擬似ログイン"""
     if not getattr(settings, 'auth_disabled', False):
-        raise HTTPException(status_code=403, detail="Not available in production mode")
-    
+        raise HTTPException(
+            status_code=403, detail="Not available in production mode")
+
     form_data = await request.form()
     username = form_data.get("username", "").strip()
-    
+
     if not username:
         raise HTTPException(status_code=400, detail="Username is required")
-    
+
     # 英数字とハイフン、アンダースコアのみ許可
     if not all(c.isalnum() or c in "-_" for c in username):
-        raise HTTPException(status_code=400, detail="Username can only contain alphanumeric characters, hyphens, and underscores")
-    
+        raise HTTPException(
+            status_code=400, detail="Username can only contain alphanumeric characters, hyphens, and underscores")
+
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(
         "local_user",
@@ -205,9 +209,17 @@ async def session(request: Request, response: Response):
 def logout(settings: Settings = Depends(get_settings)):
     base_path = f"/{settings.stage_name}" if settings.stage_name else ""
 
+    # Azure AD セッションも無効化するため logout URL へリダイレクト
+    if settings.auth_provider == "azure" and settings.azure_tenant_id and settings.azure_client_id:
+        post_logout = settings.azure_logout_uri or (f"{base_path}/" if base_path else "/")
+        azure_logout = (
+            f"https://login.microsoftonline.com/{settings.azure_tenant_id}/oauth2/v2.0/logout"
+            f"?post_logout_redirect_uri={post_logout}"
+        )
+        redirect_url = azure_logout
+
     # Cognito セッションも無効化するため Cognito logout URL へリダイレクト
-    # Cognito は logout 後に logout_uri (COGNITO_LOGOUT_URI) へ戻す
-    if (
+    elif (
         settings.cognito_domain
         and settings.cognito_client_id
         and settings.cognito_logout_uri
@@ -218,8 +230,9 @@ def logout(settings: Settings = Depends(get_settings)):
             f"&logout_uri={settings.cognito_logout_uri}"
         )
         redirect_url = cognito_logout
+
+    # GCP / other: simple-sns トップへ
     else:
-        # Cognito 未設定の場合は simple-sns トップへ
         redirect_url = f"{base_path}/" if base_path else "/"
 
     response = RedirectResponse(url=redirect_url)
