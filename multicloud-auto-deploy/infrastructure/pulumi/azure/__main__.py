@@ -57,7 +57,8 @@ oauth2_scope_id = random.RandomUuid("oauth2-scope-id")
 # ========================================
 functions_storage = azure.storage.StorageAccount(
     "functions-storage",
-    account_name=storage_suffix.result.apply(lambda suffix: f"mcadfunc{suffix}"),
+    account_name=storage_suffix.result.apply(
+        lambda suffix: f"mcadfunc{suffix}"),
     resource_group_name=resource_group.name,
     location=location,
     sku=azure.storage.SkuArgs(
@@ -73,7 +74,8 @@ functions_storage = azure.storage.StorageAccount(
 # ========================================
 frontend_storage = azure.storage.StorageAccount(
     "frontend-storage",
-    account_name=storage_suffix.result.apply(lambda suffix: f"mcadweb{suffix}"),
+    account_name=storage_suffix.result.apply(
+        lambda suffix: f"mcadweb{suffix}"),
     resource_group_name=resource_group.name,
     location=location,
     sku=azure.storage.SkuArgs(
@@ -97,7 +99,8 @@ app_insights = azure.insights.Component(
     location=location,
     application_type="web",
     kind="web",
-    ingestion_mode="ApplicationInsights",  # Use ApplicationInsights instead of LogAnalytics
+    # Use ApplicationInsights instead of LogAnalytics
+    ingestion_mode="ApplicationInsights",
     tags=common_tags,
 )
 
@@ -106,7 +109,8 @@ app_insights = azure.insights.Component(
 # ========================================
 cosmos_account = azure.documentdb.DatabaseAccount(
     "cosmos-account",
-    account_name=storage_suffix.result.apply(lambda suffix: f"mcad-cosmos-{suffix}"),
+    account_name=storage_suffix.result.apply(
+        lambda suffix: f"mcad-cosmos-{suffix}"),
     resource_group_name=resource_group.name,
     location=location,
     database_account_offer_type="Standard",
@@ -123,7 +127,8 @@ cosmos_account = azure.documentdb.DatabaseAccount(
     ),
     enable_automatic_failover=False,
     capabilities=[
-        azure.documentdb.CapabilityArgs(name="EnableServerless"),  # Serverless mode for cost efficiency
+        # Serverless mode for cost efficiency
+        azure.documentdb.CapabilityArgs(name="EnableServerless"),
     ],
     tags=common_tags,
 )
@@ -213,7 +218,8 @@ app_secret = azure.keyvault.Secret(
     resource_group_name=resource_group.name,
     vault_name=key_vault.name,
     properties=azure.keyvault.SecretPropertiesArgs(
-        value=pulumi.Output.secret('{"database_url":"changeme","api_key":"changeme"}'),
+        value=pulumi.Output.secret(
+            '{"database_url":"changeme","api_key":"changeme"}'),
     ),
     tags=common_tags,
 )
@@ -226,7 +232,8 @@ app_secret = azure.keyvault.Secret(
 
 # Get Azure AD tenant from azuread config
 azuread_config = pulumi.Config("azuread")
-azure_tenant_id = azuread_config.get("tenantId") or pulumi.Output.from_input("")
+azure_tenant_id = azuread_config.get(
+    "tenantId") or pulumi.Output.from_input("")
 
 # Create Azure AD Application
 app_registration = azuread.Application(
@@ -303,7 +310,8 @@ frontdoor_profile = azure.cdn.Profile(
 # Front Door Endpoint
 frontdoor_endpoint = azure.cdn.AFDEndpoint(
     "frontdoor-endpoint",
-    endpoint_name=storage_suffix.result.apply(lambda suffix: f"mcad-{stack}-{suffix}"),
+    endpoint_name=storage_suffix.result.apply(
+        lambda suffix: f"mcad-{stack}-{suffix}"),
     profile_name=frontdoor_profile.name,
     resource_group_name=resource_group.name,
     location="Global",
@@ -435,6 +443,13 @@ frontdoor_sns_route = azure.cdn.Route(
 # ========================================
 alarm_email = config.get("alarmEmail")
 
+# Flex Consumption instanceMemoryMB (512 / 2048 / 4096).
+# Must match the value configured on the Function App in Azure Portal.
+# Default: 2048MB. Update here (and in Pulumi.[stack].yaml) if changed.
+# Bug history: was hardcoded to 800MB in monitoring.py, firing Sev3 alerts
+# unconditionally on a 2048MB instance (800MB = only 39% of limit).
+function_memory_mb = config.get_int("functionMemoryMb") or 2048
+
 # Note: Function App ID is derived from the manually-managed app
 client_config = azure.authorization.get_client_config()
 function_app_id = pulumi.Output.concat(
@@ -455,6 +470,7 @@ monitoring_resources = monitoring.setup_monitoring(
     cosmos_account_id=cosmos_account.id,
     frontdoor_profile_id=frontdoor_profile.id,
     alarm_email=alarm_email,
+    function_memory_mb=function_memory_mb,
 )
 
 # ========================================
@@ -466,7 +482,8 @@ pulumi.export("frontend_storage_name", frontend_storage.name)
 
 # Azure AD Authentication
 pulumi.export("azure_ad_client_id", app_registration.client_id)
-pulumi.export("azure_ad_object_id", app_registration.id)  # Object ID of the application
+# Object ID of the application
+pulumi.export("azure_ad_object_id", app_registration.id)
 pulumi.export(
     "auth_config_instructions",
     pulumi.Output.concat(
@@ -498,7 +515,8 @@ pulumi.export(
     "frontdoor_url",
     frontdoor_endpoint.host_name.apply(lambda hostname: f"https://{hostname}"),
 )
-pulumi.export("app_insights_instrumentation_key", app_insights.instrumentation_key)
+pulumi.export("app_insights_instrumentation_key",
+              app_insights.instrumentation_key)
 pulumi.export("key_vault_name", key_vault.name)
 pulumi.export("key_vault_uri", key_vault.properties.vault_uri)
 
@@ -530,16 +548,19 @@ pulumi.export(
 
 # Monitoring exports
 if monitoring_resources["action_group"]:
-    pulumi.export("monitoring_action_group_id", monitoring_resources["action_group"].id)
+    pulumi.export("monitoring_action_group_id",
+                  monitoring_resources["action_group"].id)
 pulumi.export(
     "monitoring_function_alerts",
     list(monitoring_resources["function_alerts"].keys()),
 )
 pulumi.export(
-    "monitoring_cosmos_alerts", list(monitoring_resources["cosmos_alerts"].keys())
+    "monitoring_cosmos_alerts", list(
+        monitoring_resources["cosmos_alerts"].keys())
 )
 pulumi.export(
-    "monitoring_frontdoor_alerts", list(monitoring_resources["frontdoor_alerts"].keys())
+    "monitoring_frontdoor_alerts", list(
+        monitoring_resources["frontdoor_alerts"].keys())
 )
 
 # Cost estimation

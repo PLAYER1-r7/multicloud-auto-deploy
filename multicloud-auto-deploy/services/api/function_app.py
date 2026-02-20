@@ -1,6 +1,17 @@
 import azure.functions as func
 import logging
+from urllib.parse import urlparse
+
 from app.main import app as fastapi_app
+
+# -------------------------------------------------------------------
+# Azure Functions Flex Consumption は同一インスタンスで複数リクエストを処理する。
+# インポートをモジュールレベルに移動することで:
+#   - リクエスト毎のモジュール解決コスト排除
+#   - メモリ断片化リスクを抑制
+#   - Application Insights への不要なオーバーヘッド削減
+# (旧: from fastapi import Request / Response / BytesIO は未使用のため削除)
+# -------------------------------------------------------------------
 
 # Azure Functions のエントリーポイント
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
@@ -10,13 +21,10 @@ app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 @app.route(route="{*route}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def main(req: func.HttpRequest) -> func.HttpResponse:
     """Azure Functions HTTP trigger that forwards to FastAPI"""
-    logging.info(f"Python HTTP trigger function processed a request. URL: {req.url}")
-    logging.info(f"Route params: {req.route_params}")
-    logging.info(f"Method: {req.method}")
+    logging.debug(f"HTTP trigger: {req.method} {req.url}")
 
     # CORS Preflight (OPTIONS) リクエストを直接処理
     if req.method == "OPTIONS":
-        logging.info("Handling CORS preflight request")
         return func.HttpResponse(
             body="",
             status_code=204,
@@ -29,8 +37,6 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     # FastAPI ASGIアプリケーションをAzure Functionsで実行
-    from fastapi import Request
-    from starlette.responses import Response
 
     # Azure Functions Request → FastAPI Request 変換
     # route_params には "HttpTrigger/api/messages" のような値が入っている
@@ -39,22 +45,15 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
 
     # "HttpTrigger/" プレフィックスを削除
     if route_path.startswith("HttpTrigger/"):
-        route_path = route_path[len("HttpTrigger/") :]
+        route_path = route_path[len("HttpTrigger/"):]
     elif route_path == "HttpTrigger":
         route_path = ""
 
-    # FastAPIルーターのパス処理:
-    # FastAPIのルーターは /posts, /uploads, /profile などのプレフィックスを使用
-    # Azure Functions の route は api/ プレフィックスなしで渡ってくるのでそのまま使う
-    # 変換不要 - route_path をそのまま FastAPI に渡す
-
     path = "/" + route_path if route_path else "/"
 
-    logging.info(f"Converted path for FastAPI: {path}")
+    logging.debug(f"Converted path for FastAPI: {path}")
 
     # クエリ文字列を正しく抽出
-    from urllib.parse import urlparse, parse_qs
-
     parsed = urlparse(req.url)
     query_string = parsed.query.encode("utf-8") if parsed.query else b""
 
@@ -73,21 +72,17 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
     }
 
     # FastAPI を ASGI で実行
-    from io import BytesIO
-
     async def receive():
         return {"type": "http.request", "body": req.get_body()}
 
-    response_started = False
     status_code = 200
     headers = []
     body_parts = []
 
     async def send(message):
-        nonlocal response_started, status_code, headers, body_parts
+        nonlocal status_code, headers, body_parts
 
         if message["type"] == "http.response.start":
-            response_started = True
             status_code = message["status"]
             headers = message.get("headers", [])
         elif message["type"] == "http.response.body":
@@ -97,7 +92,8 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
     try:
         await fastapi_app(scope, receive, send)
     except Exception as e:
-        logging.error(f"Error in FastAPI application: {type(e).__name__}: {e}", exc_info=True)
+        logging.error(
+            f"Error in FastAPI application: {type(e).__name__}: {e}", exc_info=True)
         return func.HttpResponse(
             body=f'{{"error": "{type(e).__name__}", "message": "{str(e)}"}}',
             status_code=500,

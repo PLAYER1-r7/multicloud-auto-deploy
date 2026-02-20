@@ -57,7 +57,16 @@ def create_function_app_alerts(
     function_app_name: pulumi.Output[str],
     function_app_id: pulumi.Output[str],
     action_group_id: pulumi.Output[str],
+    memory_limit_mb: int = 2048,
 ) -> dict:
+    """
+    Create Azure Monitor Alerts for Function App.
+
+    Args:
+        memory_limit_mb: Flex Consumption instanceMemoryMB setting
+                         (512 / 2048 / 4096 MB). Default is 2048MB.
+                         The memory alert fires at 90% of this value.
+    """
     """Create Azure Monitor Alerts for Function App"""
 
     alerts = {}
@@ -88,7 +97,8 @@ def create_function_app_alerts(
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(
+                action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
@@ -122,7 +132,8 @@ def create_function_app_alerts(
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(
+                action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
@@ -131,11 +142,17 @@ def create_function_app_alerts(
     )
 
     # Alert 3: High memory usage
+    # NOTE: threshold must be in BYTES and must reflect the actual instanceMemoryMB
+    # of the Flex Consumption plan (512 / 2048 / 4096 MB).
+    # Bug history: was hardcoded to 800MB regardless of plan size, causing Sev3
+    # alerts to fire when usage was well within normal range for a 2048MB instance.
+    # Formula: memory_limit_mb * 1024 * 1024 * 0.9
+    memory_threshold_bytes = int(memory_limit_mb * 1024 * 1024 * 0.9)
     alerts["memory"] = azure_native.insights.MetricAlert(
         "function-memory-alert",
         resource_group_name=resource_group_name,
         location="Global",  # Metric alerts for platform metrics must be global
-        description="Function App memory usage is too high",
+        description=f"Function App memory usage is above 90% of {memory_limit_mb}MB instance limit",
         severity=3,
         enabled=True,
         scopes=[function_app_id],
@@ -149,14 +166,15 @@ def create_function_app_alerts(
                     metric_name="MemoryWorkingSet",
                     metric_namespace="Microsoft.Web/sites",
                     operator="GreaterThan",
-                    threshold=800_000_000,  # 800 MB
+                    threshold=memory_threshold_bytes,  # 90% of memory_limit_mb in bytes
                     time_aggregation="Average",
                     criterion_type="StaticThresholdCriterion",
                 )
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(
+                action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
@@ -212,7 +230,8 @@ def create_cosmos_db_alerts(
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(
+                action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
@@ -246,7 +265,8 @@ def create_cosmos_db_alerts(
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(
+                action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
@@ -294,7 +314,8 @@ def create_frontdoor_alerts(
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(
+                action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
@@ -314,6 +335,7 @@ def setup_monitoring(
     cosmos_account_id: Optional[pulumi.Output[str]],
     frontdoor_profile_id: pulumi.Output[str],
     alarm_email: Optional[str] = None,
+    function_memory_mb: int = 2048,
 ) -> dict:
     """
     Setup complete monitoring stack for Azure
@@ -325,7 +347,8 @@ def setup_monitoring(
     # Derive resource names from IDs
     function_app_name = f"{project_name}-{stack}-func"
     cosmos_account_name = (
-        f"{project_name}-{stack}-cosmos"  # Not used if cosmos_account_id is None
+        # Not used if cosmos_account_id is None
+        f"{project_name}-{stack}-cosmos"
     )
 
     # Create Action Group for notifications
@@ -345,6 +368,7 @@ def setup_monitoring(
         function_app_name,
         function_app_id,
         action_group.id,
+        memory_limit_mb=function_memory_mb,
     )
 
     # Create Cosmos DB alerts (if Cosmos is used)

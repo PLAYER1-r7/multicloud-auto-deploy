@@ -49,6 +49,7 @@ def create_cloud_function_alerts(
     region: str,
     project_id: str,
     notification_channels: List[pulumi.Output[str]],
+    function_memory_mb: int = 512,
 ) -> dict:
     """Create Cloud Monitoring Alerts for Cloud Functions"""
 
@@ -127,24 +128,33 @@ def create_cloud_function_alerts(
     )
 
     # Alert 3: Low memory available
+    # NOTE: user_memory_bytes is a DISTRIBUTION metric measured in BYTES.
+    # threshold_value must be set in bytes (NOT as a ratio like 0.9).
+    # Formula: function_memory_mb * 1024 * 1024 * 0.9
+    # e.g. 512MB × 0.9 = 483,183,820 bytes (~460MB)
+    # Bug history: was incorrectly set to 0.9 (bytes), causing alerts to fire
+    # unconditionally since any real usage (e.g. 171MB) always exceeds 0.9 bytes.
+    memory_threshold_bytes = int(function_memory_mb * 1024 * 1024 * 0.9)
     alerts["memory_usage"] = gcp.monitoring.AlertPolicy(
         "function-memory-alert",
         display_name=f"{project_name}-{stack}-function-memory",
         combiner="OR",
         conditions=[
             gcp.monitoring.AlertPolicyConditionArgs(
-                display_name="Memory usage > 90%",
+                display_name=f"Memory usage > 90% ({function_memory_mb}MB allocated)",
                 condition_threshold=gcp.monitoring.AlertPolicyConditionConditionThresholdArgs(
                     filter=pulumi.Output.all(function_name).apply(
                         lambda args: f'resource.type="cloud_function" AND resource.labels.function_name="{args[0]}" AND metric.type="cloudfunctions.googleapis.com/function/user_memory_bytes"'
                     ),
                     duration="300s",
                     comparison="COMPARISON_GT",
-                    threshold_value=0.9,  # 90% of allocated memory
+                    threshold_value=memory_threshold_bytes,  # 90% of function_memory_mb in bytes
                     aggregations=[
                         gcp.monitoring.AlertPolicyConditionConditionThresholdAggregationArgs(
                             alignment_period="300s",
-                            per_series_aligner="ALIGN_DELTA",  # For DISTRIBUTION metrics
+                            # ALIGN_PERCENTILE_99: appropriate for DISTRIBUTION metrics
+                            # (user_memory_bytes is a DISTRIBUTION, not GAUGE/DELTA)
+                            per_series_aligner="ALIGN_PERCENTILE_99",
                             cross_series_reducer="REDUCE_MEAN",
                         )
                     ],
@@ -275,6 +285,7 @@ def setup_monitoring(
     project_id: str,
     alarm_email: Optional[str] = None,
     monthly_budget_usd: int = 50,
+    function_memory_mb: int = 512,
 ) -> dict:
     """
     Setup complete monitoring stack for GCP
@@ -290,7 +301,8 @@ def setup_monitoring(
         alarm_email,
     )
 
-    notification_channels = [notification_channel.id] if notification_channel else []
+    notification_channels = [
+        notification_channel.id] if notification_channel else []
 
     # Create Cloud Function alerts
     function_alerts = create_cloud_function_alerts(
@@ -300,6 +312,7 @@ def setup_monitoring(
         region,
         project_id,
         notification_channels,
+        function_memory_mb=function_memory_mb,
     )
 
     # Create Firestore alerts (disabled - not using Firestore yet)

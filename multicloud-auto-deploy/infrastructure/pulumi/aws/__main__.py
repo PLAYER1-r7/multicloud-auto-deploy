@@ -10,6 +10,9 @@ Architecture:
 Cost: ~$2-5/month for low traffic
 """
 
+import base64
+import pathlib
+import os
 import json
 import pulumi
 import pulumi_aws as aws
@@ -24,7 +27,8 @@ project_name = "multicloud-auto-deploy"
 
 # CORS allowed origins (configurable per environment)
 allowed_origins = config.get("allowedOrigins") or "*"
-allowed_origins_list = allowed_origins.split(",") if allowed_origins != "*" else ["*"]
+allowed_origins_list = allowed_origins.split(
+    ",") if allowed_origins != "*" else ["*"]
 
 # Common tags
 common_tags = {
@@ -307,8 +311,6 @@ lambda_policy = aws.iam.RolePolicy(
 # Build with: ./scripts/build-lambda-layer.sh
 # The layer ZIP is automatically managed by Pulumi
 
-import os
-import pathlib
 
 # Path to Lambda Layer ZIP
 # Strategy: Use GITHUB_WORKSPACE env var in CI, fallback to relative path for local development
@@ -316,12 +318,14 @@ workspace_root = os.environ.get("GITHUB_WORKSPACE")
 if workspace_root:
     # GitHub Actions: GITHUB_WORKSPACE points to repository root (/home/runner/work/multicloud-auto-deploy/multicloud-auto-deploy)
     # Build step creates ZIP at services/api/lambda-layer.zip (relative to repository root)
-    layer_zip_path = pathlib.Path(workspace_root) / "services" / "api" / "lambda-layer.zip"
+    layer_zip_path = pathlib.Path(
+        workspace_root) / "services" / "api" / "lambda-layer.zip"
 else:
     # Local development: Calculate relative path from this file
     # __file__ -> infrastructure/pulumi/aws/__main__.py
     # Go up 3 levels to reach project root, then down to services/api
-    layer_zip_path = pathlib.Path(__file__).parent.parent.parent / "services" / "api" / "lambda-layer.zip"
+    layer_zip_path = pathlib.Path(
+        __file__).parent.parent.parent / "services" / "api" / "lambda-layer.zip"
 
 # Check if layer ZIP exists
 if not layer_zip_path.exists():
@@ -333,7 +337,8 @@ if not layer_zip_path.exists():
     # Create a minimal placeholder if ZIP doesn't exist
     layer_zip_path = None
 else:
-    pulumi.log.info(f"Lambda Layer ZIP found: {layer_zip_path} ({os.path.getsize(layer_zip_path) / 1024 / 1024:.2f} MB)")
+    pulumi.log.info(
+        f"Lambda Layer ZIP found: {layer_zip_path} ({os.path.getsize(layer_zip_path) / 1024 / 1024:.2f} MB)")
 
 # Create Lambda Layer (only if ZIP exists)
 lambda_layer = None
@@ -360,7 +365,6 @@ if layer_zip_path:
 
 # Create a minimal placeholder Lambda function
 # The actual code will be deployed via CI/CD or deploy script
-import base64
 
 placeholder_code = """
 import json
@@ -379,14 +383,16 @@ lambda_function = aws.lambda_.Function(
     role=lambda_role.arn,
     memory_size=256 if stack == "staging" else 512,  # Cost optimization for staging
     timeout=30,
-    architectures=["x86_64"],  # Use x86_64 for compatibility with custom layers
+    # Use x86_64 for compatibility with custom layers
+    architectures=["x86_64"],
     # Lambda Layer is automatically managed by Pulumi
     # If lambda-layer.zip exists, it will be deployed as a Layer Version
     # and automatically attached to this function
     layers=[lambda_layer.arn] if lambda_layer else [],
     # Use inline code or skip code updates
     # Code will be uploaded separately via deploy-lambda-aws.sh
-    code=pulumi.AssetArchive({"index.py": pulumi.StringAsset(placeholder_code)}),
+    code=pulumi.AssetArchive(
+        {"index.py": pulumi.StringAsset(placeholder_code)}),
     # Skip code updates if function already exists
     opts=pulumi.ResourceOptions(ignore_changes=["code", "source_code_hash"]),
     environment={
@@ -432,8 +438,10 @@ frontend_web_lambda = aws.lambda_.Function(
     memory_size=256,
     timeout=30,
     architectures=["x86_64"],
-    code=pulumi.AssetArchive({"index.py": pulumi.StringAsset(placeholder_code)}),
-    opts=pulumi.ResourceOptions(ignore_changes=["code", "source_code_hash", "layers"]),
+    code=pulumi.AssetArchive(
+        {"index.py": pulumi.StringAsset(placeholder_code)}),
+    opts=pulumi.ResourceOptions(
+        ignore_changes=["code", "source_code_hash", "layers"]),
     environment={
         "variables": {
             "ENVIRONMENT": stack,
@@ -797,7 +805,8 @@ cloudfront_kwargs["ordered_cache_behaviors"] = [
         path_pattern="/sns*",
         target_origin_id="frontend-web",
         viewer_protocol_policy="redirect-to-https",
-        allowed_methods=["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"],
+        allowed_methods=["DELETE", "GET", "HEAD",
+                         "OPTIONS", "PATCH", "POST", "PUT"],
         cached_methods=["GET", "HEAD"],
         compress=True,
         # Managed CachingDisabled policy (no caching — dynamic SSR app)
@@ -837,13 +846,15 @@ pulumi.export("api_url", api_gateway.api_endpoint)  # For workflow
 pulumi.export("frontend_bucket_name", frontend_bucket.id)
 pulumi.export(
     "frontend_url",
-    frontend_bucket.website_endpoint.apply(lambda endpoint: f"http://{endpoint}"),
+    frontend_bucket.website_endpoint.apply(
+        lambda endpoint: f"http://{endpoint}"),
 )
 pulumi.export("cloudfront_distribution_id", cloudfront_distribution.id)
 pulumi.export("cloudfront_domain", cloudfront_distribution.domain_name)
 pulumi.export(
     "cloudfront_url",
-    cloudfront_distribution.domain_name.apply(lambda domain: f"https://{domain}"),
+    cloudfront_distribution.domain_name.apply(
+        lambda domain: f"https://{domain}"),
 )
 # Custom domain exports (if configured)
 if custom_domain:
@@ -867,12 +878,15 @@ pulumi.export("images_bucket_arn", images_bucket.arn)
 
 # Monitoring exports
 if monitoring_resources["sns_topic"]:
-    pulumi.export("monitoring_sns_topic_arn", monitoring_resources["sns_topic"].arn)
+    pulumi.export("monitoring_sns_topic_arn",
+                  monitoring_resources["sns_topic"].arn)
 pulumi.export(
-    "monitoring_lambda_alarms", list(monitoring_resources["lambda_alarms"].keys())
+    "monitoring_lambda_alarms", list(
+        monitoring_resources["lambda_alarms"].keys())
 )
 pulumi.export(
-    "monitoring_api_alarms", list(monitoring_resources["api_gateway_alarms"].keys())
+    "monitoring_api_alarms", list(
+        monitoring_resources["api_gateway_alarms"].keys())
 )
 pulumi.export(
     "monitoring_cloudfront_alarms",

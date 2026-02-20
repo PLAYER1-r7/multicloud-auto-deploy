@@ -325,7 +325,8 @@ frontend_web_backend = gcp.compute.BackendService(
             group=frontend_web_neg.id,
         )
     ],
-    opts=pulumi.ResourceOptions(depends_on=enabled_services + [frontend_web_neg]),
+    opts=pulumi.ResourceOptions(
+        depends_on=enabled_services + [frontend_web_neg]),
 )
 
 # Managed SSL Certificate (for custom domain - optional)
@@ -364,7 +365,8 @@ url_map = gcp.compute.URLMap(
             ],
         )
     ],
-    opts=pulumi.ResourceOptions(depends_on=enabled_services + [frontend_web_backend]),
+    opts=pulumi.ResourceOptions(
+        depends_on=enabled_services + [frontend_web_backend]),
 )
 
 # Target HTTPS Proxy with SSL (managed certificate)
