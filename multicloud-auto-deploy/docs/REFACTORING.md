@@ -253,6 +253,259 @@ pytest tests/test_simple_sns_local.py -v
 
 ---
 
+---
+
+## Phase 2 — Tooling Setup (2026-02-20)
+
+This phase added static analysis and automated test tooling for both the Python
+API and the React frontend. All changes are on the same branch
+(`feature/simple-sns-migration`), committed as `a06527f`.
+
+---
+
+### Overview
+
+| Area | Tool added | Purpose |
+|------|-----------|---------|
+| Python linting | **ruff 0.9.1** | Replaces flake8 + isort + pyupgrade + flake8-bugbear in one pass |
+| Python coverage | **pytest-cov 7.0.0** | HTML + terminal coverage reports for `app/` |
+| Frontend tests | **Vitest 3.2.4** | Unit / component test runner (replaces Jest) |
+| Frontend DOM | **jsdom 26.1.0** | Simulated browser environment for Vitest |
+| Frontend interactions | **@testing-library/react 16.3.0** + **user-event 14.6.1** | Component render + interaction helpers |
+| Frontend coverage | **@vitest/coverage-v8 3.2.4** | V8-based coverage provider |
+
+---
+
+### Python — ruff
+
+#### Configuration (`services/api/ruff.toml`)
+
+```toml
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "ARG"]
+ignore = [
+    "E501",    # line too long — handled by formatter
+    "B008",    # FastAPI Depends() in default args is intentional
+    "N802",    # function names may be camelCase (nextToken API)
+    "N803",    # argument names may be camelCase (nextToken API contract)
+    "SIM108",  # ternary operator not always clearer
+    "ARG001",  # unused function arguments (overrides / callbacks)
+    "ARG002",  # unused method arguments (overrides / callbacks)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "ARG", "N803"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+```
+
+#### How to run
+
+```bash
+cd services/api
+
+# Check only (no changes written)
+ruff check app/ tests/
+
+# Auto-fix safe violations
+ruff check --fix app/ tests/
+
+# Auto-fix including unsafe rewrites (e.g. UP035 typing imports)
+ruff check --fix --unsafe-fixes app/ tests/
+
+# Format code (Black-compatible)
+ruff format app/ tests/
+```
+
+#### Resolution results
+
+| Stage | Violations |
+|-------|-----------|
+| Initial scan | **342** |
+| After `--fix --unsafe-fixes` | **18** |
+| After manual fixes | **0** |
+
+The 18 remaining violations after auto-fix and how they were resolved:
+
+| Rule | Count | Resolution |
+|------|-------|-----------|
+| `N803` | many | Added to global `ignore` list — `nextToken` is part of the upstream API contract |
+| `B904` | 10 | Added `from None` / `from exc` to all `raise` statements inside `except` blocks (`azure_backend.py`, `gcp_backend.py`, `local_backend.py`, `main.py`) |
+| `B019` | 1 | Added `# noqa: B019` on the `@lru_cache` method in `jwt_verifier.py` (intentional cache on instance method) |
+| `SIM117` | 2 | Flattened nested `with patch(…)` blocks into parenthesised multi-context form in `test_backends_integration.py` |
+| `F401` | 1 | Changed `from app.backends.base import BackendBase` to `BackendBase as BackendBase` (explicit public re-export) in `backends/__init__.py` |
+
+---
+
+### Python — pytest-cov
+
+#### Configuration changes (`services/api/pytest.ini`)
+
+```ini
+[pytest]
+addopts =
+    --cov=app
+    --cov-report=term-missing
+    --cov-report=html:htmlcov
+    --cov-fail-under=0
+asyncio_mode = auto
+```
+
+`--cov-fail-under=0` keeps the gate open while coverage is being built up;
+raise this threshold as coverage improves.
+
+#### How to run
+
+```bash
+cd services/api
+
+# Run all tests with coverage
+pytest tests/test_simple_sns_local.py
+
+# Open HTML report after run
+open htmlcov/index.html   # macOS
+xdg-open htmlcov/index.html  # Linux
+```
+
+The `htmlcov/` directory and `.coverage` binary are excluded via
+`services/api/.gitignore`.
+
+---
+
+### Frontend — Vitest + React Testing Library
+
+#### Configuration changes (`services/frontend_react/vite.config.ts`)
+
+```ts
+test: {
+  globals: true,
+  environment: 'jsdom',
+  setupFiles: ['./src/test/setup.ts'],
+  include: ['src/**/*.{test,spec}.{ts,tsx}'],
+  coverage: {
+    provider: 'v8',
+    reporter: ['text', 'html', 'lcov'],
+  },
+},
+```
+
+A `/storage` proxy was also added to `server.proxy` so that presigned MinIO
+URLs resolve correctly during local development:
+
+```ts
+'/storage': {
+  target: 'http://localhost:9000',
+  changeOrigin: true,
+},
+```
+
+#### npm scripts (`services/frontend_react/package.json`)
+
+| Script | Command | Use |
+|--------|---------|-----|
+| `npm test` | `vitest run` | Single-pass CI run |
+| `npm run test:watch` | `vitest` | Interactive watch mode |
+| `npm run test:ui` | `vitest --ui` | Browser-based test explorer |
+| `npm run test:coverage` | `vitest run --coverage` | Coverage report |
+
+#### Test helper files
+
+| File | Purpose |
+|------|---------|
+| `src/test/setup.ts` | Imports `@testing-library/jest-dom/vitest` matchers globally |
+| `src/test/utils.tsx` | `renderWithProviders()` — wraps UI in a fresh `QueryClientProvider` per test |
+
+`renderWithProviders` creates an isolated `QueryClient` with `retry: false` and
+`gcTime: 0` so Tanstack Query state does not leak between tests.
+
+#### Component test files
+
+**`src/components/MessageForm.test.tsx`** — 6 tests
+
+| Test | Assertion |
+|------|-----------|
+| renders form elements | textarea, tag input, and submit button are present |
+| submit disabled when empty | button has `disabled` attribute on mount |
+| submit enabled after typing | button becomes active after content is entered |
+| calls mutateAsync with correct payload | `content` and `tags` are forwarded to the mutation |
+| clears fields after successful submit | both inputs reset to empty |
+| ignores blank-only input | submit via `fireEvent` does not call mutation |
+
+**`src/components/MessageItem.test.tsx`** — 13 tests across 3 `describe` blocks
+
+| Block | Tests | What is covered |
+|-------|-------|----------------|
+| display | 8 | content, nickname, userId fallback, tag badges, no-tag case, image thumbnails, "編集済" label, no label when `createdAt === updatedAt` |
+| editing | 3 | enter edit mode, cancel restores original value, save calls `mutateAsync` |
+| deletion | 2 | confirm dialog → delete, cancel → no-op |
+
+**Notable fix during test authoring:** In the edit-mode cancel test,
+`getByRole('textbox', { name: '' })` was ambiguous because two textboxes are
+rendered simultaneously (content and tag). Changed to
+`getByDisplayValue('Hello, world!')` to select the content field uniquely.
+
+---
+
+### Tooling Test Results (final state)
+
+#### Python
+
+```
+19 passed in 1.65s
+```
+
+| Test class | Tests | Status |
+|-----------|-------|--------|
+| `TestHealthAndAuth` | 3 | ✅ pass |
+| `TestPostCRUD` | 4 | ✅ pass |
+| `TestImageUpload` | 8 | ✅ pass |
+| `TestHashtags` | 4 | ✅ pass |
+
+#### TypeScript
+
+```
+19 passed in 1.88s (2 test files)
+```
+
+| Test file | Tests | Status |
+|-----------|-------|--------|
+| `MessageForm.test.tsx` | 6 | ✅ pass |
+| `MessageItem.test.tsx` | 13 | ✅ pass |
+
+---
+
+### New and Modified Files (Phase 2)
+
+| File | Status | Change |
+|------|--------|--------|
+| `services/api/ruff.toml` | **New** | Ruff linter / formatter configuration |
+| `services/api/.gitignore` | **New** | Excludes `.coverage`, `htmlcov/`, `.pytest_cache/` |
+| `services/api/requirements.txt` | Modified | Added `pytest-cov==7.0.0`, `ruff==0.9.1` |
+| `services/api/pytest.ini` | Modified | Added coverage flags to `addopts` |
+| `services/api/app/backends/__init__.py` | Modified | Explicit `BackendBase as BackendBase` re-export |
+| `services/api/app/backends/azure_backend.py` | Modified | 5× B904 `raise … from None` |
+| `services/api/app/backends/gcp_backend.py` | Modified | 3× B904 `raise … from None` |
+| `services/api/app/backends/local_backend.py` | Modified | B904 `raise … from exc` |
+| `services/api/app/jwt_verifier.py` | Modified | `# noqa: B019` on `@lru_cache` method |
+| `services/api/app/main.py` | Modified | B904 `raise … from e` |
+| `services/api/tests/test_backends_integration.py` | Modified | SIM117 context-manager flattening, import cleanup |
+| `services/api/tests/test_simple_sns_local.py` | Modified | Removed unused `import io` |
+| `services/frontend_react/vite.config.ts` | Modified | Vitest config + `/storage` proxy |
+| `services/frontend_react/package.json` | Modified | Test scripts + devDependencies |
+| `services/frontend_react/tsconfig.app.json` | Modified | Added `"types": ["vitest/globals"]` |
+| `services/frontend_react/src/test/setup.ts` | **New** | Vitest global setup (jest-dom matchers) |
+| `services/frontend_react/src/test/utils.tsx` | **New** | `renderWithProviders` helper |
+| `services/frontend_react/src/components/MessageForm.test.tsx` | **New** | 6 component tests |
+| `services/frontend_react/src/components/MessageItem.test.tsx` | **New** | 13 component tests |
+
+---
+
 ## File Inventory After Refactoring
 
 ### `services/api/app/backends/`
