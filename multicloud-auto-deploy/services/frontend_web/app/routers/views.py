@@ -35,7 +35,7 @@ def _fetch_json_with_headers(
     url: str, params: dict[str, Any] | None, headers: dict[str, str]
 ) -> Any:
     try:
-        res = requests.get(url, params=params, headers=headers, timeout=5)
+        res = requests.get(url, params=params, headers=headers, timeout=20)
         res.raise_for_status()
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -47,7 +47,7 @@ def _post_json_with_headers(
     method: str = "POST",
 ) -> Any:
     try:
-        res = requests.request(method, url, json=payload, headers=headers, timeout=5)
+        res = requests.request(method, url, json=payload, headers=headers, timeout=20)
         if not res.ok:
             detail = res.text or res.reason or "Request failed"
             raise HTTPException(
@@ -182,7 +182,7 @@ async def post_create(request: Request, settings: Settings = Depends(get_setting
                             url,
                             data=content_bytes,
                             headers={"Content-Type": content_type},
-                            timeout=10,
+                            timeout=30,
                         )
                         put_res.raise_for_status()
                     finally:
