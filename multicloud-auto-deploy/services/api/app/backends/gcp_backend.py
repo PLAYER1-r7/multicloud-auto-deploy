@@ -93,6 +93,46 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _get_gcp_signing_credentials():
+    """Get credentials that support URL signing on Cloud Run / Compute Engine.
+
+    Cloud Run uses Compute Engine credentials which don't contain a private key.
+    We work around this by using the IAM signBlob API through google.auth.iam.Signer.
+    This requires the service account to have roles/iam.serviceAccountTokenCreator on itself.
+    """
+    try:
+        import urllib.request
+
+        import google.auth
+        import google.auth.transport.requests
+        from google.auth import iam as google_iam
+        from google.oauth2 import service_account as sa_module
+
+        credentials, _ = google.auth.default()
+        auth_request = google.auth.transport.requests.Request()
+        credentials.refresh(auth_request)
+
+        # Retrieve the default service account email from the GCP metadata server
+        req = urllib.request.Request(
+            "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email",
+            headers={"Metadata-Flavor": "Google"},
+        )
+        sa_email = urllib.request.urlopen(req, timeout=2).read().decode("utf-8")
+        logger.info(f"Using IAM signing credentials for SA: {sa_email}")
+
+        # Create an IAM-based signer that calls the signBlob REST API
+        signer = google_iam.Signer(auth_request, credentials, sa_email)
+
+        return sa_module.Credentials(
+            signer=signer,
+            service_account_email=sa_email,
+            token_uri="https://oauth2.googleapis.com/token",
+        )
+    except Exception as e:
+        logger.warning(f"Could not create IAM signing credentials: {e}")
+        return None
+
+
 def _build_image_urls(keys: list[str]) -> Optional[list[str]]:
     """Build public URLs for Cloud Storage objects"""
     if not keys:
@@ -423,28 +463,31 @@ class GcpBackend(BackendBase):
             blob = bucket.blob(key)
 
             # Generate signed URL
-            # For Cloud Run with default credentials, we may need impersonated credentials
+            # - With gcp_service_account set: impersonate that SA (explicit)
+            # - Otherwise: use IAM signing via the default Compute Engine SA
             generate_url_kwargs = {}
             if settings.gcp_service_account:
                 try:
                     import google.auth
                     from google.auth import impersonated_credentials
 
-                    # Get default credentials
                     source_credentials, _ = google.auth.default()
-
-                    # Create impersonated credentials
                     signing_credentials = impersonated_credentials.Credentials(
                         source_credentials=source_credentials,
                         target_principal=settings.gcp_service_account,
                         target_scopes=[
                             "https://www.googleapis.com/auth/cloud-platform"],
-                        lifetime=3600
+                        lifetime=3600,
                     )
                     generate_url_kwargs["credentials"] = signing_credentials
                 except Exception as e:
                     logger.warning(
                         f"Failed to create impersonated credentials: {e}")
+            else:
+                # Cloud Run / Compute Engine: use IAM signBlob-based credentials
+                signing_creds = _get_gcp_signing_credentials()
+                if signing_creds:
+                    generate_url_kwargs["credentials"] = signing_creds
 
             try:
                 url = blob.generate_signed_url(
