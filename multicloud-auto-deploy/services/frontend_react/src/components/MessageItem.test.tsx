@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../test/utils';
 import PostItem from './MessageItem';

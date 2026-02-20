@@ -71,7 +71,6 @@ describe('PostForm', () => {
   });
 
   it('does not call mutateAsync when content is blank', async () => {
-    const user = userEvent.setup();
     render(<PostForm />);
     // The button is disabled, but also test direct form submit
     const form = screen.getByRole('button', { name: /投稿する/ }).closest('form')!;
