@@ -14,5 +14,5 @@ def generate_upload_urls(
 ) -> UploadUrlsResponse:
     """画像アップロード用の署名付きURLを生成"""
     backend = get_backend()
-    urls = backend.generate_upload_urls(body.count, user)
+    urls = backend.generate_upload_urls(body.count, user, body.content_types)
     return UploadUrlsResponse(urls=urls)

@@ -127,7 +127,9 @@ class BackendBase(ABC):
         pass
 
     @abstractmethod
-    def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
+    def generate_upload_urls(
+        self, count: int, user: UserInfo, content_types: Optional[list[str]] = None
+    ) -> list[dict[str, str]]:
         """
         画像アップロード用の署名付きURLを生成
 

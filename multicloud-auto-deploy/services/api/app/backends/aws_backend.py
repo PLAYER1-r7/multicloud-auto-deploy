@@ -366,15 +366,30 @@ class AwsBackend(BackendBase):
             updated_at=now,
         )
 
-    def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
+    def generate_upload_urls(
+        self, count: int, user: UserInfo, content_types: Optional[list[str]] = None
+    ) -> list[dict[str, str]]:
         """画像アップロード用の署名付きURLを生成"""
         if not self.bucket_name:
             raise ValueError("IMAGES_BUCKET_NAME not configured")
 
+        # MIME -> 拡張子マッピング
+        ext_map = {
+            "image/jpeg": "jpg",
+            "image/jpg": "jpg",
+            "image/png": "png",
+            "image/gif": "gif",
+            "image/webp": "webp",
+            "image/heic": "heic",
+            "image/heif": "heif",
+        }
+
         urls = []
-        for _ in range(count):
+        for i in range(count):
+            ct = (content_types[i] if content_types and i < len(content_types) else None) or "image/jpeg"
+            ext = ext_map.get(ct, "jpg")
             image_id = str(uuid.uuid4())
-            key = f"{user.user_id}/{image_id}.jpg"
+            key = f"{user.user_id}/{image_id}.{ext}"
 
             # 署名付きURLを生成 (PUT用)
             presigned_url = self.s3_client.generate_presigned_url(
@@ -382,17 +397,12 @@ class AwsBackend(BackendBase):
                 Params={
                     "Bucket": self.bucket_name,
                     "Key": key,
-                    "ContentType": "image/jpeg",
+                    "ContentType": ct,
                 },
                 ExpiresIn=3600,  # 1時間
             )
 
-            urls.append(
-                {
-                    "url": presigned_url,
-                    "key": key,
-                }
-            )
+            urls.append({"url": presigned_url, "key": key})
 
         return urls
 

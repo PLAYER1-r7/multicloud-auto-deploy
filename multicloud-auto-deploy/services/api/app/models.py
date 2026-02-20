@@ -126,6 +126,11 @@ class UploadUrlsRequest(BaseModel):
     """アップロードURL生成リクエスト"""
 
     count: int = Field(..., ge=1, le=10)
+    content_types: Optional[list[str]] = Field(
+        None,
+        alias="contentTypes",
+        description="各ファイルのContent-Type (image/jpeg, image/png 等)",
+    )
 
 
 class UploadUrlsResponse(BaseModel):
