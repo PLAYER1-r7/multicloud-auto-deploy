@@ -12,7 +12,10 @@ from app.routers import auth, views
 _stage = Settings().stage_name
 prefix = f"/{_stage}" if _stage else ""
 
-app = FastAPI(title="Simple SNS Web", root_path=prefix)
+# NOTE: root_path は設定しない。GCP/AWS/Azure のロードバランサーは
+# /sns/* を Cloud Run/Lambda に転送する際にパスをストリップしないため、
+# root_path を設定するとStarlette 0.50+ がパスを二重にストリップして404になる。
+app = FastAPI(title="Simple SNS Web")
 
 
 class COOPMiddleware(BaseHTTPMiddleware):
