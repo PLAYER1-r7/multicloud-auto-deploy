@@ -537,6 +537,44 @@ aws.lambda_.Permission(
 )
 
 # ========================================
+# API Gateway Integration for frontend_web Lambda (Simple SNS)
+# CloudFront /sns* → API Gateway → frontend_web Lambda
+# (Lambda Function URLを直接CloudFrontオリジンにすると認証問題が発生するため)
+# ========================================
+frontend_web_integration = aws.apigatewayv2.Integration(
+    "frontend-web-integration",
+    api_id=api_gateway.id,
+    integration_type="AWS_PROXY",
+    integration_uri=frontend_web_lambda.invoke_arn,
+    payload_format_version="2.0",
+)
+
+# Route: ANY /sns  (ルートパス)
+aws.apigatewayv2.Route(
+    "sns-root-route",
+    api_id=api_gateway.id,
+    route_key="ANY /sns",
+    target=frontend_web_integration.id.apply(lambda id: f"integrations/{id}"),
+)
+
+# Route: ANY /sns/{proxy+}  (配下すべて)
+aws.apigatewayv2.Route(
+    "sns-proxy-route",
+    api_id=api_gateway.id,
+    route_key="ANY /sns/{proxy+}",
+    target=frontend_web_integration.id.apply(lambda id: f"integrations/{id}"),
+)
+
+# Permission for API Gateway to invoke frontend_web Lambda
+aws.lambda_.Permission(
+    "frontend-web-apigw-invoke",
+    action="lambda:InvokeFunction",
+    function=frontend_web_lambda.name,
+    principal="apigateway.amazonaws.com",
+    source_arn=api_gateway.execution_arn.apply(lambda arn: f"{arn}/*"),
+)
+
+# ========================================
 # S3 Bucket for Frontend
 # ========================================
 frontend_bucket = aws.s3.Bucket(
@@ -735,14 +773,14 @@ cloudfront_kwargs = {
                 origin_access_identity=cloudfront_oai.cloudfront_access_identity_path,
             ),
         ),
-        # frontend_web (Simple SNS) Lambda Function URL origin
-        # OACでSigV4署名 → cloudfront.amazonaws.com principal認証
+        # frontend_web (Simple SNS) → API Gateway HTTP API origin
+        # CloudFront /sns* → API Gateway → frontend_web Lambda
+        # (Lambda Function URL直接接続は認証問題のためAPI Gateway経由に変更)
         aws.cloudfront.DistributionOriginArgs(
             origin_id="frontend-web",
-            domain_name=frontend_web_lambda_url.function_url.apply(
+            domain_name=api_gateway.api_endpoint.apply(
                 lambda url: url.replace("https://", "").rstrip("/")
             ),
-            origin_access_control_id=frontend_web_oac.id,
             custom_origin_config=aws.cloudfront.DistributionOriginCustomOriginConfigArgs(
                 http_port=80,
                 https_port=443,
