@@ -465,7 +465,20 @@ frontend_web_lambda_url = aws.lambda_.FunctionUrl(
     },
 )
 
+# OAC (Origin Access Control) for Lambda Function URL
+# OACを使うとCloudFrontがSigV4署名付きリクエストを送信し、
+# cloudfront.amazonaws.com principalで認証される（匿名リクエスト不要）
+frontend_web_oac = aws.cloudfront.OriginAccessControl(
+    "frontend-web-oac",
+    name=f"{project_name}-{stack}-frontend-web-oac",
+    description="OAC for frontend_web Lambda Function URL",
+    origin_access_control_origin_type="lambda",
+    signing_behavior="always",
+    signing_protocol="sigv4",
+)
+
 # Permission for CloudFront to invoke frontend_web Lambda Function URL
+# OAC使用時: CloudFrontがSigV4署名でリクエストを送信 → この許可でマッチ
 aws.lambda_.Permission(
     "frontend-web-cloudfront-invoke",
     action="lambda:InvokeFunctionUrl",
@@ -723,11 +736,13 @@ cloudfront_kwargs = {
             ),
         ),
         # frontend_web (Simple SNS) Lambda Function URL origin
+        # OACでSigV4署名 → cloudfront.amazonaws.com principal認証
         aws.cloudfront.DistributionOriginArgs(
             origin_id="frontend-web",
             domain_name=frontend_web_lambda_url.function_url.apply(
                 lambda url: url.replace("https://", "").rstrip("/")
             ),
+            origin_access_control_id=frontend_web_oac.id,
             custom_origin_config=aws.cloudfront.DistributionOriginCustomOriginConfigArgs(
                 http_port=80,
                 https_port=443,
