@@ -143,6 +143,46 @@ function_source_bucket = gcp.storage.Bucket(
 )
 
 # ========================================
+# Cloud Storage Bucket for Uploads (Image Uploads via Presigned URLs)
+# ========================================
+uploads_bucket = gcp.storage.Bucket(
+    "uploads-bucket",
+    name=f"{project}-{project_name}-{stack}-uploads",
+    location=region.upper(),
+    storage_class="STANDARD",
+    uniform_bucket_level_access=True,
+    cors=[
+        gcp.storage.BucketCorArgs(
+            origins=allowed_origins_list,
+            methods=["GET", "HEAD", "PUT", "OPTIONS"],
+            response_headers=["Content-Type", "Authorization", "X-Requested-With"],
+            max_age_seconds=3600,
+        )
+    ],
+    labels=common_labels,
+    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+)
+
+# Get default Compute Engine service account (used by Cloud Functions Gen 2 / Cloud Run)
+default_compute_sa = gcp.compute.get_default_service_account()
+
+# Grant Compute SA objectAdmin on uploads bucket
+gcp.storage.BucketIAMBinding(
+    "uploads-bucket-object-admin",
+    bucket=uploads_bucket.name,
+    role="roles/storage.objectAdmin",
+    members=[f"serviceAccount:{default_compute_sa.email}"],
+)
+
+# Grant Compute SA serviceAccountTokenCreator on itself (for signed URL generation)
+gcp.serviceaccount.IAMBinding(
+    "compute-sa-token-creator",
+    service_account_id=default_compute_sa.name,
+    role="roles/iam.serviceAccountTokenCreator",
+    members=[f"serviceAccount:{default_compute_sa.email}"],
+)
+
+# ========================================
 # Cloud Storage Bucket for Frontend
 # ========================================
 frontend_bucket = gcp.storage.Bucket(
@@ -390,6 +430,8 @@ pulumi.export(
     ),
 )
 pulumi.export("function_source_bucket", function_source_bucket.name)
+pulumi.export("uploads_bucket", uploads_bucket.name)
+pulumi.export("compute_sa_email", default_compute_sa.email)
 pulumi.export("frontend_bucket", frontend_bucket.name)
 pulumi.export("secret_name", app_secret.secret_id)
 pulumi.export(
