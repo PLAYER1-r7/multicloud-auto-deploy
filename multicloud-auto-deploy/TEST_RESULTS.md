@@ -1,12 +1,68 @@
 # 統合テスト結果
 
+---
+
+## 2026-02-20 — AWS Simple-SNS Full E2E (authenticated)
+
+> Test method: manual browser verification + API direct calls  
+> Fix report: [docs/AWS_SNS_FIX_REPORT.md](docs/AWS_SNS_FIX_REPORT.md)  
+> Test script: [scripts/test-sns-aws.sh](scripts/test-sns-aws.sh)
+
+### Environment
+
+| Component | Value |
+|-----------|-------|
+| CloudFront | `E1TBH4R432SZBZ` — `https://d1tf3uumcm4bo1.cloudfront.net` |
+| API Gateway | `z42qmqdqac` — `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com` |
+| Lambda (API) | `multicloud-auto-deploy-staging-api` (Python 3.12, 512 MB) |
+| Lambda (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (Python 3.12, 512 MB) |
+| DynamoDB | `multicloud-auto-deploy-staging-posts` |
+| S3 images | `multicloud-auto-deploy-staging-images` |
+| Cognito | Pool `ap-northeast-1_AoDxOvCib` / Client `1k41lqkds4oah55ns8iod30dv2` |
+
+### Results
+
+| # | Test | Result |
+|---|------|--------|
+| 1 | CloudFront landing page (`/`) returns 200 | ✅ |
+| 2 | SNS app (`/sns/`) returns 200 + HTML | ✅ |
+| 3 | API health check (`GET /health`) — `{"status":"ok"}` | ✅ |
+| 4 | Unauthenticated `GET /posts` returns 200 (public feed) | ✅ |
+| 5 | Unauthenticated `POST /posts` returns 401 | ✅ |
+| 6 | Cognito login flow → access token issued → `/sns/auth/callback` sets cookie | ✅ |
+| 7 | Profile page shows `nickname`, `bio`, `avatar` (not "Sign in…") | ✅ |
+| 8 | `POST /posts` (text) returns 201 | ✅ |
+| 9 | `GET /posts/:id` returns correct post | ✅ |
+| 10 | `PUT /posts/:id` updates content | ✅ |
+| 11 | `DELETE /posts/:id` returns 200 | ✅ |
+| 12 | `POST /uploads/presigned-urls` (count=1) returns S3 HTTPS URL | ✅ |
+| 13 | `POST /uploads/presigned-urls` (count=16, max) returns 16 URLs | ✅ |
+| 14 | `POST /uploads/presigned-urls` (count=17, over limit) returns 422 | ✅ |
+| 15 | `POST /posts` with 16 imageKeys returns 201 | ✅ |
+| 16 | `POST /posts` with 17 imageKeys returns 422 | ✅ |
+| 17 | Logout → Cognito hosted logout → redirect back to `/sns/` | ✅ |
+| 18 | `/sns/` page does not expose `localhost` URL | ✅ |
+
+**Total**: 18/18 ✅
+
+### Bugs Fixed (this session)
+
+| Commit | Fix |
+|--------|-----|
+| `c5a261c` `2b38fc0` `9ed8200` `17a944f` | CI/CD env var reset + ResourceConflictException race condition |
+| `cced4cb` | Logout redirected to non-existent `/login` |
+| `0388b3f` | `UploadUrlsRequest.count` limit: 10 → 16 |
+| `4d2bce0` | `CreatePostBody`/`UpdatePostBody` `imageKeys` limit: 10 → 16 |
+
+---
+
 テスト実行日: 2026-02-18
 
 ## 概要
 
 3つのクラウドプロバイダー（Azure、AWS、GCP）に対して統合テストを実行しました。
 
-## テスト結果サマリー
+## テスト結果サマリー (2026-02-18)
 
 | プロバイダー | 成功 | 失敗 | 合計 | 状態                  |
 | ------------ | ---- | ---- | ---- | --------------------- |

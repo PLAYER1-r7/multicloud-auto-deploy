@@ -12,7 +12,87 @@ This changelog includes commit bodies, file changes, and statistics for full tra
 
 ## 📅 2026-02-20
 
-### ✨ **feat** (gcp): enable Firebase authentication and image uploads on GCP staging
+### 🐛 **fix** (api): raise imageKeys max_length from 10 to 16 to match frontend limit
+
+**Commit**: [`4d2bce0`](https://github.com/PLAYER1-r7/multicloud-auto-deploy/commit/4d2bce0) | **Files Changed**: 1
+
+**Summary**: `POST /posts` with 11–16 imageKeys returned `422 Unprocessable Entity` because
+`CreatePostBody` and `UpdatePostBody` validated `imageKeys` with `max_length=10`, while the
+frontend `uploads.js` allows up to 16 files. Raised both to `max_length=16`.
+
+**Changes**:
+
+> **`services/api/app/models.py`**
+>
+> - `CreatePostBody.image_keys`: `Field(..., max_length=10)` → `max_length=16`
+> - `UpdatePostBody.image_keys`: `Field(..., max_length=10)` → `max_length=16`
+
+---
+
+### 🐛 **fix** (api): raise upload count limit from 10 to 16 to match frontend max
+
+**Commit**: [`0388b3f`](https://github.com/PLAYER1-r7/multicloud-auto-deploy/commit/0388b3f) | **Files Changed**: 1
+
+**Summary**: `POST /uploads/presigned-urls` with `count > 10` returned `422 Unprocessable Entity`
+because `UploadUrlsRequest.count` was validated with `le=10`. The frontend allows up to 16 files
+(`if (files.length > 16)`). Raised the server-side limit to match.
+
+**Changes**:
+
+> **`services/api/app/models.py`**
+>
+> - `UploadUrlsRequest.count`: `Field(..., ge=1, le=10)` → `le=16`
+
+---
+
+### 🐛 **fix** (ci): apply pre-flight wait + frontend-web Lambda update to root workflow
+
+**Commit**: [`17a944f`](https://github.com/PLAYER1-r7/multicloud-auto-deploy/commit/17a944f) | **Files Changed**: 1
+
+**Summary**: All previous CI/CD fix sessions had edited the subdirectory copy of the workflow
+(`multicloud-auto-deploy/.github/workflows/deploy-aws.yml`) which GitHub Actions does not read.
+The actual workflow at `.github/workflows/deploy-aws.yml` (repo root) was missing the
+`aws lambda wait function-updated` guards and the "Update frontend-web Lambda" step entirely.
+This commit applied all fixes to the correct file. CI run `#22239547937` was the first
+run where "Update frontend-web Lambda" executed successfully, correcting the env vars
+(`AUTH_DISABLED=false`, `API_BASE_URL=https://z42qmqdqac...`, etc.).
+
+**Changes**:
+
+> **`.github/workflows/deploy-aws.yml`** (repo root — this is the real CI file)
+>
+> - Added `cognito_domain` to "Get Pulumi Outputs" step.
+> - Added `aws lambda wait function-updated` **before** `update-function-code` to guard against
+>   `ResourceConflictException` when Pulumi's async `update-function-configuration` is still
+>   in progress.
+> - Added `aws lambda wait function-updated` **after** `update-function-code` to ensure the
+>   code update completes before the next step reads the Lambda state.
+> - Added full **"Update frontend-web Lambda"** step that calls
+>   `update-function-configuration` with correct values for `AUTH_DISABLED`, `API_BASE_URL`,
+>   `COGNITO_CLIENT_ID`, `COGNITO_DOMAIN`, `COGNITO_REDIRECT_URI`, `COGNITO_LOGOUT_URI`,
+>   `STAGE_NAME`, `AUTH_PROVIDER`, and `ENVIRONMENT`.
+
+---
+
+### 🐛 **fix** (frontend-web): logout redirects to Cognito logout instead of /login
+
+**Commit**: [`cced4cb`](https://github.com/PLAYER1-r7/multicloud-auto-deploy/commit/cced4cb) | **Files Changed**: 1
+
+**Summary**: The `GET /logout` endpoint fell back to `redirect_url = "/login"` (HTTP 404 on
+CloudFront). After the env var fix (17a944f) `COGNITO_DOMAIN` is correctly set, so the handler
+now constructs the full Cognito hosted logout URL and the fallback was updated to the app root.
+
+**Changes**:
+
+> **`services/frontend_web/app/routers/auth.py`**
+>
+> - `logout()`: redirects to full Cognito logout URL
+>   `https://{cognito_domain}/logout?client_id=...&logout_uri=...`.
+>   The `logout_uri` is `COGNITO_LOGOUT_URI` (= `https://d1tf3uumcm4bo1.cloudfront.net/sns/`).
+
+---
+
+
 
 **Commits**: [`5c46a48`](https://github.com/PLAYER1-r7/multicloud-auto-deploy/commit/5c46a48) · [`d48bfcb`](https://github.com/PLAYER1-r7/multicloud-auto-deploy/commit/d48bfcb) · Pulumi `staging` stack up | **Files Changed**: 5
 
