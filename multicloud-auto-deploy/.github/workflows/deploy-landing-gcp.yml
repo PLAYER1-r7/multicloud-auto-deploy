@@ -22,7 +22,9 @@ on:
 env:
   GCP_PROJECT_ID: ashnova
   GCP_REGION: asia-northeast1
-  BUCKET_NAME: ashnova-multicloud-auto-deploy-staging-landing
+  # Landing page is deployed to the same bucket as the frontend (root level)
+  # so Cloud CDN serves it at / while the React SNS app lives under /sns/
+  BUCKET_NAME: ashnova-multicloud-auto-deploy-staging-frontend
 
 jobs:
   deploy-landing:

@@ -60,10 +60,11 @@ jobs:
       - name: Deploy to Azure Storage
         working-directory: services/frontend_react
         run: |
+          # Deploy to sns/ prefix so landing page at root is not overwritten
           az storage blob upload-batch \
             --account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
             --auth-mode key \
-            --destination '$web' \
+            --destination '$web/sns' \
             --source dist/ \
             --overwrite \
             --content-cache-control "public, max-age=3600"
@@ -74,7 +75,7 @@ jobs:
             --account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
             --auth-mode key \
             --container-name '$web' \
-            --name index.html \
+            --name sns/index.html \
             --content-cache-control "public, max-age=300, must-revalidate"
 
       - name: Deployment Success

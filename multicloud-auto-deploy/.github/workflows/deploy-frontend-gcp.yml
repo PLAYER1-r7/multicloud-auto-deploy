@@ -67,21 +67,22 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Deploy to Cloud Storage
+      - name: Deploy to Cloud Storage (sns/ prefix)
         working-directory: services/frontend_react
         run: |
+          # Deploy to sns/ prefix so landing page at root is not overwritten
           gcloud storage rsync \
             --recursive \
             --delete-unmatched-destination-objects \
             --cache-control="public, max-age=3600" \
-            dist/ gs://${{ env.BUCKET_NAME }}/
+            dist/ gs://${{ env.BUCKET_NAME }}/sns/
 
       - name: Set Cache-Control for index.html
         run: |
-          gcloud storage objects update gs://${{ env.BUCKET_NAME }}/index.html \
+          gcloud storage objects update gs://${{ env.BUCKET_NAME }}/sns/index.html \
             --cache-control="public, max-age=300, must-revalidate"
 
       - name: Deployment Success
         run: |
           echo "✅ Frontend deployed successfully!"
-          echo "🌐 URL: https://storage.googleapis.com/${{ env.BUCKET_NAME }}/index.html"
+          echo "🌐 URL: https://storage.googleapis.com/${{ env.BUCKET_NAME }}/sns/index.html"

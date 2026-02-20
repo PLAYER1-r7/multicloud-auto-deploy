@@ -21,7 +21,9 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  S3_BUCKET: multicloud-auto-deploy-staging-landing
+  # Landing page is deployed to the same bucket as the frontend (root level)
+  # so CloudFront serves it at / while the React SNS app lives under /sns/
+  S3_BUCKET: multicloud-auto-deploy-staging-frontend
 
 jobs:
   deploy-landing:
