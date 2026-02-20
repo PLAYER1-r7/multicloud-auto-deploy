@@ -248,7 +248,7 @@ class AwsBackend(BackendBase):
         # プロフィール機能は未実装
         return ProfileResponse(
             user_id=user_id,
-            display_name=user_id,
+            nickname=None,
             bio="",
             avatar_url="",
         )
@@ -262,9 +262,9 @@ class AwsBackend(BackendBase):
         # プロフィール機能は未実装
         return ProfileResponse(
             user_id=user.user_id,
-            display_name=body.display_name or user.user_id,
+            nickname=body.nickname,
             bio=body.bio or "",
-            avatar_url=body.avatar_url or "",
+            avatar_url=None,
         )
 
     def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
