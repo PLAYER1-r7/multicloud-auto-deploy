@@ -66,17 +66,19 @@ jobs:
       - name: Deploy to S3
         working-directory: services/frontend_react
         run: |
+          # Deploy non-HTML assets (JS, CSS, images) - S3 auto-detects their content types
           # Deploy to sns/ prefix so landing page at root is not overwritten
           aws s3 sync dist/ s3://${{ env.S3_BUCKET }}/sns/ \
             --delete \
-            --cache-control "public, max-age=3600"
+            --cache-control "public, max-age=3600" \
+            --exclude "*.html"
 
-      - name: Set Cache-Control for index.html
-        run: |
-          aws s3 cp s3://${{ env.S3_BUCKET }}/sns/index.html \
-            s3://${{ env.S3_BUCKET }}/sns/index.html \
-            --metadata-directive REPLACE \
-            --cache-control "public, max-age=300, must-revalidate"
+          # Deploy HTML files with explicit content-type to prevent binary/octet-stream
+          aws s3 sync dist/ s3://${{ env.S3_BUCKET }}/sns/ \
+            --cache-control "public, max-age=300, must-revalidate" \
+            --content-type "text/html; charset=utf-8" \
+            --exclude "*" \
+            --include "*.html"
 
       - name: Deployment Success
         run: |
