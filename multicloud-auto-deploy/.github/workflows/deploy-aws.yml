@@ -107,6 +107,9 @@ jobs:
           echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$(pulumi stack output cognito_user_pool_id)" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
+          echo "posts_table_name=$(pulumi stack output posts_table_name)" >> $GITHUB_OUTPUT
+          echo "images_bucket_name=$(pulumi stack output images_bucket_name)" >> $GITHUB_OUTPUT
+          echo "secret_name=$(pulumi stack output secret_name)" >> $GITHUB_OUTPUT
 
       - name: Build Lambda Layer
         id: build_layer

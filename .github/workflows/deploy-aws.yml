@@ -107,6 +107,9 @@ jobs:
           echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$(pulumi stack output cognito_user_pool_id)" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
+          echo "posts_table_name=$(pulumi stack output posts_table_name)" >> $GITHUB_OUTPUT
+          echo "images_bucket_name=$(pulumi stack output images_bucket_name)" >> $GITHUB_OUTPUT
+          echo "secret_name=$(pulumi stack output secret_name)" >> $GITHUB_OUTPUT
 
       - name: Build Lambda Layer
         id: build_layer
@@ -229,12 +232,8 @@ jobs:
 
           # Determine environment and auth settings
           DEPLOY_ENV="${{ steps.set_stack.outputs.stack_name }}"
-          # Disable auth in staging for testability; keep auth enabled in production
-          if [[ "$DEPLOY_ENV" == "staging" ]]; then
-            AUTH_DISABLED_VALUE="true"
-          else
-            AUTH_DISABLED_VALUE="false"
-          fi
+          # Auth is always enabled: Cognito is configured for both staging and production.
+          AUTH_DISABLED_VALUE="false"
 
           echo '{' > /tmp/lambda-env.json
           echo '  "Variables": {' >> /tmp/lambda-env.json
