@@ -127,6 +127,7 @@ jobs:
           echo "cloudfront_distribution_id=$(pulumi stack output cloudfront_distribution_id)" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$(pulumi stack output cognito_user_pool_id)" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
+          echo "cognito_domain=$(pulumi stack output cognito_domain)" >> $GITHUB_OUTPUT
           echo "posts_table_name=$(pulumi stack output posts_table_name)" >> $GITHUB_OUTPUT
           echo "images_bucket_name=$(pulumi stack output images_bucket_name)" >> $GITHUB_OUTPUT
           echo "secret_name=$(pulumi stack output secret_name)" >> $GITHUB_OUTPUT
@@ -206,6 +207,14 @@ jobs:
           echo "🔧 Using custom Lambda Layer"
           LAYER_ARNS="${{ steps.deploy_layer.outputs.layer_arn }}"
 
+          # Wait for any Pulumi-triggered updates to complete before touching this Lambda
+          # (Pulumi up just ran and may have updated the Lambda's environment/configuration)
+          echo "⏳ Waiting for Lambda to be ready (Pulumi may still be updating it)..."
+          aws lambda wait function-updated \
+            --function-name $LAMBDA_FUNCTION \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Lambda ready"
+
           # Debug: Check lambda.zip exists and show size
           echo "📦 Checking lambda.zip..."
           ls -lh multicloud-auto-deploy/services/api/lambda.zip || { echo "❌ lambda.zip not found!"; exit 1; }
@@ -236,6 +245,13 @@ jobs:
               --s3-key $S3_KEY \
               --output json || { echo "❌ Lambda update failed!"; exit 1; }
           fi
+
+          # Wait for code update to complete before modifying configuration
+          echo "⏳ Waiting for Lambda code update to stabilize..."
+          aws lambda wait function-updated \
+            --function-name $LAMBDA_FUNCTION \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Lambda ready for configuration update"
 
           # Get CloudFront domain for CORS
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
@@ -282,6 +298,59 @@ jobs:
 
           echo "✅ Lambda function updated successfully with Layer(s) and environment variables"
           echo "api_endpoint=${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}" >> $GITHUB_OUTPUT
+
+      - name: Update frontend-web Lambda
+        run: |
+          set -e
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          FRONTEND_WEB_LAMBDA="multicloud-auto-deploy-${STACK_NAME}-frontend-web"
+          CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
+          COGNITO_DOMAIN="${{ steps.pulumi_outputs.outputs.cognito_domain }}"
+          CLIENT_ID="${{ steps.pulumi_outputs.outputs.cognito_client_id }}"
+          API_ENDPOINT="${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}"
+          DEPLOY_ENV="${{ steps.set_stack.outputs.stack_name }}"
+
+          # Validate critical values are not empty
+          if [[ -z "$API_ENDPOINT" || -z "$CLOUDFRONT_DOMAIN" || -z "$CLIENT_ID" || -z "$COGNITO_DOMAIN" ]]; then
+            echo "❌ Critical Pulumi outputs are empty. Aborting to prevent overwriting Lambda config."
+            echo "   API_ENDPOINT='$API_ENDPOINT'"
+            echo "   CLOUDFRONT_DOMAIN='$CLOUDFRONT_DOMAIN'"
+            echo "   CLIENT_ID='$CLIENT_ID'"
+            echo "   COGNITO_DOMAIN='$COGNITO_DOMAIN'"
+            exit 1
+          fi
+
+          # Wait for any in-progress Lambda updates before configuration update
+          echo "⏳ Waiting for frontend-web Lambda to be ready..."
+          aws lambda wait function-updated \
+            --function-name "$FRONTEND_WEB_LAMBDA" \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ frontend-web Lambda ready for configuration update"
+
+          echo "🔐 Updating frontend-web Lambda with Cognito settings..."
+          cat > /tmp/frontend-web-env.json << EOF
+          {
+            "Variables": {
+              "ENVIRONMENT": "$DEPLOY_ENV",
+              "AUTH_PROVIDER": "aws",
+              "AUTH_DISABLED": "false",
+              "STAGE_NAME": "sns",
+              "API_BASE_URL": "$API_ENDPOINT",
+              "COGNITO_CLIENT_ID": "$CLIENT_ID",
+              "COGNITO_DOMAIN": "${COGNITO_DOMAIN}.auth.${{ env.AWS_REGION }}.amazoncognito.com",
+              "COGNITO_REDIRECT_URI": "https://${CLOUDFRONT_DOMAIN}/sns/auth/callback",
+              "COGNITO_LOGOUT_URI": "https://${CLOUDFRONT_DOMAIN}/sns/"
+            }
+          }
+          EOF
+
+          aws lambda update-function-configuration \
+            --function-name "$FRONTEND_WEB_LAMBDA" \
+            --region ${{ env.AWS_REGION }} \
+            --environment file:///tmp/frontend-web-env.json \
+            --output json || { echo "❌ frontend-web Lambda update failed!"; exit 1; }
+
+          echo "✅ frontend-web Lambda updated with Cognito settings"
 
       - name: Build Frontend
         run: |
