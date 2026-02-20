@@ -37,9 +37,35 @@ class AwsBackend(BackendBase):
                 "POSTS_TABLE_NAME environment variable is required")
 
         self.table = self.dynamodb.Table(self.table_name)
+        self.presigned_expiry = int(os.environ.get("PRESIGNED_URL_EXPIRY", "3600"))
+
         logger.info(
             f"Initialized AwsBackend with table={self.table_name}, bucket={self.bucket_name}"
         )
+
+    def _key_to_url(self, key: str) -> str:
+        """S3キーをpresigned GETのURLに変換（有効期限1時間）"""
+        if not key or key.startswith("http"):
+            return key
+        if not self.bucket_name:
+            return key
+        try:
+            return self.s3_client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self.bucket_name, "Key": key},
+                ExpiresIn=self.presigned_expiry,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to generate presigned URL for {key}: {e}")
+            return key
+
+    def _get_nickname(self, user_id: str) -> Optional[str]:
+        """DynamoDB PROFILESからニックネームを取得"""
+        try:
+            result = self.table.get_item(Key={"PK": "PROFILES", "SK": user_id})
+            return result.get("Item", {}).get("nickname")
+        except Exception:
+            return None
 
     def list_posts(
         self,
@@ -70,15 +96,21 @@ class AwsBackend(BackendBase):
 
             posts = []
             for item in response.get("Items", []):
+                # S3キーをpresigned URLに変換
+                image_urls = [
+                    self._key_to_url(k)
+                    for k in item.get("imageUrls", [])
+                ]
                 posts.append(
                     Post(
                         postId=item["postId"],
                         userId=item["userId"],
+                        nickname=item.get("nickname"),
                         content=item["content"],
                         tags=item.get("tags", []),
                         createdAt=item["createdAt"],
                         updatedAt=item.get("updatedAt"),
-                        imageUrls=item.get("imageUrls", []),
+                        imageUrls=image_urls,
                     )
                 )
 
@@ -99,7 +131,11 @@ class AwsBackend(BackendBase):
             post_id = str(uuid.uuid4())
             now = datetime.now(timezone.utc).isoformat()
 
-            item = {
+            # ニックネームをプロフィールから取得して投稿に保存（非正規化）
+            nickname = self._get_nickname(user.user_id)
+
+            image_keys = body.image_keys if body.image_keys else []
+            item: dict = {
                 "PK": "POSTS",
                 "SK": now + "#" + post_id,  # タイムスタンプ + UUID
                 "postId": post_id,
@@ -108,18 +144,24 @@ class AwsBackend(BackendBase):
                 "tags": body.tags if body.tags else [],
                 "createdAt": now,
                 "updatedAt": now,
-                "imageUrls": body.image_keys if body.image_keys else [],
+                "imageUrls": image_keys,
             }
+            if nickname is not None:
+                item["nickname"] = nickname
 
             self.table.put_item(Item=item)
+
+            # レスポンス用にS3キーをpresigned URLに変換
+            image_urls = [self._key_to_url(k) for k in image_keys]
 
             return {
                 "post_id": post_id,
                 "user_id": user.user_id,
+                "nickname": nickname,
                 "content": body.content,
                 "tags": item["tags"],
                 "created_at": now,
-                "image_urls": item["imageUrls"],
+                "image_urls": image_urls,
             }
 
         except Exception as e:
@@ -170,6 +212,11 @@ class AwsBackend(BackendBase):
 
             item = response["Items"][0]
 
+            # S3キーをpresigned URLに変換
+            image_urls = [
+                self._key_to_url(k) for k in item.get("imageUrls", [])
+            ]
+
             # レスポンス形式を統一
             return {
                 "id": item["postId"],
@@ -177,14 +224,15 @@ class AwsBackend(BackendBase):
                 "post_id": item["postId"],
                 "userId": item.get("userId"),
                 "user_id": item.get("userId"),
+                "nickname": item.get("nickname"),
                 "content": item.get("content"),
                 "tags": item.get("tags", []),
                 "createdAt": item.get("createdAt"),
                 "created_at": item.get("createdAt"),
                 "updatedAt": item.get("updatedAt"),
                 "updated_at": item.get("updatedAt"),
-                "imageUrls": item.get("imageUrls", []),
-                "image_urls": item.get("imageUrls", []),
+                "imageUrls": image_urls,
+                "image_urls": image_urls,
             }
 
         except Exception as e:
