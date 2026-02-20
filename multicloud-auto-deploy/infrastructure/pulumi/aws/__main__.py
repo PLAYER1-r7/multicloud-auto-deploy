@@ -426,6 +426,22 @@ lambda_url = aws.lambda_.FunctionUrl(
 )
 
 # ========================================
+# API Gateway HTTP API v2
+# ========================================
+api_gateway = aws.apigatewayv2.Api(
+    "http-api",
+    name=f"{project_name}-{stack}-api",
+    protocol_type="HTTP",
+    cors_configuration={
+        "allow_origins": allowed_origins_list,
+        "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+        "max_age": 3600,
+    },
+    tags=common_tags,
+)
+
+# ========================================
 # Lambda Function for frontend_web (Simple SNS)
 # Routes /sns/* → this Lambda via CloudFront ordered cache behavior
 # ========================================
@@ -443,12 +459,15 @@ frontend_web_lambda = aws.lambda_.Function(
     opts=pulumi.ResourceOptions(
         ignore_changes=["code", "source_code_hash", "layers"]),
     environment={
-        "variables": {
-            "ENVIRONMENT": stack,
-            "AUTH_PROVIDER": "aws",
-            "AUTH_DISABLED": "true" if stack == "staging" else "false",
-            "STAGE_NAME": "sns",
-        }
+        "variables": pulumi.Output.all(api_gateway.api_endpoint).apply(
+            lambda args: {
+                "ENVIRONMENT": stack,
+                "AUTH_PROVIDER": "aws",
+                "AUTH_DISABLED": "true" if stack == "staging" else "false",
+                "STAGE_NAME": "sns",
+                "API_BASE_URL": args[0],
+            }
+        ),
     },
     tags=common_tags,
 )
@@ -487,21 +506,7 @@ aws.lambda_.Permission(
     function_url_auth_type="NONE",
 )
 
-# Alternative: API Gateway HTTP API v2 (more features)
-api_gateway = aws.apigatewayv2.Api(
-    "http-api",
-    name=f"{project_name}-{stack}-api",
-    protocol_type="HTTP",
-    cors_configuration={
-        "allow_origins": allowed_origins_list,
-        "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-        "max_age": 3600,
-    },
-    tags=common_tags,
-)
-
-# API Gateway Integration with Lambda
+# API Gateway Integration with Lambda (backend api)
 integration = aws.apigatewayv2.Integration(
     "lambda-integration",
     api_id=api_gateway.id,
