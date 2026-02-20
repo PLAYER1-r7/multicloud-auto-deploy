@@ -325,7 +325,7 @@ frontend_web_backend = gcp.compute.BackendService(
             group=frontend_web_neg.id,
         )
     ],
-    opts=pulumi.ResourceOptions(depends_on=[enabled_services, frontend_web_neg]),
+    opts=pulumi.ResourceOptions(depends_on=enabled_services + [frontend_web_neg]),
 )
 
 # Managed SSL Certificate (for custom domain - optional)
@@ -364,7 +364,7 @@ url_map = gcp.compute.URLMap(
             ],
         )
     ],
-    opts=pulumi.ResourceOptions(depends_on=[enabled_services, frontend_web_backend]),
+    opts=pulumi.ResourceOptions(depends_on=enabled_services + [frontend_web_backend]),
 )
 
 # Target HTTPS Proxy with SSL (managed certificate)
@@ -517,6 +517,10 @@ pulumi.export("ssl_certificate_name", managed_ssl_cert.name)
 alarm_email = config.get("alarmEmail")
 function_name = f"{project_name}-{stack}-api"
 
+# Cloud Function memory setting (must match --memory in GitHub Actions deploy workflow)
+# Default: 512MB. Update here if changed in .github/workflows/deploy-gcp.yml
+function_memory_mb = config.get_int("functionMemoryMb") or 512
+
 monitoring_resources = monitoring.setup_monitoring(
     project_name=project_name,
     stack=stack,
@@ -525,6 +529,7 @@ monitoring_resources = monitoring.setup_monitoring(
     project_id=project,
     alarm_email=alarm_email,
     monthly_budget_usd=config.get_int("monthlyBudgetUsd") or 50,
+    function_memory_mb=function_memory_mb,
 )
 
 # Function name for gcloud deployment (fixed name)

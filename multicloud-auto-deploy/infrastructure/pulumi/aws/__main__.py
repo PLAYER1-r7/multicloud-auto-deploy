@@ -451,9 +451,8 @@ frontend_web_lambda_url = aws.lambda_.FunctionUrl(
     authorization_type="NONE",
     cors={
         "allow_origins": ["*"],
-        "allow_methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        "allow_methods": ["*"],
         "allow_headers": ["Content-Type", "Authorization", "Cookie", "X-Requested-With"],
-        "allow_credentials": True,
         "max_age": 3600,
     },
 )
