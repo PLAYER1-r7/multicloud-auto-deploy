@@ -16,7 +16,8 @@ try:
     logger.info("frontend_web: FastAPI app imported successfully")
 except Exception as _e:
     _IMPORT_ERROR = traceback.format_exc()
-    logger.error(f"frontend_web: Failed to import FastAPI app: {_e}\n{_IMPORT_ERROR}")
+    logger.error(
+        f"frontend_web: Failed to import FastAPI app: {_e}\n{_IMPORT_ERROR}")
 
 # Azure Functions v2 programmatic model
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
@@ -95,10 +96,25 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     response_body = b"".join(body_parts)
-    response_headers = {k.decode(): v.decode() for k, v in headers}
 
-    return func.HttpResponse(
+    # Build headers dict — exclude set-cookie (multiple values must be added individually)
+    response_headers = {}
+    set_cookie_values = []
+    for k, v in headers:
+        key = k.decode()
+        val = v.decode()
+        if key.lower() == "set-cookie":
+            set_cookie_values.append(val)
+        else:
+            response_headers[key] = val
+
+    http_response = func.HttpResponse(
         body=response_body,
         status_code=status_code,
         headers=response_headers,
     )
+    # Add each set-cookie header individually (HttpResponseHeaders.add supports multi-value)
+    for cookie_val in set_cookie_values:
+        http_response.headers.add("set-cookie", cookie_val)
+
+    return http_response
