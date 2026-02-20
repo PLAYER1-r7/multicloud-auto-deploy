@@ -397,8 +397,9 @@ lambda_function = aws.lambda_.Function(
     # Code will be uploaded separately via deploy-lambda-aws.sh
     code=pulumi.AssetArchive(
         {"index.py": pulumi.StringAsset(placeholder_code)}),
-    # Skip code updates if function already exists
-    opts=pulumi.ResourceOptions(ignore_changes=["code", "source_code_hash"]),
+    # Skip code and layer updates: deployed by deploy-aws.yml workflow
+    # Layers are managed by the CI/CD pipeline (lambda-layer.zip is built at deploy time)
+    opts=pulumi.ResourceOptions(ignore_changes=["code", "source_code_hash", "layers"]),
     environment={
         "variables": {
             "ENVIRONMENT": stack,
