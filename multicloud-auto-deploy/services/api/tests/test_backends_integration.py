@@ -44,7 +44,8 @@ class TestBackendBase:
         """Test listing posts when empty"""
         backend = self.get_backend()
 
-        posts, next_token = backend.list_posts(limit=20, next_token=None, tag=None)
+        posts, next_token = backend.list_posts(
+            limit=20, next_token=None, tag=None)
 
         assert isinstance(posts, list)
         # May be empty or contain existing test data
@@ -74,7 +75,8 @@ class TestBackendBase:
         post_id = result["item"].get("postId") or result["item"].get("id")
 
         # Update the post
-        update_result = backend.update_post(post_id, sample_update_body, test_user)
+        update_result = backend.update_post(
+            post_id, sample_update_body, test_user)
 
         assert update_result is not None
         assert update_result["status"] == "updated"
@@ -102,7 +104,8 @@ class TestBackendBase:
         post_id = result["item"].get("postId") or result["item"].get("id")
 
         # Update as admin (should succeed)
-        update_result = backend.update_post(post_id, sample_update_body, admin_user)
+        update_result = backend.update_post(
+            post_id, sample_update_body, admin_user)
 
         assert update_result is not None
         assert update_result["status"] == "updated"

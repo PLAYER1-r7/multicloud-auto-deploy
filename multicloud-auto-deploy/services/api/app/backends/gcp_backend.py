@@ -40,10 +40,12 @@ def _get_firestore():
     try:
         from google.cloud import firestore
         _firestore_client = firestore.Client(project=settings.gcp_project_id)
-        logger.info(f"Firestore client initialized for project: {settings.gcp_project_id}")
+        logger.info(
+            f"Firestore client initialized for project: {settings.gcp_project_id}")
         return _firestore_client
     except ImportError:
-        raise ImportError("google-cloud-firestore package is required for GCP backend") from None
+        raise ImportError(
+            "google-cloud-firestore package is required for GCP backend") from None
 
 
 def _get_storage():
@@ -58,10 +60,12 @@ def _get_storage():
     try:
         from google.cloud import storage
         _storage_client = storage.Client(project=settings.gcp_project_id)
-        logger.info(f"Cloud Storage client initialized for project: {settings.gcp_project_id}")
+        logger.info(
+            f"Cloud Storage client initialized for project: {settings.gcp_project_id}")
         return _storage_client
     except ImportError:
-        raise ImportError("google-cloud-storage package is required for GCP backend") from None
+        raise ImportError(
+            "google-cloud-storage package is required for GCP backend") from None
 
 
 def _encode_token(payload: Optional[dict[str, Any]]) -> Optional[str]:
@@ -121,14 +125,17 @@ class GcpBackend(BackendBase):
         try:
             from google.cloud import firestore
         except ImportError:
-            raise ImportError("google-cloud-firestore is required for GCP backend") from None
+            raise ImportError(
+                "google-cloud-firestore is required for GCP backend") from None
 
         db = _get_firestore()
         posts_ref = db.collection(settings.gcp_posts_collection)
 
         # Order by createdAt DESC, then postId DESC for stable pagination
-        query = posts_ref.order_by("createdAt", direction=firestore.Query.DESCENDING)
-        query = query.order_by("postId", direction=firestore.Query.DESCENDING).limit(limit)
+        query = posts_ref.order_by(
+            "createdAt", direction=firestore.Query.DESCENDING)
+        query = query.order_by(
+            "postId", direction=firestore.Query.DESCENDING).limit(limit)
 
         # Handle pagination cursor
         cursor = _decode_token(next_token)
@@ -151,7 +158,8 @@ class GcpBackend(BackendBase):
 
             # Handle image keys (may be list or single value)
             raw_image_keys = data.get("imageKeys")
-            image_keys = raw_image_keys or ([] if data.get("imageKey") is None else [data.get("imageKey")])
+            image_keys = raw_image_keys or ([] if data.get(
+                "imageKey") is None else [data.get("imageKey")])
             image_keys = [key for key in image_keys if isinstance(key, str)]
 
             post = Post(
@@ -191,7 +199,8 @@ class GcpBackend(BackendBase):
         created_at = _now_iso()
 
         # Get user's nickname from profile
-        profile_doc = db.collection(settings.gcp_profiles_collection).document(user.user_id).get()
+        profile_doc = db.collection(
+            settings.gcp_profiles_collection).document(user.user_id).get()
         profile = profile_doc.to_dict() if profile_doc.exists else None
         nickname = profile.get("nickname") if profile else None
         if not nickname:
@@ -217,8 +226,10 @@ class GcpBackend(BackendBase):
         if nickname:
             item["nickname"] = nickname
 
-        logger.info(f"Writing post {post_id} to Firestore collection {settings.gcp_posts_collection}")
-        db.collection(settings.gcp_posts_collection).document(post_id).set(item)
+        logger.info(
+            f"Writing post {post_id} to Firestore collection {settings.gcp_posts_collection}")
+        db.collection(settings.gcp_posts_collection).document(
+            post_id).set(item)
 
         return {
             "post_id": post_id,
@@ -234,7 +245,8 @@ class GcpBackend(BackendBase):
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
         """Delete a post from Firestore"""
         db = _get_firestore()
-        post_ref = db.collection(settings.gcp_posts_collection).document(post_id)
+        post_ref = db.collection(
+            settings.gcp_posts_collection).document(post_id)
         doc = post_ref.get()
 
         if not doc.exists:
@@ -244,10 +256,12 @@ class GcpBackend(BackendBase):
 
         # Check permissions
         if not user.is_admin and data.get("userId") != user.user_id:
-            raise PermissionError("You do not have permission to delete this post")
+            raise PermissionError(
+                "You do not have permission to delete this post")
 
         # Delete associated images from Cloud Storage
-        image_keys = data.get("imageKeys") or ([] if data.get("imageKey") is None else [data.get("imageKey")])
+        image_keys = data.get("imageKeys") or ([] if data.get(
+            "imageKey") is None else [data.get("imageKey")])
         image_keys = [key for key in image_keys if isinstance(key, str)]
 
         if image_keys and settings.gcp_storage_bucket:
@@ -272,7 +286,8 @@ class GcpBackend(BackendBase):
     def get_post(self, post_id: str) -> dict:
         """Get a single post from Firestore"""
         db = _get_firestore()
-        post_ref = db.collection(settings.gcp_posts_collection).document(post_id)
+        post_ref = db.collection(
+            settings.gcp_posts_collection).document(post_id)
         doc = post_ref.get()
 
         if not doc.exists:
@@ -300,7 +315,8 @@ class GcpBackend(BackendBase):
     def update_post(self, post_id: str, body: UpdatePostBody, user: UserInfo) -> dict:
         """Update a post in Firestore"""
         db = _get_firestore()
-        post_ref = db.collection(settings.gcp_posts_collection).document(post_id)
+        post_ref = db.collection(
+            settings.gcp_posts_collection).document(post_id)
         doc = post_ref.get()
 
         if not doc.exists:
@@ -310,7 +326,8 @@ class GcpBackend(BackendBase):
 
         # Check permissions
         if not user.is_admin and data.get("userId") != user.user_id:
-            raise PermissionError("You do not have permission to update this post")
+            raise PermissionError(
+                "You do not have permission to update this post")
 
         # Build update data
         now = _now_iso()
@@ -338,7 +355,8 @@ class GcpBackend(BackendBase):
     def get_profile(self, user_id: str) -> ProfileResponse:
         """Get user profile from Firestore"""
         db = _get_firestore()
-        doc = db.collection(settings.gcp_profiles_collection).document(user_id).get()
+        doc = db.collection(
+            settings.gcp_profiles_collection).document(user_id).get()
 
         if not doc.exists:
             return ProfileResponse(userId=user_id, nickname="")
@@ -360,13 +378,15 @@ class GcpBackend(BackendBase):
         """Update user profile in Firestore"""
         db = _get_firestore()
         now = _now_iso()
-        profile_ref = db.collection(settings.gcp_profiles_collection).document(user.user_id)
+        profile_ref = db.collection(
+            settings.gcp_profiles_collection).document(user.user_id)
         existing = profile_ref.get()
 
         # Preserve createdAt if exists
         created_at = now
         if existing.exists:
-            created_at = (existing.to_dict() or {}).get("createdAt") or created_at
+            created_at = (existing.to_dict() or {}).get(
+                "createdAt") or created_at
 
         item = {
             "userId": user.user_id,
@@ -388,7 +408,8 @@ class GcpBackend(BackendBase):
     def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
         """Generate signed URLs for Cloud Storage uploads"""
         if not settings.gcp_storage_bucket:
-            raise ValueError("GCP_STORAGE_BUCKET environment variable is required")
+            raise ValueError(
+                "GCP_STORAGE_BUCKET environment variable is required")
 
         storage_client = _get_storage()
         bucket = storage_client.bucket(settings.gcp_storage_bucket)
@@ -416,17 +437,20 @@ class GcpBackend(BackendBase):
                     signing_credentials = impersonated_credentials.Credentials(
                         source_credentials=source_credentials,
                         target_principal=settings.gcp_service_account,
-                        target_scopes=["https://www.googleapis.com/auth/cloud-platform"],
+                        target_scopes=[
+                            "https://www.googleapis.com/auth/cloud-platform"],
                         lifetime=3600
                     )
                     generate_url_kwargs["credentials"] = signing_credentials
                 except Exception as e:
-                    logger.warning(f"Failed to create impersonated credentials: {e}")
+                    logger.warning(
+                        f"Failed to create impersonated credentials: {e}")
 
             try:
                 url = blob.generate_signed_url(
                     version="v4",
-                    expiration=timedelta(seconds=settings.presigned_url_expiry),
+                    expiration=timedelta(
+                        seconds=settings.presigned_url_expiry),
                     method="PUT",
                     content_type=content_type,
                     **generate_url_kwargs,

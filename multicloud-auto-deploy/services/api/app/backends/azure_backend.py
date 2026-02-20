@@ -35,7 +35,8 @@ def _get_container():
         return _container_client
 
     if not settings.cosmos_db_endpoint or not settings.cosmos_db_key:
-        raise ValueError("COSMOS_DB_ENDPOINT and COSMOS_DB_KEY environment variables are required")
+        raise ValueError(
+            "COSMOS_DB_ENDPOINT and COSMOS_DB_KEY environment variables are required")
 
     try:
         from azure.cosmos import CosmosClient
@@ -43,12 +44,16 @@ def _get_container():
             settings.cosmos_db_endpoint,
             credential=settings.cosmos_db_key
         )
-        database = _cosmos_client.get_database_client(settings.cosmos_db_database)
-        _container_client = database.get_container_client(settings.cosmos_db_container)
-        logger.info(f"Cosmos DB container client initialized: {settings.cosmos_db_database}/{settings.cosmos_db_container}")
+        database = _cosmos_client.get_database_client(
+            settings.cosmos_db_database)
+        _container_client = database.get_container_client(
+            settings.cosmos_db_container)
+        logger.info(
+            f"Cosmos DB container client initialized: {settings.cosmos_db_database}/{settings.cosmos_db_container}")
         return _container_client
     except ImportError:
-        raise ImportError("azure-cosmos package is required for Azure backend") from None
+        raise ImportError(
+            "azure-cosmos package is required for Azure backend") from None
 
 
 def _get_blob_service():
@@ -58,7 +63,8 @@ def _get_blob_service():
         return _blob_service
 
     if not settings.azure_storage_account_name or not settings.azure_storage_account_key:
-        raise ValueError("AZURE_STORAGE_ACCOUNT_NAME and AZURE_STORAGE_ACCOUNT_KEY environment variables are required")
+        raise ValueError(
+            "AZURE_STORAGE_ACCOUNT_NAME and AZURE_STORAGE_ACCOUNT_KEY environment variables are required")
 
     try:
         from azure.storage.blob import BlobServiceClient
@@ -70,7 +76,8 @@ def _get_blob_service():
         logger.info(f"Blob Service client initialized: {account_url}")
         return _blob_service
     except ImportError:
-        raise ImportError("azure-storage-blob package is required for Azure backend") from None
+        raise ImportError(
+            "azure-storage-blob package is required for Azure backend") from None
 
 
 def _encode_token(token: Optional[str]) -> Optional[str]:
@@ -104,7 +111,8 @@ def _blob_url(key: str, permission, expiry_seconds: int) -> str:
     try:
         from azure.storage.blob import generate_blob_sas
 
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=expiry_seconds)
+        expires_at = datetime.now(timezone.utc) + \
+            timedelta(seconds=expiry_seconds)
         sas = generate_blob_sas(
             account_name=settings.azure_storage_account_name,
             container_name=settings.azure_storage_container,
@@ -176,7 +184,8 @@ class AzureBackend(BackendBase):
         posts: list[Post] = []
         for item in items:
             # Handle image keys (may be list or single value)
-            image_keys = item.get("imageKeys") or ([] if item.get("imageKey") is None else [item.get("imageKey")])
+            image_keys = item.get("imageKeys") or ([] if item.get(
+                "imageKey") is None else [item.get("imageKey")])
             image_keys = [key for key in image_keys if isinstance(key, str)]
 
             post = Post(
@@ -243,12 +252,14 @@ class AzureBackend(BackendBase):
         if nickname:
             item["nickname"] = nickname
 
-        logger.info(f"Writing post {post_id} to Cosmos DB with userId={user.user_id}")
+        logger.info(
+            f"Writing post {post_id} to Cosmos DB with userId={user.user_id}")
         try:
             container.upsert_item(item)
             logger.info(f"Successfully wrote post {post_id}")
         except Exception as e:
-            logger.error(f"Failed to write post {post_id}: {type(e).__name__}: {e}")
+            logger.error(
+                f"Failed to write post {post_id}: {type(e).__name__}: {e}")
             raise
 
         # Return response in same format as other backends (AWS, GCP)
@@ -270,8 +281,10 @@ class AzureBackend(BackendBase):
         # First query to find the post and get its userId
         try:
             query = "SELECT * FROM c WHERE c.id = @id AND c.docType = @docType"
-            params = [{"name": "@id", "value": post_id}, {"name": "@docType", "value": "post"}]
-            items = list(container.query_items(query=query, parameters=params, enable_cross_partition_query=True))
+            params = [{"name": "@id", "value": post_id},
+                      {"name": "@docType", "value": "post"}]
+            items = list(container.query_items(
+                query=query, parameters=params, enable_cross_partition_query=True))
             if not items:
                 raise ValueError(f"Post not found: {post_id}")
             post = items[0]
@@ -282,15 +295,18 @@ class AzureBackend(BackendBase):
 
         # Check permissions
         if not user.is_admin and post.get("userId") != user.user_id:
-            raise PermissionError("You do not have permission to delete this post")
+            raise PermissionError(
+                "You do not have permission to delete this post")
 
         # Delete associated images from Blob Storage
-        image_keys = post.get("imageKeys") or ([] if post.get("imageKey") is None else [post.get("imageKey")])
+        image_keys = post.get("imageKeys") or ([] if post.get(
+            "imageKey") is None else [post.get("imageKey")])
         image_keys = [key for key in image_keys if isinstance(key, str)]
 
         if image_keys:
             service = _get_blob_service()
-            container_client = service.get_container_client(settings.azure_storage_container)
+            container_client = service.get_container_client(
+                settings.azure_storage_container)
             for key in image_keys:
                 try:
                     container_client.delete_blob(key)
@@ -300,7 +316,8 @@ class AzureBackend(BackendBase):
 
         # Delete post document
         try:
-            container.delete_item(item=post_id, partition_key=post.get("userId"))
+            container.delete_item(
+                item=post_id, partition_key=post.get("userId"))
             logger.info(f"Deleted post {post_id}")
         except Exception as e:
             logger.error(f"Failed to delete post: {e}")
@@ -318,8 +335,10 @@ class AzureBackend(BackendBase):
         # Query to find the post
         try:
             query = "SELECT * FROM c WHERE c.id = @id AND c.docType = @docType"
-            params = [{"name": "@id", "value": post_id}, {"name": "@docType", "value": "post"}]
-            items = list(container.query_items(query=query, parameters=params, enable_cross_partition_query=True))
+            params = [{"name": "@id", "value": post_id},
+                      {"name": "@docType", "value": "post"}]
+            items = list(container.query_items(
+                query=query, parameters=params, enable_cross_partition_query=True))
             if not items:
                 raise ValueError(f"Post not found: {post_id}")
             post = items[0]
@@ -352,8 +371,10 @@ class AzureBackend(BackendBase):
         # First query to find the post and get its userId
         try:
             query = "SELECT * FROM c WHERE c.id = @id AND c.docType = @docType"
-            params = [{"name": "@id", "value": post_id}, {"name": "@docType", "value": "post"}]
-            items = list(container.query_items(query=query, parameters=params, enable_cross_partition_query=True))
+            params = [{"name": "@id", "value": post_id},
+                      {"name": "@docType", "value": "post"}]
+            items = list(container.query_items(
+                query=query, parameters=params, enable_cross_partition_query=True))
             if not items:
                 raise ValueError(f"Post not found: {post_id}")
             post = items[0]
@@ -364,7 +385,8 @@ class AzureBackend(BackendBase):
 
         # Check permissions
         if not user.is_admin and post.get("userId") != user.user_id:
-            raise PermissionError("You do not have permission to update this post")
+            raise PermissionError(
+                "You do not have permission to update this post")
 
         # Update fields
         now = _now_iso()
@@ -455,7 +477,8 @@ class AzureBackend(BackendBase):
         try:
             from azure.storage.blob import BlobSasPermissions
         except ImportError:
-            raise ImportError("azure-storage-blob package is required") from None
+            raise ImportError(
+                "azure-storage-blob package is required") from None
 
         post_id = str(uuid.uuid4())
 
