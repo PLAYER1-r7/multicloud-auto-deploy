@@ -42,13 +42,22 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
+      - name: Build package with bundled dependencies
         working-directory: multicloud-auto-deploy/services/frontend_web
-        run: pip install -r requirements.txt
+        run: |
+          # Install dependencies into .python_packages for Azure Linux Consumption
+          pip install --target .python_packages/lib/site-packages \
+            --no-cache-dir --upgrade -r requirements.txt
 
-      - name: Zip artifact
-        working-directory: multicloud-auto-deploy/services/frontend_web
-        run: zip -r release.zip app/ function_app.py host.json requirements.txt
+          # Cleanup unnecessary files
+          find .python_packages -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find .python_packages -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          find .python_packages -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+
+          # Create deployment zip with bundled deps
+          zip -r release.zip app/ function_app.py host.json requirements.txt .python_packages/
+          echo "✅ Package created:"
+          ls -lh release.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -81,9 +90,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-web-app
-
-      - name: Unzip artifact
-        run: unzip release.zip && rm release.zip
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -120,14 +126,22 @@ jobs:
               --storage-account "$STORAGE" \
               --os-type Linux
             echo "✅ Function App $APP_NAME created"
+            # Give the app time to initialize
+            sleep 30
           fi
 
       - name: Deploy to Azure Functions
-        uses: Azure/functions-action@v1
-        with:
-          app-name: multicloud-auto-deploy-${{ steps.env.outputs.env_name }}-frontend-web
-          slot-name: Production
-          package: .
+        run: |
+          ENV="${{ steps.env.outputs.env_name }}"
+          RG="multicloud-auto-deploy-${ENV}-rg"
+          APP_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
+
+          az functionapp deployment source config-zip \
+            --resource-group "$RG" \
+            --name "$APP_NAME" \
+            --src release.zip \
+            --timeout 600
+          echo "✅ $APP_NAME deployed"
 
       - name: Configure App Settings
         run: |
