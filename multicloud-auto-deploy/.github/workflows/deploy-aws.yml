@@ -218,6 +218,14 @@ jobs:
               --output json || { echo "❌ Lambda update failed!"; exit 1; }
           fi
 
+          # Wait for Lambda code update to complete before modifying configuration
+          # (ResourceConflictException occurs if both operations run concurrently)
+          echo "⏳ Waiting for Lambda code update to stabilize..."
+          aws lambda wait function-updated \
+            --function-name $LAMBDA_FUNCTION \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Lambda ready for configuration update"
+
           # Get CloudFront domain for CORS
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
           CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},http://localhost:5173"
@@ -285,6 +293,13 @@ jobs:
             echo "   COGNITO_DOMAIN='$COGNITO_DOMAIN'"
             exit 1
           fi
+
+          # Wait for any in-progress Lambda updates before configuration update
+          echo "⏳ Waiting for frontend-web Lambda to be ready..."
+          aws lambda wait function-updated \
+            --function-name "$FRONTEND_WEB_LAMBDA" \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ frontend-web Lambda ready for configuration update"
 
           echo "🔐 Updating frontend-web Lambda with Cognito settings..."
           cat > /tmp/frontend-web-env.json << EOF

@@ -385,7 +385,7 @@ lambda_function = aws.lambda_.Function(
     runtime="python3.12",
     handler="app.main.handler",  # FastAPI application entry point with Mangum
     role=lambda_role.arn,
-    memory_size=256 if stack == "staging" else 512,  # Cost optimization for staging
+    memory_size=512,  # 512MB for both staging and production (cold start performance)
     timeout=30,
     # Use x86_64 for compatibility with custom layers
     architectures=["x86_64"],
@@ -399,7 +399,8 @@ lambda_function = aws.lambda_.Function(
         {"index.py": pulumi.StringAsset(placeholder_code)}),
     # Skip code and layer updates: deployed by deploy-aws.yml workflow
     # Layers are managed by the CI/CD pipeline (lambda-layer.zip is built at deploy time)
-    opts=pulumi.ResourceOptions(ignore_changes=["code", "source_code_hash", "layers"]),
+    opts=pulumi.ResourceOptions(
+        ignore_changes=["code", "source_code_hash", "layers"]),
     environment={
         "variables": {
             "ENVIRONMENT": stack,
