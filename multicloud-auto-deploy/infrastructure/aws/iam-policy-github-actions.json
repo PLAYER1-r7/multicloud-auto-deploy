@@ -44,12 +44,17 @@
       ]
     },
     {
-      "Sid": "CloudFrontInvalidationPermissions",
+      "Sid": "CloudFrontPermissions",
       "Effect": "Allow",
       "Action": [
         "cloudfront:CreateInvalidation",
         "cloudfront:GetInvalidation",
-        "cloudfront:ListInvalidations"
+        "cloudfront:ListInvalidations",
+        "cloudfront:CreateOriginAccessControl",
+        "cloudfront:GetOriginAccessControl",
+        "cloudfront:UpdateOriginAccessControl",
+        "cloudfront:DeleteOriginAccessControl",
+        "cloudfront:ListOriginAccessControls"
       ],
       "Resource": "*"
     },
