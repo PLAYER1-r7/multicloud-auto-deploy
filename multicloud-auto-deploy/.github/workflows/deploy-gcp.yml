@@ -198,8 +198,9 @@ jobs:
           gsutil cp services/api/function-source.zip gs://$FUNCTION_BUCKET/function-source.zip
 
           # Get CDN IP from Pulumi outputs for CORS
+          # GCP Classic HTTP LB serves over HTTP (not HTTPS), so both schemes are included
           CDN_URL="${{ steps.pulumi_outputs.outputs.cdn_ip_address }}"
-          CORS_ORIGINS="https://${CDN_URL},http://localhost:5173"
+          CORS_ORIGINS="http://${CDN_URL},https://${CDN_URL},http://localhost:5173"
 
           echo "🔒 CORS Origins: $CORS_ORIGINS"
 
