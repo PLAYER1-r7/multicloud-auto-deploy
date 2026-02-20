@@ -124,6 +124,7 @@ jobs:
           echo "api_gateway_endpoint=$(pulumi stack output api_gateway_endpoint)" >> $GITHUB_OUTPUT
           echo "frontend_bucket_name=$(pulumi stack output frontend_bucket_name)" >> $GITHUB_OUTPUT
           echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)" >> $GITHUB_OUTPUT
+          echo "cloudfront_distribution_id=$(pulumi stack output cloudfront_distribution_id)" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$(pulumi stack output cognito_user_pool_id)" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
           echo "posts_table_name=$(pulumi stack output posts_table_name)" >> $GITHUB_OUTPUT
@@ -294,6 +295,20 @@ jobs:
         run: |
           S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
           aws s3 sync multicloud-auto-deploy/services/frontend_react/dist/ s3://$S3_BUCKET/ --delete
+
+      - name: Restore Landing Page
+        run: |
+          S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
+          DIST_ID="${{ steps.pulumi_outputs.outputs.cloudfront_distribution_id }}"
+          # React app assets are under /assets/; only index.html conflicts with the landing page
+          aws s3 cp multicloud-auto-deploy/static-site/index.html s3://$S3_BUCKET/index.html \
+            --cache-control "public, max-age=3600" \
+            --content-type "text/html"
+          echo "✅ Landing page restored to s3://$S3_BUCKET/index.html"
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths "/index.html" \
+            --no-cli-pager
 
       - name: Notify Success
         if: success()
