@@ -246,13 +246,29 @@ class AwsBackend(BackendBase):
 
     def get_profile(self, user_id: str) -> ProfileResponse:
         """プロフィールを取得"""
-        # プロフィール機能は未実装
-        return ProfileResponse(
-            user_id=user_id,
-            nickname=None,
-            bio="",
-            avatar_url="",
-        )
+        try:
+            result = self.table.get_item(
+                Key={"PK": "PROFILES", "SK": user_id}
+            )
+            item = result.get("Item")
+            if not item:
+                return ProfileResponse(
+                    user_id=user_id,
+                    nickname=None,
+                    bio=None,
+                    avatar_url=None,
+                )
+            return ProfileResponse(
+                user_id=user_id,
+                nickname=item.get("nickname"),
+                bio=item.get("bio"),
+                avatar_url=item.get("avatar_url"),
+                created_at=item.get("created_at"),
+                updated_at=item.get("updated_at"),
+            )
+        except Exception as e:
+            logger.error(f"Error getting profile for {user_id}: {e}")
+            raise
 
     def update_profile(
         self,
@@ -260,12 +276,46 @@ class AwsBackend(BackendBase):
         body: ProfileUpdateRequest,
     ) -> ProfileResponse:
         """プロフィールを更新"""
-        # プロフィール機能は未実装
+        now = datetime.now(timezone.utc).isoformat()
+
+        # 既存プロフィールを取得して created_at を保持し、未指定フィールドをマージ
+        existing = self.table.get_item(
+            Key={"PK": "PROFILES", "SK": user.user_id}
+        ).get("Item")
+        created_at = existing.get("created_at", now) if existing else now
+
+        item: dict = {
+            "PK": "PROFILES",
+            "SK": user.user_id,
+            "user_id": user.user_id,
+            "created_at": created_at,
+            "updated_at": now,
+        }
+        # 既存データをベースにしてリクエストで指定されたフィールドのみ上書き
+        if existing:
+            for field in ("nickname", "bio", "avatar_url"):
+                if field in existing:
+                    item[field] = existing[field]
+        if body.nickname is not None:
+            item["nickname"] = body.nickname
+        if body.bio is not None:
+            item["bio"] = body.bio
+        if body.avatar_key is not None:
+            item["avatar_url"] = body.avatar_key
+
+        try:
+            self.table.put_item(Item=item)
+        except Exception as e:
+            logger.error(f"Error updating profile for {user.user_id}: {e}")
+            raise
+
         return ProfileResponse(
             user_id=user.user_id,
-            nickname=body.nickname,
-            bio=body.bio or "",
-            avatar_url=None,
+            nickname=item.get("nickname"),
+            bio=item.get("bio"),
+            avatar_url=item.get("avatar_url"),
+            created_at=created_at,
+            updated_at=now,
         )
 
     def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
