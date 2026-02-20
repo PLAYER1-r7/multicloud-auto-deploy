@@ -39,8 +39,16 @@ class Settings(BaseSettings):
     posts_table_name: Optional[str] = None
     images_bucket_name: Optional[str] = None
     images_cdn_url: Optional[str] = None
-    cognito_user_pool_id: Optional[str] = None
-    cognito_client_id: Optional[str] = None
+    # Accepts both COGNITO_USER_POOL_ID and AWS_COGNITO_USER_POOL_ID
+    cognito_user_pool_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("cognito_user_pool_id", "aws_cognito_user_pool_id"),
+    )
+    # Accepts both COGNITO_CLIENT_ID and AWS_COGNITO_CLIENT_ID
+    cognito_client_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("cognito_client_id", "aws_cognito_client_id"),
+    )
 
     # Azure設定
     azure_tenant_id: Optional[str] = None
