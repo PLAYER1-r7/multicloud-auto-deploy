@@ -187,6 +187,14 @@ jobs:
           echo "🔧 Using custom Lambda Layer"
           LAYER_ARNS="${{ steps.deploy_layer.outputs.layer_arn }}"
 
+          # Wait for any Pulumi-triggered updates (env/config) to complete before we touch this Lambda
+          # Pulumi up just ran and may have updated the Lambda's environment/configuration
+          echo "⏳ Waiting for Lambda to be ready (Pulumi may still be updating it)..."
+          aws lambda wait function-updated \
+            --function-name $LAMBDA_FUNCTION \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Lambda ready"
+
           # Debug: Check lambda.zip exists and show size
           echo "📦 Checking lambda.zip..."
           ls -lh multicloud-auto-deploy/services/api/lambda.zip || { echo "❌ lambda.zip not found!"; exit 1; }
