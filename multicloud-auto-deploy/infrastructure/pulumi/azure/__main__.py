@@ -358,7 +358,7 @@ frontdoor_origin = azure.cdn.AFDOrigin(
     enabled_state="Enabled",
 )
 
-# Front Door Route
+# Front Door Route (default - serves landing page and other paths from Blob Storage)
 frontdoor_route = azure.cdn.Route(
     "frontdoor-route",
     route_name=f"{project_name}-{stack}-route",
@@ -374,6 +374,60 @@ frontdoor_route = azure.cdn.Route(
     link_to_default_domain="Enabled",
     https_redirect="Enabled",
     opts=pulumi.ResourceOptions(depends_on=[frontdoor_origin]),
+)
+
+# ========================================
+# Front Door: frontend_web (Simple SNS) origin + route for /sns/*
+# Routes /sns/* → Azure Functions multicloud-auto-deploy-{stack}-frontend-web
+# ========================================
+frontend_web_fd_origin_group = azure.cdn.AFDOriginGroup(
+    "frontdoor-frontend-web-origin-group",
+    origin_group_name=f"{project_name}-{stack}-frontend-web-origin-group",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    load_balancing_settings=azure.cdn.LoadBalancingSettingsParametersArgs(
+        sample_size=4,
+        successful_samples_required=3,
+        additional_latency_in_milliseconds=50,
+    ),
+    health_probe_settings=azure.cdn.HealthProbeParametersArgs(
+        probe_path="/sns/health",
+        probe_request_type="GET",
+        probe_protocol="Https",
+        probe_interval_in_seconds=100,
+    ),
+)
+
+frontend_web_fd_origin = azure.cdn.AFDOrigin(
+    "frontdoor-frontend-web-origin",
+    origin_name=f"{project_name}-{stack}-frontend-web-origin",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    origin_group_name=frontend_web_fd_origin_group.name,
+    host_name=f"{project_name}-{stack}-frontend-web.azurewebsites.net",
+    origin_host_header=f"{project_name}-{stack}-frontend-web.azurewebsites.net",
+    http_port=80,
+    https_port=443,
+    priority=1,
+    weight=1000,
+    enabled_state="Enabled",
+)
+
+frontdoor_sns_route = azure.cdn.Route(
+    "frontdoor-sns-route",
+    route_name=f"{project_name}-{stack}-sns-route",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    endpoint_name=frontdoor_endpoint.name,
+    origin_group=azure.cdn.ResourceReferenceArgs(
+        id=frontend_web_fd_origin_group.id,
+    ),
+    supported_protocols=["Http", "Https"],
+    patterns_to_match=["/sns", "/sns/*"],
+    forwarding_protocol="HttpsOnly",
+    link_to_default_domain="Enabled",
+    https_redirect="Enabled",
+    opts=pulumi.ResourceOptions(depends_on=[frontend_web_fd_origin]),
 )
 
 # ========================================

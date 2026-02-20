@@ -127,6 +127,7 @@ jobs:
               "API_BASE_URL": "${API_URL}",
               "AUTH_PROVIDER": "aws",
               "AUTH_DISABLED": "${{ steps.env.outputs.auth_disabled }}",
+              "STAGE_NAME": "sns",
               "COGNITO_DOMAIN": "${{ secrets.COGNITO_DOMAIN }}",
               "COGNITO_CLIENT_ID": "${{ secrets.COGNITO_CLIENT_ID }}",
               "COGNITO_REDIRECT_URI": "${{ secrets.FRONTEND_WEB_REDIRECT_URI }}"

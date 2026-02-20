@@ -96,3 +96,11 @@ jobs:
           app-name: multicloud-auto-deploy-${{ steps.env.outputs.env_name }}-frontend-web
           slot-name: Production
           package: .
+
+      - name: Configure App Settings
+        run: |
+          az functionapp config appsettings set \
+            --name multicloud-auto-deploy-${{ steps.env.outputs.env_name }}-frontend-web \
+            --resource-group multicloud-auto-deploy-${{ steps.env.outputs.env_name }} \
+            --settings STAGE_NAME=sns
+          echo "✅ STAGE_NAME=sns configured"

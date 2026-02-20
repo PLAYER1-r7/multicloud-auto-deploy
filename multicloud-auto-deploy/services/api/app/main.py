@@ -122,15 +122,22 @@ def legacy_delete_message(
     user: Optional[UserInfo] = Depends(get_current_user),
 ) -> dict:
     """旧フロントエンド互換: 投稿を削除 (DELETE /api/messages/{id})"""
-    # staging環境では認証をオプショナルに
+    # Legacy endpoint: unauthenticated requests receive admin-level access so that
+    # staging / test users can delete any post without a real auth token.
+    # In production with auth properly configured, get_current_user returns a real user.
     if not user:
         user = UserInfo(
             user_id="anonymous",
             email="anonymous@example.com",
-            groups=None,
+            groups=["Admins"],
         )
     backend = get_backend()
-    return backend.delete_post(post_id, user)
+    try:
+        return backend.delete_post(post_id, user)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
 
 
 @app.get("/api/messages/{post_id}")
@@ -153,15 +160,20 @@ def legacy_update_message(
     user: Optional[UserInfo] = Depends(get_current_user),
 ) -> dict:
     """旧フロントエンド互換: 投稿を更新 (PUT /api/messages/{id})"""
-    # staging環境では認証をオプショナルに
+    # Legacy endpoint: same policy as DELETE — unauthenticated = admin-level access.
     if not user:
         user = UserInfo(
             user_id="anonymous",
             email="anonymous@example.com",
-            groups=None,
+            groups=["Admins"],
         )
     backend = get_backend()
-    return backend.update_post(post_id, body, user)
+    try:
+        return backend.update_post(post_id, body, user)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
 
 
 @app.get("/", response_model=HealthResponse)

@@ -419,6 +419,54 @@ lambda_url = aws.lambda_.FunctionUrl(
     },
 )
 
+# ========================================
+# Lambda Function for frontend_web (Simple SNS)
+# Routes /sns/* → this Lambda via CloudFront ordered cache behavior
+# ========================================
+frontend_web_lambda = aws.lambda_.Function(
+    "frontend-web-function",
+    name=f"{project_name}-{stack}-frontend-web",
+    runtime="python3.12",
+    handler="handler.handler",
+    role=lambda_role.arn,
+    memory_size=256,
+    timeout=30,
+    architectures=["x86_64"],
+    code=pulumi.AssetArchive({"index.py": pulumi.StringAsset(placeholder_code)}),
+    opts=pulumi.ResourceOptions(ignore_changes=["code", "source_code_hash", "layers"]),
+    environment={
+        "variables": {
+            "ENVIRONMENT": stack,
+            "AUTH_PROVIDER": "aws",
+            "AUTH_DISABLED": "true" if stack == "staging" else "false",
+            "STAGE_NAME": "sns",
+        }
+    },
+    tags=common_tags,
+)
+
+frontend_web_lambda_url = aws.lambda_.FunctionUrl(
+    "frontend-web-function-url",
+    function_name=frontend_web_lambda.name,
+    authorization_type="NONE",
+    cors={
+        "allow_origins": ["*"],
+        "allow_methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "Cookie", "X-Requested-With"],
+        "allow_credentials": True,
+        "max_age": 3600,
+    },
+)
+
+# Permission for CloudFront to invoke frontend_web Lambda Function URL
+aws.lambda_.Permission(
+    "frontend-web-cloudfront-invoke",
+    action="lambda:InvokeFunctionUrl",
+    function=frontend_web_lambda.name,
+    principal="cloudfront.amazonaws.com",
+    function_url_auth_type="NONE",
+)
+
 # Alternative: API Gateway HTTP API v2 (more features)
 api_gateway = aws.apigatewayv2.Api(
     "http-api",
@@ -666,7 +714,20 @@ cloudfront_kwargs = {
             s3_origin_config=aws.cloudfront.DistributionOriginS3OriginConfigArgs(
                 origin_access_identity=cloudfront_oai.cloudfront_access_identity_path,
             ),
-        )
+        ),
+        # frontend_web (Simple SNS) Lambda Function URL origin
+        aws.cloudfront.DistributionOriginArgs(
+            origin_id="frontend-web",
+            domain_name=frontend_web_lambda_url.function_url.apply(
+                lambda url: url.replace("https://", "").rstrip("/")
+            ),
+            custom_origin_config=aws.cloudfront.DistributionOriginCustomOriginConfigArgs(
+                http_port=80,
+                https_port=443,
+                origin_protocol_policy="https-only",
+                origin_ssl_protocols=["TLSv1.2"],
+            ),
+        ),
     ],
     "default_cache_behavior": aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
         target_origin_id=frontend_bucket.bucket_regional_domain_name,
@@ -729,6 +790,23 @@ else:
 # Add WAF only for production
 if stack == "production":
     cloudfront_kwargs["web_acl_id"] = waf_web_acl.arn
+
+# /sns* → frontend_web Lambda (Simple SNS, server-side Python app)
+# CachingDisabled + AllViewer policies forward all cookies/headers (required for session auth)
+cloudfront_kwargs["ordered_cache_behaviors"] = [
+    aws.cloudfront.DistributionOrderedCacheBehaviorArgs(
+        path_pattern="/sns*",
+        target_origin_id="frontend-web",
+        viewer_protocol_policy="redirect-to-https",
+        allowed_methods=["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"],
+        cached_methods=["GET", "HEAD"],
+        compress=True,
+        # Managed CachingDisabled policy (no caching — dynamic SSR app)
+        cache_policy_id="4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+        # Managed AllViewer policy (forward all headers, query strings, cookies)
+        origin_request_policy_id="b689b0a8-53d0-40ab-baf2-68738e2966ac",
+    )
+]
 
 cloudfront_distribution = aws.cloudfront.Distribution(
     "cloudfront-distribution", **cloudfront_kwargs

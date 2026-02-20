@@ -298,6 +298,36 @@ backend_bucket = gcp.compute.BackendBucket(
     "cdn-backend-bucket", **backend_bucket_kwargs
 )
 
+# ========================================
+# Serverless NEG + Backend Service for frontend_web (Simple SNS)
+# Routes /sns/* → Cloud Run multicloud-auto-deploy-{stack}-frontend-web
+# ========================================
+frontend_web_neg = gcp.compute.RegionNetworkEndpointGroup(
+    "frontend-web-neg",
+    name=f"{project_name}-{stack}-frontend-web-neg",
+    project=project,
+    region=region,
+    network_endpoint_type="SERVERLESS",
+    cloud_run=gcp.compute.RegionNetworkEndpointGroupCloudRunArgs(
+        service=f"{project_name}-{stack}-frontend-web",
+    ),
+    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+)
+
+frontend_web_backend = gcp.compute.BackendService(
+    "frontend-web-backend",
+    name=f"{project_name}-{stack}-frontend-web-backend",
+    project=project,
+    protocol="HTTP",
+    load_balancing_scheme="EXTERNAL",
+    backends=[
+        gcp.compute.BackendServiceBackendArgs(
+            group=frontend_web_neg.id,
+        )
+    ],
+    opts=pulumi.ResourceOptions(depends_on=[enabled_services, frontend_web_neg]),
+)
+
 # Managed SSL Certificate (for custom domain - optional)
 # Note: This requires a custom domain. For now, we'll use HTTP only.
 # To enable HTTPS with custom domain:
@@ -306,29 +336,35 @@ backend_bucket = gcp.compute.BackendBucket(
 # 3. Use TargetHttpsProxy instead of TargetHttpProxy
 
 # URL Map for Load Balancer
-# NOTE: Cloud CDN with scheme=EXTERNAL (Classic LB) does NOT support
-# advanced routing rules such as routeAction.urlRewrite or
-# defaultCustomErrorResponsePolicy. These features require the Global
-# Application Load Balancer (scheme=EXTERNAL_MANAGED).
-#
-# SPA deep-link behaviour with Classic LB:
-#   GCS returns the not_found_page (index.html) body WITH a 404 status.
-#   Cloud CDN forwards the 404. Browsers still render the SPA correctly
-#   because the HTML is valid; only automated tests / SEO tools see 404.
-#
-# To achieve a true HTTP 200 for /sns/* deep links, upgrade the forwarding
-# rules to load_balancing_scheme="EXTERNAL_MANAGED" and re-add:
-#   default_custom_error_response_policy=gcp.compute.URLMapDefaultCustomErrorResponsePolicyArgs(
-#       error_service=backend_bucket.self_link,
-#       error_response_rules=[gcp.compute.URLMapDefaultCustomErrorResponsePolicyErrorResponseRuleArgs(
-#           match_response_codes=["4xx"], path="/sns/index.html", override_response_code=200)],
-#   )
+# Routes:
+#   /sns, /sns/*  → frontend_web Cloud Run (Simple SNS, server-side Python app)
+#   /*            → backend_bucket (GCS static files - landing page etc.)
+# NOTE: Classic LB (EXTERNAL) does not support URL rewrites. The frontend_web
+# app is configured with STAGE_NAME=sns so it handles /sns/* paths natively.
 url_map = gcp.compute.URLMap(
     "cdn-url-map",
     name=f"{project_name}-{stack}-cdn-urlmap",
     project=project,
     default_service=backend_bucket.self_link,
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    host_rules=[
+        gcp.compute.URLMapHostRuleArgs(
+            hosts=["*"],
+            path_matcher="main",
+        )
+    ],
+    path_matchers=[
+        gcp.compute.URLMapPathMatcherArgs(
+            name="main",
+            default_service=backend_bucket.self_link,
+            path_rules=[
+                gcp.compute.URLMapPathMatcherPathRuleArgs(
+                    paths=["/sns", "/sns/*"],
+                    service=frontend_web_backend.self_link,
+                )
+            ],
+        )
+    ],
+    opts=pulumi.ResourceOptions(depends_on=[enabled_services, frontend_web_backend]),
 )
 
 # Target HTTPS Proxy with SSL (managed certificate)
