@@ -28,11 +28,13 @@ project_name = "multicloud-auto-deploy"
 
 # Get the service account email from environment or config (used by GitHub Actions)
 # This will be set from GCP_CREDENTIALS in the workflow
-github_actions_sa = config.get("github_actions_sa") or os.getenv("GITHUB_ACTIONS_SA")
+github_actions_sa = config.get(
+    "github_actions_sa") or os.getenv("GITHUB_ACTIONS_SA")
 
 # CORS allowed origins (configurable per environment)
 allowed_origins = config.get("allowedOrigins") or "*"
-allowed_origins_list = allowed_origins.split(",") if allowed_origins != "*" else ["*"]
+allowed_origins_list = allowed_origins.split(
+    ",") if allowed_origins != "*" else ["*"]
 
 # Common labels
 common_labels = {
@@ -51,7 +53,8 @@ services = [
     "run.googleapis.com",  # Cloud Functions Gen 2 uses Cloud Run
     "secretmanager.googleapis.com",  # Secret Manager
     "firebase.googleapis.com",  # Firebase
-    "identitytoolkit.googleapis.com",  # Identity Platform (Firebase Auth backend)
+    # Identity Platform (Firebase Auth backend)
+    "identitytoolkit.googleapis.com",
 ]
 
 enabled_services = []
@@ -155,7 +158,8 @@ uploads_bucket = gcp.storage.Bucket(
         gcp.storage.BucketCorArgs(
             origins=allowed_origins_list,
             methods=["GET", "HEAD", "PUT", "OPTIONS"],
-            response_headers=["Content-Type", "Authorization", "X-Requested-With"],
+            response_headers=["Content-Type",
+                              "Authorization", "X-Requested-With"],
             max_age_seconds=3600,
         )
     ],
@@ -200,7 +204,8 @@ frontend_bucket = gcp.storage.Bucket(
         gcp.storage.BucketCorArgs(
             origins=allowed_origins_list,
             methods=["GET", "HEAD", "OPTIONS"],
-            response_headers=["Content-Type", "Authorization", "X-Requested-With"],
+            response_headers=["Content-Type",
+                              "Authorization", "X-Requested-With"],
             max_age_seconds=3600,
         )
     ],
@@ -301,6 +306,23 @@ backend_bucket = gcp.compute.BackendBucket(
 # 3. Use TargetHttpsProxy instead of TargetHttpProxy
 
 # URL Map for Load Balancer
+# NOTE: Cloud CDN with scheme=EXTERNAL (Classic LB) does NOT support
+# advanced routing rules such as routeAction.urlRewrite or
+# defaultCustomErrorResponsePolicy. These features require the Global
+# Application Load Balancer (scheme=EXTERNAL_MANAGED).
+#
+# SPA deep-link behaviour with Classic LB:
+#   GCS returns the not_found_page (index.html) body WITH a 404 status.
+#   Cloud CDN forwards the 404. Browsers still render the SPA correctly
+#   because the HTML is valid; only automated tests / SEO tools see 404.
+#
+# To achieve a true HTTP 200 for /sns/* deep links, upgrade the forwarding
+# rules to load_balancing_scheme="EXTERNAL_MANAGED" and re-add:
+#   default_custom_error_response_policy=gcp.compute.URLMapDefaultCustomErrorResponsePolicyArgs(
+#       error_service=backend_bucket.self_link,
+#       error_response_rules=[gcp.compute.URLMapDefaultCustomErrorResponsePolicyErrorResponseRuleArgs(
+#           match_response_codes=["4xx"], path="/sns/index.html", override_response_code=200)],
+#   )
 url_map = gcp.compute.URLMap(
     "cdn-url-map",
     name=f"{project_name}-{stack}-cdn-urlmap",
@@ -313,7 +335,8 @@ url_map = gcp.compute.URLMap(
 # Custom domain configuration (optional)
 custom_domain = config.get("customDomain")  # e.g., gcp.yourdomain.com
 ssl_domains = (
-    [custom_domain] if custom_domain else [f"{project_name}-{stack}.example.com"]
+    [custom_domain] if custom_domain else [
+        f"{project_name}-{stack}.example.com"]
 )
 
 managed_ssl_cert = gcp.compute.ManagedSslCertificate(
@@ -441,8 +464,10 @@ pulumi.export(
     ),
 )
 pulumi.export("cdn_ip_address", cdn_ip_address.address)
-pulumi.export("cdn_url", cdn_ip_address.address.apply(lambda ip: f"http://{ip}"))
-pulumi.export("cdn_https_url", cdn_ip_address.address.apply(lambda ip: f"https://{ip}"))
+pulumi.export("cdn_url", cdn_ip_address.address.apply(
+    lambda ip: f"http://{ip}"))
+pulumi.export("cdn_https_url", cdn_ip_address.address.apply(
+    lambda ip: f"https://{ip}"))
 pulumi.export("backend_bucket_name", backend_bucket.name)
 pulumi.export("url_map_name", url_map.name)
 # Cloud Armor exports only for production
@@ -476,10 +501,12 @@ if monitoring_resources["notification_channel"]:
         monitoring_resources["notification_channel"].id,
     )
 pulumi.export(
-    "monitoring_function_alerts", list(monitoring_resources["function_alerts"].keys())
+    "monitoring_function_alerts", list(
+        monitoring_resources["function_alerts"].keys())
 )
 pulumi.export(
-    "monitoring_firestore_alerts", list(monitoring_resources["firestore_alerts"].keys())
+    "monitoring_firestore_alerts", list(
+        monitoring_resources["firestore_alerts"].keys())
 )
 if monitoring_resources["billing_budget"]:
     pulumi.export(
@@ -505,7 +532,8 @@ if stack == "production":
     )
 else:
     cost_estimate = (
-        cost_estimate_base + "Cloud Armor: Disabled for staging (saves ~$6-7/month). "
+        cost_estimate_base +
+        "Cloud Armor: Disabled for staging (saves ~$6-7/month). "
         "Estimated: $8-15/month for low traffic without Cloud Armor."
     )
 

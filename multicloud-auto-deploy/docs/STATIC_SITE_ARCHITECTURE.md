@@ -92,23 +92,41 @@ Front Door endpoint  (single endpoint)
 
 ---
 
-### GCP — Cloud CDN (URL Map path routing)
+### GCP — Cloud CDN (URL Map + GCS Website Hosting)
 
 ```
-cdn_ip_address (Global LB)
-├── /sns/*   →  backend_bucket  ← frontend_bucket (GCS)  ← SNS app files (dist/)
-└── /*       →  backend_bucket  ← frontend_bucket (GCS)  ← landing page (index.html)
+cdn_ip_address (Global Classic External LB — scheme=EXTERNAL)
+└── /*    →  backend_bucket  ← frontend_bucket (GCS website hosting)
+                ├─ /          → landing page (index.html at bucket root)
+                └─ /sns/*     → SNS React SPA
+
+SPA deep-link behaviour (scheme=EXTERNAL):
+  /sns/unknown-path → GCS serves index.html body with HTTP 404
+  Cloud CDN forwards the 404 as-is (no status override).
+  Browsers render the SPA correctly despite the 404 status.
 ```
 
 **Resources**:
 
 - `cdn_ip_address` — single Global External IP (~$7.30/month)
-- `backend_bucket` — single Cloud CDN backend pointing to `frontend_bucket`; serves both landing files (at bucket root) and SNS app (under `sns/` prefix)
-- `url_map` — URLMapPathMatcher with:
-  - `path_rules[0]`: `/sns/*` → `backend_bucket`
-  - `default_service`: `backend_bucket` (serves landing page at `/`)
-- SSL certificate (`managed_ssl_cert`): covers both `customDomain` and `staticSiteDomain` in a single Google Managed certificate (max 100 domains per cert)
-- Optional custom domain via `customDomain` + `staticSiteDomain` config keys (both should point to the same subdomain)
+- `frontend_bucket` — GCS bucket with `website.not_found_page = "index.html"`; for unknown paths GCS returns the `index.html` body **with HTTP 404 status**
+- `backend_bucket` — Cloud CDN backend pointing to `frontend_bucket`; CDN caching enabled for static assets
+- `url_map` — `default_service: backend_bucket`; no advanced routing rules (see note below)
+- `uploads_bucket` — separate GCS bucket for image uploads (`ashnova-{project}-{stack}-uploads`); the Compute Engine service account has `roles/storage.objectAdmin` on this bucket and `roles/iam.serviceAccountTokenCreator` on itself (required for signed URL generation via IAM signBlob API)
+- SSL certificate (`managed_ssl_cert`): covers custom domain when configured
+
+> **SPA Deep-Link Routing — GCP Classic LB limitation**: `defaultCustomErrorResponsePolicy`
+> (which would convert GCS 4xx to HTTP 200) is only supported on
+> `load_balancing_scheme = "EXTERNAL_MANAGED"` (Global Application Load Balancer).
+> The current setup uses the classic `EXTERNAL` scheme to stay within the free-tier
+> `BACKEND_BUCKETS` quota. As a result, direct navigation to `/sns/unknown-path` returns
+> HTTP 404 with the SPA HTML body — browsers render the page correctly, but HTTP clients
+> (e.g., `curl`, Lighthouse, SEO crawlers) see 404. The staging test suite accepts
+> `404 + <html>` as a passing SPA fallback check.
+>
+> **To achieve true HTTP 200**, migrate forwarding rules to `EXTERNAL_MANAGED`
+> and re-add `defaultCustomErrorResponsePolicy` to the URL map.
+> This is tracked as a future improvement.
 
 > **Design note**: A separate `landing_bucket` + `landing_backend_bucket` was initially used. This was consolidated to a single `backend_bucket` to stay within the GCP `BACKEND_BUCKETS` project quota (limit: 3). Landing page files are deployed to the root of `frontend_bucket`; SNS app files are deployed under the `sns/` prefix of the same bucket.
 
@@ -401,14 +419,52 @@ cd services/frontend_react && npm run build
 
 ### GCP: `/sns/` returns landing page content
 
-The URL Map path matcher may not have been applied. Verify:
+Verify that the frontend build was deployed to the `sns/` prefix of the frontend bucket:
 
 ```bash
-gcloud compute url-maps describe <project>-<stack>-cdn-urlmap --global
-# Should show pathMatchers with /sns/* rule
+gcloud storage ls gs://ashnova-multicloud-auto-deploy-staging-frontend/sns/
+# Should list index.html and assets/
 ```
 
-Re-run `pulumi up` to reconcile state.
+If not, rebuild:
+
+```bash
+cd services/frontend_react && npm run build
+# Re-run deploy workflow or copy dist/ to gs://.../sns/
+```
+
+### GCP: `/sns/unknown-path` returns 404 (SPA deep-link behaviour)
+
+**This is expected behaviour with the Classic External LB** (`load_balancing_scheme = "EXTERNAL"`).
+
+GCS serves the `not_found_page` (`index.html`) with an HTTP 404 status. Cloud CDN
+forwards the 404 without modifying the status code because `defaultCustomErrorResponsePolicy`
+(which would override 4xx → 200) is only supported on `EXTERNAL_MANAGED` load balancers.
+
+**Behaviour summary**:
+| Client | Result |
+|--------|--------|
+| Browser (React Router) | Renders SPA correctly — `index.html` is returned |
+| `curl` / HTTP clients | Sees HTTP 404, body is SPA HTML |
+| SEO crawlers | May flag deep links as 404 (not ideal for production) |
+
+**Staging test**: `test-staging-sns.sh` accepts both HTTP 200 and `404 + <html>` as a
+passing SPA fallback result.
+
+**To fix properly** (future improvement):
+1. Change `load_balancing_scheme` in Pulumi forwarding rules to `"EXTERNAL_MANAGED"`
+2. Re-add to the URL Map:
+   ```python
+   default_custom_error_response_policy=gcp.compute.URLMapDefaultCustomErrorResponsePolicyArgs(
+       error_service=backend_bucket.self_link,
+       error_response_rules=[gcp.compute.URLMapDefaultCustomErrorResponsePolicyErrorResponseRuleArgs(
+           match_response_codes=["4xx"],
+           path="/sns/index.html",
+           override_response_code=200,
+       )],
+   )
+   ```
+3. Run `pulumi up` and verify with `curl -o /dev/null -s -w "%{http_code}" http://<ip>/sns/unknown-path`
 
 ### Azure: `/sns/` route not working
 
