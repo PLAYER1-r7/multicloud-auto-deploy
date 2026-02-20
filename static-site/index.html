@@ -98,28 +98,31 @@
         </div>
     </div>
     <script>
-        // dev container環境でも動作するよう、動的にリンクを生成
+        // 環境を自動検出してリンクを動的生成
+        // - ローカル開発 (localhost): 各サービスが別ポートで起動
+        // - Dev Container / Codespaces: ポート転送URLパターン
+        // - Staging / Production (CDN): /sns/ パスにReactアプリが配置
         const protocol = window.location.protocol;
         const hostname = window.location.hostname;
-        
-        // ポート番号を取得（dev containerの転送URLの場合、異なる形式になる）
         const currentPort = window.location.port;
-        
-        // 同じホストの別ポートへのリンクを生成
-        document.getElementById('snsLink').href = `${protocol}//${hostname}:8080`;
-        document.getElementById('apiDocsLink').href = `${protocol}//${hostname}:8000/docs`;
-        
-        // dev container環境ではポート転送URLが複雑になるため、
-        // 現在のURLベースで推測する（例: https://xxx-5173.preview... → https://xxx-8080.preview...）
-        if (currentPort && hostname.includes('preview')) {
-            // GitHub Codespaces や VS Code dev container の転送URLパターン
-            const snsHostname = hostname.replace(/-5173\./, '-8080.');
-            const apiHostname = hostname.replace(/-5173\./, '-8000.');
+
+        const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+        const isDevContainer = hostname.includes('preview') || hostname.includes('github.dev') || hostname.includes('codespaces') || hostname.includes('app.github.dev');
+
+        if (isLocal) {
+            // ローカル開発: 各サービスを別ポートで起動
+            document.getElementById('snsLink').href = `${protocol}//${hostname}:8080`;
+            document.getElementById('apiDocsLink').href = `${protocol}//${hostname}:8000/docs`;
+        } else if (isDevContainer) {
+            // Dev Container / Codespaces: ポート番号をURLに変換
+            const snsHostname = hostname.replace(/-(5173|3000)\./, '-8080.');
+            const apiHostname = hostname.replace(/-(5173|3000)\./, '-8000.');
             document.getElementById('snsLink').href = `${protocol}//${snsHostname}`;
             document.getElementById('apiDocsLink').href = `${protocol}//${apiHostname}/docs`;
-        } else if (currentPort && !hostname.includes('localhost') && !hostname.includes('127.0.0.1')) {
-            // その他のポート転送環境の場合
-            // 最初は localhostとして試して、必要に応じて調整
+        } else {
+            // Staging / Production: SNSアプリはCDN同一オリジンの /sns/ パスに配置
+            document.getElementById('snsLink').href = '/sns/';
+            document.getElementById('apiDocsLink').href = '/sns/#/api-docs';
         }
     </script>
 </body>
