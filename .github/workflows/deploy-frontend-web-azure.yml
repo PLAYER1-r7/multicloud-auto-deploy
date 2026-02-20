@@ -90,7 +90,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-web-app
-          path: .
+          path: /tmp/deploy
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -137,17 +137,21 @@ jobs:
           RG="multicloud-auto-deploy-${ENV}-rg"
           APP_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
 
-          # Clear WEBSITE_RUN_FROM_PACKAGE to allow zip deploy
-          az functionapp config appsettings set \
+          # Remove WEBSITE_RUN_FROM_PACKAGE to avoid conflict with zipdeploy
+          az functionapp config appsettings delete \
             --resource-group "$RG" --name "$APP_NAME" \
-            --settings WEBSITE_RUN_FROM_PACKAGE=0 &>/dev/null || true
+            --setting-names WEBSITE_RUN_FROM_PACKAGE 2>/dev/null || true
 
-          # Deploy using the newer az functionapp deploy API
-          az functionapp deploy \
+          # Find the zip file
+          ZIP_PATH=$(find /tmp/deploy -name "release.zip" | head -1)
+          echo "Zip file: $ZIP_PATH"
+          ls -lh "$ZIP_PATH"
+
+          # Deploy using Kudu zipdeploy
+          az functionapp deployment source config-zip \
             --resource-group "$RG" \
             --name "$APP_NAME" \
-            --src-path release.zip \
-            --type zip \
+            --src "$ZIP_PATH" \
             --timeout 600
           echo "✅ $APP_NAME deployed"
 
