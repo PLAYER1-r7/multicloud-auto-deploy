@@ -20,7 +20,7 @@ on:
           - production
 
 env:
-  AZURE_STORAGE_ACCOUNT: mcadstaticweb752
+  AZURE_STORAGE_ACCOUNT: mcadwebd45ihd
   AZURE_RESOURCE_GROUP: multicloud-auto-deploy-staging-rg
 
 jobs:
