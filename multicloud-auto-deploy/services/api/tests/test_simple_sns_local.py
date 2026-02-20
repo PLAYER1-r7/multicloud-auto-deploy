@@ -20,7 +20,6 @@ Environment variables (all optional)
   TEST_USER_ID       default: test-user-1
 """
 
-import io
 import os
 import struct
 import zlib

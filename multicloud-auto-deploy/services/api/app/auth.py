@@ -1,8 +1,9 @@
-from typing import Optional
-from dataclasses import dataclass
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
+from dataclasses import dataclass
+from typing import Optional
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)

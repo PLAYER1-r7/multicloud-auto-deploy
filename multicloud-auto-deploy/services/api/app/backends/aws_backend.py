@@ -1,16 +1,22 @@
 """AWS Backend Implementation with DynamoDB Single Table Design"""
 
+import logging
 import os
-import boto3
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Tuple
-from decimal import Decimal
-import logging
+from typing import Optional
 
-from app.backends.base import BackendBase
-from app.models import Post, CreatePostBody, UpdatePostBody, ProfileResponse, ProfileUpdateRequest
+import boto3
+
 from app.auth import UserInfo
+from app.backends.base import BackendBase
+from app.models import (
+    CreatePostBody,
+    Post,
+    ProfileResponse,
+    ProfileUpdateRequest,
+    UpdatePostBody,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +46,7 @@ class AwsBackend(BackendBase):
         limit: int,
         next_token: Optional[str],
         tag: Optional[str],
-    ) -> Tuple[list[Post], Optional[str]]:
+    ) -> tuple[list[Post], Optional[str]]:
         """投稿一覧を取得 (DynamoDB Query)"""
         try:
             query_kwargs = {

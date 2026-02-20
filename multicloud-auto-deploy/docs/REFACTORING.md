@@ -18,12 +18,12 @@ All 19 integration tests pass after the changes (`pytest tests/test_simple_sns_l
 
 ### 1. Deleted — Legacy Backend Files (5 files)
 
-| File | Reason |
-|------|--------|
-| `services/api/app/backends/local.py` | Old MinIO-object-store backend. Used obsolete `Message` / `MessageCreate` models. Replaced by `local_backend.py`. |
-| `services/api/app/backends/aws.py` | Old AWS DynamoDB backend for messages API. Replaced by `aws_backend.py`. |
-| `services/api/app/backends/azure.py` | Old Azure Cosmos DB backend for messages API. Replaced by `azure_backend.py`. |
-| `services/api/app/backends/gcp.py` | Old GCP Firestore backend for messages API. Replaced by `gcp_backend.py`. |
+| File                                   | Reason                                                                                                                                              |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `services/api/app/backends/local.py`   | Old MinIO-object-store backend. Used obsolete `Message` / `MessageCreate` models. Replaced by `local_backend.py`.                                   |
+| `services/api/app/backends/aws.py`     | Old AWS DynamoDB backend for messages API. Replaced by `aws_backend.py`.                                                                            |
+| `services/api/app/backends/azure.py`   | Old Azure Cosmos DB backend for messages API. Replaced by `azure_backend.py`.                                                                       |
+| `services/api/app/backends/gcp.py`     | Old GCP Firestore backend for messages API. Replaced by `gcp_backend.py`.                                                                           |
 | `services/api/app/backends/factory.py` | Duplicate `get_backend()` function. Imported from the deleted `local.py`, rendering it broken. The authoritative factory is `backends/__init__.py`. |
 
 All five files imported the obsolete models (`Message`, `MessageCreate`, `MessageUpdate`) that no longer exist in `models.py`. They were not imported by any live code path.
@@ -35,6 +35,7 @@ All five files imported the obsolete models (`Message`, `MessageCreate`, `Messag
 **Change:** Removed the `BaseBackend = BackendBase` backward-compatibility alias.
 
 **Before:**
+
 ```python
 from app.backends.base import BackendBase
 
@@ -43,6 +44,7 @@ BaseBackend = BackendBase
 ```
 
 **After:**
+
 ```python
 from app.backends.base import BackendBase
 ```
@@ -58,11 +60,13 @@ from app.backends.base import BackendBase
 #### 3-a. Fixed `MINIO_BUCKET_NAME` environment variable mismatch
 
 **Before:**
+
 ```python
 minio_bucket: str = "images"
 ```
 
 **After:**
+
 ```python
 # Accepts both MINIO_BUCKET and MINIO_BUCKET_NAME environment variables
 minio_bucket: str = Field(
@@ -94,6 +98,7 @@ import os
 The module already imports `boto3` at the top level (line 22). A duplicate `import boto3` existed inside the `generate_upload_urls()` function body. The inline import was removed.
 
 **Before (inside function):**
+
 ```python
 import boto3
 from botocore.config import Config
@@ -121,6 +126,7 @@ from datetime import datetime, timezone
 **Change:** Migrated from deprecated `@app.on_event` handlers to the modern `lifespan` context manager (FastAPI ≥ 0.93).
 
 **Before:**
+
 ```python
 app = FastAPI(title="Simple SNS API", ...)
 
@@ -134,6 +140,7 @@ async def shutdown_event():
 ```
 
 **After:**
+
 ```python
 from contextlib import asynccontextmanager
 
@@ -158,6 +165,7 @@ app = FastAPI(title="Simple SNS API", ..., lifespan=lifespan)
 **Before:** The backend had a `get_post(post_id)` method but no HTTP route exposed it. `frontend_web` worked around this by fetching all posts (`GET /posts?limit=50`) and filtering in Python — an O(n) scan.
 
 **After:**
+
 ```python
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -180,6 +188,7 @@ def get_post(post_id: str) -> dict:
 **Change:** Refactored `post_detail` view to use the new `GET /posts/{post_id}` API endpoint.
 
 **Before (O(n) full scan):**
+
 ```python
 # Fetched all posts and filtered in Python
 data = _fetch_json_with_headers(f"{api}/posts", {"limit": 50}, headers)
@@ -190,6 +199,7 @@ raise HTTPException(status_code=404, detail="Post not found")
 ```
 
 **After (O(1) direct lookup):**
+
 ```python
 item = _fetch_json_with_headers(f"{api}/posts/{post_id}", None, headers)
 return templates.TemplateResponse("post.html", ...)
@@ -227,14 +237,15 @@ return templates.TemplateResponse("post.html", ...)
 19 passed in 0.53s
 ```
 
-| Test Class | Tests | Result |
-|------------|-------|--------|
-| `TestHealthAndAuth` | 3 | ✅ All pass |
-| `TestPostCRUD` | 4 | ✅ All pass |
-| `TestImageUpload` | 8 | ✅ All pass |
-| `TestHashtags` | 4 | ✅ All pass |
+| Test Class          | Tests | Result      |
+| ------------------- | ----- | ----------- |
+| `TestHealthAndAuth` | 3     | ✅ All pass |
+| `TestPostCRUD`      | 4     | ✅ All pass |
+| `TestImageUpload`   | 8     | ✅ All pass |
+| `TestHashtags`      | 4     | ✅ All pass |
 
 Run with:
+
 ```bash
 cd services/api
 pytest tests/test_simple_sns_local.py -v
@@ -246,16 +257,16 @@ pytest tests/test_simple_sns_local.py -v
 
 ### `services/api/app/backends/`
 
-| File | Status | Purpose |
-|------|--------|---------|
-| `__init__.py` | Modified | Factory: `get_backend()` + `BackendBase` export |
-| `base.py` | Unchanged | Abstract base class `BackendBase` |
-| `local_backend.py` | Modified | Local dev: DynamoDB Local + MinIO |
-| `aws_backend.py` | Unchanged | AWS: DynamoDB + S3 |
-| `azure_backend.py` | Unchanged | Azure: Cosmos DB + Blob Storage |
-| `gcp_backend.py` | Unchanged | GCP: Firestore + Cloud Storage |
-| ~~`local.py`~~ | **Deleted** | Old MinIO-object-store backend |
-| ~~`aws.py`~~ | **Deleted** | Old DynamoDB messages backend |
-| ~~`azure.py`~~ | **Deleted** | Old Cosmos DB messages backend |
-| ~~`gcp.py`~~ | **Deleted** | Old Firestore messages backend |
-| ~~`factory.py`~~ | **Deleted** | Duplicate factory (broken) |
+| File               | Status      | Purpose                                         |
+| ------------------ | ----------- | ----------------------------------------------- |
+| `__init__.py`      | Modified    | Factory: `get_backend()` + `BackendBase` export |
+| `base.py`          | Unchanged   | Abstract base class `BackendBase`               |
+| `local_backend.py` | Modified    | Local dev: DynamoDB Local + MinIO               |
+| `aws_backend.py`   | Unchanged   | AWS: DynamoDB + S3                              |
+| `azure_backend.py` | Unchanged   | Azure: Cosmos DB + Blob Storage                 |
+| `gcp_backend.py`   | Unchanged   | GCP: Firestore + Cloud Storage                  |
+| ~~`local.py`~~     | **Deleted** | Old MinIO-object-store backend                  |
+| ~~`aws.py`~~       | **Deleted** | Old DynamoDB messages backend                   |
+| ~~`azure.py`~~     | **Deleted** | Old Cosmos DB messages backend                  |
+| ~~`gcp.py`~~       | **Deleted** | Old Firestore messages backend                  |
+| ~~`factory.py`~~   | **Deleted** | Duplicate factory (broken)                      |

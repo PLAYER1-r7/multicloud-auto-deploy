@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+
 from app.auth import UserInfo, require_user
 from app.backends import get_backend
-from app.models import CreatePostBody, UpdatePostBody, ListPostsResponse
+from app.models import CreatePostBody, ListPostsResponse, UpdatePostBody
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 

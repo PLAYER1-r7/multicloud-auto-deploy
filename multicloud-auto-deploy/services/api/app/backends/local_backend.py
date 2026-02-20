@@ -17,17 +17,23 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from typing import Optional
 
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from fastapi import HTTPException, status
 
-from app.backends.base import BackendBase
-from app.models import Post, CreatePostBody, UpdatePostBody, ProfileResponse, ProfileUpdateRequest
 from app.auth import UserInfo
+from app.backends.base import BackendBase
 from app.config import settings
+from app.models import (
+    CreatePostBody,
+    Post,
+    ProfileResponse,
+    ProfileUpdateRequest,
+    UpdatePostBody,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +208,7 @@ class LocalBackend(BackendBase):
         limit: int,
         next_token: Optional[str],
         tag: Optional[str],
-    ) -> Tuple[list[Post], Optional[str]]:
+    ) -> tuple[list[Post], Optional[str]]:
         """投稿一覧を取得（PK=POSTS, 降順）"""
         kwargs: dict = {
             "KeyConditionExpression": "PK = :pk",
@@ -433,7 +439,7 @@ class LocalBackend(BackendBase):
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to generate upload URL",
-                )
+                ) from exc
             # http://minio:9000 → /storage (相対 URL) に変換してブラウザから使用可能にする
             proxy_url = upload_url.replace("http://minio:9000", "/storage", 1)
             urls.append({"url": proxy_url, "key": key})

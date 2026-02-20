@@ -3,23 +3,23 @@ Multi-cloud Simple SNS API (v1.2.4)
 CORS-hardened version for production deployment - AWS Lambda Layer permissions fix
 """
 
+import logging
 from contextlib import asynccontextmanager
+from typing import Optional
 
-from fastapi import FastAPI, Query, Depends, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from typing import Optional
-import logging
 
-from app.config import settings
-from app.models import HealthResponse, ListPostsResponse, CreatePostBody, UpdatePostBody
-from app.routes import posts, profile, uploads
+from app.auth import UserInfo, get_current_user
 from app.backends import get_backend
-from app.auth import UserInfo, require_user, get_current_user
+from app.config import settings
+from app.models import CreatePostBody, HealthResponse, ListPostsResponse, UpdatePostBody
+from app.routes import posts, profile, uploads
 
 # AWS Lambda Powertools (observability)
 try:
-    from aws_lambda_powertools import Logger, Tracer, Metrics
+    from aws_lambda_powertools import Logger, Metrics, Tracer
     from aws_lambda_powertools.metrics import MetricUnit
 
     # Powertools Logger (構造化ログ)
@@ -143,7 +143,7 @@ def legacy_get_message(
     try:
         return backend.get_post(post_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @app.put("/api/messages/{post_id}")
