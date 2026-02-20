@@ -8,7 +8,8 @@ from fastapi.templating import Jinja2Templates
 from app.config import Settings, get_settings
 
 router = APIRouter()
-_TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates")
+_TEMPLATES_DIR = os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), "..", "templates")
 templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 
 
@@ -46,7 +47,7 @@ def _get_auth_urls(settings: Settings) -> tuple[str | None, str | None, str]:
         login_url = (
             f"https://login.microsoftonline.com/{settings.azure_tenant_id}/oauth2/v2.0/authorize"
             f"?client_id={settings.azure_client_id}"
-            f"&response_type=token+id_token"
+            f"&response_type=id_token"
             f"&response_mode=fragment"
             f"&scope={settings.oidc_scope.replace(' ', '+')}"
             f"&redirect_uri={settings.azure_redirect_uri}"
@@ -211,7 +212,8 @@ def logout(settings: Settings = Depends(get_settings)):
 
     # Azure AD セッションも無効化するため logout URL へリダイレクト
     if settings.auth_provider == "azure" and settings.azure_tenant_id and settings.azure_client_id:
-        post_logout = settings.azure_logout_uri or (f"{base_path}/" if base_path else "/")
+        post_logout = settings.azure_logout_uri or (
+            f"{base_path}/" if base_path else "/")
         azure_logout = (
             f"https://login.microsoftonline.com/{settings.azure_tenant_id}/oauth2/v2.0/logout"
             f"?post_logout_redirect_uri={post_logout}"
