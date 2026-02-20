@@ -461,24 +461,18 @@ frontend_web_lambda = aws.lambda_.Function(
     architectures=["x86_64"],
     code=pulumi.AssetArchive(
         {"index.py": pulumi.StringAsset(placeholder_code)}),
+    # ignore_changes=["environment"]: deploy-aws.yml workflow sets Cognito env vars
+    # after CloudFront domain is known (Pulumi outputs). Pulumi must not overwrite.
     opts=pulumi.ResourceOptions(
-        ignore_changes=["code", "source_code_hash", "layers"]),
+        ignore_changes=["code", "source_code_hash", "layers", "environment"]),
     environment={
-        "variables": pulumi.Output.all(
-            api_gateway.api_endpoint,
-            user_pool_client.id,
-            user_pool_domain.domain,
-        ).apply(
+        "variables": pulumi.Output.all(api_gateway.api_endpoint).apply(
             lambda args: {
                 "ENVIRONMENT": stack,
                 "AUTH_PROVIDER": "aws",
                 "AUTH_DISABLED": "false",
                 "STAGE_NAME": "sns",
                 "API_BASE_URL": args[0],
-                "COGNITO_CLIENT_ID": args[1],
-                "COGNITO_DOMAIN": f"{args[2]}.auth.{region}.amazoncognito.com",
-                "COGNITO_REDIRECT_URI": f"https://{cf_domain}/sns/auth/callback" if cf_domain else "",
-                "COGNITO_LOGOUT_URI": f"https://{cf_domain}/sns/" if cf_domain else "",
             }
         ),
     },
@@ -910,6 +904,7 @@ monitoring_resources = monitoring.setup_monitoring(
 # ========================================
 pulumi.export("lambda_function_name", lambda_function.name)
 pulumi.export("lambda_function_arn", lambda_function.arn)
+pulumi.export("frontend_web_lambda_name", frontend_web_lambda.name)
 pulumi.export("lambda_function_url", lambda_url.function_url)
 pulumi.export("api_gateway_id", api_gateway.id)
 pulumi.export("api_gateway_endpoint", api_gateway.api_endpoint)
