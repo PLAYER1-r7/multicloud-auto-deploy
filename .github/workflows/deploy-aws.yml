@@ -86,7 +86,24 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
-      - name: Deploy Infrastructure with Pulumi
+      - name: Remove stuck obsolete resources from Pulumi state
+        run: |
+          cd multicloud-auto-deploy/infrastructure/pulumi/aws
+          STACK="${{ steps.set_stack.outputs.stack_name }}"
+          # These landing-* resources were removed from code but remain in state.
+          # Pulumi tries to delete them on every up, but fails:
+          #   landing-oai: IAM permission denied (cloudfront:DeleteCloudFrontOriginAccessIdentity)
+          #   landing-bucket: BucketNotEmpty
+          # Removing from state retains AWS resources but stops Pulumi tracking them.
+          pulumi state delete \
+            "urn:pulumi:${STACK}::multicloud-auto-deploy-aws::aws:cloudfront/originAccessIdentity:OriginAccessIdentity::landing-oai" \
+            --force --yes 2>/dev/null || echo "landing-oai not in state"
+          pulumi state delete \
+            "urn:pulumi:${STACK}::multicloud-auto-deploy-aws::aws:s3/bucket:Bucket::landing-bucket" \
+            --force --yes 2>/dev/null || echo "landing-bucket not in state"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_REGION: ${{ env.AWS_REGION }}
         id: pulumi
         uses: pulumi/actions@v5
         with:
