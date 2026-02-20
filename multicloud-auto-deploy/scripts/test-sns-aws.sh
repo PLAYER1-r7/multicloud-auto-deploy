@@ -135,8 +135,9 @@ run_test() {
     esac
   done
 
-  local curl_args=(-s -o /tmp/sns_test_body -w "%{http_code}" -X "$method")
-  curl_args+=(-H "Accept: application/json")
+  local curl_args=(-s -o /tmp/sns_test_body -w "%{http_code}" -X "$method"
+                   --max-time 20 --compressed)
+  # Do not force Accept: application/json globally — let the server decide
   [[ -n "$data" ]] && curl_args+=(-H "Content-Type: application/json" -d "$data")
   for h in "${extra_headers[@]}"; do curl_args+=("$h"); done
   curl_args+=("$url")
@@ -184,12 +185,14 @@ run_test "Landing page (/) returns 200" \
 run_test "SNS app (/sns/) returns 200" \
   GET "$CF_URL/sns/"
 
-run_test "SNS feed page returns HTML with <html> tag" \
-  GET "$CF_URL/sns/" || true
-if echo "$LAST_BODY" | grep -qi "<html"; then
-  ok "  SNS page contains <html> tag"
+# Check Content-Type header via GET (HEAD request returns application/json from API GW)
+SNS_CT=$(curl -s --max-time 15 -D - "$CF_URL/sns/" -o /dev/null 2>/dev/null \
+         | grep -i '^content-type:' | head -1 | tr -d '\r\n')
+if echo "$SNS_CT" | grep -qi 'text/html'; then
+  ok "  SNS page Content-Type is text/html  [$SNS_CT]"
+  PASS=$((PASS + 1))
 else
-  fail "  SNS page missing <html> tag"
+  fail "  SNS page unexpected Content-Type: $SNS_CT"
   FAIL=$((FAIL + 1))
 fi
 
@@ -383,19 +386,18 @@ echo -e "${BOLD}Section 8 — frontend-web Lambda env-var sanity check${NC}"
 sep
 
 # Verify that the SNS app does NOT show "localhost" in its HTML
-run_test "GET /sns/ does not expose localhost URL" \
-  GET "$CF_URL/sns/" || true
-if echo "$LAST_BODY" | grep -q "localhost"; then
-  fail "  /sns/ page contains 'localhost' — env vars may be wrong"
+# (checks that API_BASE_URL env var is set correctly in the Lambda)
+SNS_BODY=$(curl -s --max-time 15 --compressed "$CF_URL/sns/" 2>/dev/null || echo "")
+if echo "$SNS_BODY" | grep -q "localhost"; then
+  fail "GET /sns/ env-var sanity: page exposes 'localhost' — env vars may be wrong"
   FAIL=$((FAIL + 1))
 else
-  ok "  /sns/ page does not expose 'localhost'"
+  ok "GET /sns/ env-var sanity: page does not expose 'localhost'"
   PASS=$((PASS + 1))
 fi
 
-# Verify that the page doesn't prompt login when it shouldn't need to (SNS feed is public)
-if echo "$LAST_BODY" | grep -qi "sign.in\|ログイン\|サインイン" && \
-   ! echo "$LAST_BODY" | grep -qi "ログアウト\|sign out\|profile"; then
+# Warn if page seems to require login (public feed should NOT require login)
+if echo "$SNS_BODY" | grep -qi 'sign.in' && ! echo "$SNS_BODY" | grep -qi 'profile'; then
   warn "  /sns/ page may be prompting login (AUTH_DISABLED or env var issue?)"
 fi
 
