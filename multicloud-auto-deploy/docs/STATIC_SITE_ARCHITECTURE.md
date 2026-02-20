@@ -452,6 +452,7 @@ forwards the 404 without modifying the status code because `defaultCustomErrorRe
 passing SPA fallback result.
 
 **To fix properly** (future improvement):
+
 1. Change `load_balancing_scheme` in Pulumi forwarding rules to `"EXTERNAL_MANAGED"`
 2. Re-add to the URL Map:
    ```python

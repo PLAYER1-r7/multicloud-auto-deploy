@@ -10,7 +10,6 @@ This changelog includes commit bodies, file changes, and statistics for full tra
 
 ---
 
-
 ## 📅 2026-02-20
 
 ### ✨ **feat** (gcp): enable Firebase authentication and image uploads on GCP staging
@@ -42,14 +41,14 @@ Firebase auth and image uploads are now fully operational on the `develop` branc
 
 **Test results after changes** (`scripts/test-staging-sns.sh --cloud gcp --token <firebase-jwt>`):
 
-| Section | Result |
-|---|---|
-| 1. API Health Check | ✅ 2/2 |
-| 2. Posts GET (no auth) | ✅ 4/4 |
-| 3. Auth guard (401 without token) | ✅ 2/2 |
-| 4. Authenticated CRUD (POST/GET/PUT/DELETE) | ✅ 5/5 |
-| 5. Image upload presigned URL generation | ✅ 1/1 |
-| 6. SPA frontend | ✅ 1/1 (deep-link: 404+SPA body — accepted) / ⚠️ HTTP 200 requires EXTERNAL_MANAGED LB |
+| Section                                     | Result                                                                                 |
+| ------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1. API Health Check                         | ✅ 2/2                                                                                 |
+| 2. Posts GET (no auth)                      | ✅ 4/4                                                                                 |
+| 3. Auth guard (401 without token)           | ✅ 2/2                                                                                 |
+| 4. Authenticated CRUD (POST/GET/PUT/DELETE) | ✅ 5/5                                                                                 |
+| 5. Image upload presigned URL generation    | ✅ 1/1                                                                                 |
+| 6. SPA frontend                             | ✅ 1/1 (deep-link: 404+SPA body — accepted) / ⚠️ HTTP 200 requires EXTERNAL_MANAGED LB |
 
 ---
 
@@ -111,33 +110,32 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 >   - Categorizes by Conventional Commits format
 >   - Groups by date
 >   - Outputs Markdown format with commit links
-> 
 > - Generate initial CHANGELOG.md
 >   - 122 commits documented
 >   - Organized by date and category
 >   - Features, fixes, docs, refactoring, tests, chores, styling
 >   - Direct links to GitHub commits
-> 
 > - Update TOOLS_REFERENCE.md
 >   - Add generate-changelog.sh documentation
 >   - Usage examples and parameters
 >   - Category legend with emojis
-> 
+>
 > Changelog Categories:
->   ✨ Features (feat)
->   🐛 Bug Fixes (fix)
->   📚 Documentation (docs)
->   ♻️ Refactoring (refactor)
->   ⚡ Performance (perf)
->   🧪 Tests (test)
->   💄 Styling (style)
->   🔧 Chores (chore)
-> 
+> ✨ Features (feat)
+> 🐛 Bug Fixes (fix)
+> 📚 Documentation (docs)
+> ♻️ Refactoring (refactor)
+> ⚡ Performance (perf)
+> 🧪 Tests (test)
+> 💄 Styling (style)
+> 🔧 Chores (chore)
+>
 > Benefits:
->   - Automated changelog generation
->   - Consistent commit history documentation
->   - Easy version tracking
->   - Better transparency for contributors
+>
+> - Automated changelog generation
+> - Consistent commit history documentation
+> - Easy version tracking
+> - Better transparency for contributors
 
 ---
 
@@ -153,31 +151,32 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 >   - Management tools: 4 scripts (secrets, monitoring, cicd-monitor, trigger)
 >   - Utilities: 3 scripts (diagnostics, import, cleanup)
 >   - Recommended workflows and usage examples
-> 
 > - Standardize script headers across all 17 scripts
 >   - Add metadata: Script Name, Description, Author, Version
 >   - Add usage information: Parameters, Examples
 >   - Add prerequisites and exit codes
 >   - Improve maintainability and documentation
-> 
+>
 > Scripts updated:
->   - cleanup-old-resources.sh
->   - deploy-aws-pulumi.sh
->   - deploy-aws.sh, deploy-azure.sh, deploy-gcp.sh
->   - deploy-frontend-aws.sh
->   - diagnostics.sh
->   - import-gcp-resources.sh
->   - manage-github-secrets.sh
->   - monitor-cicd.sh, trigger-workflow.sh
->   - setup-monitoring.sh
->   - test-api.sh, test-cicd.sh, test-deployments.sh
->   - test-e2e.sh, test-endpoints.sh
-> 
+>
+> - cleanup-old-resources.sh
+> - deploy-aws-pulumi.sh
+> - deploy-aws.sh, deploy-azure.sh, deploy-gcp.sh
+> - deploy-frontend-aws.sh
+> - diagnostics.sh
+> - import-gcp-resources.sh
+> - manage-github-secrets.sh
+> - monitor-cicd.sh, trigger-workflow.sh
+> - setup-monitoring.sh
+> - test-api.sh, test-cicd.sh, test-deployments.sh
+> - test-e2e.sh, test-endpoints.sh
+>
 > Benefits:
->   - Consistent script documentation format
->   - Clear usage instructions for all tools
->   - Better onboarding for new developers
->   - Quick reference for troubleshooting
+>
+> - Consistent script documentation format
+> - Clear usage instructions for all tools
+> - Better onboarding for new developers
+> - Quick reference for troubleshooting
 
 ---
 
@@ -200,8 +199,9 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 >   - Cloud-specific path handling (Azure Flex Consumption)
 >   - Data persistence verification
 > - Update troubleshooting history (2026-02-15)
-> 
+>
 > Resolves deployment issues encountered in commits:
+>
 > - 4315dd7 (Azure API URL path fix)
 > - 37aa17d (Cosmos DB direct fetch)
 > - 202f555 (Package optimization + retry logic)
@@ -285,16 +285,19 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Problem:
+>
 > - Azure reports 'ERROR: Deployment was partially successful'
 > - Script treats this as failure and exits
 > - BUT actual function is working perfectly (health check passes)
-> 
+>
 > Root Cause:
+>
 > - Azure Flex Consumption plan deployment shows 'partially successful' even when all steps complete
 > - Script logic: ERROR: in output → fail immediately
 > - Reality: 'partially successful' with all steps completed = SUCCESS
-> 
+>
 > Evidence:
+>
 > - Kudu logs show all steps completed:
 >   ✅ ValidationStep completed
 >   ✅ ExtractZipStep completed
@@ -305,33 +308,34 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 >   ✅ SyncTriggerStep starting
 > - Health check returns 200 OK with proper response
 > - Function is fully operational
-> 
+>
 > Solution:
+>
 > 1. Improved deployment detection:
->    - Check for 'UploadPackageStep.*completed' (deployment uploaded)
+>    - Check for 'UploadPackageStep.\*completed' (deployment uploaded)
 >    - Check for 'SyncTriggerStep' (final sync started)
 >    - Ignore 'partially successful' message
 >    - Only fail on critical errors (not 'partially successful')
-> 
 > 2. Enhanced health check validation:
 >    - Extended timeout to 3 minutes (was 2 minutes)
 >    - Make health check mandatory (exit 1 if fails)
 >    - Capture and display health response
 >    - health_check_passed flag for proper exit code
-> 
 > 3. Better error handling:
 >    - Distinguish 'partially successful' from real errors
 >    - Continue deployment if key steps completed
 >    - Final verification via health check
 >    - Clear success/failure messaging
-> 
+>
 > Expected Flow:
+>
 > 1. Deployment runs → 'partially successful' message
 > 2. Script checks: UploadPackageStep completed? → YES
-> 4. Health check: curl /health → 200 OK
-> 5. Final: ✅ Verified deployment success
-> 
+> 3. Health check: curl /health → 200 OK
+> 4. Final: ✅ Verified deployment success
+>
 > Testing:
+>
 > - Manually verified: Function already working from previous deploy
 > - curl health endpoint → {"status":"ok","cloud_provider":"azure"}
 
@@ -344,44 +348,47 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Problem:
+>
 > - Kudu restarted during deployment (Flex Consumption plan limitation)
 > - Large deployment package causing resource constraints
 > - No retry mechanism for transient Kudu issues
-> 
+>
 > Root Cause:
-> - Deployment package included unnecessary files (__pycache__, .pyc, tests, .dist-info)
+>
+> - Deployment package included unnecessary files (**pycache**, .pyc, tests, .dist-info)
 > - Azure Functions Flex Consumption dynamically scales, causing Kudu restarts
 > - Single deployment attempt fails on transient infrastructure issues
-> 
+>
 > Solution:
+>
 > 1. Optimize deployment package:
->    - Remove __pycache__ directories
+>    - Remove **pycache** directories
 >    - Delete .pyc/.pyo compiled files
 >    - Exclude test directories
 >    - Remove .dist-info metadata
 >    - Use --no-cache-dir for pip install
 >    - Use -q flag for zip (quiet mode)
 >    - Report package size for monitoring
-> 
 > 2. Add intelligent retry logic:
 >    - Retry up to 3 times on deployment failure
 >    - Detect Kudu restart errors specifically
 >    - Wait 30 seconds between retries for Kudu stabilization
 >    - Distinguish transient vs permanent errors
 >    - Exit immediately on non-transient errors
-> 
 > 3. Improve logging:
 >    - Capture deployment output to log file
 >    - Check for ERROR patterns
 >    - Show retry attempt numbers
 >    - Confirm success before proceeding
-> 
+>
 > Expected Results:
+>
 > - Smaller package → faster upload → less Kudu stress
 > - Transient Kudu restart → auto-retry → eventual success
 > - Permanent errors → fail fast with clear message
-> 
+>
 > Previous attempts:
+>
 > - Attempt 1: 4m deployment time, Kudu restart, no retry → FAIL
 > - Attempt 2: Expected < 3m, auto-retry on Kudu restart → SUCCESS
 
@@ -394,33 +401,34 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Problem:
+>
 > - Environment variables were all null
 > - Workflow tried to get COSMOS_DB_ENDPOINT/KEY from existing app settings
 > - On first deploy, these settings don't exist yet → null → set null → fail
-> 
+>
 > Root Cause:
+>
 > - Workflow used: az functionapp config appsettings list
 > - This returns null for non-existent settings
 > - Created a circular dependency issue
-> 
+>
 > Solution:
+>
 > 1. Get Cosmos DB credentials directly from the resource:
 >    - az cosmosdb show --query documentEndpoint
 >    - az cosmosdb keys list --query primaryMasterKey
-> 
 > 2. Add validation:
 >    - Exit with error if credentials cannot be retrieved
-> 
 > 3. Improve deployment:
 >    - Add --timeout 600 to zip deployment
 >    - Suppress appsettings output (security)
-> 
 > 4. Add post-deployment verification:
 >    - Wait up to 2 minutes for function to be ready
 >    - Curl health endpoint to verify deployment
 >    - Workaround for Flex Consumption plan log limitations
-> 
+>
 > Expected Result:
+>
 > - Cosmos DB credentials properly retrieved: ✅
 > - Environment variables correctly set: ✅
 > - Function app deployment succeeds: ✅
@@ -435,32 +443,35 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Problem:
+>
 > - Azure frontend showed ERR_NAME_NOT_RESOLVED errors
 > - API paths were resolving as relative URLs (e.g., 'api/HttpTrigger/api/messages/')
 > - VITE_API_URL was not correctly embedded in build
-> 
+>
 > Root Cause:
+>
 > - Azure Functions URL structure: https://xxx.azurewebsites.net/api/HttpTrigger
 > - Frontend was appending '/api/messages', resulting in '/api/HttpTrigger/api/messages'
 > - This double '/api' path was correct for the backend but confusing
-> 
+>
 > Solution:
+>
 > 1. Enhanced frontend API client (client.ts):
 >    - Detect Azure Functions URLs (contains '/api/HttpTrigger')
 >    - Use basePath='' for Azure (no '/api' prefix)
 >    - Use basePath='/api' for AWS/GCP
-> 
 > 2. Improved deployment workflow logging:
 >    - Echo API_URL during build step
 >    - Verify URL was embedded in built assets
 >    - Add explicit API URL logging in resource detection
-> 
+>
 > Result:
+>
 > - Azure: https://xxx.azurewebsites.net/api/HttpTrigger + /messages ✅
 > - AWS/GCP: https://xxx.run.app + /api/messages ✅
-> 
+>
 > Testing:
->   curl https://xxx.azurewebsites.net/api/HttpTrigger/messages
+> curl https://xxx.azurewebsites.net/api/HttpTrigger/messages
 
 ---
 
@@ -471,30 +482,30 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Changes:
+>
 > - ✨ NEW: manage-github-secrets.sh (統合)
 >   - Merged set-github-secrets.sh (auto mode)
 >   - Merged setup-github-secrets.sh (guide mode)
 >   - Added --check-local flag for env validation
-> 
 > - 🔧 ENHANCED: monitor-cicd.sh
 >   - Added --workflow=NAME filter option
 >   - Absorbed watch-workflow.sh functionality
-> 
 > - 🗑️ REMOVED: 3 duplicate scripts
 >   - set-github-secrets.sh (9.3K)
 >   - setup-github-secrets.sh (6.3K)
 >   - watch-workflow.sh (992B)
-> 
+>
 > Impact:
+>
 > - Reduced script count: 19 → 17 (-11%)
 > - Eliminated ~16.3KB of duplicate code
 > - Improved maintainability (single source of truth)
 > - Enhanced UX (unified interfaces)
-> 
+>
 > Usage:
->   ./manage-github-secrets.sh --mode=auto
->   ./manage-github-secrets.sh --mode=guide
->   ./monitor-cicd.sh --workflow=deploy-aws.yml
+> ./manage-github-secrets.sh --mode=auto
+> ./manage-github-secrets.sh --mode=guide
+> ./monitor-cicd.sh --workflow=deploy-aws.yml
 
 ---
 
@@ -552,12 +563,11 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 > - Update deploy-lambda-aws.sh to include index.py in deployment package
 > - Add services/api/.build/ to .gitignore (pip install artifacts)
 > - Remove previously tracked .build/ directory from git
-> 
+>
 > Fixes: Runtime.ImportModuleError: Unable to import module 'index'
 > Context: Lambda function was deployed without application code due to Pulumi ignore_changes setting
 
 ---
-
 
 ## 📅 2026-02-14
 
@@ -795,38 +805,45 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > ✨ Complete Infrastructure as Code migration:
+>
 > - Replace Terraform with Pulumi Python implementation
 > - All 3 clouds: AWS, Azure, GCP
-> 
+>
 > 📦 Infrastructure Components:
 > AWS:
->   - Lambda Function (Python 3.12, ZIP deployment)
->   - API Gateway HTTP API v2
->   - S3 Static Website
->   - IAM Roles
-> 
+>
+> - Lambda Function (Python 3.12, ZIP deployment)
+> - API Gateway HTTP API v2
+> - S3 Static Website
+> - IAM Roles
+>
 > Azure:
->   - Azure Functions (Consumption Plan Y1)
->   - Storage Accounts (Functions + Frontend)
->   - Application Insights
->   - Random naming for global uniqueness
-> 
+>
+> - Azure Functions (Consumption Plan Y1)
+> - Storage Accounts (Functions + Frontend)
+> - Application Insights
+> - Random naming for global uniqueness
+>
 > GCP:
->   - Cloud Storage (Function source + Frontend)
->   - Cloud Functions Gen 2 (via gcloud CLI)
->   - IAM bindings for public access
-> 
+>
+> - Cloud Storage (Function source + Frontend)
+> - Cloud Functions Gen 2 (via gcloud CLI)
+> - IAM bindings for public access
+>
 > 🔧 Workflow Updates:
+>
 > - GitHub Actions now use Pulumi CLI
 > - pulumi up for infrastructure deployment
 > - Outputs retrieved via pulumi stack output
 > - Maintain ZIP-based deployment for all Functions
-> 
-> 🗑️  Cleanup:
+>
+> 🗑️ Cleanup:
+>
 > - Removed all Terraform files
 > - Deleted infrastructure/terraform directory
-> 
+>
 > 💡 Benefits:
+>
 > - Real programming language (Python) for IaC
 > - Better type safety and error checking
 > - More flexible conditional logic
@@ -871,8 +888,9 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 > - Add Cloud Functions entry point (function.py)
 > - Update CI/CD workflows to ZIP deployment
 > - Add azure-functions and functions-framework dependencies
-> 
+>
 > Benefits:
+>
 > - Consistent deployment model across AWS/Azure/GCP
 > - Faster deployments: 30-70s (vs 2-5min with containers)
 > - Lower costs: Consumption-only billing (estimated 0-80/month savings)
@@ -914,7 +932,7 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 
 **Details**:
 
-> - Change cp -r src/* to cp -r app/* in Package Backend step
+> - Change cp -r src/_ to cp -r app/_ in Package Backend step
 > - Use standard Dockerfile instead of Dockerfile.azure/gcp (they don't exist)
 > - This fixes the 'No such file or directory' error in CI/CD
 > - All local tests passing (100% success rate)
@@ -942,6 +960,7 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > New Scripts:
+>
 > - scripts/deploy-lambda-aws.sh: Full Lambda deployment automation
 >   - Auto dependency installation (manylinux2014_x86_64)
 >   - ZIP package creation and S3 upload
@@ -949,14 +968,12 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 >   - API Gateway integration setup
 >   - Correct Lambda permissions (HTTP API SourceArn format)
 >   - CloudWatch Logs access log configuration
-> 
 > - scripts/test-api.sh: Complete API integration tests
 >   - Health check
 >   - CRUD operations (Create, Read, Update, Delete)
 >   - Pagination testing
 >   - Error handling validation
 >   - Pass/fail reporting with statistics
-> 
 > - scripts/setup-monitoring.sh: CloudWatch monitoring setup
 >   - SNS topic and email notifications
 >   - Lambda alarms (errors, throttles, duration, concurrency)
@@ -964,8 +981,9 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 >   - DynamoDB alarms (read/write throttles)
 >   - CloudWatch Logs metric filters
 >   - Auto dashboard creation
-> 
+>
 > Documentation:
+>
 > - docs/QUICK_REFERENCE.md: Quick reference for common operations
 >   - Deployment commands
 >   - Testing and debugging
@@ -974,13 +992,11 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 >   - Troubleshooting
 >   - Resource management
 >   - Useful one-liners
-> 
 > - docs/TROUBLESHOOTING.md: Added Lambda + API Gateway section
 >   - HTTP API vs REST API SourceArn difference
 >   - Permission troubleshooting steps
 >   - Access log enablement
 >   - Debug workflow
-> 
 > - README.md: Enhanced with tooling and recommendations
 >   - New script usage documentation
 >   - Recommended AWS services for production:
@@ -992,7 +1008,7 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 >     - CloudFront Functions (edge processing)
 >     - AWS Backup (data protection)
 >   - Implementation examples for each service
-> 
+>
 > All scripts are executable and production-ready.
 
 ---
@@ -1003,7 +1019,7 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 
 **Details**:
 
-> - Root cause: HTTP API requires SourceArn format: {api-id}/*/* (not {api-id}/*/*/*)
+> - Root cause: HTTP API requires SourceArn format: {api-id}/_/_ (not {api-id}/_/_/\*)
 > - Fixed Lambda resource policy with correct SourceArn pattern
 > - Enabled API Gateway access logs for debugging
 > - Updated frontend .env to use Lambda API (from GCP Cloud Run)
@@ -1024,7 +1040,7 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 > - Make AWS region optional in AWSBackend (auto-detect from environment)
 > - Build and deploy to ECR for x86_64 architecture
 > - Replace ZIP-based Lambda with container-based Lambda
-> 
+>
 > This enables AWS-only staging environment without GCP Cloud Run dependency
 
 ---
@@ -1074,29 +1090,34 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Successfully deployed React SPA to replace Reflex SSR frontend:
-> 
+>
 > Deployment Details:
+>
 > - S3 Bucket: multicloud-auto-deploy-staging-frontend
 > - CloudFront: E2GDU7Y7UGDV3S (dx3l4mbwg1ade.cloudfront.net)
 > - API: https://mcad-staging-api-son5b3ml7a-an.a.run.app
 > - Region: ap-northeast-1 (Tokyo)
-> 
+>
 > Performance:
+>
 > - Build size: 90KB gzipped (vs 500KB+ for Reflex)
 > - TTFB: 20-50ms (CDN cached, vs 200-500ms SSR)
 > - Cost: $1-5/month (vs $20-50/month for containers)
 > - Lighthouse: Expected 95+ (vs 70-80 for SSR)
-> 
+>
 > Files Added:
+>
 > - docs/REACT_FRONTEND_DEPLOYMENT.md: Complete deployment guide
 > - scripts/deploy-frontend-aws.sh: Automated deployment script
-> 
+>
 > Cache Strategy:
+>
 > - Assets (CSS/JS): max-age=31536000 (1 year, content-hashed)
 > - HTML: max-age=0 (always revalidate)
 > - CloudFront invalidation: Automatic on deploy
-> 
+>
 > Next Steps:
+>
 > - Phase 2B: Deploy to Azure Blob Storage + CDN
 > - Phase 2C: Deploy to GCP Cloud Storage + CDN
 > - Phase 3: Update CI/CD pipeline for automated deployments
@@ -1115,28 +1136,32 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 > - Add TanStack Query for efficient data management
 > - Design responsive UI with Tailwind CSS
 > - Build optimized static files (88KB gzipped)
-> 
+>
 > Architecture change:
+>
 > - OLD: Reflex SSR (Container Apps/Cloud Run) - 0-50/month
 > - NEW: React SPA (Static CDN hosting) - -5/month
-> 
+>
 > Components:
+>
 > - MessageForm: Create new messages
 > - MessageList: Display paginated messages
 > - MessageItem: Individual message with edit/delete
-> 
+>
 > Features:
+>
 > - Real-time data synchronization
 > - Optimistic UI updates
 > - Dark mode support- Error handling and loading states
 > - Mobile-responsive design
 > - TypeScript type safety
-> 
+>
 > Build output:
+>
 > - dist/index.html (0.46KB)
 > - dist/assets/index.css (4.23KB → 1.36KB gzipped)
 > - dist/assets/index.js (274.66KB → 88.07KB gzipped)
-> 
+>
 > Next: Deploy to S3, Blob Storage, Cloud Storage + CDN
 
 ---
@@ -1153,16 +1178,18 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 > - Add health check validation after deployment
 > - Create comprehensive CI/CD setup documentation
 > - Update README with new workflow information
-> 
+>
 > Features:
+>
 > - Parallel deployment to Azure and GCP
 > - Configurable deployment targets (all/azure/gcp)
 > - Environment selection (staging/production)
 > - Docker buildx with cache optimization
 > - Automated health checks
 > - GitHub Actions summary with deployment URLs
-> 
+>
 > Documentation:
+>
 > - docs/CI_CD_SETUP.md: Complete setup guide with secrets
 > - README.md: Updated with new workflow table and badges
 
@@ -1180,8 +1207,9 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 > - Build frontend assets at Docker build time with 'reflex export'
 > - Support both dual-port (Azure) and single-port (GCP) modes
 > - Deploy to Azure Container Apps and GCP Cloud Run
-> 
+>
 > Deployed services:
+>
 > - Azure: https://mcad-staging-frontend.livelycoast-fa9d3350.japaneast.azurecontainerapps.io
 > - GCP: https://mcad-staging-frontend-son5b3ml7a-an.a.run.app
 
@@ -1194,28 +1222,33 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Infrastructure:
+>
 > - Add ECR repositories for API and Frontend containers
 > - Update Pulumi stack with image registry support
 > - Add lifecycle policies to manage image retention (keep last 10)
-> 
+>
 > Environment Configuration:
+>
 > - Add .env.example for frontend_reflex
 > - Document environment variables for production
-> 
+>
 > Deployment:
+>
 > - Create comprehensive production deployment guide
 > - Add deploy-aws-pulumi.sh script for automated deployment
 > - Include AWS App Runner, ECS Fargate deployment options
 > - Document secrets management with AWS Secrets Manager
 > - Add CI/CD pipeline examples for GitHub Actions
-> 
+>
 > Documentation:
+>
 > - PRODUCTION_DEPLOYMENT.md with complete deployment workflows
 > - Health checks, monitoring, rollback procedures
 > - Cost optimization strategies
 > - Security best practices
-> 
+>
 > Ready for production deployment with:
+>
 > - Containerized API and Frontend
 > - ECR image storage
 > - Infrastructure as Code (Pulumi)
@@ -1230,20 +1263,23 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Docker image optimization:
+>
 > - Remove unused dependencies (unzip from frontend_reflex)
 > - Add --no-install-recommends to apt-get
-> - Clean apt cache and Python __pycache__
+> - Clean apt cache and Python **pycache**
 > - Add PYTHONDONTWRITEBYTECODE=1 environment variable
 > - Use selective COPY instead of COPY . .
 > - Apply optimizations to both api and frontend_reflex
-> 
+>
 > Cleanup:
+>
 > - Remove all test data (74 messages)
-> - Delete Python cache files (__pycache__/*.pyc)
+> - Delete Python cache files (**pycache**/\*.pyc)
 > - Remove legacy backend service from docker-compose.yml
 > - Remove obsolete 'version' directive from docker-compose.yml
-> 
+>
 > Benefits:
+>
 > - Reduced image size overhead
 > - Faster build times with layer caching
 > - Cleaner production images
@@ -1278,16 +1314,13 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 >   - Pagination support (20 items per page)
 >   - WebSocket state management
 >   - Proper HTTP status code handling (200/201/204)
-> 
 > - Docker integration
 >   - Add Dockerfile for Reflex frontend
 >   - Update docker-compose.yml (ports 3002/3003)
 >   - Add .dockerignore for optimized builds
-> 
 > - Remove legacy React frontend
 >   - Delete services/frontend/ directory (99MB freed)
 >   - Remove frontend service from docker-compose.yml
-> 
 > - Benefits
 >   - Full-stack Python development
 >   - Simplified dependency management
@@ -1309,13 +1342,14 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Remove legacy implementations and free up 1.1GB of disk space:
-> 
+>
 > - Remove services/backend/ (192MB) - old FastAPI implementation, now using services/api/
 > - Remove services/web/ (28KB) - Reflex frontend, now using React in services/frontend/
 > - Remove services/database/ - empty directory
 > - Remove infrastructure/terraform/ (948MB) - migrated to Pulumi
-> 
+>
 > The project now uses:
+>
 > - Backend: services/api/ (FastAPI + Python)
 > - Frontend: services/frontend/ (React + TypeScript)
 > - IaC: infrastructure/pulumi/ (Python)
@@ -1346,26 +1380,26 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > 実装内容:
+>
 > - フロントエンドに削除ボタン追加
 >   - ゴミ箱アイコンのSVG表示
 >   - ホバー時の視覚的フィードバック
 >   - メッセージカードの右上に配置
-> 
 > - 削除確認ダイアログ
 >   - window.confirm() で削除前に確認
 >   - メッセージ内容の一部を表示（最大50文字）
 >   - キャンセル可能
-> 
 > - DELETE API呼び出し
 >   - axios.delete() でバックエンドAPIを呼び出し
 >   - 削除成功後に自動的にメッセージリストを更新
 >   - エラーハンドリング付き
-> 
+>
 > 技術詳細:
+>
 > - handleDeleteMessage関数を追加
 > - メッセージIDとコンテンツを引数に受け取る
 > - 削除後はfetchMessages()で再取得
-> 
+>
 > テスト結果:
 > ✅ メッセージ削除: 成功（9件→7件）
 > ✅ 削除確認ダイアログ: 動作確認
@@ -1382,23 +1416,24 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > 実装内容:
+>
 > - POST /api/uploads エンドポイント作成
 >   - 画像ファイルのバリデーション (形式、サイズ)
 >   - MinIOへの画像保存 (images/ フォルダ)
 >   - ブラウザアクセス可能なURLを返却
-> 
 > - フロントエンド画像アップロードUI
 >   - ファイル選択ボタン
 >   - 画像プレビュー表示
 >   - メッセージ送信時に画像URLを含める
 >   - メッセージ一覧での画像表示
-> 
+>
 > 技術詳細:
+>
 > - FastAPI UploadFile でマルチパート処理
 > - MinIO公開読み取りポリシー設定 (images/ フォルダ)
 > - React useState で画像プレビュー管理
 > - 最大10MB、画像形式のみ対応
-> 
+>
 > テスト結果:
 > ✅ 画像アップロード成功
 > ✅ 画像付きメッセージ作成成功
@@ -1414,29 +1449,33 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Changes:
+>
 > - Replace in-memory dict storage with MinIO object storage
 > - Store messages as JSON files in MinIO bucket (simple-sns/messages/)
 > - Auto-create bucket on initialization
 > - Implement full CRUD operations with MinIO SDK:
->   * create_message: Save as JSON to MinIO
->   * get_messages: List and read all message objects
->   * get_message: Read single message by ID
->   * delete_message: Remove object from MinIO
-> 
+>   - create_message: Save as JSON to MinIO
+>   - get_messages: List and read all message objects
+>   - get_message: Read single message by ID
+>   - delete_message: Remove object from MinIO
+>
 > Benefits:
+>
 > - Data persists across container restarts
 > - S3-compatible API (easy to migrate to real S3)
 > - Compatible with existing API interface
 > - Automatic bucket management
-> 
+>
 > Testing:
+>
 > - ✅ Created 4 messages successfully
 > - ✅ Retrieved messages from MinIO
 > - ✅ Restarted API container
 > - ✅ All 4 messages still available after restart
 > - ✅ MinIO console shows JSON files in simple-sns/messages/
-> 
+>
 > Architecture:
+>
 > - MinIO container stores data in Docker volume (minio-data)
 > - Messages stored as: messages/{uuid}.json
 > - JSON format matches Message model schema
@@ -1450,18 +1489,21 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Root cause:
+>
 > - Browser runs on host machine, not inside Docker network
 > - 'api:8000' hostname only resolves within Docker network
 > - Browser cannot resolve 'api' hostname (ERR_NAME_NOT_RESOLVED)
-> 
+>
 > Fixed:
+>
 > - VITE_API_URL=http://api:8000 → http://localhost:8000
-> 
+>
 > Architecture:
+>
 > - Browser (host) → localhost:8000 → Docker port mapping → api:8000 (container)
 > - Docker internal services can still use 'api:8000' hostname
 > - Port 8000 is exposed to host via docker-compose ports mapping
-> 
+>
 > After this fix, browser can successfully connect to FastAPI backend.
 
 ---
@@ -1474,13 +1516,14 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 
 > Fixed issue where frontend was trying to connect to non-existent
 > 'backend' service instead of 'api' service in Docker network.
-> 
+>
 > Changed:
+>
 > - VITE_API_URL=http://backend:8000 → http://api:8000
-> 
+>
 > This was causing 'メッセージの送信に失敗しました' error because
 > the frontend could not reach the API service on the Docker network.
-> 
+>
 > After this fix, users need to force-reload the browser (Ctrl+Shift+R)
 > to clear the cached Vite build with the old environment variable.
 
@@ -1493,11 +1536,12 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Fixed issues:
+>
 > - Corrected h2 tag className from 'mb-space-y-3' to 'mb-4'
 > - Added missing form tag with proper onSubmit handler
 > - Removed duplicated closing tags that caused syntax error
 > - Restored correct HTML structure for message submission form
-> 
+>
 > The error was causing Babel parser to fail at line 126 with
 > 'Unexpected token, expected jsxTagEnd'.
 
@@ -1510,6 +1554,7 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Changes:
+>
 > - Update Message interface to match backend model (content, author, created_at)
 > - Add MessageListResponse interface for paginated responses
 > - Update API endpoints: /api/messages → /api/messages/, /api/health → /health
@@ -1517,16 +1562,18 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 > - Add author input field to the message form
 > - Update message display to show author name and created_at timestamp
 > - Fix cloud provider detection to use cloud_provider field
-> 
+>
 > Integration Testing:
+>
 > - ✅ Health check endpoint working (Status: ok, Provider: local)
 > - ✅ POST /api/messages/ creates messages successfully
 > - ✅ GET /api/messages/ returns paginated message list
 > - ✅ CORS configuration working correctly
 > - ✅ Frontend accessible at http://localhost:3001
 > - ✅ API docs accessible at http://localhost:8000/docs
-> 
+>
 > User Flow:
+>
 > 1. Enter name in the author field
 > 2. Enter message content
 > 3. Click submit button
@@ -1541,20 +1588,23 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Changes:
-> - Add BaseBackend abstract class (app/backends/__init__.py)
+>
+> - Add BaseBackend abstract class (app/backends/**init**.py)
 > - Implement LocalBackend with in-memory storage (app/backends/local.py)
 > - Implement AWSBackend with DynamoDB support (app/backends/aws.py)
 > - Add backend factory for multi-cloud support (app/backends/factory.py)
 > - Create messages router with CRUD operations (app/routes/messages.py)
 > - Register messages router in main.py
-> 
+>
 > API Endpoints:
+>
 > - POST /api/messages/ - Create message
 > - GET /api/messages/ - List messages (with pagination)
 > - GET /api/messages/{id} - Get single message
 > - DELETE /api/messages/{id} - Delete message
-> 
+>
 > Testing:
+>
 > - ✅ POST creates messages successfully
 > - ✅ GET returns paginated message list
 > - ✅ LocalBackend stores 6 test messages
@@ -1570,16 +1620,18 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Changes:
+>
 > - Fix web service to use Dockerfile instead of inline command
 > - Update httpx version requirement (>=0.25.1) for Reflex compatibility
 > - Add Node.js to Reflex Dockerfile for proper frontend compilation
 > - Switch Reflex to production mode to avoid init issues
-> 
+>
 > Testing:
+>
 > - FastAPI (api): ✅ Working on http://localhost:8000
 > - React Frontend: ✅ Working on http://localhost:3001
 > - MinIO: ✅ Working on http://localhost:9000-9001
-> 
+>
 > All services successfully running in local development environment.
 
 ---
@@ -1591,35 +1643,36 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Major Changes:
+>
 > - Add FastAPI backend (services/api/) with multi-cloud support
 > - Add Reflex frontend (services/web/) for complete Python UI
 > - Add Pulumi IaC for AWS (infrastructure/pulumi/aws/)
 > - Update docker-compose.yml with new Python services
 > - Add comprehensive migration guide (docs/PYTHON_MIGRATION.md)
 > - Update README with Python Full Stack section
-> 
+>
 > New Services:
+>
 > - services/api/ - FastAPI backend (Python 3.12)
->   * Multi-cloud backends (AWS/Azure/GCP/Local)
->   * Pydantic models and settings
->   * Dockerized for easy deployment
-> 
+>   - Multi-cloud backends (AWS/Azure/GCP/Local)
+>   - Pydantic models and settings
+>   - Dockerized for easy deployment
 > - services/web/ - Reflex frontend (Python)
->   * React-like components in Python
->   * State management with async support
->   * Full TypeScript replacement
-> 
+>   - React-like components in Python
+>   - State management with async support
+>   - Full TypeScript replacement
 > - infrastructure/pulumi/aws/ - Pulumi IaC (Python)
->   * Lambda + API Gateway + DynamoDB + S3
->   * Replaces Terraform with Python-native IaC
->   * Complete AWS infrastructure as code
-> 
+>   - Lambda + API Gateway + DynamoDB + S3
+>   - Replaces Terraform with Python-native IaC
+>   - Complete AWS infrastructure as code
+>
 > Benefits:
+>
 > - Unified Python stack (IaC + Backend + Frontend)
 > - Type safety across entire codebase
 > - Improved developer experience
 > - Easier maintenance and debugging
-> 
+>
 > 23 files changed, 1800+ insertions
 
 ---
@@ -1631,37 +1684,40 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Documentation:
+>
 > - Add TROUBLESHOOTING.md with all CI/CD issues and solutions
->   * Azure authentication problems (Service Principal, Terraform Wrapper)
->   * GCP resource conflicts (GCS backend, resource imports)
->   * Frontend API connection issues (build order, API URL)
->   * Permission errors and IAM configurations
+>   - Azure authentication problems (Service Principal, Terraform Wrapper)
+>   - GCP resource conflicts (GCS backend, resource imports)
+>   - Frontend API connection issues (build order, API URL)
+>   - Permission errors and IAM configurations
 > - Add ENDPOINTS.md with complete endpoint information
->   * AWS, Azure, GCP API and frontend URLs
->   * Management console links
->   * API specification and test scripts
+>   - AWS, Azure, GCP API and frontend URLs
+>   - Management console links
+>   - API specification and test scripts
 > - Update CICD_SETUP.md with troubleshooting references
 > - Update README.md with latest information
->   * All cloud providers now fully operational
->   * New documentation and script references
->   * Dev Container support info
-> 
+>   - All cloud providers now fully operational
+>   - New documentation and script references
+>   - Dev Container support info
+>
 > Tools & Scripts:
+>
 > - Add test-endpoints.sh - Test all cloud endpoints
 > - Add import-gcp-resources.sh - Import existing GCP resources
 > - Add setup-github-secrets.sh - GitHub Secrets setup guide
 > - Make all scripts executable
-> 
+>
 > Dev Container:
+>
 > - Add .devcontainer/devcontainer.json with full tooling
->   * Terraform 1.7.5, Node.js 18, Python 3.12
->   * AWS CLI, Azure CLI, gcloud CLI
->   * Docker-in-Docker support
->   * VS Code extensions for cloud development
+>   - Terraform 1.7.5, Node.js 18, Python 3.12
+>   - AWS CLI, Azure CLI, gcloud CLI
+>   - Docker-in-Docker support
+>   - VS Code extensions for cloud development
 > - Add .devcontainer/Dockerfile with additional utilities
 > - Add .devcontainer/setup.sh for initialization
 > - Include helpful aliases and functions
-> 
+>
 > This completes the documentation and tooling setup after successful
 > deployment to all three cloud providers (AWS, Azure, GCP).
 
@@ -1675,11 +1731,12 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 
 > Issue: Frontend was building with incorrect API URL (us-east-1 instead of ap-northeast-1)
 > Changes:
+>
 > - Move Build Frontend step after Lambda deployment
 > - Dynamically fetch API Gateway endpoint from AWS
 > - Use fetched API endpoint when building frontend (VITE_API_URL)
 > - Update CloudFront distribution ID default value (E2GDU7Y7UGDV3S)
-> 
+>
 > This ensures the frontend knows the correct API URL at build time.
 
 ---
@@ -1692,11 +1749,12 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 
 > Issue: Frontend was building before infrastructure deployment, so API URL was not available
 > Changes:
+>
 > - Move Deploy Infrastructure step before Build Frontend
 > - Extract api_url from Terraform outputs
 > - Use api_url output when building frontend (VITE_API_URL)
 > - Frontend now built with correct API endpoint
-> 
+>
 > This ensures the frontend knows the correct API URL at build time.
 
 ---
@@ -1708,28 +1766,27 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Major changes:
+>
 > 1. Enable GCS backend for persistent Terraform state
 >    - Created gs://multicloud-auto-deploy-tfstate-gcp bucket
 >    - Granted storage.objectAdmin role to service account
 >    - Enabled backend in main.tf
-> 
 > 2. Imported existing GCP resources to Terraform state
 >    - google_artifact_registry_repository.main (mcad-staging-repo)
 >    - google_storage_bucket.frontend (mcad-staging-frontend)
 >    - google_compute_global_address.frontend (mcad-staging-frontend-ip)
 >    - google_firestore_database.main ((default))
-> 
 > 3. Simplified GitHub Actions workflow
 >    - Removed complex import logic (now handled by persistent state)
 >    - Use GitHub Actions outputs instead of terraform output commands
 >    - Cleaner workflow with better logging
-> 
 > 4. Added missing Terraform outputs
 >    - artifact_registry_location
 >    - frontend_storage_bucket
 >    - api_url in workflow outputs
-> 
+>
 > Benefits:
+>
 > - No more 'resource already exists' errors
 > - Faster workflow execution (no repeated imports)
 > - Consistent state across workflow runs
@@ -1744,12 +1801,13 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Changes:
+>
 > - Add extensive logging to import process
 > - Show environment variables being used
 > - Display state check results
 > - Show terraform state list after import
 > - Add separators for better log readability
-> 
+>
 > This will help diagnose why imports are failing and resources
 > still show 'already exists' errors.
 
@@ -1762,12 +1820,14 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Changes:
+>
 > - Add import_resource function to check state before importing
 > - Skip import if resource already in state
 > - Better error handling and progress messages
 > - This reduces execution time and provides clearer feedback
-> 
+>
 > Benefits:
+>
 > - Faster execution when resources already imported
 > - Clear status messages (✓ = in state, → = importing, ○ = not found)
 > - Avoids redundant import attempts
@@ -1781,16 +1841,18 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Changes:
+>
 > - Add Firestore owner role to service account
 > - Import existing GCP resources before terraform apply:
->   * Artifact Registry repository
->   * Firestore database (default)
->   * Storage bucket for frontend
->   * Global address for frontend
+>   - Artifact Registry repository
+>   - Firestore database (default)
+>   - Storage bucket for frontend
+>   - Global address for frontend
 > - Ignore import errors if resources already in state
 > - This prevents 'resource already exists' errors
-> 
+>
 > Errors fixed:
+>
 > - Error 409: Repository/bucket/address already exists
 > - Error 403: No permission for Firestore (role added)
 
@@ -1803,12 +1865,14 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Changes:
+>
 > - Add container_registry_name output (ACR name)
 > - Add frontend_storage_account output (Storage Account name)
 > - Add debug output in Deploy Infrastructure step
 > - Add ACR_NAME validation in Build and Push Docker Image step
-> 
+>
 > These outputs are required by the GitHub Actions workflow to:
+>
 > - Login to ACR for Docker image push
 > - Deploy to Container App
 > - Upload frontend files to Storage Account
@@ -1822,12 +1886,14 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Key changes:
+>
 > - Store Terraform outputs in Deploy Infrastructure step
 > - Pass outputs to subsequent steps via GitHub Actions outputs
 > - Avoid running 'terraform output' after Azure CLI login
 > - This prevents CLI auth conflicts with Terraform
-> 
+>
 > Terraform outputs stored:
+>
 > - acr_name (Container Registry)
 > - resource_group (Resource Group)
 > - container_app (Container App name)
@@ -1842,11 +1908,12 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Critical fixes:
+>
 > - Disable terraform_wrapper to ensure environment variables pass correctly
 > - Clear Azure CLI config (az account clear) before Terraform execution
 > - Explicitly disable use_cli, use_msi, use_oidc in provider
-> - Environment variables (ARM_*) are the ONLY authentication method
-> 
+> - Environment variables (ARM\_\*) are the ONLY authentication method
+>
 > This ensures Terraform uses Service Principal credentials exclusively.
 
 ---
@@ -1858,8 +1925,9 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > Changes:
+>
 > - Remove initial Azure Login step (not needed for Terraform)
-> - Terraform uses ARM_* environment variables for Service Principal auth
+> - Terraform uses ARM\_\* environment variables for Service Principal auth
 > - Added use_msi=false and use_oidc=false to provider block
 > - Login to Azure CLI only when needed for ACR operations
 > - This prevents Terraform from attempting Azure CLI authentication
@@ -1873,7 +1941,7 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 **Details**:
 
 > - Backend block does not support use_cli or use_azuread_auth
-> - Authentication via ARM_* environment variables (already set in workflow)
+> - Authentication via ARM\_\* environment variables (already set in workflow)
 > - Keep use_cli=false in provider block (this is valid)
 
 ---
@@ -1951,7 +2019,7 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 
 **Details**:
 
-> - Use xargs for __pycache__ removal instead of -exec
+> - Use xargs for **pycache** removal instead of -exec
 > - Add || true to all cleanup commands to prevent pipeline failures
 > - Add package size display for debugging
 > - Tested locally: successfully creates 2.8MB package (35% size reduction)
@@ -1964,7 +2032,7 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 
 **Details**:
 
-> - Remove __pycache__, *.pyc, tests, *.dist-info to reduce package size
+> - Remove **pycache**, _.pyc, tests, _.dist-info to reduce package size
 > - Add detailed logging for each step (📦 ☁️ 🚀)
 > - Add error handling with clear failure messages
 > - Add workflow monitoring script
@@ -2032,7 +2100,7 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 > - Update GitHub Actions workflow AWS_REGION
 > - Update deployment scripts
 > - Migrate Terraform state to new bucket with versioning and encryption
-> 
+>
 > New bucket: multicloud-auto-deploy-terraform-state-apne1
 
 ---
@@ -2065,7 +2133,6 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 
 ---
 
-
 ## 📅 2026-02-13
 
 ### 📚 **docs**: Add comprehensive documentation
@@ -2096,7 +2163,6 @@ Error 400: Advanced routing rules are not supported for scheme EXTERNAL.
 > - Configure Docker Compose for local development
 
 ---
-
 
 ---
 

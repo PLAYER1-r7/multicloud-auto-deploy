@@ -63,7 +63,7 @@ jobs:
           az storage blob upload-batch \
             --account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
             --auth-mode key \
-            --destination '$web' \
+            --destination '$web/sns' \
             --source dist/ \
             --overwrite \
             --content-cache-control "public, max-age=3600"
@@ -74,7 +74,7 @@ jobs:
             --account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
             --auth-mode key \
             --container-name '$web' \
-            --name index.html \
+            --name sns/index.html \
             --content-cache-control "public, max-age=300, must-revalidate"
 
       - name: Deployment Success

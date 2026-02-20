@@ -21,7 +21,9 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  S3_BUCKET: multicloud-auto-deploy-staging-landing
+  # Landing page is deployed to the same bucket as the frontend (root level)
+  # so CloudFront serves it at / while the React SNS app lives under /sns/
+  S3_BUCKET: multicloud-auto-deploy-staging-frontend
 
 jobs:
   deploy-landing:
@@ -39,7 +41,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy to S3

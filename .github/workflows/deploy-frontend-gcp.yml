@@ -74,11 +74,11 @@ jobs:
             --recursive \
             --delete-unmatched-destination-objects \
             --cache-control="public, max-age=3600" \
-            dist/ gs://${{ env.BUCKET_NAME }}/
+            dist/ gs://${{ env.BUCKET_NAME }}/sns/
 
       - name: Set Cache-Control for index.html
         run: |
-          gcloud storage objects update gs://${{ env.BUCKET_NAME }}/index.html \
+          gcloud storage objects update gs://${{ env.BUCKET_NAME }}/sns/index.html \
             --cache-control="public, max-age=300, must-revalidate"
 
       - name: Deployment Success

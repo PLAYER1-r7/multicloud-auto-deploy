@@ -3,11 +3,11 @@ name: Deploy Frontend to Azure
 on:
   push:
     branches:
-      - develop  # staging自動デプロイ
-      - main     # production自動デプロイ
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
     paths:
-      - 'services/frontend_react/**'
-      - '.github/workflows/deploy-frontend-azure.yml'
+      - "services/frontend_react/**"
+      - ".github/workflows/deploy-frontend-azure.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -35,8 +35,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: services/frontend_react/package-lock.json
 
       - name: Install dependencies

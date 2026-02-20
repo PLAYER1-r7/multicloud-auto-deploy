@@ -117,7 +117,8 @@ def _get_gcp_signing_credentials():
             "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email",
             headers={"Metadata-Flavor": "Google"},
         )
-        sa_email = urllib.request.urlopen(req, timeout=2).read().decode("utf-8")
+        sa_email = urllib.request.urlopen(
+            req, timeout=2).read().decode("utf-8")
         logger.info(f"Using IAM signing credentials for SA: {sa_email}")
 
         # Create an IAM-based signer that calls the signBlob REST API

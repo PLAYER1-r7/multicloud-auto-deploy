@@ -20,7 +20,9 @@ on:
           - production
 
 env:
-  AZURE_STORAGE_ACCOUNT: mcadlanding752
+  # Landing page is deployed to the same storage account as the frontend (root level)
+  # so Azure Front Door serves it at / while the React SNS app lives under /sns/
+  AZURE_STORAGE_ACCOUNT: mcadstaticweb752
   AZURE_RESOURCE_GROUP: multicloud-auto-deploy-staging-rg
 
 jobs:
