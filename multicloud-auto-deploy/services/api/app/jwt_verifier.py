@@ -160,6 +160,17 @@ class JWTVerifier:
             issuer = self.get_issuer()
             audience = self.get_audience()
 
+            # Cognito access_token has no 'aud' claim (uses 'client_id' instead).
+            # Detect via token_use claim to skip aud verification for access tokens.
+            verify_aud = True
+            if self.provider == "cognito":
+                try:
+                    unverified_claims = jwt.get_unverified_claims(token)
+                    if unverified_claims.get("token_use") == "access":
+                        verify_aud = False
+                except Exception:
+                    pass
+
             claims = jwt.decode(
                 token,
                 key,
@@ -168,7 +179,7 @@ class JWTVerifier:
                 issuer=issuer,
                 options={
                     "verify_signature": True,
-                    "verify_aud": True,
+                    "verify_aud": verify_aud,
                     "verify_iat": True,
                     "verify_exp": True,
                     "verify_iss": True,
@@ -200,6 +211,9 @@ class JWTVerifier:
 
         if self.provider == "cognito":
             user_info["email"] = claims.get("email")
+            # access_token uses 'username', id_token uses 'cognito:username'
+            if not user_info["user_id"]:
+                user_info["user_id"] = claims.get("username")
             user_info["groups"] = claims.get("cognito:groups", [])
 
         elif self.provider == "firebase":

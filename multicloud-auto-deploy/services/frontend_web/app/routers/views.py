@@ -22,7 +22,10 @@ def _auth_header(request: Request, settings: Settings | None = None) -> dict[str
 
     access_token = request.cookies.get("access_token")
     id_token = request.cookies.get("id_token")
-    token = id_token or access_token
+    # Prefer access_token: Cognito id_token contains at_hash claim which
+    # requires access_token for verification on the backend.
+    # Cognito access_token has no at_hash and is the correct token for API authorization.
+    token = access_token or id_token
     if not token:
         return {}
     return {"Authorization": f"Bearer {token}"}
