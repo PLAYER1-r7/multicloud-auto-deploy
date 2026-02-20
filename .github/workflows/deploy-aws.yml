@@ -301,7 +301,8 @@ jobs:
           S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
           DIST_ID="${{ steps.pulumi_outputs.outputs.cloudfront_distribution_id }}"
           # React app assets are under /assets/; only index.html conflicts with the landing page
-          aws s3 cp multicloud-auto-deploy/static-site/index.html s3://$S3_BUCKET/index.html \
+          # Use root-level static-site/ (same as deploy-landing-aws.yml)
+          aws s3 cp static-site/index.html s3://$S3_BUCKET/index.html \
             --cache-control "public, max-age=3600" \
             --content-type "text/html"
           echo "✅ Landing page restored to s3://$S3_BUCKET/index.html"
