@@ -125,7 +125,7 @@ class ProfileUpdateRequest(BaseModel):
 class UploadUrlsRequest(BaseModel):
     """アップロードURL生成リクエスト"""
 
-    count: int = Field(..., ge=1, le=10)
+    count: int = Field(..., ge=1, le=16)
     content_types: Optional[list[str]] = Field(
         None,
         alias="contentTypes",
