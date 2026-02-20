@@ -277,7 +277,7 @@ jobs:
             --cache-control="public, max-age=3600"
           echo "✅ Landing page restored to gs://$BUCKET_NAME/index.html"
           gcloud compute url-maps invalidate-cdn-cache multicloud-auto-deploy-staging-cdn-urlmap \
-            --path "/index.html" \
+            --path "/*" \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --quiet
 
