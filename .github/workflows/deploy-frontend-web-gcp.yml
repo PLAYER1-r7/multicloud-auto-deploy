@@ -71,6 +71,15 @@ jobs:
       - name: Configure Docker for GCR
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
 
+      - name: Create Artifact Registry repository (if not exists)
+        run: |
+          gcloud artifacts repositories create multicloud-auto-deploy \
+            --repository-format=docker \
+            --location=${{ env.GCP_REGION }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --description="Docker images for multicloud-auto-deploy" \
+            2>/dev/null || echo "Repository already exists"
+
       - name: Set image tag
         id: image
         run: |
