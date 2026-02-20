@@ -90,6 +90,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-web-app
+          path: .
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -136,10 +137,17 @@ jobs:
           RG="multicloud-auto-deploy-${ENV}-rg"
           APP_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
 
-          az functionapp deployment source config-zip \
+          # Clear WEBSITE_RUN_FROM_PACKAGE to allow zip deploy
+          az functionapp config appsettings set \
+            --resource-group "$RG" --name "$APP_NAME" \
+            --settings WEBSITE_RUN_FROM_PACKAGE=0 &>/dev/null || true
+
+          # Deploy using the newer az functionapp deploy API
+          az functionapp deploy \
             --resource-group "$RG" \
             --name "$APP_NAME" \
-            --src release.zip \
+            --src-path release.zip \
+            --type zip \
             --timeout 600
           echo "✅ $APP_NAME deployed"
 
