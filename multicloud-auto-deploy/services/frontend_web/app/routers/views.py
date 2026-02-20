@@ -43,10 +43,11 @@ def _fetch_json_with_headers(
 
 
 def _post_json_with_headers(
-    url: str, payload: dict[str, Any], headers: dict[str, str]
+    url: str, payload: dict[str, Any], headers: dict[str, str],
+    method: str = "POST",
 ) -> Any:
     try:
-        res = requests.post(url, json=payload, headers=headers, timeout=5)
+        res = requests.request(method, url, json=payload, headers=headers, timeout=5)
         if not res.ok:
             detail = res.text or res.reason or "Request failed"
             raise HTTPException(
@@ -309,6 +310,7 @@ async def profile_update(request: Request, settings: Settings = Depends(get_sett
                 f"{settings.clean_api_base_url}/profile",
                 {"nickname": nickname},
                 headers,
+                method="PUT",
             )
             success = "Profile updated"
             profile_data = _fetch_json_with_headers(
