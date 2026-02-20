@@ -493,7 +493,7 @@ class AzureBackend(BackendBase):
             urls.append({
                 "url": url,
                 "key": key,
-                "fields": {},
+                "fields": "",
             })
             logger.info(f"Generated SAS URL for key: {key}")
 

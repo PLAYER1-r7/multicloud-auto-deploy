@@ -458,7 +458,7 @@ class GcpBackend(BackendBase):
                 urls.append({
                     "url": url,
                     "key": key,
-                    "fields": {},
+                    "fields": "",
                 })
                 logger.info(f"Generated upload URL for key: {key}")
             except Exception as e:
