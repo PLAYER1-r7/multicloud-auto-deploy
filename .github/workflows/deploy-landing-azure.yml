@@ -3,11 +3,11 @@ name: Deploy Landing Page to Azure
 on:
   push:
     branches:
-      - develop  # staging自動デプロイ
-      - main     # production自動デプロイ
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
     paths:
-      - 'static-site/**'
-      - '.github/workflows/deploy-landing-azure.yml'
+      - "static-site/**"
+      - ".github/workflows/deploy-landing-azure.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -50,7 +50,15 @@ jobs:
             --overwrite \
             --content-cache-control "public, max-age=3600"
 
+      - name: Purge Azure Front Door Cache
+        run: |
+          az afd endpoint purge \
+            --profile-name multicloud-auto-deploy-staging-fd \
+            --resource-group multicloud-auto-deploy-staging-rg \
+            --endpoint-name mcad-staging-d45ihd \
+            --content-paths "/*"
+
       - name: Deployment Success
         run: |
           echo "✅ Landing page deployed successfully!"
-          echo "🌐 URL: https://${{ env.AZURE_STORAGE_ACCOUNT }}.z11.web.core.windows.net/"
+          echo "🌐 URL: https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/"

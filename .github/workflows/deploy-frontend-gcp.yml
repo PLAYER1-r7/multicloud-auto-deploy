@@ -3,11 +3,11 @@ name: Deploy Frontend to GCP
 on:
   push:
     branches:
-      - develop  # staging自動デプロイ
-      - main     # production自動デプロイ
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
     paths:
-      - 'services/frontend_react/**'
-      - '.github/workflows/deploy-frontend-gcp.yml'
+      - "services/frontend_react/**"
+      - ".github/workflows/deploy-frontend-gcp.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -40,8 +40,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: services/frontend_react/package-lock.json
 
       - name: Install dependencies
@@ -81,7 +81,13 @@ jobs:
           gcloud storage objects update gs://${{ env.BUCKET_NAME }}/sns/index.html \
             --cache-control="public, max-age=300, must-revalidate"
 
+      - name: Invalidate CDN Cache
+        run: |
+          gcloud compute url-maps invalidate-cdn-cache multicloud-auto-deploy-staging-cdn-urlmap \
+            --path "/*" \
+            --project=${{ secrets.GCP_PROJECT_ID }}
+
       - name: Deployment Success
         run: |
           echo "✅ Frontend deployed successfully!"
-          echo "🌐 URL: https://storage.googleapis.com/${{ env.BUCKET_NAME }}/index.html"
+          echo "🌐 URL: http://34.117.111.182/sns/"

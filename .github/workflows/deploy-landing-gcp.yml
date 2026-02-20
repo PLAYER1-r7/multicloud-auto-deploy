@@ -3,11 +3,11 @@ name: Deploy Landing Page to GCP
 on:
   push:
     branches:
-      - develop  # staging自動デプロイ
-      - main     # production自動デプロイ
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
     paths:
-      - 'static-site/**'
-      - '.github/workflows/deploy-landing-gcp.yml'
+      - "static-site/**"
+      - ".github/workflows/deploy-landing-gcp.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -54,7 +54,13 @@ jobs:
           gcloud storage cp static-site/*.html gs://${{ env.BUCKET_NAME }}/ \
             --cache-control="public, max-age=3600"
 
+      - name: Invalidate CDN Cache
+        run: |
+          gcloud compute url-maps invalidate-cdn-cache multicloud-auto-deploy-staging-cdn-urlmap \
+            --path "/*" \
+            --project=${{ secrets.GCP_PROJECT_ID }}
+
       - name: Deployment Success
         run: |
           echo "✅ Landing page deployed successfully!"
-          echo "🌐 URL: https://storage.googleapis.com/${{ env.BUCKET_NAME }}/index.html"
+          echo "🌐 URL: http://34.117.111.182/"

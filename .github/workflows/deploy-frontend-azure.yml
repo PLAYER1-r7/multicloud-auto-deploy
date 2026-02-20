@@ -3,11 +3,11 @@ name: Deploy Frontend to Azure
 on:
   push:
     branches:
-      - develop  # staging自動デプロイ
-      - main     # production自動デプロイ
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
     paths:
-      - 'services/frontend_react/**'
-      - '.github/workflows/deploy-frontend-azure.yml'
+      - "services/frontend_react/**"
+      - ".github/workflows/deploy-frontend-azure.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -35,8 +35,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: services/frontend_react/package-lock.json
 
       - name: Install dependencies
@@ -77,7 +77,15 @@ jobs:
             --name sns/index.html \
             --content-cache-control "public, max-age=300, must-revalidate"
 
+      - name: Purge Azure Front Door Cache
+        run: |
+          az afd endpoint purge \
+            --profile-name multicloud-auto-deploy-staging-fd \
+            --resource-group multicloud-auto-deploy-staging-rg \
+            --endpoint-name mcad-staging-d45ihd \
+            --content-paths "/*"
+
       - name: Deployment Success
         run: |
           echo "✅ Frontend deployed successfully!"
-          echo "🌐 URL: https://${{ env.AZURE_STORAGE_ACCOUNT }}.z11.web.core.windows.net/"
+          echo "🌐 URL: https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/sns/"

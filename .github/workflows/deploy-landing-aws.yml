@@ -3,11 +3,11 @@ name: Deploy Landing Page to AWS
 on:
   push:
     branches:
-      - develop  # staging自動デプロイ
-      - main     # production自動デプロイ
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
     paths:
-      - 'static-site/**'
-      - '.github/workflows/deploy-landing-aws.yml'
+      - "static-site/**"
+      - ".github/workflows/deploy-landing-aws.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -52,7 +52,14 @@ jobs:
             --exclude "*" \
             --include "*.html"
 
+      - name: Invalidate CloudFront Cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id E1TBH4R432SZBZ \
+            --paths "/*" \
+            --no-cli-pager
+
       - name: Deployment Success
         run: |
           echo "✅ Landing page deployed successfully!"
-          echo "🌐 URL: http://${{ env.S3_BUCKET }}.s3-website-${{ env.AWS_REGION }}.amazonaws.com/"
+          echo "🌐 URL: https://d1tf3uumcm4bo1.cloudfront.net/"
