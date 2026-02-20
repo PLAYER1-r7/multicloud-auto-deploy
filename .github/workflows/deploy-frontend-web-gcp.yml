@@ -1,0 +1,108 @@
+name: Deploy Frontend Web to GCP
+
+on:
+  push:
+    branches:
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
+    paths:
+      - "multicloud-auto-deploy/services/frontend_web/**"
+      - ".github/workflows/deploy-frontend-web-gcp.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  GCP_REGION: asia-northeast1
+  IMAGE_NAME: frontend-web
+
+concurrency:
+  group: deploy-frontend-web-gcp-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Deploy frontend_web to Cloud Run
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            ENV="production"
+          else
+            ENV="staging"
+          fi
+          echo "env_name=$ENV" >> $GITHUB_OUTPUT
+          if [ "$ENV" == "staging" ]; then
+            echo "auth_disabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "auth_disabled=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
+
+      - name: Set image tag
+        id: image
+        run: |
+          ENV="${{ steps.env.outputs.env_name }}"
+          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/multicloud-auto-deploy/${IMAGE_NAME}-${ENV}:${{ github.sha }}"
+          echo "tag=$IMAGE" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        working-directory: multicloud-auto-deploy/services/frontend_web
+        run: docker build -t ${{ steps.image.outputs.tag }} .
+
+      - name: Push Docker image
+        run: docker push ${{ steps.image.outputs.tag }}
+
+      - name: Deploy to Cloud Run
+        run: |
+          ENV="${{ steps.env.outputs.env_name }}"
+          gcloud run deploy multicloud-auto-deploy-${ENV}-frontend-web \
+            --image ${{ steps.image.outputs.tag }} \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --set-env-vars "API_BASE_URL=${{ secrets.GCP_API_ENDPOINT }}" \
+            --set-env-vars "AUTH_PROVIDER=gcp" \
+            --set-env-vars "AUTH_DISABLED=${{ steps.env.outputs.auth_disabled }}" \
+            --set-env-vars "GCP_CLIENT_ID=${{ secrets.GCP_OIDC_CLIENT_ID }}" \
+            --set-env-vars "GCP_REDIRECT_URI=${{ secrets.GCP_FRONTEND_WEB_REDIRECT_URI }}" \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+          URL=$(gcloud run services describe multicloud-auto-deploy-${ENV}-frontend-web \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --format 'value(status.url)')
+          echo "✅ frontend_web deployed: $URL"

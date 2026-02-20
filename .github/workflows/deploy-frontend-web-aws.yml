@@ -1,0 +1,144 @@
+name: Deploy Frontend Web to AWS
+
+on:
+  push:
+    branches:
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
+    paths:
+      - "multicloud-auto-deploy/services/frontend_web/**"
+      - ".github/workflows/deploy-frontend-web-aws.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  AWS_REGION: ap-northeast-1
+  PYTHON_VERSION: "3.12"
+
+concurrency:
+  group: deploy-frontend-web-aws-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy frontend_web to AWS Lambda
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            ENV="production"
+          else
+            ENV="staging"
+          fi
+          echo "env_name=$ENV" >> $GITHUB_OUTPUT
+          if [ "$ENV" == "staging" ]; then
+            echo "auth_disabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "auth_disabled=false" >> $GITHUB_OUTPUT
+          fi
+          echo "📦 Deploying to: $ENV"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build Lambda Layer (dependencies)
+        run: |
+          cd multicloud-auto-deploy/services/frontend_web
+          mkdir -p .build-layer/python
+          pip install --target .build-layer/python -r requirements.txt --no-deps
+          pip install --target .build-layer/python -r requirements.txt
+          cd .build-layer
+          zip -r ../lambda-layer.zip python/
+          echo "✅ Layer size: $(du -sh ../lambda-layer.zip | cut -f1)"
+
+      - name: Package Application Code
+        run: |
+          cd multicloud-auto-deploy/services/frontend_web
+          mkdir -p .build/package
+          cp -r app .build/package/
+          cp handler.py .build/package/
+          cd .build/package
+          zip -r ../../lambda.zip .
+          cd ../..
+          echo "✅ Package size: $(du -sh lambda.zip | cut -f1)"
+
+      - name: Publish Lambda Layer
+        id: layer
+        run: |
+          ENV="${{ steps.env.outputs.env_name }}"
+          LAYER_NAME="multicloud-auto-deploy-${ENV}-frontend-web-deps"
+          LAYER_ARN=$(aws lambda publish-layer-version \
+            --layer-name $LAYER_NAME \
+            --description "frontend_web dependencies" \
+            --zip-file fileb://multicloud-auto-deploy/services/frontend_web/lambda-layer.zip \
+            --compatible-runtimes python3.12 \
+            --region ${{ env.AWS_REGION }} \
+            --query LayerVersionArn \
+            --output text)
+          echo "layer_arn=$LAYER_ARN" >> $GITHUB_OUTPUT
+          echo "✅ Layer ARN: $LAYER_ARN"
+
+      - name: Deploy to Lambda
+        run: |
+          ENV="${{ steps.env.outputs.env_name }}"
+          FUNCTION_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
+          API_URL="${{ secrets.API_GATEWAY_ENDPOINT }}"
+
+          # Update function code
+          aws lambda update-function-code \
+            --function-name $FUNCTION_NAME \
+            --region ${{ env.AWS_REGION }} \
+            --zip-file fileb://multicloud-auto-deploy/services/frontend_web/lambda.zip
+
+          # Build env vars
+          cat > /tmp/frontend-web-env.json << EOF
+          {
+            "Variables": {
+              "API_BASE_URL": "${API_URL}",
+              "AUTH_PROVIDER": "aws",
+              "AUTH_DISABLED": "${{ steps.env.outputs.auth_disabled }}",
+              "COGNITO_DOMAIN": "${{ secrets.COGNITO_DOMAIN }}",
+              "COGNITO_CLIENT_ID": "${{ secrets.COGNITO_CLIENT_ID }}",
+              "COGNITO_REDIRECT_URI": "${{ secrets.FRONTEND_WEB_REDIRECT_URI }}"
+            }
+          }
+          EOF
+
+          # Update configuration
+          aws lambda update-function-configuration \
+            --function-name $FUNCTION_NAME \
+            --region ${{ env.AWS_REGION }} \
+            --layers ${{ steps.layer.outputs.layer_arn }} \
+            --environment file:///tmp/frontend-web-env.json
+
+          echo "✅ frontend_web deployed to $FUNCTION_NAME"

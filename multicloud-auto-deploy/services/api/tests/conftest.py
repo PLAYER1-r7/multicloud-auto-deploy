@@ -3,9 +3,8 @@ Pytest Configuration for Multi-Cloud Backend Tests
 """
 import os
 import uuid
+
 import pytest
-from datetime import datetime, timezone
-from typing import Generator
 
 # Set test environment variables
 os.environ["CLOUD_PROVIDER"] = "local"
@@ -14,7 +13,7 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["STORAGE_PATH"] = "/tmp/test-storage"
 
 from app.auth import UserInfo
-from app.models import CreatePostBody, UpdatePostBody, ProfileUpdateRequest
+from app.models import CreatePostBody, ProfileUpdateRequest, UpdatePostBody
 
 
 @pytest.fixture

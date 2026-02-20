@@ -1,5 +1,5 @@
-import MessageForm from './components/MessageForm';
-import MessageList from './components/MessageList';
+import PostForm from './components/MessageForm';
+import PostList from './components/MessageList';
 
 function App() {
   return (
@@ -11,7 +11,7 @@ function App() {
             🌐 Multi-Cloud SNS
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            A simple social network powered by AWS, Azure, and GCP
+            AWS・ Azure・ GCP で動作するシンプルな SNS
           </p>
           <div className="mt-4 flex justify-center gap-4 text-sm text-gray-500 dark:text-gray-400">
             <span>☁️ AWS Lambda</span>
@@ -20,15 +20,15 @@ function App() {
           </div>
         </header>
 
-        {/* Message Form */}
-        <MessageForm />
+        {/* Post Form */}
+        <PostForm />
 
-        {/* Message List */}
-        <MessageList />
+        {/* Post List */}
+        <PostList />
 
         {/* Footer */}
         <footer className="mt-12 text-center text-sm text-gray-500 dark:text-gray-400">
-          <p>Built with React, TypeScript, Vite & Tailwind CSS</p>
+          <p>Built with React, TypeScript, Vite &amp; Tailwind CSS</p>
           <p className="mt-1">
             Deployed to: S3 + CloudFront, Blob Storage + CDN, Cloud Storage + CDN
           </p>
@@ -39,4 +39,3 @@ function App() {
 }
 
 export default App;
-

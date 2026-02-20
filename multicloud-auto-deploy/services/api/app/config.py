@@ -1,8 +1,9 @@
 from typing import Optional
-from pydantic import Field, AliasChoices
+
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
+
 from app.models import CloudProvider
-import os
 
 
 class Settings(BaseSettings):
@@ -19,13 +20,19 @@ class Settings(BaseSettings):
     auth_audience: Optional[str] = None
     admin_group: str = "Admins"
 
-    # ローカル開発設定
-    database_url: Optional[str] = None
-    storage_path: str = "./storage"
+    # ローカル開発設定 (DynamoDB Local + MinIO)
+    dynamodb_endpoint: Optional[str] = Field(default="http://localhost:8001")
+    dynamodb_table_name: str = Field(default="simple-sns-local")
     minio_endpoint: Optional[str] = None
     minio_access_key: Optional[str] = None
     minio_secret_key: Optional[str] = None
-    minio_bucket: str = "images"
+    # Accepts both MINIO_BUCKET and MINIO_BUCKET_NAME environment variables
+    minio_bucket: str = Field(
+        default="images",
+        validation_alias=AliasChoices("minio_bucket", "minio_bucket_name"),
+    )
+    # Public URL for browser-side PUT requests (falls back to minio_endpoint)
+    minio_public_endpoint: Optional[str] = None
 
     # AWS設定
     aws_region: str = "ap-northeast-1"
@@ -41,14 +48,15 @@ class Settings(BaseSettings):
     azure_storage_account_name: Optional[str] = None
     azure_storage_account_key: Optional[str] = None
     azure_storage_container: str = "images"
-    
+
     # Cosmos DB設定
     # NOTE: AZURE_COSMOS_DATABASE/CONTAINER names are reserved by Azure CLI/Function App
     #       and always return null values. Use COSMOS_DB_* prefix instead.
     #       Both naming conventions are supported via AliasChoices for compatibility.
     cosmos_db_endpoint: Optional[str] = Field(
         default=None,
-        validation_alias=AliasChoices("cosmos_db_endpoint", "azure_cosmos_endpoint")
+        validation_alias=AliasChoices(
+            "cosmos_db_endpoint", "azure_cosmos_endpoint")
     )
     cosmos_db_key: Optional[str] = Field(
         default=None,
@@ -56,11 +64,13 @@ class Settings(BaseSettings):
     )
     cosmos_db_database: str = Field(
         default="simple-sns",
-        validation_alias=AliasChoices("cosmos_db_database", "azure_cosmos_database")
+        validation_alias=AliasChoices(
+            "cosmos_db_database", "azure_cosmos_database")
     )
     cosmos_db_container: str = Field(
         default="items",
-        validation_alias=AliasChoices("cosmos_db_container", "azure_cosmos_container")
+        validation_alias=AliasChoices(
+            "cosmos_db_container", "azure_cosmos_container")
     )
 
     # GCP設定

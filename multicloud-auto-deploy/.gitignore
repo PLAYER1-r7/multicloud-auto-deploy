@@ -75,3 +75,5 @@ secrets/
 service-account-key.json
 services/api/.build/
 services/frontend_react/.env.production
+.venv/
+.deployment/

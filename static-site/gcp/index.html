@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ashnova on GCP</title>
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --gcp-blue:    #4285F4;
+            --gcp-red:     #EA4335;
+            --gcp-yellow:  #FBBC04;
+            --gcp-green:   #34A853;
+            --gcp-dark:    #0D1117;
+            --gcp-mid:     #161B22;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Google Sans', 'Roboto', sans-serif;
+            background: var(--gcp-dark);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background: var(--gcp-dark);
+            border-bottom: 3px solid var(--gcp-blue);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .logo { font-size: 1.5rem; font-weight: 700; }
+        /* Google 4-color logo dots */
+        .logo .dot-b { color: var(--gcp-blue); }
+        .logo .dot-r { color: var(--gcp-red); }
+        .logo .dot-y { color: var(--gcp-yellow); }
+        .logo .dot-g { color: var(--gcp-green); }
+        .cloud-badge {
+            background: var(--gcp-blue);
+            color: #fff;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .hero {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem 2rem;
+            text-align: center;
+            background: linear-gradient(160deg, var(--gcp-dark) 0%, var(--gcp-mid) 100%);
+        }
+        .hero h1 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 1rem;
+        }
+        /* Google 4-color word */
+        .hero h1 .gcp-word span:nth-child(1) { color: var(--gcp-blue); }
+        .hero h1 .gcp-word span:nth-child(2) { color: var(--gcp-red); }
+        .hero h1 .gcp-word span:nth-child(3) { color: var(--gcp-yellow); }
+        .hero h1 .gcp-word span:nth-child(4) { color: var(--gcp-blue); }
+        .hero h1 .gcp-word span:nth-child(5) { color: var(--gcp-green); }
+        .hero h1 .gcp-word span:nth-child(6) { color: var(--gcp-red); }
+        .hero p {
+            font-size: 1.1rem;
+            opacity: 0.8;
+            max-width: 560px;
+            margin-bottom: 2.5rem;
+            line-height: 1.7;
+        }
+        .cta-group {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 3rem;
+        }
+        .btn {
+            padding: 0.85rem 2rem;
+            border-radius: 0.375rem;
+            font-weight: 700;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+        .btn-primary { background: var(--gcp-blue); color: #fff; }
+        .btn-secondary {
+            background: transparent;
+            color: #fff;
+            border: 2px solid rgba(255,255,255,0.35);
+        }
+        .services {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            max-width: 900px;
+            width: 100%;
+        }
+        .service-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 0.5rem;
+            padding: 1.25rem;
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+        }
+        /* Top border with Google colors cycling */
+        .service-card:nth-child(1) { border-top: 3px solid var(--gcp-blue); }
+        .service-card:nth-child(2) { border-top: 3px solid var(--gcp-red); }
+        .service-card:nth-child(3) { border-top: 3px solid var(--gcp-yellow); }
+        .service-card:nth-child(4) { border-top: 3px solid var(--gcp-green); }
+        .service-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .service-card h3 { font-size: 0.9rem; color: #8AB4F8; font-weight: 700; margin-bottom: 0.25rem; }
+        .service-card p { font-size: 0.8rem; opacity: 0.65; line-height: 1.5; }
+        footer {
+            background: var(--gcp-dark);
+            border-top: 1px solid rgba(255,255,255,0.08);
+            padding: 1rem 2rem;
+            font-size: 0.8rem;
+            opacity: 0.5;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">Ash<span class="dot-b">n</span><span class="dot-r">o</span><span class="dot-y">v</span><span class="dot-g">a</span></div>
+        <div class="cloud-badge">GCP asia-northeast1</div>
+    </header>
+
+    <main class="hero">
+        <h1>Powered by
+            <span class="gcp-word">
+                <span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span>
+            </span>
+            Cloud
+        </h1>
+        <p>
+            Cloud Run + Firestore + Cloud CDN + Cloud Storage。<br>
+            コンテナベースのサーバーレス基盤でSNSを高速配信します。
+        </p>
+
+        <div class="cta-group">
+            <a href="/sns/" class="btn btn-primary">SNS アプリを開く</a>
+            <a href="https://github.com/PLAYER1-r7/ashnova" class="btn btn-secondary">GitHub</a>
+        </div>
+
+        <div class="services">
+            <div class="service-card">
+                <div class="icon">🚢</div>
+                <h3>Cloud Run</h3>
+                <p>Python 3.13 コンテナ。リクエスト単位の完全サーバーレス。</p>
+            </div>
+            <div class="service-card">
+                <div class="icon">🌐</div>
+                <h3>Cloud CDN</h3>
+                <p>グローバルエッジキャッシュ。Cloud Armor WAF 付き（本番）。</p>
+            </div>
+            <div class="service-card">
+                <div class="icon">🔥</div>
+                <h3>Firestore</h3>
+                <p>ネイティブモード NoSQL。リアルタイム同期対応。</p>
+            </div>
+            <div class="service-card">
+                <div class="icon">🔒</div>
+                <h3>Firebase Auth</h3>
+                <p>Google / メール認証。Identity Platform バックエンド。</p>
+            </div>
+        </div>
+    </main>
+
+    <footer>Ashnova · Multi-Cloud Platform · Powered by Python + Pulumi</footer>
+</body>
+</html>

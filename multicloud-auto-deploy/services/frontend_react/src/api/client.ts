@@ -1,53 +1,55 @@
 import axios from 'axios';
-import type { Message, MessagesResponse, CreateMessageInput, UpdateMessageInput } from '../types/message';
+import type { Post, PostsResponse, CreatePostInput, UpdatePostInput } from '../types/message';
 
-// Get API URL from environment variable or use staging as default
-const API_URL = import.meta.env.VITE_API_URL || 'https://mcad-staging-api-son5b3ml7a-an.a.run.app';
-
-// Detect if this is Azure Functions (contains `/api/HttpTrigger`)
-// Azure Functions URL structure: https://xxx.azurewebsites.net/api/HttpTrigger
-// We need to append paths differently for Azure
-const isAzureFunctions = API_URL.includes('/api/HttpTrigger');
-const basePath = isAzureFunctions ? '' : '/api';
+// API URL:
+//  - 本番ビルド: VITE_API_URL 環境変数 (例: https://api.example.com)
+//  - dev server: '' (空文字 = 相対URL、Vite proxy 経由で localhost:8000 へ転送)
+const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 const apiClient = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
   timeout: 10000,
 });
 
-export const messagesApi = {
-  // Get all messages with pagination
-  async getMessages(page: number = 1, pageSize: number = 20): Promise<MessagesResponse> {
-    const response = await apiClient.get<MessagesResponse>(`${basePath}/messages/`, {
-      params: { page, page_size: pageSize },
+export const postsApi = {
+  // 投稿一覧（カーソルページネーション）
+  async getPosts(
+    limit: number = 20,
+    nextToken?: string | null,
+    tag?: string | null,
+  ): Promise<PostsResponse> {
+    const response = await apiClient.get<PostsResponse>('/posts', {
+      params: {
+        limit,
+        ...(nextToken ? { next_token: nextToken } : {}),
+        ...(tag ? { tag } : {}),
+      },
     });
     return response.data;
   },
 
-  // Get a single message by ID
-  async getMessage(id: string): Promise<Message> {
-    const response = await apiClient.get<Message>(`${basePath}/messages/${id}`);
+  // 単一投稿取得
+  async getPost(postId: string): Promise<Post> {
+    const response = await apiClient.get<Post>(`/posts/${postId}`);
     return response.data;
   },
 
-  // Create a new message
-  async createMessage(data: CreateMessageInput): Promise<Message> {
-    const response = await apiClient.post<Message>(`${basePath}/messages/`, data);
+  // 投稿作成
+  async createPost(data: CreatePostInput): Promise<Post> {
+    const response = await apiClient.post<Post>('/posts', data);
     return response.data;
   },
 
-  // Update an existing message
-  async updateMessage(id: string, data: UpdateMessageInput): Promise<Message> {
-    const response = await apiClient.put<Message>(`${basePath}/messages/${id}`, data);
+  // 投稿更新
+  async updatePost(postId: string, data: UpdatePostInput): Promise<Post> {
+    const response = await apiClient.put<Post>(`/posts/${postId}`, data);
     return response.data;
   },
 
-  // Delete a message
-  async deleteMessage(id: string): Promise<void> {
-    await apiClient.delete(`${basePath}/messages/${id}`);
+  // 投稿削除
+  async deletePost(postId: string): Promise<void> {
+    await apiClient.delete(`/posts/${postId}`);
   },
 };
 

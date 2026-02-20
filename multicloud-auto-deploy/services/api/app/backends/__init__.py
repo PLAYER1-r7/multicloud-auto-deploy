@@ -1,10 +1,8 @@
 from functools import lru_cache
+
+from app.backends.base import BackendBase as BackendBase
 from app.config import settings
 from app.models import CloudProvider
-from app.backends.base import BackendBase
-
-# Alias for backward compatibility
-BaseBackend = BackendBase
 
 
 @lru_cache(maxsize=1)
