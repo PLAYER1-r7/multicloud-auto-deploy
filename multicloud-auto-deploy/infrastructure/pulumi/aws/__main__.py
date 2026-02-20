@@ -30,6 +30,10 @@ allowed_origins = config.get("allowedOrigins") or "*"
 allowed_origins_list = allowed_origins.split(
     ",") if allowed_origins != "*" else ["*"]
 
+# CloudFront domain (set after first deploy: pulumi config set cloudFrontDomain <domain>)
+# Used for Cognito callback/logout URLs and frontend_web redirect URIs
+cf_domain = config.get("cloudFrontDomain") or ""
+
 # Common tags
 common_tags = {
     "Project": project_name,
@@ -141,11 +145,11 @@ user_pool_client = aws.cognito.UserPoolClient(
     callback_urls=[
         "http://localhost:8080/callback",
         "https://localhost:8080/callback",
-    ],
+    ] + ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else []),
     logout_urls=[
         "http://localhost:8080/",
         "https://localhost:8080/",
-    ],
+    ] + ([f"https://{cf_domain}/sns/"] if cf_domain else []),
     access_token_validity=1,
     id_token_validity=1,
     refresh_token_validity=30,
@@ -400,7 +404,7 @@ lambda_function = aws.lambda_.Function(
             "ENVIRONMENT": stack,
             "CLOUD_PROVIDER": "aws",
             "AUTH_PROVIDER": "cognito",
-            "AUTH_DISABLED": "true" if stack == "staging" else "false",
+            "AUTH_DISABLED": "false",
             "SECRET_NAME": app_secret.name,
             "COGNITO_USER_POOL_ID": user_pool.id,
             "COGNITO_CLIENT_ID": user_pool_client.id,
@@ -460,13 +464,21 @@ frontend_web_lambda = aws.lambda_.Function(
     opts=pulumi.ResourceOptions(
         ignore_changes=["code", "source_code_hash", "layers"]),
     environment={
-        "variables": pulumi.Output.all(api_gateway.api_endpoint).apply(
+        "variables": pulumi.Output.all(
+            api_gateway.api_endpoint,
+            user_pool_client.id,
+            user_pool_domain.domain,
+        ).apply(
             lambda args: {
                 "ENVIRONMENT": stack,
                 "AUTH_PROVIDER": "aws",
-                "AUTH_DISABLED": "true" if stack == "staging" else "false",
+                "AUTH_DISABLED": "false",
                 "STAGE_NAME": "sns",
                 "API_BASE_URL": args[0],
+                "COGNITO_CLIENT_ID": args[1],
+                "COGNITO_DOMAIN": f"{args[2]}.auth.{region}.amazoncognito.com",
+                "COGNITO_REDIRECT_URI": f"https://{cf_domain}/sns/auth/callback" if cf_domain else "",
+                "COGNITO_LOGOUT_URI": f"https://{cf_domain}/sns/" if cf_domain else "",
             }
         ),
     },
