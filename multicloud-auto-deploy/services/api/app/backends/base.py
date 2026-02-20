@@ -24,7 +24,8 @@ class BackendBase(ABC):
         limit: int,
         next_token: Optional[str],
         tag: Optional[str],
-    ) -> tuple[list[Post], Optional[str]]:
+        user: Optional["UserInfo"] = None,
+    ) -> tuple[list, Optional[str]]:
         """
         投稿一覧を取得
 
@@ -137,4 +138,14 @@ class BackendBase(ABC):
         Returns:
             [{"uploadUrl": "...", "key": "..."}, ...]
         """
+        pass
+
+    @abstractmethod
+    def like_post(self, post_id: str, user: UserInfo) -> dict:
+        """投稿にいいねをする"""
+        pass
+
+    @abstractmethod
+    def unlike_post(self, post_id: str, user: UserInfo) -> dict:
+        """投稿のいいねを取り消す"""
         pass

@@ -46,6 +46,7 @@ class AwsBackend(BackendBase):
         limit: int,
         next_token: Optional[str],
         tag: Optional[str],
+        user: Optional[UserInfo] = None,
     ) -> tuple[list[Post], Optional[str]]:
         """投稿一覧を取得 (DynamoDB Query)"""
         try:
@@ -296,3 +297,11 @@ class AwsBackend(BackendBase):
             )
 
         return urls
+
+    def like_post(self, post_id: str, user: UserInfo) -> dict:
+        """いいね機能（未実装）"""
+        return {"post_id": post_id, "liked": True}
+
+    def unlike_post(self, post_id: str, user: UserInfo) -> dict:
+        """いいね取り消し機能（未実装）"""
+        return {"post_id": post_id, "liked": False}
