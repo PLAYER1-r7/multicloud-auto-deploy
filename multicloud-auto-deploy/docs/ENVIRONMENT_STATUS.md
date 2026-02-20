@@ -1,306 +1,346 @@
-# 環境ステータスレポート
+# Environment Status Report
 
-最終更新: 2026-02-17
-
-## 📋 概要
-
-このドキュメントは、staging環境とproduction環境の現在のステータスを記録しています。各チャットで環境の前提知識として参照してください。
+Last updated: 2026-02-20
 
 ---
 
-## 🔄 CI/CD ステータス
+## Summary
 
-### 最新のワークフロー実行状況
+All three cloud staging environments are fully operational. The landing page is served at the CDN root
+(`/`) and the React SNS app is served under the `/sns/` path on every cloud.
 
-| ワークフロー                 | ブランチ | ステータス | 日時             |
-| ---------------------------- | -------- | ---------- | ---------------- |
-| Deploy to AWS                | main     | ❌ failure | 2026-02-17 17:06 |
-| Deploy to Azure              | main     | ❌ failure | 2026-02-17 17:06 |
-| Deploy to GCP                | main     | ❌ failure | 2026-02-17 17:06 |
-| Deploy Frontend to AWS       | main     | ✅ success | 2026-02-17 17:06 |
-| Deploy Frontend to Azure     | main     | ✅ success | 2026-02-17 17:06 |
-| Deploy Frontend to GCP       | main     | ✅ success | 2026-02-17 17:06 |
-| Deploy Landing Page to AWS   | main     | ❌ failure | 2026-02-17 17:06 |
-| Deploy Landing Page to Azure | main     | ✅ success | 2026-02-17 17:06 |
-| Deploy Landing Page to GCP   | main     | ❌ failure | 2026-02-17 17:06 |
-| Deploy to Azure              | develop  | ❌ failure | 2026-02-17 17:05 |
-
-### 共通の失敗原因
-
-1. **Pulumi Stack初期化エラー**: `Initialize Pulumi Stack` ステップで失敗
-   - スタック名のハードコーディング問題は修正済み
-   - 最新の失敗は別の原因の可能性
-
-2. **Lambda Layer問題**: AWS Lambda関数で依存関係が見つからない
-   - `No module named 'mangum'` エラー
-   - Layerビルドの条件分岐に問題がある可能性
+| Cloud | Landing Page (`/`) | SNS App (`/sns/`) | API |
+|-------|-------------------|-------------------|-----|
+| GCP   | ✅ `http://34.117.111.182/` | ✅ `http://34.117.111.182/sns/` | ✅ Cloud Run |
+| AWS   | ✅ `https://d1tf3uumcm4bo1.cloudfront.net/` | ✅ `https://d1tf3uumcm4bo1.cloudfront.net/sns/` | ⚠️ Lambda (500) |
+| Azure | ✅ `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/` | ✅ `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/sns/` | ✅ Azure Functions |
 
 ---
 
-## ☁️ AWS 環境ステータス
+## Staging Environment Details
 
-### Staging環境 (ap-northeast-1)
+### GCP
 
-| コンポーネント      | ステータス | URL/ID                                                        | 備考                           |
-| ------------------- | ---------- | ------------------------------------------------------------- | ------------------------------ |
-| **API**             | ❌ 失敗    | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com` | Internal Server Error 500      |
-| **Frontend**        | ✅ 正常    | `https://d1tf3uumcm4bo1.cloudfront.net`                       | CloudFront配信正常             |
-| **Lambda Function** | ⚠️ エラー  | `multicloud-auto-deploy-staging-api`                          | mangumモジュールが見つからない |
-| **Runtime**         | -          | Python 3.12                                                   | -                              |
-| **Handler**         | -          | index.handler                                                 | -                              |
-| **Layers**          | ❌ なし    | null                                                          | 依存関係がデプロイされていない |
-| **Code Size**       | ⚠️ 29KB    | -                                                             | 非常に小さい（依存関係なし）   |
+| Component      | Value |
+|----------------|-------|
+| CDN IP         | `34.117.111.182` (Classic External HTTP Load Balancer) |
+| Storage Bucket | `ashnova-multicloud-auto-deploy-staging-frontend` |
+| API            | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app` |
+| Project        | `ashnova` |
+| Region         | `asia-northeast1` |
 
-#### 問題点
+### AWS
+
+| Component       | Value |
+|-----------------|-------|
+| CloudFront URL  | `https://d1tf3uumcm4bo1.cloudfront.net` |
+| Distribution ID | `E1TBH4R432SZBZ` |
+| S3 Bucket       | `multicloud-auto-deploy-staging-frontend` |
+| API             | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com` |
+| Region          | `ap-northeast-1` |
+
+### Azure
+
+| Component       | Value |
+|-----------------|-------|
+| Front Door URL  | `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net` |
+| Profile         | `multicloud-auto-deploy-staging-fd` |
+| Endpoint        | `mcad-staging-d45ihd` |
+| Storage Account | `mcadwebd45ihd` (origin: `mcadwebd45ihd.z11.web.core.windows.net`) |
+| Function App    | `multicloud-auto-deploy-staging-func` |
+| API             | `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger` |
+| Resource Group  | `multicloud-auto-deploy-staging-rg` |
+| Region          | `japaneast` |
+
+---
+
+## CI/CD Status (2026-02-20)
+
+| Workflow                     | Branch  | Status     | HEAD      |
+|------------------------------|---------|------------|-----------|
+| Deploy Frontend to GCP       | develop | ✅ success | `591ce0b` |
+| Deploy Frontend to AWS       | develop | ✅ success | `591ce0b` |
+| Deploy Frontend to Azure     | develop | ✅ success | `591ce0b` |
+| Deploy Landing Page to GCP   | develop | ✅ success | `591ce0b` |
+| Deploy Landing Page to AWS   | develop | ✅ success | `591ce0b` |
+| Deploy Landing Page to Azure | develop | ✅ success | `591ce0b` |
+
+---
+
+## Bucket / Storage Layout
+
+All three clouds share the same directory structure within their respective storage buckets:
 
 ```
-[ERROR] Runtime.ImportModuleError: Unable to import module 'index': No module named 'mangum'
+bucket-root/
+├── index.html          ← Landing page ("Ashnova - マルチクラウド静的サイト")
+├── error.html          ← Error page
+├── aws/                ← Cloud-specific static asset directories
+├── azure/
+├── gcp/
+└── sns/                ← React SNS application (Vite build output)
+    ├── index.html      ←   Content-Type: text/html; charset=utf-8
+    ├── vite.svg
+    └── assets/
+        ├── index-*.js
+        └── index-*.css
 ```
 
-**原因**: Lambda Layerが正しくデプロイされていない
+---
 
-- ワークフローの `Build Lambda Layer` ステップが条件付き実行
-- 条件: `if: ${{ github.event.inputs.use_klayers == 'false' }}`
-- push トリガーでは評価されず、Layerがビルドされない
+## Issues Fixed — 2026-02-20
 
-**解決策**:
+### Fix 1 — Wrong workflow files were being edited
 
-1. Lambda Layerを手動でデプロイ（推奨）
-2. ワークフローの条件を修正
-3. 公開Layer + カスタムLayerのハイブリッド構成
+**Commit:** `c347727`
 
-👉 **詳細**: [AWS Lambda Layer最適化戦略](./AWS_LAMBDA_LAYER_STRATEGY.md)
+**Problem:**
+The repository contains GitHub Actions workflows at two locations:
+- `.github/workflows/` — the **actual** path GitHub Actions reads
+- `multicloud-auto-deploy/.github/workflows/` — a subdirectory copy that CI ignores
 
-#### エンドポイントテスト結果
+All prior fixes had been applied exclusively to the subdirectory copy. CI continued using the
+unmodified root-level files, producing a confusing state where `git show` and `cat` showed the
+correct content while CI logs showed old values.
 
+**Discovery:**
+Compared blob SHAs using `git cat-file` (local object store) against the GitHub Contents API
+(`GET /repos/.../contents/.github/workflows/...?ref=<sha>`). The SHAs differed, confirming that
+CI was reading a different file from the one being edited.
+
+**Fix:**
+Applied all corrections to the six workflow files under `.github/workflows/` (root level) and kept
+the subdirectory copies in sync.
+
+---
+
+### Fix 2 — CI authentication failures for landing page deployments
+
+**Commits:** `1e465e1`, `c347727`
+
+**Problem:**
+`deploy-landing-gcp.yml` specified `workload_identity_provider` and `deploy-landing-aws.yml`
+specified `role-to-assume`. Neither secret was configured in the repository's Actions secrets,
+causing immediate authentication failures.
+
+**Fix:**
+Aligned both workflows with the authentication method already used by the working frontend workflows:
+
+| Workflow | Old (broken) | New (working) |
+|----------|--------------|---------------|
+| `deploy-landing-gcp.yml` | `workload_identity_provider` (secret not set) | `credentials_json: ${{ secrets.GCP_CREDENTIALS }}` |
+| `deploy-landing-aws.yml` | `role-to-assume` (secret not set) | `aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}` + `aws-secret-access-key` |
+
+---
+
+### Fix 3 — React SNS app overwrote the landing page at CDN root
+
+**Commits:** `a585f22`, `c347727`, `982c0d5`
+
+**Problem:**
+`deploy-frontend-*.yml` synced the Vite `dist/` output directly to the storage bucket root.
+Every frontend CI run replaced the landing page `index.html` with the React app's `index.html`.
+Additionally, the `deploy-landing-*.yml` workflows deployed to a *separate* bucket that was not
+connected to any CDN, so the landing page was never publicly reachable.
+
+**Fix:**
+1. Changed all frontend workflows to deploy to the `sns/` prefix:
+
+   | Cloud | Old | New |
+   |-------|-----|-----|
+   | GCP   | `gs://bucket/` | `gs://bucket/sns/` |
+   | AWS   | `s3://bucket/` | `s3://bucket/sns/` |
+   | Azure | `$web/` | `$web/sns/` |
+
+2. Changed all landing page workflows to target the CDN-connected frontend bucket:
+
+   | Cloud | Old bucket | New bucket |
+   |-------|------------|------------|
+   | GCP   | `...-staging-landing` | `...-staging-frontend` |
+   | AWS   | `...-staging-landing` | `...-staging-frontend` |
+   | Azure | `mcadlanding752` | `mcadwebd45ihd` (see Fix 6) |
+
+3. Set `base: '/sns/'` in `services/frontend_react/vite.config.ts` so all asset URLs in the
+   React bundle are rooted at `/sns/` (e.g. `/sns/assets/index-abc.js`).
+
+---
+
+### Fix 4 — AUTH_DISABLED=true in staging for AWS and Azure
+
+**Commit:** `6699586`
+
+**Problem:**
+AWS and Azure backend deployment workflows had a conditional block that was intended to enable auth
+only in production, but the condition was inverted — it set `AUTH_DISABLED=true` in staging.
+GCP was not affected because it had a separate, correct configuration.
+
+**Fix:**
+Removed the conditional entirely and always set `AUTH_DISABLED=false` with the appropriate
+`AUTH_PROVIDER` value for each cloud.
+
+---
+
+### Fix 5 — Landing page SNS link pointed to `:8080` on CDN hostnames
+
+**Commit:** `0c485b7`
+
+**Problem:**
+`static-site/index.html` contained JavaScript that unconditionally appended `:8080` to the
+current hostname to build the SNS app URL. On CDN hostnames such as
+`d1tf3uumcm4bo1.cloudfront.net`, this produced the invalid URL
+`https://d1tf3uumcm4bo1.cloudfront.net:8080`, which browsers cannot resolve.
+
+**Fix:**
+Replaced the single-path logic with three-environment detection:
+
+```javascript
+const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+const isDevContainer = hostname.includes('preview') || hostname.includes('github.dev')
+                    || hostname.includes('codespaces') || hostname.includes('app.github.dev');
+
+if (isLocal) {
+    // Docker Compose: each service runs on a dedicated port
+    snsLink.href = `${protocol}//${hostname}:8080`;
+    apiDocsLink.href = `${protocol}//${hostname}:8000/docs`;
+} else if (isDevContainer) {
+    // VS Code / Codespaces: port numbers are encoded in the forwarding URL
+    snsLink.href = `${protocol}//${hostname.replace(/-(5173|3000)\./, '-8080.')}`;
+    apiDocsLink.href = `${protocol}//${hostname.replace(/-(5173|3000)\./, '-8000.')}/docs`;
+} else {
+    // Staging / Production CDN: SNS app is on the same origin under /sns/
+    snsLink.href = '/sns/';
+    apiDocsLink.href = '/sns/#/api-docs';
+}
+```
+
+---
+
+### Fix 6 — Azure deployments targeting the wrong storage account
+
+**Commit:** `f1c7834`
+
+**Problem:**
+Azure Front Door's origin was configured against `mcadwebd45ihd.z11.web.core.windows.net`, but
+all Azure workflow files set `AZURE_STORAGE_ACCOUNT: mcadstaticweb752`. Files were being uploaded
+to a storage account that Front Door never served, so the CDN continued to return stale content
+regardless of how many times the workflows ran or caches were purged.
+
+**Discovery:**
+Ran `az afd origin list` to inspect the actual Front Door origin hostname and compared it against
+the `AZURE_STORAGE_ACCOUNT` value in the workflow environment variables.
+
+**Fix:**
+Updated `AZURE_STORAGE_ACCOUNT` in all four affected workflow files:
+
+```
+mcadstaticweb752  →  mcadwebd45ihd
+```
+
+Files updated:
+- `.github/workflows/deploy-frontend-azure.yml`
+- `.github/workflows/deploy-landing-azure.yml`
+- `multicloud-auto-deploy/.github/workflows/deploy-frontend-azure.yml`
+- `multicloud-auto-deploy/.github/workflows/deploy-landing-azure.yml`
+
+---
+
+### Fix 7 — AWS `/sns/` caused a file download instead of rendering the app
+
+**Commit:** `591ce0b`
+
+**Problem:**
+Clicking the SNS link on the AWS landing page triggered a browser file download dialog.
+Inspecting the CloudFront response revealed `content-type: binary/octet-stream` for `sns/index.html`.
+
+**Root cause:**
+`aws s3 sync` does not infer `Content-Type: text/html` for `.html` files produced by a Vite build.
+Without an explicit content-type, S3 stores them as `application/octet-stream`, and CloudFront
+forwards that header verbatim, causing browsers to download rather than render the response.
+
+**Immediate fix (manual):**
 ```bash
-# ヘルスチェック
-curl https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/
-# {"message":"Internal Server Error"}
-
-# GET /api/messages/
-curl https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/api/messages/
-# {"message":"Internal Server Error"}
-
-# Frontend (正常)
-curl -I https://d1tf3uumcm4bo1.cloudfront.net/
-# HTTP/2 200
+aws s3 cp s3://bucket/sns/index.html s3://bucket/sns/index.html \
+  --metadata-directive REPLACE \
+  --content-type "text/html; charset=utf-8" \
+  --cache-control "public, max-age=300, must-revalidate"
 ```
 
-### Production環境
-
-**未構築** - mainブランチのデプロイが失敗しているため
-
----
-
-## 🔵 Azure 環境ステータス
-
-### Staging環境 (japaneast)
-
-| コンポーネント      | ステータス | URL/ID                                                                                                        | 備考                 |
-| ------------------- | ---------- | ------------------------------------------------------------------------------------------------------------- | -------------------- |
-| **API**             | ✅ 正常    | `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger` | version 3.0.0        |
-| **Frontend**        | ✅ 正常    | `https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net`                                                | Azure Front Door配信 |
-| **Function App**    | ✅ 稼働中  | `multicloud-auto-deploy-staging-func`                                                                         | -                    |
-| **Storage Account** | ✅ 正常    | `mcadwebd45ihd`                                                                                               | -                    |
-| **Resource Group**  | -          | `multicloud-auto-deploy-staging-rg`                                                                           | -                    |
-| **Runtime**         | -          | Python 3.12                                                                                                   | -                    |
-
-#### エンドポイントテスト結果
-
-```bash
-# ヘルスチェック (正常)
-curl https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger/
-# {"status":"ok","provider":"azure","version":"3.0.0"}
-
-# Frontend (正常)
-curl -I https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net/
-# HTTP/2 200
-```
-
-#### 注意事項
-
-- `/api/messages/` エンドポイントは空のレスポンスを返す
-- エンドポイントパスが異なる可能性（要確認）
-
-### Production環境
-
-**未構築** - mainブランチのデプロイが失敗しているため
-
----
-
-## 🟢 GCP 環境ステータス
-
-### Staging環境 (asia-northeast1)
-
-| コンポーネント     | ステータス    | URL/ID                                                               | 備考                               |
-| ------------------ | ------------- | -------------------------------------------------------------------- | ---------------------------------- |
-| **API**            | ⚠️ エラー     | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app` | ヘルスチェックは200、messagesは500 |
-| **Frontend**       | ✅ 正常       | `http://34.117.111.182`                                              | Load Balancer経由                  |
-| **Cloud Run**      | ⚠️ 部分的稼働 | `multicloud-auto-deploy-staging-api`                                 | -                                  |
-| **Storage Bucket** | ✅ 正常       | `ashnova-multicloud-auto-deploy-staging-frontend`                    | -                                  |
-| **Project ID**     | -             | `ashnova`                                                            | -                                  |
-| **Firestore**      | -             | (default)                                                            | messages, posts collections        |
-
-#### エンドポイントテスト結果
-
-```bash
-# ヘルスチェック (正常)
-curl https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app/
-# {"status":"ok","provider":"gcp","version":"3.0.0"}
-
-# GET /api/messages/ (エラー)
-curl https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app/api/messages/
-# 500
-
-# Frontend (正常)
-curl -I http://34.117.111.182/
-# HTTP/1.1 200 OK
-```
-
-#### 問題点
-
-- ルートパス `/` は正常に応答
-- `/api/messages/` は500エラーを返す
-- Firestore接続またはルーティングの問題の可能性
-
-### Production環境
-
-**未構築** - mainブランチのデプロイが失敗しているため
-
----
-
-## 📊 環境比較サマリー
-
-| 項目                   | AWS Staging | Azure Staging    | GCP Staging   |
-| ---------------------- | ----------- | ---------------- | ------------- |
-| **API ヘルスチェック** | ❌ 500      | ✅ 200           | ✅ 200        |
-| **API CRUD操作**       | ❌ 500      | ⚠️ 要確認        | ❌ 500        |
-| **Frontend**           | ✅ 200      | ✅ 200           | ✅ 200        |
-| **CDN**                | CloudFront  | Azure Front Door | Load Balancer |
-| **API実装**            | Lambda      | Azure Functions  | Cloud Run     |
-| **ストレージ**         | DynamoDB    | Cosmos DB        | Firestore     |
-
----
-
-## 🔧 優先度の高い修正項目
-
-### 1. AWS Lambda依存関係の修復 (最優先)
-
-**問題**: mangumモジュールが見つからない
-
-**📘 推奨ドキュメント**: [AWS Lambda Layer最適化戦略](./AWS_LAMBDA_LAYER_STRATEGY.md)
-
-- 完全カスタムLayer（推奨）
-- 公開Layer + カスタムLayerのハイブリッド構成
-- Layer分離戦略（上級者向け）
-
-**解決手順**:
-
-#### オプションA: Lambda Layerを手動デプロイ（最速）
-
-```bash
-cd /workspaces/ashnova/multicloud-auto-deploy/services/api
-bash ../../scripts/build-lambda-layer.sh
-aws lambda publish-layer-version \
-  --layer-name multicloud-auto-deploy-staging-dependencies \
-  --zip-file fileb://lambda-layer.zip \
-  --compatible-runtimes python3.12 \
-  --region ap-northeast-1
-
-# 出力されたLayerVersionArnをコピー
-LAYER_ARN="arn:aws:lambda:ap-northeast-1:ACCOUNT_ID:layer:multicloud-auto-deploy-staging-dependencies:VERSION"
-
-# Lambda関数にLayerをアタッチ
-aws lambda update-function-configuration \
-  --function-name multicloud-auto-deploy-staging-api \
-  --layers $LAYER_ARN \
-  --region ap-northeast-1
-```
-
-#### オプションB: ワークフローの修正
-
-[deploy-aws.yml](file:///workspaces/ashnova/multicloud-auto-deploy/.github/workflows/deploy-aws.yml#L110-L111):
+**Permanent fix (workflow):**
+Split the single `aws s3 sync` command into two passes:
 
 ```yaml
-- name: Build Lambda Layer
-  # ❌ 削除: if: ${{ github.event.inputs.use_klayers == 'false' }}
-  id: build_layer
-  run: |
-    # ...
-```
+# Pass 1: JS/CSS/images — S3 reliably detects these content types
+aws s3 sync dist/ s3://$S3_BUCKET/sns/ \
+  --delete \
+  --cache-control "public, max-age=3600" \
+  --exclude "*.html"
 
-### 2. GCP API /api/messages/ エンドポイントの修正
-
-**問題**: ルートは正常だが、/api/messages/が500エラー
-
-**調査手順**:
-
-```bash
-# Cloud Runログの確認
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=multicloud-auto-deploy-staging-api" \
-  --limit 50 \
-  --format json \
-  --project ashnova
-```
-
-### 3. CI/CDワークフローの修正
-
-**問題**: Pulumi Stack初期化エラー
-
-**確認手順**:
-
-```bash
-# 最新の失敗ログを確認
-curl -s "https://api.github.com/repos/PLAYER1-r7/multicloud-auto-deploy/actions/runs/22107983145/jobs" | \
-  jq -r '.jobs[0].steps[] | select(.conclusion == "failure") | {name, conclusion}'
+# Pass 2: HTML files — must be explicit to avoid binary/octet-stream
+aws s3 sync dist/ s3://$S3_BUCKET/sns/ \
+  --content-type "text/html; charset=utf-8" \
+  --cache-control "public, max-age=300, must-revalidate" \
+  --exclude "*" --include "*.html"
 ```
 
 ---
 
-## 📝 次のステップ
+### Fix 8 — AWS CloudFront returned 403 for `/sns/` (missing directory index)
 
-### 短期（今日中）
+**Manual infrastructure change (not in a commit)**
 
-1. ✅ 環境ステータスの確認と文書化（完了）
-2. ⬜ AWS Lambda依存関係の修復
-3. ⬜ GCP API /api/messages/ エンドポイントの調査と修復
-4. ⬜ CI/CDワークフローの修正とテスト
+**Problem:**
+Accessing `/sns/` returned a 403 error. S3 does not serve `index.html` automatically for
+directory-style paths, and CloudFront's "Default Root Object" setting only applies to the root `/`.
 
-### 中期（今週中）
+**Fix:**
+Created a CloudFront Function (`staging-directory-index`) and attached it as a `viewer-request`
+handler to distribution `E1TBH4R432SZBZ`. The function rewrites URI paths ending in `/` or with
+no file extension to append `index.html`:
 
-1. ⬜ Production環境のセットアップ
-2. ⬜ Azure /api/messages/ エンドポイントの確認
-3. ⬜ 各環境の完全なCRUDテスト
-4. ⬜ モニタリングとアラート設定の確認
-
-### 長期（今月中）
-
-1. ⬜ 環境間の設定統一化
-2. ⬜ デプロイプロセスの自動化改善
-3. ⬜ ドキュメントの整備と最新化
-4. ⬜ セキュリティ監査とベストプラクティスの適用
-
----
-
-## 📚 関連ドキュメント
-
-- [AWS Lambda Layer最適化戦略](./AWS_LAMBDA_LAYER_STRATEGY.md) ⭐ **NEW**
-- [デプロイ失敗調査レポート](./DEPLOYMENT_FAILURE_INVESTIGATION.md)
-- [デプロイ監視ガイド](./DEPLOYMENT_MONITORING.md)
-- [環境診断ガイド](./ENVIRONMENT_DIAGNOSTICS.md)
-- [AWS デプロイメントガイド](./AWS_DEPLOYMENT.md)
-- [Azure デプロイメントガイド](./AZURE_DEPLOYMENT.md)
-- [GCP デプロイメントガイド](./GCP_DEPLOYMENT.md)
-- [エンドポイント一覧](./ENDPOINTS.md)
-- [クイックリファレンス](./QUICK_REFERENCE.md)
-- [CI/CD設定ガイド](./CICD_SETUP.md)
+```javascript
+function handler(event) {
+    var uri = event.request.uri;
+    if (uri.endsWith('/')) {
+        event.request.uri += 'index.html';
+    } else if (!uri.includes('.', uri.lastIndexOf('/'))) {
+        event.request.uri += '/index.html';
+    }
+    return event.request;
+}
+```
 
 ---
 
-## 🔄 更新履歴
+## Known Remaining Issues
 
-- **2026-02-17**: 初版作成
-  - 3クラウド全環境の動作確認実施
-  - 問題点の特定と文書化
-  - 修復手順の記載
+| Issue | Cloud | Severity | Notes |
+|-------|-------|----------|-------|
+| `GET /api/messages/` returns 500 | AWS | Medium | Lambda Layer (`mangum`) not attached. See [AWS_LAMBDA_LAYER_STRATEGY.md](./AWS_LAMBDA_LAYER_STRATEGY.md) |
+| Production environment not deployed | All | Low | `main` branch not yet verified |
+
+---
+
+## Related Documents
+
+- [Static Site Architecture](./STATIC_SITE_ARCHITECTURE.md)
+- [AWS Lambda Layer Strategy](./AWS_LAMBDA_LAYER_STRATEGY.md)
+- [CDN Setup](./CDN_SETUP.md)
+- [CI/CD Setup](./CICD_SETUP.md)
+- [Endpoints Reference](./ENDPOINTS.md)
+- [Troubleshooting](./TROUBLESHOOTING.md)
+
+---
+
+## Change Log
+
+| Date | Commit | Description |
+|------|--------|-------------|
+| 2026-02-20 | `591ce0b` | fix(aws): explicit `text/html` content-type in s3 sync to prevent file download |
+| 2026-02-20 | `f1c7834` | fix(azure): deploy to `mcadwebd45ihd` — the actual Front Door origin |
+| 2026-02-20 | `0c485b7` | fix(landing): environment-aware SNS link URL (local / dev-container / CDN) |
+| 2026-02-20 | `982c0d5` | fix(frontend): set `base: /sns/` in vite.config; add CDN invalidation to workflows |
+| 2026-02-20 | `c347727` | fix(ci): correct root-level workflows — auth, bucket names, `sns/` prefix |
+| 2026-02-20 | `1e465e1` | fix(ci): use `credentials_json` / `access-key-id` auth in landing page workflows |
+| 2026-02-20 | `a585f22` | fix(frontend): deploy React app to `sns/` prefix; landing page at bucket root |
+| 2026-02-20 | `6699586` | fix(aws,azure): always set `AUTH_DISABLED=false` in staging |
+| 2026-02-17 | —        | Initial environment status documented |
