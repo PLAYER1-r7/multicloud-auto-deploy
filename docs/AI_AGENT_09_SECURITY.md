@@ -64,7 +64,7 @@ Cloud Run (API) environment variables:
   AUTH_PROVIDER=firebase
   GCP_PROJECT_ID=ashnova
   GCP_SERVICE_ACCOUNT=899621454670-compute@developer.gserviceaccount.com
-  (impersonated_credentials を使用しIAM signBlob APIでGCS署名URLを生成)
+  (uses impersonated_credentials to generate GCS presigned URLs via IAM signBlob API)
 
 Cloud Run (frontend-web) environment variables:
   AUTH_PROVIDER=firebase
@@ -78,7 +78,7 @@ Firebase authorized domain:
   multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app
 
 Token refresh:
-  home.html 内の `onIdTokenChanged` で自動リフレッシュ (+セッションCookie再発行)
+  `onIdTokenChanged` in home.html auto-refreshes the token (and re-issues the session cookie)
 ```
 
 ---

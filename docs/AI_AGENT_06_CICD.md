@@ -164,82 +164,82 @@ gh run watch <run-id>
 
 ---
 
-## バージョン管理
+## Version Management
 
-> 成果物ごとに `X.Y.Z` 形式でバージョンを追跡する。  
-> バージョン定義ファイル: [`versions.json`](../versions.json)
+> Each artifact is tracked with a version in `X.Y.Z` format.  
+> Version definition file: [`versions.json`](../versions.json)
 
-### コンポーネント一覧と初期バージョン
+### Component List and Initial Versions
 
-| コンポーネント        | 初期バージョン | 理由                                     |
-| --------------------- | -------------- | ---------------------------------------- |
-| `aws-static-site`     | `1.0.0`        | 安定稼働中                               |
-| `azure-static-site`   | `0.9.0`        | AFD 経由 `/sns/*` 間欠的 502 未解消      |
-| `gcp-static-site`     | `1.0.0`        | 安定稼働中 (HTTPS未設定は残課題)         |
-| `simple-sns`          | `1.0.0`        | React SNS アプリ、全クラウド共通デプロイ |
+| Component           | Initial Version | Reason                                                             |
+| ------------------- | --------------- | ------------------------------------------------------------------ |
+| `aws-static-site`   | `1.0.0`         | Stable and operational                                             |
+| `azure-static-site` | `0.9.0`         | Intermittent AFD `/sns/*` 502 not yet resolved                     |
+| `gcp-static-site`   | `1.0.0`         | Stable and operational (HTTPS not configured is a remaining issue) |
+| `simple-sns`        | `1.0.0`         | React SNS app, deployed to all three clouds                        |
 
-### バージョン規則
+### Version Increment Rules
 
-| 桁 | 名称      | インクリメント条件               | 方法                          |
-| -- | --------- | -------------------------------- | ----------------------------- |
-| X  | メジャー  | 手動指示のみ                     | `make version-major`          |
-| Y  | マイナー  | `develop` / `main` へのプッシュ  | GitHub Actions `version-bump.yml` が自動実行 |
-| Z  | パッチ    | コミットのたびに                 | `pre-commit` git hook が自動実行 |
+| Digit | Name  | Increment condition        | Method                                               |
+| ----- | ----- | -------------------------- | ---------------------------------------------------- |
+| X     | Major | Manual instruction only    | `make version-major`                                 |
+| Y     | Minor | Push to `develop` / `main` | GitHub Actions `version-bump.yml` runs automatically |
+| Z     | Patch | On every commit            | `pre-commit` git hook runs automatically             |
 
-### 実装ファイル
+### Implementation Files
 
-| ファイル                               | 役割                                                  |
-| -------------------------------------- | ----------------------------------------------------- |
-| `versions.json`                        | 全コンポーネントの現在バージョンを格納                |
-| `scripts/bump-version.sh`             | バージョン操作スクリプト (patch / minor / major 対応) |
-| `.githooks/pre-commit`                | コミット前にパッチ(Z)を自動インクリメント             |
-| `.github/workflows/version-bump.yml`  | push 時にマイナー(Y)を自動インクリメント              |
+| File                                 | Role                                                         |
+| ------------------------------------ | ------------------------------------------------------------ |
+| `versions.json`                      | Stores the current version for each component                |
+| `scripts/bump-version.sh`            | Version manipulation script (supports patch / minor / major) |
+| `.githooks/pre-commit`               | Auto-increments patch (Z) before each commit                 |
+| `.github/workflows/version-bump.yml` | Auto-increments minor (Y) on push                            |
 
-### セットアップ (初回のみ)
+### Setup (first time only)
 
 ```bash
 make hooks-install
-# → git config core.hooksPath .githooks を設定
-# → コミット時に自動で Z をインクリメント
+# → runs: git config core.hooksPath .githooks
+# → auto-increments Z on each commit
 ```
 
-### よく使うコマンド
+### Common Commands
 
 ```bash
-# 現在のバージョン一覧
+# Show all current versions
 make version
 
-# メジャーバージョンを手動で上げる (X+1)
-make version-major COMPONENT=all          # 全コンポーネント
-make version-major COMPONENT=simple-sns   # 指定コンポーネントのみ
+# Bump major version manually (X+1)
+make version-major COMPONENT=all          # all components
+make version-major COMPONENT=simple-sns   # specific component only
 
-# Azure AFD 解消後に 0.9.x → 1.0.0 へ昇格
+# Promote 0.9.x → 1.0.0 once Azure AFD issue is resolved
 make version-azure-afd-resolved
 
-# スクリプトを直接呼ぶ場合
+# Call the script directly
 ./scripts/bump-version.sh show
 ./scripts/bump-version.sh major simple-sns
 ./scripts/bump-version.sh azure-afd-resolved
 ```
 
-### バージョンバンプのスキップ
+### Skipping Version Bumps
 
-| 対象 | スキップ方法 |
-|---|---|
-| pre-commit hook (パッチZ) | 環境変数 `SKIP_VERSION_BUMP=1 git commit -m "..."` |
-| GitHub Actions (マイナーY) | コミットメッセージに `[skip-version-bump]` を含める |
+| Target                    | How to skip                                            |
+| ------------------------- | ------------------------------------------------------ |
+| pre-commit hook (patch Z) | Set env var: `SKIP_VERSION_BUMP=1 git commit -m "..."` |
+| GitHub Actions (minor Y)  | Include `[skip-version-bump]` in the commit message    |
 
 ```bash
-# pre-commit フックをスキップしてコミット
+# Commit while skipping the pre-commit hook
 SKIP_VERSION_BUMP=1 git commit -m "docs: update readme"
 
-# GitHub Actions のマイナーバンプをスキップ (botコミットのループ防止用)
+# Skip GitHub Actions minor bump (used to prevent bot commit loops)
 git commit -m "chore: some change [skip-version-bump]"
 ```
 
-### Azure AFD 解消手順
+### Procedure When Azure AFD Issue Is Resolved
 
-Azure Front Door の間欠的 502 が解消されたら:
+Once the intermittent Azure Front Door 502 is fixed:
 
 ```bash
 make version-azure-afd-resolved

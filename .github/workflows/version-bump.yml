@@ -13,12 +13,12 @@ on:
       - develop
       - main
     paths-ignore:
-      - "versions.json"      # versions.json のみの変更はスキップ (ループ防止)
+      - "versions.json" # versions.json のみの変更はスキップ (ループ防止)
       - "docs/**"
       - "*.md"
 
 permissions:
-  contents: write            # バージョンバンプコミットを push するために必要
+  contents: write # バージョンバンプコミットを push するために必要
 
 jobs:
   version-bump-minor:

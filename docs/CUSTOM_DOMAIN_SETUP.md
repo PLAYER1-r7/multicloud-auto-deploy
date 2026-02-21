@@ -1,67 +1,68 @@
-# カスタムドメイン設定ガイド
+# Custom Domain Configuration Guide
 
-各クラウドで異なるドメインを使用する際のカスタムドメイン設定手順です。
+Steps for configuring custom domains when using different domains per cloud.
 
 ---
 
-## ✅ Production環境カスタムドメイン — 設定完了済み（2026-02-21）
+## ✅ Production Custom Domains — Configuration Complete (2026-02-21)
 
-> **全3クラウドのカスタムドメインが稼働中です。**
+> **All 3 cloud custom domains are operational.**
 
-| クラウド  | カスタムドメイン       | 向き先エンドポイント                                      | 状態                              |
-| --------- | ---------------------- | --------------------------------------------------------- | --------------------------------- |
-| **AWS**   | `www.aws.ashnova.jp`   | `d1qob7569mn5nw.cloudfront.net`                           | ✅ HTTPS 稼働中                   |
-| **Azure** | `www.azure.ashnova.jp` | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | ✅ HTTPS 稼働中 ⚠️ /sns/\* 要調査 |
-| **GCP**   | `www.gcp.ashnova.jp`   | `34.8.38.222` (A record)                                  | ✅ HTTPS 稼働中                   |
+| Cloud     | Custom Domain          | Target Endpoint                                           | Status                                            |
+| --------- | ---------------------- | --------------------------------------------------------- | ------------------------------------------------- |
+| **AWS**   | `www.aws.ashnova.jp`   | `d1qob7569mn5nw.cloudfront.net`                           | ✅ HTTPS active (directly fixed 2026-02-21)       |
+| **Azure** | `www.azure.ashnova.jp` | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | ✅ HTTPS active ⚠️ /sns/* needs investigation        |
+| **GCP**   | `www.gcp.ashnova.jp`   | `34.8.38.222` (A record)                                  | ✅ HTTPS active                                   |
 
-### 動作確認済みエンドポイント
+### Verified Endpoints
 
 ```bash
-# ランディングページ
+# Landing pages
 curl -I https://www.aws.ashnova.jp        # 200 OK
 curl -I https://www.azure.ashnova.jp      # 200 OK
 curl -I https://www.gcp.ashnova.jp        # 200 OK
 
-# SNS アプリ
+# SNS app
 curl https://www.aws.ashnova.jp/health    # 200 {"status":"healthy"}
 curl https://www.gcp.ashnova.jp/health    # 200 {"status":"healthy"}
-# ⚠️ Azure: /sns/* が間欠的 502 → AFD調査中 (AZURE_SNS_FIX_REPORT.md 参照)
+# ⚠️ Azure: /sns/* intermittent 502 → AFD under investigation (see AZURE_SNS_FIX_REPORT.md)
 ```
 
-### 設定完了チェックリスト（Production）
+### Configuration Completion Checklist (Production)
 
 **AWS**
 
-- [x] ACM証明書作成 → `arn:aws:acm:us-east-1:278280499340:certificate/fafdb594-5de6-4072-9576-e4af6b6e3487`
-- [x] Pulumi config 設定済み（`customDomain` + `acmCertificateArn`）
-- [x] ACM証明書 `ISSUED` 確認済み
-- [x] DNS: CNAME `www.aws.ashnova.jp` → `d1qob7569mn5nw.cloudfront.net` 設定完了
-- [x] `pulumi up --stack production`（CloudFront エイリアス追加）完了
-- [x] CORS更新済み
+- [x] ACM certificate `ISSUED` confirmed → `arn:aws:acm:us-east-1:278280499340:certificate/914b86b1-4c10-4354-91cf-19c4460dcde5` (expires 2027-03-12)
+- [x] DNS: CNAME `www.aws.ashnova.jp` → `d1qob7569mn5nw.cloudfront.net` configured
+- [x] CloudFront `E214XONKTXJEJD` alias + ACM certificate set directly (fixed via AWS CLI on 2026-02-21)
+  - Issue: `pulumi up` did not apply alias/certificate (remained on CloudFrontDefaultCertificate)
+  - Fix: Set alias `www.aws.ashnova.jp` + cert `914b86b1` via `aws cloudfront update-distribution`
+- [!] **Note before re-running Pulumi**: Must set `pulumi config set customDomain www.aws.ashnova.jp --stack production` and `pulumi config set acmCertificateArn arn:aws:acm:us-east-1:278280499340:certificate/914b86b1-4c10-4354-91cf-19c4460dcde5 --stack production`
+- [x] CORS updated
 
 **Azure**
 
-- [x] `az afd custom-domain create` 実行済み（`azure-ashnova-jp`）
-- [x] 両ルートにカスタムドメインをアタッチ済み
-- [x] DNS: TXTレコード `_dnsauth.www.azure.ashnova.jp` 設定完了（検証済み）
-- [x] DNS: CNAME `www.azure.ashnova.jp` → `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` 設定完了
-- [x] Managed Certificate 発行済み・HTTPS 稼働中
-- [⚠️] `/sns/*` 間欠的 502 問題 → 調査中（[AZURE_SNS_FIX_REPORT.md](AZURE_SNS_FIX_REPORT.md) 参照）
+- [x] `az afd custom-domain create` executed (`azure-ashnova-jp`)
+- [x] Custom domain attached to both routes
+- [x] DNS: TXT record `_dnsauth.www.azure.ashnova.jp` configured (verified)
+- [x] DNS: CNAME `www.azure.ashnova.jp` → `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` configured
+- [x] Managed Certificate issued, HTTPS active
+- [⚠️] `/sns/*` intermittent 502 issue → under investigation (see [AZURE_SNS_FIX_REPORT.md](AZURE_SNS_FIX_REPORT.md))
 
 **GCP**
 
-- [x] Pulumi config 設定済み（`customDomain: www.gcp.ashnova.jp`）
-- [x] `pulumi up --stack production` 完了
-- [x] DNS: Aレコード `www.gcp.ashnova.jp` → `34.8.38.222` 設定完了
-- [x] Managed SSL証明書 `ACTIVE` 確認済み
+- [x] Pulumi config set (`customDomain: www.gcp.ashnova.jp`)
+- [x] `pulumi up --stack production` completed
+- [x] DNS: A record `www.gcp.ashnova.jp` → `34.8.38.222` configured
+- [x] Managed SSL certificate `ACTIVE` confirmed
 
 ---
 
-## 🎯 Production環境カスタムドメイン設定（設定手順）
+## 🎯 Production Custom Domain Setup (Setup Procedure)
 
-### 設定対象ドメイン
+### Target Domains
 
-| クラウド  | カスタムドメイン       | 向き先エンドポイント                                      |
+| Cloud     | Custom Domain          | Target Endpoint                                           |
 | --------- | ---------------------- | --------------------------------------------------------- |
 | **AWS**   | `www.aws.ashnova.jp`   | `d1qob7569mn5nw.cloudfront.net`                           |
 | **Azure** | `www.azure.ashnova.jp` | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` |
@@ -69,19 +70,19 @@ curl https://www.gcp.ashnova.jp/health    # 200 {"status":"healthy"}
 
 ---
 
-## 📋 現在のエンドポイント
+## 📋 Current Endpoints
 
-### Staging環境
+### Staging Environment
 
-| クラウド  | 種類       | 現在のエンドポイント                                   | Distribution ID     |
-| --------- | ---------- | ------------------------------------------------------ | ------------------- |
-| **AWS**   | CloudFront | `d1tf3uumcm4bo1.cloudfront.net`                        | E1TBH4R432SZBZ      |
+| Cloud     | Type       | Current Endpoint                                        | Distribution ID     |
+| --------- | ---------- | ------------------------------------------------------- | ------------------- |
+| **AWS**   | CloudFront | `d1tf3uumcm4bo1.cloudfront.net`                         | E1TBH4R432SZBZ      |
 | **Azure** | Front Door | `mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net` | mcad-staging-d45ihd |
-| **GCP**   | Cloud CDN  | `34.117.111.182` (IP address)                          | -                   |
+| **GCP**   | Cloud CDN  | `34.117.111.182` (IP address)                           | -                   |
 
-### Production環境
+### Production Environment
 
-| クラウド  | 種類       | 現在のエンドポイント                                      | Distribution ID        |
+| Cloud     | Type       | Current Endpoint                                          | Distribution ID        |
 | --------- | ---------- | --------------------------------------------------------- | ---------------------- |
 | **AWS**   | CloudFront | `d1qob7569mn5nw.cloudfront.net`                           | E214XONKTXJEJD         |
 | **Azure** | Front Door | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | mcad-production-diev0w |
@@ -89,37 +90,37 @@ curl https://www.gcp.ashnova.jp/health    # 200 {"status":"healthy"}
 
 ---
 
-## 🌐 使用するドメイン（ashnova.jp）
+## 🌐 Domains Used (ashnova.jp)
 
-このプロジェクトで設定するカスタムドメイン：
+Custom domains configured for this project:
 
 - **AWS**: `www.aws.ashnova.jp`
 - **Azure**: `www.azure.ashnova.jp`
 - **GCP**: `www.gcp.ashnova.jp`
 
-> 注: 汎用的な手順では `aws.yourdomain.com` などのプレースホルダーを使用しています。実際には上記の ashnova.jp ドメインを使用してください。
+> Note: Generic procedures use placeholders such as `aws.yourdomain.com`. In practice, use the ashnova.jp domains above.
 
 ---
 
-## 1️⃣ AWS CloudFront カスタムドメイン設定
+## 1️⃣ AWS CloudFront Custom Domain Setup
 
-### 前提条件
+### Prerequisites
 
-- ドメイン所有権の確認
-- AWS Route 53（推奨）または外部DNSプロバイダー
+- Domain ownership verified
+- AWS Route 53 (recommended) or external DNS provider
 
-### 手順
+### Steps
 
-#### ステップ1: ACM証明書の作成（us-east-1リージョン必須）
+#### Step 1: Create ACM Certificate (us-east-1 region required)
 
 ```bash
-# ACM証明書をリクエスト
+# Request ACM certificate
 aws acm request-certificate \
   --domain-name www.aws.ashnova.jp \
   --validation-method DNS \
   --region us-east-1
 
-# 証明書ARNを取得
+# Get certificate ARN
 CERT_ARN=$(aws acm list-certificates \
   --region us-east-1 \
   --query "CertificateSummaryList[?DomainName=='www.aws.ashnova.jp'].CertificateArn" \
@@ -128,16 +129,16 @@ CERT_ARN=$(aws acm list-certificates \
 echo "Certificate ARN: $CERT_ARN"
 ```
 
-#### ステップ2: DNS検証レコードの追加
+#### Step 2: Add DNS Validation Record
 
 ```bash
-# 検証レコード情報を取得
+# Get validation record info
 aws acm describe-certificate \
   --certificate-arn $CERT_ARN \
   --region us-east-1 \
   --query 'Certificate.DomainValidationOptions[0].ResourceRecord'
 
-# 出力例:
+# Example output:
 # {
 #   "Name": "_abc123.aws.yourdomain.com",
 #   "Type": "CNAME",
@@ -145,23 +146,23 @@ aws acm describe-certificate \
 # }
 ```
 
-**DNSプロバイダーで設定**:
+**Configure in your DNS provider**:
 
-- レコードタイプ: `CNAME`
-- 名前: `_abc123.www.aws.ashnova.jp`
-- 値: `_xyz456.acm-validations.aws.`
+- Record type: `CNAME`
+- Name: `_abc123.www.aws.ashnova.jp`
+- Value: `_xyz456.acm-validations.aws.`
 
-#### ステップ3: Pulumi設定の更新
+#### Step 3: Update Pulumi Configuration
 
-`infrastructure/pulumi/aws/__main__.py` の CloudFront Distribution部分を修正：
+Modify the CloudFront Distribution section in `infrastructure/pulumi/aws/__main__.py`:
 
 ```python
-# 証明書ARNを設定
-cert_arn = config.get("acmCertificateArn")  # Pulumi configから取得
-custom_domain = config.get("customDomain")  # 例: aws.yourdomain.com
+# Set certificate ARN
+cert_arn = config.get("acmCertificateArn")  # Retrieved from Pulumi config
+custom_domain = config.get("customDomain")  # e.g. aws.yourdomain.com
 
 cloudfront_kwargs = {
-    # ... 既存の設定 ...
+    # ... existing config ...
     "aliases": [custom_domain] if custom_domain else [],
     "viewer_certificate": aws.cloudfront.DistributionViewerCertificateArgs(
         acm_certificate_arn=cert_arn,
@@ -170,11 +171,11 @@ cloudfront_kwargs = {
     ) if cert_arn else aws.cloudfront.DistributionViewerCertificateArgs(
         cloudfront_default_certificate=True,
     ),
-    # ... 残りの設定 ...
+    # ... remaining config ...
 }
 ```
 
-#### ステップ4: Pulumi設定を追加
+#### Step 4: Add Pulumi Configuration
 
 ```bash
 cd infrastructure/pulumi/aws
@@ -183,21 +184,21 @@ pulumi config set acmCertificateArn arn:aws:acm:us-east-1:ACCOUNT_ID:certificate
 pulumi up --stack production
 ```
 
-#### ステップ5: DNSにCNAMEレコードを追加
+#### Step 5: Add CNAME Record to DNS
 
-**Pulumi環境（production/staging）のCloudFrontドメインを確認**:
+**Verify the CloudFront domain for your Pulumi environment (production/staging)**:
 
 ```bash
 cd infrastructure/pulumi/aws
-pulumi stack select production  # または staging
+pulumi stack select production  # or staging
 CLOUDFRONT_DOMAIN=$(pulumi stack output cloudfront_domain)
 echo "CloudFront Domain: $CLOUDFRONT_DOMAIN"
 ```
 
-**Route 53の場合**:
+**For Route 53**:
 
 ```bash
-# production環境
+# production environment
 aws route53 change-resource-record-sets \
   --hosted-zone-id YOUR_ZONE_ID \
   --change-batch '{
@@ -213,33 +214,33 @@ aws route53 change-resource-record-sets \
   }'
 ```
 
-**外部DNSプロバイダーの場合**:
+**For external DNS providers**:
 
-- レコードタイプ: `CNAME`
-- 名前: `www.aws.ashnova.jp`
-- 値:
+- Record type: `CNAME`
+- Name: `www.aws.ashnova.jp`
+- Value:
   - Production: `d1qob7569mn5nw.cloudfront.net`
   - Staging: `d1tf3uumcm4bo1.cloudfront.net`
 
 ---
 
-## 2️⃣ Azure Front Door カスタムドメイン設定
+## 2️⃣ Azure Front Door Custom Domain Setup
 
-### 前提条件
+### Prerequisites
 
-- ドメイン所有権の確認
-- Azure DNS（推奨）または外部DNSプロバイダー
+- Domain ownership verified
+- Azure DNS (recommended) or external DNS provider
 
-### 手順
+### Steps
 
-#### ステップ1: カスタムドメインの追加
+#### Step 1: Add Custom Domain
 
-**環境のリソース情報を取得**:
+**Retrieve environment resource info**:
 
 ```bash
-# Pulumi outputsから確認
+# Check Pulumi outputs
 cd infrastructure/pulumi/azure
-pulumi stack select production  # または staging
+pulumi stack select production  # or staging
 FRONTDOOR_HOSTNAME=$(pulumi stack output frontdoor_hostname)
 FRONTDOOR_PROFILE=$(pulumi stack output frontdoor_profile_name)
 FRONTDOOR_ENDPOINT=$(pulumi stack output frontdoor_endpoint_name)
@@ -249,7 +250,7 @@ echo "Front Door Hostname: $FRONTDOOR_HOSTNAME"
 echo "Profile Name: $FRONTDOOR_PROFILE"
 ```
 
-**カスタムドメインを作成**:
+**Create custom domain**:
 
 ```bash
 # Environment: production
@@ -259,7 +260,7 @@ PROFILE_NAME="multicloud-auto-deploy-${ENVIRONMENT}-fd"
 CUSTOM_DOMAIN_NAME="azure-ashnova-jp"
 HOSTNAME="www.azure.ashnova.jp"
 
-# カスタムドメインを作成
+# Create custom domain
 az afd custom-domain create \
   --resource-group $RESOURCE_GROUP \
   --profile-name $PROFILE_NAME \
@@ -268,37 +269,37 @@ az afd custom-domain create \
   --certificate-type ManagedCertificate
 ```
 
-#### ステップ2: DNS検証レコードの追加
+#### Step 2: Add DNS Validation Record
 
 ```bash
-# 検証レコード情報を取得
+# Get validation record info
 az afd custom-domain show \
   --resource-group $RESOURCE_GROUP \
   --profile-name $PROFILE_NAME \
   --custom-domain-name $CUSTOM_DOMAIN_NAME \
   --query "validationProperties"
 
-# 出力例:
+# Example output:
 # {
 #   "validationToken": "abc123def456",
 #   "expirationDate": "2026-02-24T..."
 # }
 ```
 
-**DNSプロバイダーで設定**:
+**Configure in your DNS provider**:
 
-- レコードタイプ: `TXT`
-- 名前: `_dnsauth.www.azure.ashnova.jp`
-- 値: `abc123def456` (validationToken)
+- Record type: `TXT`
+- Name: `_dnsauth.www.azure.ashnova.jp`
+- Value: `abc123def456` (validationToken)
 
-#### ステップ3: エンドポイントへの関連付け
+#### Step 3: Associate with Endpoint
 
 ```bash
-# Endpoint名を取得（production/stagingで異なる）
+# Get Endpoint name (differs between production/staging)
 ENDPOINT_NAME=$(pulumi stack output frontdoor_endpoint_name)
 echo "Endpoint Name: $ENDPOINT_NAME"
 
-# カスタムドメインをエンドポイントに関連付け
+# Associate custom domain with endpoint
 az afd route create \
   --resource-group $RESOURCE_GROUP \
   --profile-name $PROFILE_NAME \
@@ -311,18 +312,18 @@ az afd route create \
   --https-redirect Enabled
 ```
 
-#### ステップ4: DNSにCNAMEレコードを追加
+#### Step 4: Add CNAME Record to DNS
 
-**Front Door Hostnameを確認**:
+**Verify the Front Door Hostname**:
 
 ```bash
 cd infrastructure/pulumi/azure
-pulumi stack select production  # または staging
+pulumi stack select production  # or staging
 FRONTDOOR_HOSTNAME=$(pulumi stack output frontdoor_hostname)
 echo "Front Door Hostname: $FRONTDOOR_HOSTNAME"
 ```
 
-**Azure DNSの場合**:
+**For Azure DNS**:
 
 ```bash
 az network dns record-set cname set-record \
@@ -332,18 +333,18 @@ az network dns record-set cname set-record \
   --cname $FRONTDOOR_HOSTNAME
 ```
 
-**外部DNSプロバイダーの場合**:
+**For external DNS providers**:
 
-- レコードタイプ: `CNAME`
-- 名前: `www.azure.ashnova.jp`
-- 値:
+- Record type: `CNAME`
+- Name: `www.azure.ashnova.jp`
+- Value:
   - Production: `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net`
   - Staging: `mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net`
 
-#### ステップ5: HTTPSの有効化を確認
+#### Step 5: Confirm HTTPS Is Active
 
 ```bash
-# カスタムドメインの状態を確認
+# Check custom domain status
 az afd custom-domain show \
   --resource-group $RESOURCE_GROUP \
   --profile-name $PROFILE_NAME \
@@ -353,22 +354,22 @@ az afd custom-domain show \
 
 ---
 
-## 3️⃣ GCP Cloud CDN カスタムドメイン設定
+## 3️⃣ GCP Cloud CDN Custom Domain Setup
 
-### 前提条件
+### Prerequisites
 
-- ドメイン所有権の確認
-- Google Cloud DNS（推奨）または外部DNSプロバイダー
+- Domain ownership verified
+- Google Cloud DNS (recommended) or external DNS provider
 
-### 手順
+### Steps
 
-#### ステップ1: Managed SSL証明書の更新
+#### Step 1: Update Managed SSL Certificate
 
-`infrastructure/pulumi/gcp/__main__.py` の SSL証明書部分を修正：
+Modify the SSL certificate section in `infrastructure/pulumi/gcp/__main__.py`:
 
 ```python
-# カスタムドメインを設定
-custom_domain = config.get("customDomain")  # 例: gcp.yourdomain.com
+# Configure custom domain
+custom_domain = config.get("customDomain")  # e.g. gcp.yourdomain.com
 
 managed_ssl_cert = gcp.compute.ManagedSslCertificate(
     f"{project_name}-{stack}-ssl-cert",
@@ -381,7 +382,7 @@ managed_ssl_cert = gcp.compute.ManagedSslCertificate(
 )
 ```
 
-#### ステップ2: Pulumi設定を更新してデプロイ
+#### Step 2: Update Pulumi Configuration and Deploy
 
 ```bash
 cd infrastructure/pulumi/gcp
@@ -389,20 +390,20 @@ pulumi config set customDomain www.gcp.ashnova.jp --stack production
 pulumi up --stack production
 ```
 
-**注意**: Managed SSL証明書のプロビジョニングには最大60分かかります。
+**Note**: Managed SSL certificate provisioning can take up to 60 minutes.
 
-#### ステップ3: DNSにAレコードを追加
+#### Step 3: Add A Record to DNS
 
-**CDN IPアドレスを確認**:
+**Verify the CDN IP address**:
 
 ```bash
 cd infrastructure/pulumi/gcp
-pulumi stack select production  # または staging
+pulumi stack select production  # or staging
 CDN_IP=$(pulumi stack output cdn_ip_address)
 echo "CDN IP Address: $CDN_IP"
 ```
 
-**Google Cloud DNSの場合**:
+**For Google Cloud DNS**:
 
 ```bash
 gcloud dns record-sets create www.gcp.ashnova.jp. \
@@ -412,18 +413,18 @@ gcloud dns record-sets create www.gcp.ashnova.jp. \
   --rrdatas=$CDN_IP
 ```
 
-**外部DNSプロバイダーの場合**:
+**For external DNS providers**:
 
-- レコードタイプ: `A`
-- 名前: `www.gcp.ashnova.jp`
-- 値:
+- Record type: `A`
+- Name: `www.gcp.ashnova.jp`
+- Value:
   - Production: `34.8.38.222`
   - Staging: `34.117.111.182`
 
-#### ステップ4: SSL証明書のプロビジョニング確認
+#### Step 4: Verify SSL Certificate Provisioning
 
 ```bash
-# 証明書の状態を確認（ACTIVEになるまで待つ）
+# Check certificate status (wait until ACTIVE)
 gcloud compute ssl-certificates describe multicloud-auto-deploy-production-ssl-cert-3ee2c3ce \
   --global \
   --format="value(managed.status)"
@@ -431,17 +432,17 @@ gcloud compute ssl-certificates describe multicloud-auto-deploy-production-ssl-c
 # Expected: ACTIVE
 ```
 
-**プロビジョニングに時間がかかる場合**:
+**If provisioning takes a long time**:
 
-- DNSレコードが正しく設定されているか確認
-- DNS伝播を待つ（最大48時間、通常は数分～数時間）
-- `dig www.gcp.ashnova.jp` でDNS解決を確認
+- Verify that the DNS record is correctly configured
+- Wait for DNS propagation (up to 48 hours, usually a few minutes to hours)
+- Verify DNS resolution with `dig www.gcp.ashnova.jp`
 
 ---
 
-## 🔄 CORS設定の更新
+## 🔄 Update CORS Settings
 
-カスタムドメイン設定後、各クラウドのCORS設定を更新する必要があります。
+After configuring custom domains, CORS settings for each cloud must be updated.
 
 ### AWS
 
@@ -456,7 +457,7 @@ pulumi up --stack production
 ```bash
 cd infrastructure/pulumi/azure
 pulumi config set allowedOrigins "https://www.azure.ashnova.jp,http://localhost:5173" --stack production
-# Azure Function Appの環境変数は手動更新が必要
+# Azure Function App environment variables require manual update
 ```
 
 ### GCP
@@ -469,9 +470,9 @@ pulumi up --stack production
 
 ---
 
-## ✅ 動作確認
+## ✅ Verification
 
-### 1. DNS解決の確認
+### 1. Verify DNS Resolution
 
 ```bash
 # AWS
@@ -487,27 +488,27 @@ dig www.gcp.ashnova.jp
 nslookup www.gcp.ashnova.jp
 ```
 
-### 2. SSL証明書の確認
+### 2. Verify SSL Certificate
 
 ```bash
-# SSL証明書の有効性をチェック
+# Check SSL certificate validity
 curl -vI https://www.aws.ashnova.jp
 curl -vI https://www.azure.ashnova.jp
 curl -vI https://www.gcp.ashnova.jp
 
-# または
+# Or
 openssl s_client -connect www.aws.ashnova.jp:443 -servername www.aws.ashnova.jp < /dev/null
 ```
 
-### 3. アプリケーションの確認
+### 3. Verify Application
 
 ```bash
-# フロントエンドへのアクセス
+# Access frontends
 curl https://www.aws.ashnova.jp
 curl https://www.azure.ashnova.jp
 curl https://www.gcp.ashnova.jp
 
-# APIへのアクセス（ヘルスチェック）
+# Access APIs (health check)
 curl https://www.aws.ashnova.jp/health
 curl https://www.azure.ashnova.jp/api/health
 curl https://www.gcp.ashnova.jp/health
@@ -515,76 +516,76 @@ curl https://www.gcp.ashnova.jp/health
 
 ---
 
-## 🔍 トラブルシューティング
+## 🔍 Troubleshooting
 
-### 証明書エラー
+### Certificate Error
 
-**問題**: SSL証明書エラーが発生する
+**Problem**: SSL certificate error occurs
 
-**解決策**:
+**Solution**:
 
-1. 証明書のステータスを確認
-2. ドメインのaliasesが正しく設定されているか確認
-3. CloudFront/Front Door/Cloud CDNで証明書が関連付けられているか確認
+1. Check certificate status
+2. Verify that domain aliases are correctly configured
+3. Verify that the certificate is associated with CloudFront / Front Door / Cloud CDN
 
-### DNS解決失敗
+### DNS Resolution Failure
 
-**問題**: ドメインが解決されない
+**Problem**: Domain does not resolve
 
-**解決策**:
+**Solution**:
 
-1. DNSレコードが正しく設定されているか確認
-2. DNS伝播を待つ（最大48時間）
-3. `dig @8.8.8.8 www.aws.ashnova.jp` などでGoogle DNSから確認
-4. TTL値を確認（変更後は古いTTLが切れるまで待つ）
+1. Verify that DNS records are correctly configured
+2. Wait for DNS propagation (up to 48 hours)
+3. Check from Google DNS: `dig @8.8.8.8 www.aws.ashnova.jp`
+4. Check TTL values (after changes, wait for old TTL to expire)
 
-### GCP Managed SSL証明書がACTIVEにならない
+### GCP Managed SSL Certificate Not Becoming ACTIVE
 
-**問題**: 証明書が長時間PROVISIONINGのまま
+**Problem**: Certificate remains in PROVISIONING state for a long time
 
-**解決策**:
+**Solution**:
 
-1. DNSのAレコードが正しいIPアドレスを指しているか確認
-2. ロードバランサーが正常に動作しているか確認
-3. ドメインがグローバルに解決可能か確認（複数の場所から`dig`を実行）
+1. Verify that the DNS A record points to the correct IP address
+2. Verify that the load balancer is operating normally
+3. Verify that the domain is globally resolvable (run `dig` from multiple locations)
 
-### Azure Front Door検証失敗
+### Azure Front Door Validation Failure
 
-**問題**: カスタムドメイン検証が失敗する
+**Problem**: Custom domain validation fails
 
-**解決策**:
+**Solution**:
 
-1. TXTレコード（`_dnsauth`）が正しく設定されているか確認
-2. validationTokenが正しいか確認
-3. DNSの伝播を待つ
-4. `dig TXT _dnsauth.www.azure.ashnova.jp` で確認
-
----
-
-## 📝 各クラウドのコスト
-
-| クラウド  | 追加コスト                                                     |
-| --------- | -------------------------------------------------------------- |
-| **AWS**   | ACM証明書: 無料<br>CloudFrontカスタムドメイン: 無料            |
-| **Azure** | Front Door Managed Certificate: 無料<br>カスタムドメイン: 無料 |
-| **GCP**   | Managed SSL Certificate: 無料<br>ロードバランサーは既存        |
+1. Verify that the TXT record (`_dnsauth`) is correctly configured
+2. Verify that validationToken is correct
+3. Wait for DNS propagation
+4. Verify with `dig TXT _dnsauth.www.azure.ashnova.jp`
 
 ---
 
-## 🎯 次のステップ
+## 📝 Additional Costs per Cloud
 
-カスタムドメイン設定後に推奨される作業：
-
-1. **監視アラートの更新**: 新しいドメインでの監視を設定
-2. **CORS設定の検証**: ブラウザからアクセスして動作確認
-3. **セキュリティヘッダーの追加**: HSTS、CSPなどの設定
-4. **リダイレクト設定**: 旧エンドポイントから新ドメインへリダイレクト
-5. **ドキュメント更新**: README.mdに新しいURLを記載
+| Cloud     | Additional Cost                                                          |
+| --------- | ------------------------------------------------------------------------ |
+| **AWS**   | ACM certificate: Free<br>CloudFront custom domain: Free                  |
+| **Azure** | Front Door Managed Certificate: Free<br>Custom domain: Free              |
+| **GCP**   | Managed SSL Certificate: Free<br>Load balancer already exists            |
 
 ---
 
-## 📚 参考リンク
+## 🎯 Next Steps
 
-- [AWS CloudFront - カスタムドメイン設定](https://docs.aws.amazon.com/ja_jp/AmazonCloudFront/latest/DeveloperGuide/CNAMEs.html)
-- [Azure Front Door - カスタムドメイン](https://learn.microsoft.com/ja-jp/azure/frontdoor/standard-premium/how-to-add-custom-domain)
-- [GCP - Managed SSL証明書](https://cloud.google.com/load-balancing/docs/ssl-certificates/google-managed-certs)
+Recommended tasks after custom domain setup:
+
+1. **Update monitoring alerts**: Configure monitoring for new domains
+2. **Validate CORS settings**: Access from a browser to verify behavior
+3. **Add security headers**: Configure HSTS, CSP, etc.
+4. **Configure redirects**: Redirect from old endpoints to new domains
+5. **Update documentation**: Add new URLs to README.md
+
+---
+
+## 📚 Reference Links
+
+- [AWS CloudFront - Custom Domain Setup](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/CNAMEs.html)
+- [Azure Front Door - Custom Domain](https://learn.microsoft.com/en-us/azure/frontdoor/standard-premium/how-to-add-custom-domain)
+- [GCP - Managed SSL Certificates](https://cloud.google.com/load-balancing/docs/ssl-certificates/google-managed-certs)

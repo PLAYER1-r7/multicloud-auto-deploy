@@ -4,21 +4,21 @@
 
 ---
 
-## 概要
+## Overview
 
-2026-02-21 に行ったリポジトリクリーンアップの記録。  
-今後 `multicloud-auto-deploy/` を VS Code のルートフォルダとして開いて作業するための情報源。
+A record of the repository cleanup performed on 2026-02-21.  
+This is the reference for working with `multicloud-auto-deploy/` as the VS Code root folder going forward.
 
 ---
 
-## リポジトリ構造（移行後）
+## Repository Structure (after migration)
 
 ```
-ashnova/                              ← git リポジトリルート
+ashnova/                              ← git repository root
 │
-├── .devcontainer/                    ← ashnova全体を開く場合のdevcontainer設定
+├── .devcontainer/                    ← devcontainer config when opening ashnova/ as a whole
 ├── .github/
-│   └── workflows/                   ← ★ GitHub Actions が読む唯一の場所
+│   └── workflows/                   ← ★ The only location that GitHub Actions reads
 │       ├── deploy-aws.yml
 │       ├── deploy-azure.yml
 │       ├── deploy-gcp.yml
@@ -29,18 +29,18 @@ ashnova/                              ← git リポジトリルート
 │       ├── deploy-frontend-web-azure.yml
 │       └── deploy-frontend-web-gcp.yml
 ├── .gitignore
-├── .vscode/                          ← ashnova全体を開く場合のVSCode設定（旧・不使用）
+├── .vscode/                          ← VS Code settings when opening ashnova/ (old, not in use)
 ├── LICENSE
 ├── README.md
 │
-└── multicloud-auto-deploy/           ← ★ プロジェクトルート（ここを VS Code で開く）
-    ├── .devcontainer/                ← VS Code devcontainer設定（multicloud-auto-deployを開く場合）
+└── multicloud-auto-deploy/           ← ★ Project root (open this folder in VS Code)
+    ├── .devcontainer/                ← VS Code devcontainer config (when opening multicloud-auto-deploy/)
     ├── .gitignore
     ├── .vscode/
-    │   └── settings.json            ← VS Code設定（Python venv、フォーマット等）
+    │   └── settings.json            ← VS Code settings (Python venv, formatting, etc.)
     ├── infrastructure/
     ├── services/
-    ├── static-site/                  ← ★ ランディングページ（aws/azure/gcp サブディレクトリ含む）
+    ├── static-site/                  ← ★ Landing pages (includes aws/azure/gcp subdirectories)
     ├── scripts/
     ├── docs/
     └── ...
@@ -48,169 +48,166 @@ ashnova/                              ← git リポジトリルート
 
 ---
 
-## `multicloud-auto-deploy/` を VS Code で開く際の注意事項
+## Notes When Opening `multicloud-auto-deploy/` in VS Code
 
-### `.github/workflows/` の場所
+### Location of `.github/workflows/`
 
-**GitHub Actions のワークフローは `ashnova/.github/workflows/` にしか存在しない。**  
-`multicloud-auto-deploy/` を VS Code で開くと、ファイルツリーには `.github/workflows/` が表示されないが、  
-git リポジトリのルートは依然として `ashnova/` であるため、  
-**CI/CD は正常に動作する（GitHub 上で push すれば自動実行される）。**
+**GitHub Actions workflows exist ONLY in `ashnova/.github/workflows/`.**  
+When VS Code is opened with `multicloud-auto-deploy/` as the root, `.github/workflows/` is not visible in the file tree.  
+However, since the git repository root is still `ashnova/`,  
+**CI/CD works correctly (pushing to GitHub triggers workflows automatically).**
 
-ワークフローを編集する場合は、ターミナルから:
+To edit workflows, from the terminal:
 
 ```bash
-# devcontainer 内から
-cd /workspaces/ashnova    # git ルートへ移動
+# From inside the devcontainer
+cd /workspaces/ashnova    # navigate to git root
 code .github/workflows/deploy-aws.yml
 ```
 
-または、GitHub 上でのブラウザ編集が確実。
+Alternatively, editing via the GitHub web interface is reliable.
 
-### ワークフロー内のパス表記
+### Path References Inside Workflows
 
-ワークフローは **git リポジトリルートからの相対パス** でファイルを参照する。  
-`multicloud-auto-deploy/` を起点として記述されているため、以下のようなパスが多用される:
+Workflows reference files using **paths relative to the git repository root.**  
+Since they are written relative to `multicloud-auto-deploy/`, paths like the following are common:
 
 ```yaml
-# ワークフロー内での記述例
+# Example path inside a workflow
 working-directory: multicloud-auto-deploy/services/api
 aws s3 sync multicloud-auto-deploy/static-site/ s3://...
 cd multicloud-auto-deploy/infrastructure/pulumi/aws
 ```
 
-### devcontainer 設定
+### Devcontainer Configuration
 
-`multicloud-auto-deploy/.devcontainer/devcontainer.json` が使用される。  
-`postCreateCommand` で `bash .devcontainer/setup.sh` が実行され:
+`multicloud-auto-deploy/.devcontainer/devcontainer.json` is used.  
+The `postCreateCommand` runs `bash .devcontainer/setup.sh`, which automatically:
 
-- `infrastructure/pulumi/aws|azure|gcp/requirements.txt` の pip install
-- `scripts/*.sh` への実行権限付与
-
-が自動で行われる。
+- Runs `pip install` for `infrastructure/pulumi/aws|azure|gcp/requirements.txt`
+- Grants execute permission to `scripts/*.sh`
 
 ---
 
-## 2026-02-21 に削除・整理したファイル
+## Files Deleted and Cleaned Up on 2026-02-21
 
-### 削除したディレクトリ（旧バージョン）
+### Deleted Directories (old versions)
 
-| 削除したパス                        | 削除理由                                                                    |
-| ----------------------------------- | --------------------------------------------------------------------------- |
-| `ashnova/ashnova.v1/`               | v1 の旧コード。クラウドリソース削除済み                                     |
-| `ashnova/ashnova.v2/`               | v2 の旧コード。クラウドリソースなし                                         |
-| `ashnova/ashnova.v3/`               | v3 の旧コード。クラウドリソース削除済み                                     |
-| `ashnova/infrastructure/`           | `multicloud-auto-deploy/infrastructure/` の古いコピー                       |
-| `ashnova/services/api/`             | `multicloud-auto-deploy/services/api/` の古いコピー。CI/CD は mcad 版を参照 |
-| `ashnova/services/frontend_react/`  | deploy-frontend-\*.yml 削除後に参照なし                                     |
-| `ashnova/services/frontend_reflex/` | いずれのワークフローからも未参照                                            |
-| `ashnova/scripts/`                  | `multicloud-auto-deploy/scripts/` の古いコピー。CI/CD は mcad 版を参照      |
-| `ashnova/static-site/`              | `multicloud-auto-deploy/static-site/` に統合                                |
-| `multicloud-auto-deploy/.github/`   | GitHub Actions に読まれない死んだコード                                     |
+| Deleted Path                        | Reason                                                                              |
+| ----------------------------------- | ----------------------------------------------------------------------------------- |
+| `ashnova/ashnova.v1/`               | Old v1 code. Cloud resources already deleted.                                       |
+| `ashnova/ashnova.v2/`               | Old v2 code. No cloud resources.                                                    |
+| `ashnova/ashnova.v3/`               | Old v3 code. Cloud resources already deleted.                                       |
+| `ashnova/infrastructure/`           | Old copy of `multicloud-auto-deploy/infrastructure/`                                |
+| `ashnova/services/api/`             | Old copy of `multicloud-auto-deploy/services/api/`. CI/CD references the mcad version. |
+| `ashnova/services/frontend_react/`  | No longer referenced after `deploy-frontend-*.yml` was deleted.                    |
+| `ashnova/services/frontend_reflex/` | Not referenced by any workflow.                                                     |
+| `ashnova/scripts/`                  | Old copy of `multicloud-auto-deploy/scripts/`. CI/CD references the mcad version.  |
+| `ashnova/static-site/`              | Consolidated into `multicloud-auto-deploy/static-site/`                            |
+| `multicloud-auto-deploy/.github/`   | Dead code not read by GitHub Actions.                                               |
 
-### 削除したワークフロー
+### Deleted Workflows
 
-| 削除したファイル                                   | 削除理由                                                                                |
+| Deleted File                                       | Reason                                                                                  |
 | -------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `deploy-multicloud.yml.disabled`                   | `.disabled` で明示的に無効化済み                                                        |
-| `main_multicloud-auto-deplopy-staging-funcapp.yml` | Azure Portal 自動生成。存在しないリソースに対するデプロイ。typo あり                    |
-| `main_multicloud-auto-deploy-staging-func.yml`     | 同上                                                                                    |
-| `deploy-frontend-aws.yml`                          | `ashnova/services/frontend_react/`（旧版）をハードコードされた staging 固定値でデプロイ |
-| `deploy-frontend-azure.yml`                        | 上記と同様。削除済み旧 API URL にハードコード                                           |
-| `deploy-frontend-gcp.yml`                          | 上記と同様                                                                              |
+| `deploy-multicloud.yml.disabled`                   | Explicitly disabled with `.disabled` extension                                          |
+| `main_multicloud-auto-deplopy-staging-funcapp.yml` | Auto-generated by Azure Portal. Deploys to non-existent resources. Contains typo.      |
+| `main_multicloud-auto-deploy-staging-func.yml`     | Same as above                                                                           |
+| `deploy-frontend-aws.yml`                          | Deployed `ashnova/services/frontend_react/` (old) with hardcoded staging values         |
+| `deploy-frontend-azure.yml`                        | Same as above. Hardcoded to deleted old API URL.                                        |
+| `deploy-frontend-gcp.yml`                          | Same as above                                                                           |
 
-### 移動・作成したファイル
+### Files Moved or Created
 
-| アクション                                          | 内容                                  |
-| --------------------------------------------------- | ------------------------------------- |
-| `multicloud-auto-deploy/.vscode/settings.json` 作成 | Python venv パス・エディタ設定        |
-| `multicloud-auto-deploy/static-site/aws/` コピー    | `ashnova/static-site/aws/` から移行   |
-| `multicloud-auto-deploy/static-site/azure/` コピー  | `ashnova/static-site/azure/` から移行 |
-| `multicloud-auto-deploy/static-site/gcp/` コピー    | `ashnova/static-site/gcp/` から移行   |
+| Action                                              | Content                                        |
+| --------------------------------------------------- | ---------------------------------------------- |
+| Created `multicloud-auto-deploy/.vscode/settings.json` | Python venv path and editor settings        |
+| Copied `multicloud-auto-deploy/static-site/aws/`    | Migrated from `ashnova/static-site/aws/`       |
+| Copied `multicloud-auto-deploy/static-site/azure/`  | Migrated from `ashnova/static-site/azure/`     |
+| Copied `multicloud-auto-deploy/static-site/gcp/`    | Migrated from `ashnova/static-site/gcp/`       |
 
-### ワークフローのパス更新
+### Workflow Path Updates
 
-`deploy-landing-*.yml` と `deploy-aws.yml` / `deploy-gcp.yml` 内の  
-`static-site/` → `multicloud-auto-deploy/static-site/` に変更。
+Changed `static-site/` → `multicloud-auto-deploy/static-site/` in `deploy-landing-*.yml` and `deploy-aws.yml` / `deploy-gcp.yml`.
 
 ---
 
-## 削除したクラウドリソース（旧バージョン）
+## Deleted Cloud Resources (Old Versions)
 
 ### v3 (Pulumi: ashnova-v3-aws/staging)
 
-- 22 リソースを `pulumi destroy` で削除（2026-02-21）
-- Pulumi スタックも `pulumi stack rm` で削除
+- 22 resources deleted with `pulumi destroy` (2026-02-21)
+- Pulumi stack also removed with `pulumi stack rm`
 
-### v1 (Terraform管理、satoshi AWSプロファイル)
+### v1 (Terraform-managed, satoshi AWS profile)
 
-AWS CLI で直接削除:
+Deleted directly via AWS CLI:
 
 - API Gateway REST API: `utw7e2zuwc`
-- Lambda Layer `simple-sns-nodejs-dependencies`: バージョン 5, 6, 10, 11
-- DynamoDB テーブル: `simple-sns-messages`
+- Lambda Layer `simple-sns-nodejs-dependencies`: versions 5, 6, 10, 11
+- DynamoDB table: `simple-sns-messages`
 
 ### v2
 
-- デプロイ済みリソースなし（対応不要）
+- No deployed resources (no action required)
 
-### 孤立 Pulumi スタック
+### Orphaned Pulumi Stack
 
-- `ashnova/simple-sns-aws/staging` (0 リソース) を `pulumi stack rm` で削除
-
----
-
-## アクティブな本番環境（削除後に確認済み）
-
-| クラウド | URL                           | 確認日時      |
-| -------- | ----------------------------- | ------------- |
-| AWS      | https://www.aws.ashnova.jp/   | 2026-02-21 ✅ |
-| Azure    | https://www.azure.ashnova.jp/ | 2026-02-21 ✅ |
-| GCP      | https://www.gcp.ashnova.jp/   | 2026-02-21 ✅ |
-
-全 12 テスト（ランディング / SNS アプリ / API ヘルスチェック / GET /posts）が PASS。  
-API バージョン: `3.0.0`
+- `ashnova/simple-sns-aws/staging` (0 resources) removed with `pulumi stack rm`
 
 ---
 
-## 現在のワークフロー一覧（9件）
+## Active Production Environments (Verified After Deletion)
 
-| ファイル                        | トリガーパス                                      | 役割                                                                |
-| ------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------- |
-| `deploy-aws.yml`                | `multicloud-auto-deploy/**`                       | AWS フルスタックデプロイ（Pulumi + API + frontend_react + landing） |
-| `deploy-azure.yml`              | `multicloud-auto-deploy/**`                       | Azure フルスタックデプロイ                                          |
-| `deploy-gcp.yml`                | `multicloud-auto-deploy/**`                       | GCP フルスタックデプロイ                                            |
-| `deploy-landing-aws.yml`        | `multicloud-auto-deploy/static-site/**`           | AWS ランディングページのみ更新                                      |
-| `deploy-landing-azure.yml`      | `multicloud-auto-deploy/static-site/**`           | Azure ランディングページのみ更新                                    |
-| `deploy-landing-gcp.yml`        | `multicloud-auto-deploy/static-site/**`           | GCP ランディングページのみ更新                                      |
-| `deploy-frontend-web-aws.yml`   | `multicloud-auto-deploy/services/frontend_web/**` | frontend_web Lambda のみ更新（AWS）                                 |
-| `deploy-frontend-web-azure.yml` | `multicloud-auto-deploy/services/frontend_web/**` | frontend_web のみ更新（Azure）                                      |
-| `deploy-frontend-web-gcp.yml`   | `multicloud-auto-deploy/services/frontend_web/**` | frontend_web のみ更新（GCP）                                        |
+| Cloud | URL                           | Verified       |
+| ----- | ----------------------------- | -------------- |
+| AWS   | https://www.aws.ashnova.jp/   | 2026-02-21 ✅  |
+| Azure | https://www.azure.ashnova.jp/ | 2026-02-21 ✅  |
+| GCP   | https://www.gcp.ashnova.jp/   | 2026-02-21 ✅  |
+
+All 12 tests (landing / SNS app / API health check / GET /posts) PASSED.  
+API version: `3.0.0`
 
 ---
 
-## トラブルシューティング
+## Current Workflow List (9 workflows)
 
-### ワークフローが GitHub 上に表示されない
+| File                            | Trigger Path                                      | Role                                                              |
+| ------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------- |
+| `deploy-aws.yml`                | `multicloud-auto-deploy/**`                       | AWS full-stack deploy (Pulumi + API + frontend_react + landing)   |
+| `deploy-azure.yml`              | `multicloud-auto-deploy/**`                       | Azure full-stack deploy                                           |
+| `deploy-gcp.yml`                | `multicloud-auto-deploy/**`                       | GCP full-stack deploy                                             |
+| `deploy-landing-aws.yml`        | `multicloud-auto-deploy/static-site/**`           | Update AWS landing page only                                      |
+| `deploy-landing-azure.yml`      | `multicloud-auto-deploy/static-site/**`           | Update Azure landing page only                                    |
+| `deploy-landing-gcp.yml`        | `multicloud-auto-deploy/static-site/**`           | Update GCP landing page only                                      |
+| `deploy-frontend-web-aws.yml`   | `multicloud-auto-deploy/services/frontend_web/**` | Update frontend_web Lambda only (AWS)                             |
+| `deploy-frontend-web-azure.yml` | `multicloud-auto-deploy/services/frontend_web/**` | Update frontend_web only (Azure)                                  |
+| `deploy-frontend-web-gcp.yml`   | `multicloud-auto-deploy/services/frontend_web/**` | Update frontend_web only (GCP)                                    |
 
-`multicloud-auto-deploy/` を VS Code で開いた状態では `.github/` が見えないが、  
-GitHub リポジトリのワークフロー画面 (`/actions`) には正常に表示される。  
-ローカルで確認したい場合: `ls /workspaces/ashnova/.github/workflows/`
+---
 
-### static-site の変更が CI でデプロイされない
+## Troubleshooting
 
-変更を `multicloud-auto-deploy/static-site/**` に加える必要がある（旧: `ashnova/static-site/`）。  
-`deploy-landing-*.yml` のトリガーパスは `multicloud-auto-deploy/static-site/**` に更新済み。
+### Workflows Not Visible on GitHub
 
-### Pulumi スタックが見つからない
+When `multicloud-auto-deploy/` is opened in VS Code, `.github/` is not visible in that workspace,  
+but workflows display correctly in the GitHub repository's Actions tab (`/actions`).  
+To verify locally: `ls /workspaces/ashnova/.github/workflows/`
 
-`cd /workspaces/ashnova/multicloud-auto-deploy/infrastructure/pulumi/aws` に移動して `pulumi stack ls`。  
-開発コンテナ内では AWS / Azure / GCP の認証情報は `/home/vscode/.aws` 等にマウント済み。
+### static-site Changes Not Deployed by CI
 
-### Python インタープリターが見つからない
+Changes must be made under `multicloud-auto-deploy/static-site/**` (old path: `ashnova/static-site/`).  
+The trigger path in `deploy-landing-*.yml` has been updated to `multicloud-auto-deploy/static-site/**`.
 
-`multicloud-auto-deploy/.vscode/settings.json` に venv 設定があるが、初期状態では `.venv` はない。  
-Pulumi インフラの Python 依存は各 `infrastructure/pulumi/*/` 内で仮想環境を作成する:
+### Pulumi Stack Not Found
+
+Navigate to `cd /workspaces/ashnova/multicloud-auto-deploy/infrastructure/pulumi/aws` and run `pulumi stack ls`.  
+Inside the dev container, AWS / Azure / GCP credentials are mounted at `/home/vscode/.aws` etc.
+
+### Python Interpreter Not Found
+
+`multicloud-auto-deploy/.vscode/settings.json` contains the venv path, but `.venv` does not exist initially.  
+Create a Python virtual environment in each `infrastructure/pulumi/*/` directory:
 
 ```bash
 cd infrastructure/pulumi/aws
@@ -223,88 +220,89 @@ pip install -r requirements.txt
 
 ---
 
-## git ルート移行（`multicloud-auto-deploy/` を新ルートにする）
+## Git Root Migration (Making `multicloud-auto-deploy/` the New Root)
 
-### 準備状況（2026-02-21 完了済み）
+### Readiness Status (Completed 2026-02-21)
 
-| 項目 | 状態 |
-| ---- | ---- |
-| `multicloud-auto-deploy/.github/workflows/` (9ファイル) | ✅ 作成済み・パス修正済み |
-| 全9ファイルに `multicloud-auto-deploy/` プレフィックスが含まれないこと | ✅ `grep -rc "multicloud-auto-deploy/" ...` → 全ファイル `:0` 確認済み |
-| `multicloud-auto-deploy/.devcontainer/` (setup.sh 相対パス) | ✅ 確認済み |
-| `multicloud-auto-deploy/.gitignore` | ✅ 存在 |
-| `multicloud-auto-deploy/LICENSE` | ✅ 存在 |
-| `multicloud-auto-deploy/README.md` | ✅ 存在 |
-| `multicloud-auto-deploy/.vscode/settings.json` | ✅ 作成済み |
-| `multicloud-auto-deploy/static-site/` (aws/azure/gcp サブディレクトリ含む) | ✅ 統合済み |
+| Item | Status |
+| ---- | ------ |
+| `multicloud-auto-deploy/.github/workflows/` (9 files) | ✅ Created and paths corrected |
+| All 9 files must NOT contain the `multicloud-auto-deploy/` prefix | ✅ Verified via `grep -rc "multicloud-auto-deploy/" ...` → all files show `:0` |
+| `multicloud-auto-deploy/.devcontainer/` (setup.sh relative paths) | ✅ Verified |
+| `multicloud-auto-deploy/.gitignore` | ✅ Present |
+| `multicloud-auto-deploy/LICENSE` | ✅ Present |
+| `multicloud-auto-deploy/README.md` | ✅ Present |
+| `multicloud-auto-deploy/.vscode/settings.json` | ✅ Created |
+| `multicloud-auto-deploy/static-site/` (including aws/azure/gcp subdirectories) | ✅ Consolidated |
 
-### ワークフローのパス比較
+### Workflow Path Comparison
 
-| ファイル | 現行 (`ashnova/.github/workflows/`) | 移行後 (`multicloud-auto-deploy/.github/workflows/`) |
-| ------- | ----------------------------------- | ---------------------------------------------------- |
+| File | Current (`ashnova/.github/workflows/`) | After Migration (`multicloud-auto-deploy/.github/workflows/`) |
+| ---- | --------------------------------------- | ------------------------------------------------------------- |
 | `deploy-aws.yml` | `cd multicloud-auto-deploy/services/api` | `cd services/api` |
 | `deploy-aws.yml` | `cd multicloud-auto-deploy/infrastructure/pulumi/aws` | `cd infrastructure/pulumi/aws` |
 | `deploy-landing-aws.yml` | `multicloud-auto-deploy/static-site/` | `static-site/` |
-| トリガー `paths:` | `"multicloud-auto-deploy/services/**"` | `"services/**"` |
+| trigger `paths:` | `"multicloud-auto-deploy/services/**"` | `"services/**"` |
 
-### 実行すべき git 移行コマンド（ユーザーが手動で実行）
+### Git Migration Commands (Run Manually by User)
 
-> **注意**: 以下はどれか1つを選んで実行する。操作後は GitHub にて確認すること。
+> **Note**: Choose exactly ONE of the options below and execute it. Verify on GitHub after completion.
 
-#### オプション A — 履歴を保持（推奨）
+#### Option A — Preserve History (Recommended)
 
 ```bash
 cd /workspaces/ashnova
 
-# multicloud-auto-deploy/ の履歴だけを切り出して新ブランチを作成
+# Extract only the multicloud-auto-deploy/ history into a new branch
 git subtree split --prefix=multicloud-auto-deploy -b git-root
 
-# 確認
+# Verify
 git log git-root --oneline | head -10
 
-# 新しいリポジトリを作成して push
+# Create a new repository and push
 mkdir /tmp/ashnova-mcad
 cd /tmp/ashnova-mcad
 git init
 git pull /workspaces/ashnova git-root
-git remote add origin <新しいGitHub repo URL>
+git remote add origin <new GitHub repo URL>
 git push -u origin main
 ```
 
-#### オプション B — 履歴なし・シンプル（新規 repo の場合）
+#### Option B — No History, Simple (For a Brand-New Repo)
 
 ```bash
 cd /workspaces/ashnova/multicloud-auto-deploy
 git init
 git add .
 git commit -m "chore: initialize repository root at multicloud-auto-deploy"
-git remote add origin <新しいGitHub repo URL>
+git remote add origin <new GitHub repo URL>
 git branch -M main
 git push -u origin main
 ```
 
-#### オプション C — `git filter-repo`（高精度・要インストール）
+#### Option C — `git filter-repo` (High Precision, Requires Installation)
 
 ```bash
 pip install git-filter-repo
 
 cd /workspaces/ashnova
 git filter-repo --subdirectory-filter multicloud-auto-deploy --force
-# → ashnova/ リポジトリ自体が multicloud-auto-deploy/ の内容に上書きされる
-git remote set-url origin <新しいGitHub repo URL>
+# → The ashnova/ repository itself is overwritten with the contents of multicloud-auto-deploy/
+git remote set-url origin <new GitHub repo URL>
 git push --force
 ```
 
-### 移行後に実施すること
+### Post-Migration Steps
 
-1. **GitHub Actions の確認**: 旧 `ashnova/.github/workflows/` は GitHub 上で読まれなくなる。新リポジトリの `.github/workflows/` が自動的に認識される。
-2. **GitHub Secrets の再設定**: 旧リポジトリに登録したシークレット（AWS/Azure/GCP 認証情報）を新リポジトリにも登録する。
-3. **`pulumi config` のスタック名確認**: Pulumi スタックは Pulumi Cloud 上に保存されているため gitルートと無関係だが、`Pulumi.yaml` の `name:` や `backend:` が正しいことを確認する。
-4. **VS Code で新ルートを開く**: `code /path/to/multicloud-auto-deploy` または devcontainer で開く。`.devcontainer/` は既に正しい相対パスを使用している。
-5. **旧 `ashnova/` リポジトリのアーカイブ**: 移行完了後、旧リポジトリを GitHub 上で `Archived` に設定する。
+1. **Verify GitHub Actions**: The old `ashnova/.github/workflows/` will no longer be read by GitHub. The new repository's `.github/workflows/` will be automatically discovered.
+2. **Re-register GitHub Secrets**: Re-add secrets (AWS/Azure/GCP credentials) registered in the old repository to the new repository.
+3. **Verify Pulumi stack names with `pulumi config`**: Pulumi stacks are stored in Pulumi Cloud and are independent of the git root, but confirm that `name:` and `backend:` in `Pulumi.yaml` are correct.
+4. **Open new root in VS Code**: Use `code /path/to/multicloud-auto-deploy` or open via devcontainer. `.devcontainer/` already uses correct relative paths.
+5. **Archive old `ashnova/` repository**: After migration is complete, set the old repository to `Archived` on GitHub.
 
 ---
 
-## 前のセクション / 次のセクション
+## Previous / Next Section
 
 ← [10 — Remaining Tasks](AI_AGENT_10_TASKS.md)
+

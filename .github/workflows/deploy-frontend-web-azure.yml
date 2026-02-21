@@ -1,4 +1,4 @@
-name: Deploy Frontend Web to Azure
+name: Deploy Frontend Web (React SPA) to Azure
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
     paths:
-      - "services/frontend_web/**"
+      - "services/frontend_react/**"
       - ".github/workflows/deploy-frontend-web-azure.yml"
   workflow_dispatch:
     inputs:
@@ -20,60 +20,26 @@ on:
           - production
 
 env:
-  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
 
 concurrency:
   group: deploy-frontend-web-azure-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build frontend_web for Azure Functions
+  deploy:
+    name: Build & Deploy React SPA to Azure Blob/AFD
     runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Build package with bundled dependencies
-        working-directory: services/frontend_web
-        run: |
-          # Install dependencies into .python_packages for Azure Linux Consumption
-          pip install --target .python_packages/lib/site-packages \
-            --no-cache-dir --upgrade -r requirements.txt
-
-          # Cleanup unnecessary files
-          find .python_packages -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-          find .python_packages -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
-          find .python_packages -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-
-          # Create deployment zip with bundled deps
-          zip -r release.zip app/ function_app.py host.json requirements.txt .python_packages/
-          echo "✅ Package created:"
-          ls -lh release.zip
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-web-app
-          path: services/frontend_web/release.zip
-
-  deploy:
-    name: Deploy to Azure Functions
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
       - name: Determine environment
         id: env
         run: |
@@ -86,98 +52,120 @@ jobs:
           fi
           echo "env_name=$ENV" >> $GITHUB_OUTPUT
 
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-web-app
-          path: /tmp/deploy
+          # Blob storage accounts (fixed per environment)
+          if [ "$ENV" == "staging" ]; then
+            echo "storage_account=mcadwebd45ihd" >> $GITHUB_OUTPUT
+          else
+            echo "storage_account=mcadwebdiev0w" >> $GITHUB_OUTPUT
+          fi
+
+          echo "rg=multicloud-auto-deploy-${ENV}-rg"          >> $GITHUB_OUTPUT
+          echo "afd_profile=multicloud-auto-deploy-${ENV}-fd"  >> $GITHUB_OUTPUT
+          echo "📦 Deploying to: $ENV"
 
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Create Function App if not exists
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: services/frontend_react/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/frontend_react
+        run: npm ci
+
+      - name: Build React SPA
+        working-directory: services/frontend_react
+        env:
+          VITE_BASE_PATH: /sns/
+          # Required secret: AZURE_API_ENDPOINT (per GitHub environment)
+          # e.g. https://multicloud-auto-deploy-staging-api.azurewebsites.net
+          VITE_API_URL: ${{ secrets.AZURE_API_ENDPOINT }}
         run: |
-          ENV="${{ steps.env.outputs.env_name }}"
-          RG="multicloud-auto-deploy-${ENV}-rg"
-          LOCATION="japaneast"
+          npm run build
+          echo "✅ Build complete ($(du -sh dist | cut -f1))"
 
-          # production は FC1 移行済みの -v2 アプリを優先使用
-          BASE_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
-          if az functionapp show --name "${BASE_NAME}-v2" --resource-group "$RG" &>/dev/null; then
-            APP_NAME="${BASE_NAME}-v2"
-          else
-            APP_NAME="$BASE_NAME"
-          fi
-          echo "app_name=$APP_NAME" >> $GITHUB_ENV
-
-          # Check if Function App already exists
-          if az functionapp show --name "$APP_NAME" --resource-group "$RG" &>/dev/null; then
-            echo "✅ Function App $APP_NAME already exists"
-          else
-            echo "Creating Function App $APP_NAME..."
-            # Find the functions storage account (mcadfunc*)
-            STORAGE=$(az storage account list --resource-group "$RG" \
-              --query "[?starts_with(name,'mcadfunc')].name | [0]" -o tsv)
-            if [ -z "$STORAGE" ]; then
-              echo "❌ Could not find functions storage account in $RG"
-              exit 1
-            fi
-            echo "Using storage account: $STORAGE"
-            # FC1 FlexConsumption で作成（Dynamic Y1 は AFD との stale TCP 問題を起こすため使用禁止）
-            az functionapp create \
-              --name "$APP_NAME" \
-              --resource-group "$RG" \
-              --flexconsumption-location "$LOCATION" \
-              --runtime python \
-              --runtime-version 3.12 \
-              --storage-account "$STORAGE"
-            echo "✅ Function App $APP_NAME created (FC1 FlexConsumption)"
-            # スケール設定：インスタンス固定 + 常時起動（コールドスタート防止）
-            az functionapp scale config set \
-              --name "$APP_NAME" --resource-group "$RG" \
-              --maximum-instance-count 1
-            az functionapp scale config always-ready set \
-              --name "$APP_NAME" --resource-group "$RG" \
-              --settings "http=1"
-            echo "✅ Scale config set (maxInstances=1, alwaysReady http=1)"
-            # Give the app time to initialize
-            sleep 30
-          fi
-
-      - name: Deploy to Azure Functions
+      - name: Deploy to Azure Blob Storage
         run: |
-          ENV="${{ steps.env.outputs.env_name }}"
-          RG="multicloud-auto-deploy-${ENV}-rg"
-          # app_name は前のステップで設定済み（-v2 が存在する場合はそちらを使用）
-          APP_NAME="${app_name:-multicloud-auto-deploy-${ENV}-frontend-web}"
+          STORAGE="${{ steps.env.outputs.storage_account }}"
+          RG="${{ steps.env.outputs.rg }}"
 
-          # Remove WEBSITE_RUN_FROM_PACKAGE to avoid conflict with zipdeploy
-          az functionapp config appsettings delete \
-            --resource-group "$RG" --name "$APP_NAME" \
-            --setting-names WEBSITE_RUN_FROM_PACKAGE 2>/dev/null || true
-
-          # Find the zip file
-          ZIP_PATH=$(find /tmp/deploy -name "release.zip" | head -1)
-          echo "Zip file: $ZIP_PATH"
-          ls -lh "$ZIP_PATH"
-
-          # Deploy using Kudu zipdeploy
-          az functionapp deployment source config-zip \
+          # ストレージアカウントキーを取得（Blob Data ロール不要、listKeys権限で可能）
+          ACCOUNT_KEY=$(az storage account keys list \
+            --account-name "$STORAGE" \
             --resource-group "$RG" \
-            --name "$APP_NAME" \
-            --src "$ZIP_PATH" \
-            --timeout 600
-          echo "✅ $APP_NAME deployed"
+            --query '[0].value' -o tsv)
 
-      - name: Configure App Settings
+          # assets (長期キャッシュ・immutable)
+          az storage blob upload-batch \
+            --account-name "$STORAGE" \
+            --account-key "$ACCOUNT_KEY" \
+            --destination '$web/sns' \
+            --source services/frontend_react/dist/ \
+            --pattern "assets/*" \
+            --content-cache-control "public, max-age=31536000, immutable" \
+            --overwrite true
+
+          # index.html (短期キャッシュ)
+          az storage blob upload-batch \
+            --account-name "$STORAGE" \
+            --account-key "$ACCOUNT_KEY" \
+            --destination '$web/sns' \
+            --source services/frontend_react/dist/ \
+            --pattern "*.html" \
+            --content-cache-control "public, max-age=300" \
+            --content-type "text/html" \
+            --overwrite true
+
+          # その他ファイル (svg等)
+          az storage blob upload-batch \
+            --account-name "$STORAGE" \
+            --account-key "$ACCOUNT_KEY" \
+            --destination '$web/sns' \
+            --source services/frontend_react/dist/ \
+            --pattern "*.svg" \
+            --content-cache-control "public, max-age=3600" \
+            --overwrite true
+
+          echo "✅ Deployed to blob: ${STORAGE}/\$web/sns/"
+
+      - name: Purge AFD Cache
         run: |
-          ENV="${{ steps.env.outputs.env_name }}"
-          RG="multicloud-auto-deploy-${ENV}-rg"
-          APP_NAME="${app_name:-multicloud-auto-deploy-${ENV}-frontend-web}"
-          az functionapp config appsettings set \
-            --name "$APP_NAME" \
+          RG="${{ steps.env.outputs.rg }}"
+          PROFILE="${{ steps.env.outputs.afd_profile }}"
+          ENDPOINT=$(az afd endpoint list \
+            --profile-name "$PROFILE" \
             --resource-group "$RG" \
-            --settings STAGE_NAME=sns
-          echo "✅ STAGE_NAME=sns configured for $APP_NAME"
+            --query '[0].name' -o tsv)
+          if [ -z "$ENDPOINT" ]; then
+            echo "⚠️ AFD endpoint not found, skipping purge"
+            exit 0
+          fi
+          HOSTNAME=$(az afd endpoint show \
+            --profile-name "$PROFILE" \
+            --resource-group "$RG" \
+            --endpoint-name "$ENDPOINT" \
+            --query 'hostName' -o tsv)
+          az afd endpoint purge \
+            --profile-name "$PROFILE" \
+            --resource-group "$RG" \
+            --endpoint-name "$ENDPOINT" \
+            --content-paths '/sns' '/sns/' '/sns/*' \
+            --domains "$HOSTNAME"
+          echo "✅ AFD cache purged for /sns*"
+
+      - name: Deployment Summary
+        run: |
+          RG="${{ steps.env.outputs.rg }}"
+          PROFILE="${{ steps.env.outputs.afd_profile }}"
+          HOSTNAME=$(az afd endpoint list \
+            --profile-name "$PROFILE" \
+            --resource-group "$RG" \
+            --query '[0].hostName' -o tsv 2>/dev/null || echo "(see AFD portal)")
+          echo "✅ Deployed to: https://${HOSTNAME}/sns/"
+          echo "   Blob Storage: ${{ steps.env.outputs.storage_account }}/\$web/sns/"

@@ -1,4 +1,4 @@
-name: Deploy Frontend Web to AWS
+name: Deploy Frontend Web (React SPA) to AWS
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
     paths:
-      - "services/frontend_web/**"
+      - "services/frontend_react/**"
       - ".github/workflows/deploy-frontend-web-aws.yml"
   workflow_dispatch:
     inputs:
@@ -21,7 +21,7 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
   PULUMI_PYTHON_VERSION: "3.13"
 
 concurrency:
@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy frontend_web to AWS Lambda
+    name: Build & Deploy React SPA to S3/CloudFront
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
 
@@ -53,11 +53,6 @@ jobs:
             ENV="staging"
           fi
           echo "env_name=$ENV" >> $GITHUB_OUTPUT
-          if [ "$ENV" == "staging" ]; then
-            echo "auth_disabled=true" >> $GITHUB_OUTPUT
-          else
-            echo "auth_disabled=false" >> $GITHUB_OUTPUT
-          fi
           echo "📦 Deploying to: $ENV"
 
       - name: Configure AWS credentials
@@ -67,10 +62,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Python
+      - name: Setup Python (Pulumi)
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ env.PULUMI_PYTHON_VERSION }}
 
       - name: Install Pulumi CLI
         uses: pulumi/actions@v5
@@ -81,124 +76,65 @@ jobs:
           pip install -r requirements.txt
 
       - name: Get Pulumi Outputs
-        id: pulumi_outputs
+        id: pulumi
         run: |
           cd infrastructure/pulumi/aws
           STACK="${{ steps.env.outputs.env_name }}"
           pulumi login
-          pulumi stack select "$STACK" 2>/dev/null || pulumi stack select staging
-          echo "api_gateway_endpoint=$(pulumi stack output api_gateway_endpoint)" >> $GITHUB_OUTPUT
-          echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)"      >> $GITHUB_OUTPUT
-          echo "custom_domain=$(pulumi stack output custom_domain 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
-          echo "cognito_client_id=$(pulumi stack output cognito_client_id)"      >> $GITHUB_OUTPUT
-          echo "cognito_domain=$(pulumi stack output cognito_domain)"            >> $GITHUB_OUTPUT
+          pulumi stack select "$STACK"
+          echo "api_url=$(pulumi stack output api_gateway_endpoint)"         >> $GITHUB_OUTPUT
+          echo "bucket=$(pulumi stack output frontend_bucket_name)"          >> $GITHUB_OUTPUT
+          echo "cf_id=$(pulumi stack output cloudfront_distribution_id)"     >> $GITHUB_OUTPUT
+          echo "cf_domain=$(pulumi stack output cloudfront_domain)"          >> $GITHUB_OUTPUT
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           AWS_REGION: ${{ env.AWS_REGION }}
 
-      - name: Build Lambda Layer (dependencies)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: services/frontend_react/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/frontend_react
+        run: npm ci
+
+      - name: Build React SPA
+        working-directory: services/frontend_react
+        env:
+          VITE_BASE_PATH: /sns/
+          VITE_API_URL: ${{ steps.pulumi.outputs.api_url }}
         run: |
-          cd services/frontend_web
-          mkdir -p .build-layer/python
-          pip install --target .build-layer/python -r requirements.txt --no-deps
-          pip install --target .build-layer/python -r requirements.txt
-          cd .build-layer
-          zip -r ../lambda-layer.zip python/
-          echo "✅ Layer size: $(du -sh ../lambda-layer.zip | cut -f1)"
+          npm run build
+          echo "✅ Build complete ($(du -sh dist | cut -f1))"
 
-      - name: Package Application Code
+      - name: Deploy to S3
         run: |
-          cd services/frontend_web
-          mkdir -p .build/package
-          cp -r app .build/package/
-          cp handler.py .build/package/
-          cd .build/package
-          zip -r ../../lambda.zip .
-          cd ../..
-          echo "✅ Package size: $(du -sh lambda.zip | cut -f1)"
+          BUCKET="${{ steps.pulumi.outputs.bucket }}"
+          aws s3 sync services/frontend_react/dist/ s3://${BUCKET}/sns/ \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "index.html"
+          # index.html は短いキャッシュ
+          aws s3 cp services/frontend_react/dist/index.html \
+            s3://${BUCKET}/sns/index.html \
+            --cache-control "public, max-age=300" \
+            --content-type "text/html"
+          echo "✅ Deployed to s3://${BUCKET}/sns/"
 
-      - name: Publish Lambda Layer
-        id: layer
+      - name: Invalidate CloudFront Cache
         run: |
-          ENV="${{ steps.env.outputs.env_name }}"
-          LAYER_NAME="multicloud-auto-deploy-${ENV}-frontend-web-deps"
-          LAYER_ARN=$(aws lambda publish-layer-version \
-            --layer-name $LAYER_NAME \
-            --description "frontend_web dependencies" \
-            --zip-file fileb://services/frontend_web/lambda-layer.zip \
-            --compatible-runtimes python3.12 \
-            --region ${{ env.AWS_REGION }} \
-            --query LayerVersionArn \
-            --output text)
-          echo "layer_arn=$LAYER_ARN" >> $GITHUB_OUTPUT
-          echo "✅ Layer ARN: $LAYER_ARN"
+          CF_ID="${{ steps.pulumi.outputs.cf_id }}"
+          aws cloudfront create-invalidation \
+            --distribution-id "$CF_ID" \
+            --paths "/sns*" \
+            --no-cli-pager
+          echo "✅ Invalidation issued for /sns*"
 
-      - name: Deploy to Lambda
+      - name: Deployment Summary
         run: |
-          ENV="${{ steps.env.outputs.env_name }}"
-          FUNCTION_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
-
-          # Use Pulumi outputs (authoritative source; secrets are ignored)
-          API_URL="${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}"
-          CF_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
-          CLIENT_ID="${{ steps.pulumi_outputs.outputs.cognito_client_id }}"
-          COGNITO_DOMAIN_VAL="${{ steps.pulumi_outputs.outputs.cognito_domain }}.auth.${{ env.AWS_REGION }}.amazoncognito.com"
-
-          # Use custom domain (e.g. www.aws.ashnova.jp) when set, else CloudFront domain
-          CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
-          SITE_DOMAIN="${CUSTOM_DOMAIN:-$CF_DOMAIN}"
-
-          # Guard: abort if critical values are empty
-          if [[ -z "$API_URL" || -z "$CF_DOMAIN" || -z "$CLIENT_ID" ]]; then
-            echo "❌ Critical Pulumi outputs are empty. Aborting."
-            echo "   API_URL='$API_URL'"
-            echo "   CF_DOMAIN='$CF_DOMAIN'"
-            echo "   CLIENT_ID='$CLIENT_ID'"
-            exit 1
-          fi
-
-          echo "🌐 Site domain for Cognito callbacks: $SITE_DOMAIN"
-
-          # Wait for Lambda to be ready before code update
-          echo "⏳ Waiting for Lambda to be ready..."
-          aws lambda wait function-updated \
-            --function-name "$FUNCTION_NAME" --region ${{ env.AWS_REGION }}
-
-          # Update function code
-          aws lambda update-function-code \
-            --function-name "$FUNCTION_NAME" \
-            --region ${{ env.AWS_REGION }} \
-            --zip-file fileb://services/frontend_web/lambda.zip
-
-          # Wait for code update before configuration update
-          aws lambda wait function-updated \
-            --function-name "$FUNCTION_NAME" --region ${{ env.AWS_REGION }}
-
-          # Build env vars
-          cat > /tmp/frontend-web-env.json << EOF
-          {
-            "Variables": {
-              "ENVIRONMENT": "$ENV",
-              "API_BASE_URL": "${API_URL}",
-              "AUTH_PROVIDER": "aws",
-              "AUTH_DISABLED": "false",
-              "STAGE_NAME": "sns",
-              "COGNITO_DOMAIN": "${COGNITO_DOMAIN_VAL}",
-              "COGNITO_CLIENT_ID": "${CLIENT_ID}",
-              "COGNITO_REDIRECT_URI": "https://${SITE_DOMAIN}/sns/auth/callback",
-              "COGNITO_LOGOUT_URI": "https://${SITE_DOMAIN}/sns/"
-            }
-          }
-          EOF
-
-          # Update configuration
-          aws lambda update-function-configuration \
-            --function-name "$FUNCTION_NAME" \
-            --region ${{ env.AWS_REGION }} \
-            --layers ${{ steps.layer.outputs.layer_arn }} \
-            --environment file:///tmp/frontend-web-env.json \
-            --output json || { echo "❌ Configuration update failed!"; exit 1; }
-
-          echo "✅ frontend_web deployed to $FUNCTION_NAME"
-          echo "   API_BASE_URL=$API_URL"
-          echo "   COGNITO_REDIRECT_URI=https://${SITE_DOMAIN}/sns/auth/callback"
+          echo "✅ Deployed to: https://${{ steps.pulumi.outputs.cf_domain }}/sns/"
+          echo "   API URL   : ${{ steps.pulumi.outputs.api_url }}"
+          echo "   S3 Bucket : ${{ steps.pulumi.outputs.bucket }}/sns/"

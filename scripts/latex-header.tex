@@ -21,16 +21,17 @@
 \usepackage{xcolor}
 \usepackage{seqsplit}
 
-% Better font setup for CJK
-\usepackage{xeCJK}
-\setCJKmainfont{Noto Serif CJK JP}
-\setCJKsansfont{Noto Sans CJK JP}
-\setCJKmonofont{Noto Sans Mono CJK JP}
-
-% English fonts
-\setmainfont{Latin Modern Roman}
-\setsansfont{Latin Modern Sans}
-\setmonofont{DejaVu Sans Mono}[Scale=0.9]
+% Better font setup for CJK (fontspec only, no xeCJK/ctex required)
+% Use Noto CJK fonts for both Japanese and Latin text
+\setmainfont{Noto Serif CJK JP}[
+    BoldFont = Noto Serif CJK JP Bold,
+    ItalicFont = Noto Serif CJK JP,
+    BoldItalicFont = Noto Serif CJK JP Bold
+]
+\setsansfont{Noto Sans CJK JP}[
+    BoldFont = Noto Sans CJK JP Bold
+]
+\setmonofont{Noto Sans Mono CJK JP}[Scale=0.9]
 
 % Code listing style
 \lstset{
@@ -52,6 +53,13 @@
     numbers=left,
     numbersep=8pt,
     xleftmargin=15pt,
+    extendedchars=true,
+    literate=
+        {→}{{->}}2 {←}{{<-}}2 {↑}{{^}}1 {↓}{{v}}1
+        {=>}{{=>}}2 {>=}{{>=}}2 {<=}{{<=}}2
+        {…}{{\ldots}}3 {—}{{---}}3 {–}{{--}}2
+        {「}{{[}}1 {」}{{]}}1 {『}{{[}}1 {』}{{]}}1
+        {。}{{.}}1 {、}{{,}}1,
     xrightmargin=5pt,
 }
 
@@ -96,8 +104,8 @@
 \fancyhead[R]{\thepage}
 \fancyfoot[C]{}
 
-% Better link colors
-\usepackage{hyperref}
+% Better link colors (hyperref loaded later by pandoc template, use AtBeginDocument)
+\AtBeginDocument{
 \hypersetup{
     colorlinks=true,
     linkcolor=blue!70!black,
@@ -108,8 +116,7 @@
     pdfauthor={PLAYER1-r7},
     pdfsubject={Complete Documentation},
     pdfkeywords={AWS, Azure, GCP, Multi-Cloud, DevOps, CI/CD},
-    bookmarksnumbered=true,
-    bookmarksopen=true,
+}
 }
 
 % Chapter and section styling

@@ -357,41 +357,47 @@ add_chapter() {
 # Part 1: Project Overview
 echo -e "\n${BLUE}Part 1: Project Overview${NC}"
 add_chapter "$PROJECT_ROOT/README.md" "Project Overview" 1
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_01_OVERVIEW.md" "AI Agent Overview" 2
 
 # Part 2: Architecture
 echo -e "\n${BLUE}Part 2: Architecture${NC}"
-add_chapter "$PROJECT_ROOT/docs/ARCHITECTURE.md" "System Architecture" 1
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_03_ARCHITECTURE.md" "System Architecture" 1
 
 # Part 3: Setup and Configuration
 echo -e "\n${BLUE}Part 3: Setup and Configuration${NC}"
-add_chapter "$PROJECT_ROOT/docs/SETUP.md" "Initial Setup" 1
-add_chapter "$PROJECT_ROOT/docs/QUICK_REFERENCE.md" "Quick Reference Guide" 2
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_02_LAYOUT.md" "Layout & Overview" 1
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_GUIDE.md" "AI Agent Guide" 2
 
 # Part 4: Deployment Guides
 echo -e "\n${BLUE}Part 4: Deployment Guides${NC}"
 echo -e '\n# Deployment Guides\n' >> "$MERGED_MD"
-add_chapter "$PROJECT_ROOT/docs/AWS_DEPLOYMENT.md" "AWS Deployment" 2
-add_chapter "$PROJECT_ROOT/docs/AZURE_DEPLOYMENT.md" "Azure Deployment" 2
-add_chapter "$PROJECT_ROOT/docs/GCP_DEPLOYMENT.md" "GCP Deployment" 2
-add_chapter "$PROJECT_ROOT/docs/PRODUCTION_DEPLOYMENT.md" "Production Deployment" 2
-add_chapter "$PROJECT_ROOT/docs/CDN_SETUP.md" "CDN Setup" 2
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_05_INFRA.md" "Infrastructure" 2
+add_chapter "$PROJECT_ROOT/docs/CUSTOM_DOMAIN_SETUP.md" "Custom Domain Setup" 2
+add_chapter "$PROJECT_ROOT/docs/INTEGRATION_TESTS_GUIDE.md" "Integration Tests Guide" 2
+add_chapter "$PROJECT_ROOT/docs/LAMBDA_LAYER_OPTIMIZATION.md" "Lambda Layer Optimization" 2
+add_chapter "$PROJECT_ROOT/docs/AWS_HTTPS_FIX_REPORT.md" "AWS HTTPS Fix Report" 2
+add_chapter "$PROJECT_ROOT/docs/AWS_SNS_FIX_REPORT.md" "AWS SNS Fix Report" 2
+add_chapter "$PROJECT_ROOT/docs/AWS_PRODUCTION_SNS_FIX_REPORT.md" "AWS Production SNS Fix Report" 2
+add_chapter "$PROJECT_ROOT/docs/AZURE_SNS_FIX_REPORT.md" "Azure SNS Fix Report" 2
 
 # Part 5: CI/CD
 echo -e "\n${BLUE}Part 5: CI/CD${NC}"
-add_chapter "$PROJECT_ROOT/docs/CICD_SETUP.md" "CI/CD Setup" 1
-add_chapter "$PROJECT_ROOT/docs/CICD_TEST_RESULTS.md" "CI/CD Test Results" 2
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_06_CICD.md" "CI/CD Setup" 1
 
 # Part 6: Tools and Utilities
 echo -e "\n${BLUE}Part 6: Tools and Utilities${NC}"
-add_chapter "$PROJECT_ROOT/docs/TOOLS_REFERENCE.md" "Tools Reference" 1
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_08_RUNBOOKS.md" "Runbooks" 1
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_09_SECURITY.md" "Security" 1
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_10_TASKS.md" "Task Management" 1
 
 # Part 7: API Reference
 echo -e "\n${BLUE}Part 7: API Reference${NC}"
-add_chapter "$PROJECT_ROOT/docs/ENDPOINTS.md" "API Endpoints" 1
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_04_API.md" "API Reference" 1
 
-# Part 8: Troubleshooting
-echo -e "\n${BLUE}Part 8: Troubleshooting${NC}"
-add_chapter "$PROJECT_ROOT/docs/TROUBLESHOOTING.md" "Troubleshooting Guide" 1
+# Part 8: Status / Monitoring
+echo -e "\n${BLUE}Part 8: Status / Monitoring${NC}"
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_07_STATUS.md" "Status & Monitoring" 1
+add_chapter "$PROJECT_ROOT/docs/AI_AGENT_11_WORKSPACE_MIGRATION.md" "Workspace Migration" 1
 
 # Part 9: Services and Infrastructure
 echo -e "\n${BLUE}Part 9: Services and Infrastructure${NC}"
@@ -476,6 +482,7 @@ LUA_FILTER="$PROJECT_ROOT/scripts/table-columns.lua"
 if pandoc "$MERGED_MD" \
     -o "$OUTPUT_FILE" \
     --pdf-engine=xelatex \
+    --template="$PROJECT_ROOT/scripts/custom-latex-template.tex" \
     --lua-filter="$LUA_FILTER" \
     --toc \
     --toc-depth=3 \
@@ -487,9 +494,9 @@ if pandoc "$MERGED_MD" \
     --variable fontsize=11pt \
     --variable papersize=a4 \
     --variable geometry:margin=2.5cm \
-    --variable lang=ja \
     --variable tables=true \
     --variable graphics=true \
+    --variable lmodern=false \
     2>&1; then
     
     echo ""

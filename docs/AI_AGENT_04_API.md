@@ -23,9 +23,9 @@
 
 ---
 
-## リクエスト / レスポンス スキーマ
+## Request / Response Schema
 
-### POST /posts — リクエスト
+### POST /posts — Request Body
 
 ```json
 {
@@ -36,7 +36,7 @@
 }
 ```
 
-### GET /posts — レスポンス
+### GET /posts — Response
 
 ```json
 {
@@ -46,7 +46,7 @@
 }
 ```
 
-### Post オブジェクト
+### Post Object
 
 ```json
 {
@@ -60,7 +60,7 @@
   "createdAt": "2026-02-20T00:00:00Z",
   "updatedAt": "2026-02-20T00:00:00Z",
 
-  // 後方互換フィールド（snake_case）
+  // backward-compatible fields (snake_case)
   "id": "uuid",
   "author": "string (= userId)",
   "created_at": "...",
@@ -69,13 +69,13 @@
 }
 ```
 
-### GET /posts クエリパラメータ
+### GET /posts Query Parameters
 
-| パラメータ  | 型         | デフォルト | 説明                     |
-| ----------- | ---------- | ---------- | ------------------------ |
-| `limit`     | int (1-50) | 20         | 取得件数                 |
-| `nextToken` | string     | null       | ページネーショントークン |
-| `tag`       | string     | null       | タグフィルタ             |
+| Parameter   | Type       | Default | Description               |
+| ----------- | ---------- | ------- | ------------------------- |
+| `limit`     | int (1-50) | 20      | Number of items to return |
+| `nextToken` | string     | null    | Pagination token          |
+| `tag`       | string     | null    | Tag filter                |
 
 ---
 

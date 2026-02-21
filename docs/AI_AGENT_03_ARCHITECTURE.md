@@ -47,9 +47,9 @@ bucket-root/
 
 **CI deploy destinations**:
 
-| Content       | AWS                | Azure       | GCP                |
-| ------------- | ------------------ | ----------- | ------------------ |
-| Landing pages | `s3://bucket/`     | `$web/`     | `gs://bucket/`     |
+| Content       | AWS                            | Azure                                   | GCP                               |
+| ------------- | ------------------------------ | --------------------------------------- | --------------------------------- |
+| Landing pages | `s3://bucket/`                 | `$web/`                                 | `gs://bucket/`                    |
 | SNS pages     | `s3://bucket/sns/` (React SPA) | Azure Functions `frontend-web` (Python) | Cloud Run `frontend-web` (Python) |
 
 > Azure と GCP の SNS ページは静的ファイルではなく Python サーバーが動的に生成する。

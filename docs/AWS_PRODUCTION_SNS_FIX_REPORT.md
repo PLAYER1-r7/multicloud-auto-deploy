@@ -20,10 +20,10 @@ This report documents two independent bugs that caused the Production `frontend-
 Lambda to fall back to `http://localhost:8000` instead of the real API Gateway URL.
 Both root causes have been identified, fixed, and deployed.
 
-| #   | Symptom                                                             | Root Cause                                                                                          | Commit     | Status   |
-| --- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------- | -------- |
-| 1   | All API calls hit `http://localhost:8000` → `Connection refused`    | Production `frontend-web` Lambda had `API_BASE_URL=""` — CI/CD relied on an unset GitHub Secret    | `fd1f422`  | ✅ Fixed |
-| 2   | `COGNITO_REDIRECT_URI` used CloudFront domain, not custom domain    | CI/CD set redirect URI to `cloudfront_domain` while Cognito App Client only allows `ashnova.jp`    | `fd1f422`  | ✅ Fixed |
+| #   | Symptom                                                          | Root Cause                                                                                      | Commit    | Status   |
+| --- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | --------- | -------- |
+| 1   | All API calls hit `http://localhost:8000` → `Connection refused` | Production `frontend-web` Lambda had `API_BASE_URL=""` — CI/CD relied on an unset GitHub Secret | `fd1f422` | ✅ Fixed |
+| 2   | `COGNITO_REDIRECT_URI` used CloudFront domain, not custom domain | CI/CD set redirect URI to `cloudfront_domain` while Cognito App Client only allows `ashnova.jp` | `fd1f422` | ✅ Fixed |
 
 ---
 
@@ -206,26 +206,26 @@ fi
 
 ## Production Environment Reference
 
-| Resource                   | Value                                                            |
-| -------------------------- | ---------------------------------------------------------------- |
-| CloudFront Distribution    | `E214XONKTXJEJD` — `d1qob7569mn5nw.cloudfront.net`             |
-| Custom Domain (Production) | `www.aws.ashnova.jp`                                             |
-| API Gateway (Production)   | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com`   |
-| Lambda (API)               | `multicloud-auto-deploy-production-api`                          |
-| Lambda (frontend-web)      | `multicloud-auto-deploy-production-frontend-web`                 |
-| Cognito User Pool          | `ap-northeast-1_50La963P2`                                       |
-| Cognito App Client         | `4h3b285v1a9746sqhukk5k3a7i`                                     |
-| DynamoDB Table             | `multicloud-auto-deploy-production-posts`                        |
-| Pulumi Stack               | `production` (org: `ashnova`)                                    |
+| Resource                   | Value                                                         |
+| -------------------------- | ------------------------------------------------------------- |
+| CloudFront Distribution    | `E214XONKTXJEJD` — `d1qob7569mn5nw.cloudfront.net`            |
+| Custom Domain (Production) | `www.aws.ashnova.jp`                                          |
+| API Gateway (Production)   | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com` |
+| Lambda (API)               | `multicloud-auto-deploy-production-api`                       |
+| Lambda (frontend-web)      | `multicloud-auto-deploy-production-frontend-web`              |
+| Cognito User Pool          | `ap-northeast-1_50La963P2`                                    |
+| Cognito App Client         | `4h3b285v1a9746sqhukk5k3a7i`                                  |
+| DynamoDB Table             | `multicloud-auto-deploy-production-posts`                     |
+| Pulumi Stack               | `production` (org: `ashnova`)                                 |
 
 ---
 
 ## Files Changed
 
-| File                                                  | Change                                                                            |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `.github/workflows/deploy-frontend-web-aws.yml`       | Replaced Secret-based env vars with Pulumi outputs; added wait steps and guard    |
-| `.github/workflows/deploy-aws.yml`                    | Added `custom_domain` output; use `SITE_DOMAIN` for Cognito URIs and CORS         |
+| File                                            | Change                                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| `.github/workflows/deploy-frontend-web-aws.yml` | Replaced Secret-based env vars with Pulumi outputs; added wait steps and guard |
+| `.github/workflows/deploy-aws.yml`              | Added `custom_domain` output; use `SITE_DOMAIN` for Cognito URIs and CORS      |
 
 ---
 

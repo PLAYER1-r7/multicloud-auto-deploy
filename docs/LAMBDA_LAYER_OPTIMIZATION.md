@@ -1,40 +1,40 @@
-# Lambda Layer による最適化ガイド
+# Lambda Layer Optimization Guide
 
-## 概要
+## Overview
 
-Lambda関数のデプロイサイズを削減するために、Lambda Layerを使用して依存関係とアプリケーションコードを分離します。
+To reduce Lambda function deployment size, we use Lambda Layers to separate dependencies from application code.
 
-**🌟 推奨: Klayers（公開Lambda Layer）を使用することで、さらに効率的なデプロイが可能です！**
+**🌟 Recommended: Using Klayers (public Lambda Layers) enables even more efficient deployments!**
 
-詳細は [LAMBDA_LAYER_PUBLIC_RESOURCES.md](LAMBDA_LAYER_PUBLIC_RESOURCES.md) を参照してください。
+See [LAMBDA_LAYER_PUBLIC_RESOURCES.md](LAMBDA_LAYER_PUBLIC_RESOURCES.md) for details.
 
-### 最適化前の問題
+### Problems Before Optimization
 
-- **パッケージサイズ**: 50MB以上（すべての依存関係を含む）
-- **デプロイ方法**: S3経由でのアップロードが必須
-- **デプロイ時間**: S3アップロード + Lambda更新で遅い
-- **非効率**: 依存関係が変わらなくても毎回アップロード
+- **Package size**: Over 50MB (including all dependencies)
+- **Deployment method**: Upload via S3 required
+- **Deployment time**: Slow due to S3 upload + Lambda update
+- **Inefficient**: Every deployment re-uploads even when dependencies haven't changed
 
-### 最適化後のメリット
+### Benefits After Optimization
 
-- **パッケージサイズ**: 数MB（アプリケーションコードのみ）
-- **デプロイ方法**: 直接アップロード可能（50MB未満）
-- **デプロイ時間**: 数秒で完了
-- **効率化**: 依存関係は Layer で管理、コード変更時のみ更新
+- **Package size**: A few MB (application code only)
+- **Deployment method**: Direct upload possible (under 50MB)
+- **Deployment time**: Completes in seconds
+- **Efficient**: Dependencies managed in Layer; only update when code changes
 
-## アーキテクチャ
+## Architecture
 
 ```
-Lambda Function (軽量)
-├── app/              # アプリケーションコード (~2-5MB)
+Lambda Function (lightweight)
+├── app/              # Application code (~2-5MB)
 │   ├── main.py
 │   ├── auth.py
 │   ├── config.py
 │   └── ...
 └── index.py
 
-Lambda Layer (依存関係)
-└── python/           # 依存関係 (~20-40MB)
+Lambda Layer (dependencies)
+└── python/           # Dependencies (~20-40MB)
     ├── fastapi/
     ├── pydantic/
     ├── mangum/
@@ -42,108 +42,108 @@ Lambda Layer (依存関係)
     └── ...
 ```
 
-## セットアップ手順
+## Setup Steps
 
-### オプションA: Klayers を使用（推奨）
+### Option A: Use Klayers (Recommended)
 
-**メリット:**
-- ✅ ビルド不要（即座にデプロイ可能）
-- ✅ メンテナンス不要（コミュニティが管理）
-- ✅ 最新版に簡単に更新可能
+**Benefits:**
+- ✅ No build required (instantly deployable)
+- ✅ No maintenance needed (community managed)
+- ✅ Easy to update to latest version
 
 ```bash
-# Klayers ARN は https://api.klayers.cloud/ で確認できます
+# Klayers ARNs can be found at https://api.klayers.cloud/
 
-# Pulumi で use_klayers=true に設定（デフォルト）
+# Set use_klayers=true in Pulumi (default)
 cd infrastructure/pulumi/aws/simple-sns
 pulumi config set use_klayers true
 pulumi up
 
-# または GitHub Actions で use_klayers を true に設定（デフォルト）
+# Or set use_klayers to true in GitHub Actions (default)
 ```
 
-詳細は [LAMBDA_LAYER_PUBLIC_RESOURCES.md](LAMBDA_LAYER_PUBLIC_RESOURCES.md) を参照。
+See [LAMBDA_LAYER_PUBLIC_RESOURCES.md](LAMBDA_LAYER_PUBLIC_RESOURCES.md) for details.
 
-### オプションB: カスタム Layer を使用
+### Option B: Use a Custom Layer
 
-**メリット:**
-- ✅ 完全な制御（特定バージョンの使用）
-- ✅ サイズ最適化（必要なものだけ）
-- ✅ プライベート環境での使用
+**Benefits:**
+- ✅ Full control (use specific versions)
+- ✅ Size optimization (only what's needed)
+- ✅ Use in private environments
 
-### 1. Lambda Layer のビルド
+### 1. Build the Lambda Layer
 
 ```bash
 cd /workspaces/ashnova/multicloud-auto-deploy
 ./scripts/build-lambda-layer.sh
 ```
 
-このスクリプトは以下を実行します：
-- AWS専用の依存関係のみをインストール
-- boto3/botocore は除外（Lambda ランタイムに含まれる）
-- Azure/GCP SDK は除外（AWS では不要）
-- テストファイルとドキュメントを削除してサイズ削減
-- `services/api/lambda-layer.zip` を生成
+This script performs the following:
+- Install only AWS-specific dependencies
+- Exclude boto3/botocore (included in Lambda runtime)
+- Exclude Azure/GCP SDKs (not needed for AWS)
+- Remove test files and documentation to reduce size
+- Generate `services/api/lambda-layer.zip`
 
-### 2. Pulumi でカスタム Layer を使用
+### 2. Use Custom Layer with Pulumi
 
 ```bash
 cd infrastructure/pulumi/aws/simple-sns
 
-# カスタム Layer を使用するように設定
+# Configure to use custom Layer
 pulumi config set use_klayers false
 
-# Layer を含めてインフラをデプロイ
+# Deploy infrastructure including Layer
 pulumi up
 ```
 
-Pulumi は自動的に：
-- カスタム Lambda Layer を作成
-- Lambda 関数にアプリケーションコードのみをデプロイ
-- Layer を Lambda 関数にアタッチ
+Pulumi will automatically:
+- Create the custom Lambda Layer
+- Deploy only application code to the Lambda function
+- Attach the Layer to the Lambda function
 
-### 3. GitHub Actions で自動デプロイ
+### 3. Automated Deployment with GitHub Actions
 
 ```bash
-# GitHub Actions ワークフローをトリガー
+# Trigger GitHub Actions workflow
 gh workflow run deploy-aws.yml
 ```
 
-## CI/CD での使用
+## Usage in CI/CD
 
-### Klayers を使用する場合（推奨・デフォルト）
+### Using Klayers (Recommended, Default)
 
-GitHub Actions ワークフローは自動的に：
+The GitHub Actions workflow automatically:
 
-1. **ARN の取得**: Klayers の最新 ARN を使用
-2. **アプリケーションコードのパッケージング**: コードのみを ZIP 化
-3. **Lambda 関数の更新**: 
-   - パッケージが 50MB 未満: 直接アップロード ✅
-   - パッケージが 50MB 以上: S3 経由（フォールバック）
-4. **Klayers のアタッチ**: 公開 Layer を Lambda に接続
+1. **Fetch ARN**: Uses the latest Klayers ARN
+2. **Package application code**: ZIPs code only
+3. **Update Lambda function**: 
+   - Package under 50MB: Direct upload ✅
+   - Package over 50MB: Via S3 (fallback)
+4. **Attach Klayers**: Connect the public Layer to Lambda
 
 ```yaml
-# GitHub Actions でのトリガー例
+# Example trigger in GitHub Actions
 name: Deploy
 on:
   workflow_dispatch:
     inputs:
       use_klayers:
         description: "Use Klayers (public Lambda Layers)"
-        default: true  # デフォルトで Klayers を使用
+        default: true  # Use Klayers by default
 ```
 
-### カスタム Layer を使用する場合
+### Using a Custom Layer
 
-GitHub Actions ワークフローで `use_klayers: false` を選択：
+Select `use_klayers: false` in the GitHub Actions workflow:
 
-1. **Layer のビルド**: `build-lambda-layer.sh` を実行
-2. **アプリケーションコードのパッケージング**: コードのみを ZIP 化
-3. **カスタム Layer のデプロイ**: Lambda Layer として公開
-4. **Lambda 関数の更新**: 直接アップロードまたは S3 経由
-5. **Layer のアタッチ**: カスタム Layer を Lambda に接続
+1. **Build Layer**: Run `build-lambda-layer.sh`
+2. **Package application code**: ZIPs code only
+3. **Deploy custom Layer**: Publish as Lambda Layer
+4. **Update Lambda function**: Direct upload or via S3
+5. **Attach Layer**: Connect custom Layer to Lambda
 
-## Layer に含まれる依存関係
+## Dependencies Included in Layer
 
 ```
 fastapi==0.115.0
@@ -156,125 +156,125 @@ mangum==0.17.0
 requests==2.32.3
 ```
 
-### 除外される依存関係
+### Excluded Dependencies
 
-- **boto3/botocore**: Lambda ランタイムに含まれる
-- **Azure SDK**: AWS では不要
-- **GCP SDK**: AWS では不要
-- **PostgreSQL/SQLAlchemy**: DynamoDB のみ使用
+- **boto3/botocore**: Included in Lambda runtime
+- **Azure SDK**: Not required for AWS
+- **GCP SDK**: Not required for AWS
+- **PostgreSQL/SQLAlchemy**: DynamoDB only is used
 
-## サイズ比較
+## Size Comparison
 
-### 最適化前
-
-```
-Lambda パッケージ: 65MB (コード + 全依存関係)
-└── S3 経由デプロイ必須
-```
-
-### 最適化後
+### Before Optimization
 
 ```
-Lambda パッケージ: 3MB (コードのみ)
-├── 直接アップロード可能
-└── Layer: 25MB (依存関係)
-    └── 依存関係更新時のみ再デプロイ
+Lambda package: 65MB (code + all dependencies)
+└── S3 deployment required
 ```
 
-## トラブルシューティング
+### After Optimization
 
-### Layer が見つからないエラー
+```
+Lambda package: 3MB (code only)
+├── Direct upload possible
+└── Layer: 25MB (dependencies)
+    └── Re-deploy only when dependencies change
+```
+
+## Troubleshooting
+
+### Layer Not Found Error
 
 ```bash
-# Layer を再ビルド
+# Rebuild Layer
 ./scripts/build-lambda-layer.sh
 
-# Layer が作成されたか確認
+# Verify Layer was created
 ls -lh services/api/lambda-layer.zip
 ```
 
-### Lambda 関数でモジュールが見つからない
+### Module Not Found in Lambda Function
 
 ```bash
-# Layer が正しくアタッチされているか確認
+# Verify Layer is correctly attached
 aws lambda get-function-configuration \
   --function-name multicloud-auto-deploy-staging-api \
   --query 'Layers[*].Arn'
 ```
 
-### Layer サイズが大きすぎる
+### Layer Size Too Large
 
-Lambda Layer の制限:
-- **ZIP サイズ**: 50MB
-- **解凍後サイズ**: 250MB
+Lambda Layer limits:
+- **ZIP size**: 50MB
+- **Unzipped size**: 250MB
 
-サイズ削減方法:
-1. `build-lambda-layer.sh` で不要なファイルを削除
-2. `--no-deps` オプションで余分な依存関係を除外
-3. テストファイルとドキュメントを削除
+Size reduction methods:
+1. Remove unnecessary files in `build-lambda-layer.sh`
+2. Use `--no-deps` to exclude extra dependencies
+3. Remove test files and documentation
 
-## ベストプラクティス
+## Best Practices
 
-### 1. Layer の更新頻度を減らす
+### 1. Reduce Layer Update Frequency
 
-- 依存関係のバージョンを固定
-- アプリケーションコードの変更時は Lambda のみ更新
-- 依存関係の変更時のみ Layer を更新
+- Pin dependency versions
+- Only update Lambda when application code changes
+- Only update Layer when dependencies change
 
-### 2. Layer のバージョン管理
+### 2. Layer Version Management
 
 ```bash
-# Layer のバージョンを確認
+# Check Layer versions
 aws lambda list-layer-versions \
   --layer-name multicloud-auto-deploy-staging-dependencies
 
-# 古いバージョンを削除
+# Delete old versions
 aws lambda delete-layer-version \
   --layer-name multicloud-auto-deploy-staging-dependencies \
   --version-number 1
 ```
 
-### 3. 環境ごとに Layer を分離
+### 3. Separate Layers per Environment
 
 ```yaml
-# staging 環境
+# staging environment
 LAYER_NAME: multicloud-auto-deploy-staging-dependencies
 
-# production 環境
+# production environment
 LAYER_NAME: multicloud-auto-deploy-production-dependencies
 ```
 
-## 参考リンク
+## Reference Links
 
-- [Lambda Layer 公開リソース活用ガイド](LAMBDA_LAYER_PUBLIC_RESOURCES.md) ⭐ **推奨**
+- [Lambda Layer Public Resources Guide](LAMBDA_LAYER_PUBLIC_RESOURCES.md) ⭐ **Recommended**
 - [Klayers GitHub](https://github.com/keithrozario/Klayers)
 - [Klayers API](https://api.klayers.cloud/)
 - [AWS Lambda Layers Documentation](https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html)
-- [Lambda デプロイパッケージ](https://docs.aws.amazon.com/lambda/latest/dg/python-package.html)
-- [Lambda のクォータ](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)
+- [Lambda Deployment Packages](https://docs.aws.amazon.com/lambda/latest/dg/python-package.html)
+- [Lambda Quotas](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)
 
-## まとめ
+## Summary
 
-### 推奨アプローチ
+### Recommended Approach
 
-**🌟 Klayers（公開 Layer）を使用することを強く推奨します**
+**🌟 We strongly recommend using Klayers (public Layers)**
 
-Lambda Layer を使用することで：
+By using Lambda Layers:
 
-✅ デプロイサイズを **65MB → 3MB** に削減  
-✅ デプロイ時間を **数分 → 数秒** に短縮  
-✅ S3 アップロードを **不要** に  
-✅ 依存関係の管理を **分離** して効率化  
-✅ ビルド時間を **ゼロ** に（Klayers使用時）  
+✅ Reduces deployment size from **65MB → 3MB**  
+✅ Reduces deployment time from **minutes → seconds**  
+✅ S3 upload **no longer required**  
+✅ Dependency management is **separated** for efficiency  
+✅ Build time is **zero** (when using Klayers)  
 
-**選択基準:**
+**Selection Criteria:**
 
-| シナリオ | 推奨アプローチ |
-|---------|---------------|
-| 通常の開発・本番環境 | **Klayers** ✅ |
-| 迅速なプロトタイピング | **Klayers** ✅ |
-| 特定バージョンが必要 | カスタム Layer |
-| プライベート依存関係 | カスタム Layer |
-| サイズを極限まで削減 | カスタム Layer |
+| Scenario                                  | Recommended Approach  |
+| ----------------------------------------- | --------------------- |
+| Standard development / production         | **Klayers** ✅        |
+| Rapid prototyping                         | **Klayers** ✅        |
+| Specific version required                 | Custom Layer          |
+| Private dependencies                      | Custom Layer          |
+| Minimize size to the extreme              | Custom Layer          |
 
-詳細は [Lambda Layer 公開リソース活用ガイド](LAMBDA_LAYER_PUBLIC_RESOURCES.md) を参照してください。
+See [Lambda Layer Public Resources Guide](LAMBDA_LAYER_PUBLIC_RESOURCES.md) for details.

@@ -9,7 +9,7 @@
 ```
 multicloud-auto-deploy/
 │
-├── .github/  ← ashnova/ (git root) に存在。multicloud-auto-deploy/ を開いた場合は見えないが CI は正常動作
+├── .github/  ← lives in ashnova/ (git root). Not visible when multicloud-auto-deploy/ is opened, but CI works correctly
 │   └── workflows/                    ← ★ REAL workflows — CI reads ONLY these
 │       ├── deploy-aws.yml
 │       ├── deploy-azure.yml
@@ -129,18 +129,18 @@ multicloud-auto-deploy/
 
 ---
 
-## ⚠️ `.github/workflows/` の場所
+## ⚠️ Location of `.github/workflows/`
 
-`multicloud-auto-deploy/` を VS Code で開くと `.github/` フォルダは **表示されない**。  
-ワークフローは git リポジトリルート `ashnova/.github/workflows/` にのみ存在する（2026-02-21 に mcad 内のコピーは削除済み）。
+When `multicloud-auto-deploy/` is opened in VS Code, the `.github/` folder is **not visible** in the tree.  
+Workflows exist only in the git repository root at `ashnova/.github/workflows/` (the copy inside mcad was deleted on 2026-02-21).
 
 ```bash
-# ワークフローを編集するには git リポジトリルートへ移動
+# To edit workflows, navigate to the git repository root
 cd /workspaces/ashnova
 code .github/workflows/deploy-aws.yml
 ```
 
-詳細は [11 — Workspace Migration](AI_AGENT_11_WORKSPACE_MIGRATION.md) を参照。
+See [11 — Workspace Migration](AI_AGENT_11_WORKSPACE_MIGRATION.md) for details.
 
 ---
 

@@ -5,23 +5,23 @@
 
 ---
 
-## [RB-01] Lambda 関数を手動更新する
+## [RB-01] Manually Update a Lambda Function
 
 ```bash
-# 1. アプリコードのみ ZIP
+# 1. Package app code only (ZIP)
 cd /workspaces/ashnova/multicloud-auto-deploy/services/api
 rm -rf .build && mkdir -p .build/package
 cp -r app .build/package/
 cp index.py .build/package/
 cd .build/package && zip -r ../../lambda.zip . && cd ../..
 
-# 2. Lambda 更新
+# 2. Update Lambda
 aws lambda update-function-code \
   --function-name multicloud-auto-deploy-staging-api \
   --zip-file fileb://lambda.zip \
   --region ap-northeast-1
 
-# 3. 反映確認
+# 3. Verify update
 aws lambda invoke \
   --function-name multicloud-auto-deploy-staging-api \
   --payload '{"version":"2.0","routeKey":"$default","rawPath":"/health","requestContext":{"http":{"method":"GET","path":"/health"}}}' \
@@ -240,10 +240,10 @@ TOKEN=$(aws cognito-idp initiate-auth \
 
 ---
 
-## [RB-10] Start the local development environment
+## [RB-10] Start the Local Development Environment
 
-> **ホストマシン**: ARM (Apple Silicon M-series Mac)
-> Dev Container 内から実行してください。
+> **Host machine**: ARM (Apple Silicon M-series Mac)
+> Run from inside the Dev Container.
 
 ```bash
 cd /workspaces/ashnova/multicloud-auto-deploy
@@ -259,23 +259,23 @@ curl http://localhost:8000/health
 docker compose logs -f api
 ```
 
-### 環境変数オーバーライド（デバッグ用）
+### Environment Variable Overrides (for debugging)
 
-特定のバックエンドに向きを変えたい場合は `.env` ファイルを作成：
+To point at a specific backend, create a `.env` file:
 
 ```bash
-# services/api/.env または docker-compose の env_file で指定
+# Specify via services/api/.env or docker-compose env_file
 CLOUD_PROVIDER=local
 AUTH_DISABLED=true
 API_BASE_URL=http://localhost:8000
 ```
 
-### ARM 注意事項
+### ARM Notes
 
-- ローカル docker compose は**ネイティブ ARM** で動作 (問題なし)
-- Lambda 向けパッケージビルドは `--platform linux/amd64` 必須  
-  → 通常は GitHub Actions (ubuntu-latest = x86_64) で実施
-- GCP Cloud Function ZIP ビルドも同様（CI で自動処理）
+- Local docker compose runs natively on **ARM** (no issues)
+- Building packages for Lambda requires `--platform linux/amd64`
+  → Normally handled by GitHub Actions (ubuntu-latest = x86_64)
+- Same applies to GCP Cloud Function ZIP builds (handled automatically in CI)
 
 ---
 
