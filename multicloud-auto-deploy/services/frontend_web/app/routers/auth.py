@@ -207,13 +207,27 @@ async def session(request: Request, response: Response):
 
 
 @router.get("/logout", name="logout")
-def logout(settings: Settings = Depends(get_settings)):
+def logout(request: Request, settings: Settings = Depends(get_settings)):
     base_path = f"/{settings.stage_name}" if settings.stage_name else ""
+
+    # Front Door / リバースプロキシ経由のホストを取得してフルURLを構成
+    forwarded_host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("host")
+        or ""
+    )
+    forwarded_proto = request.headers.get("x-forwarded-proto") or "https"
+    if forwarded_host:
+        origin = f"{forwarded_proto}://{forwarded_host}"
+    else:
+        origin = str(request.base_url).rstrip("/")
+
+    # ログアウト後のリダイレクト先（設定値 > リクエストから構成）
+    sns_top = f"{origin}{base_path}/"
 
     # Azure AD セッションも無効化するため logout URL へリダイレクト
     if settings.auth_provider == "azure" and settings.azure_tenant_id and settings.azure_client_id:
-        post_logout = settings.azure_logout_uri or (
-            f"{base_path}/" if base_path else "/")
+        post_logout = settings.azure_logout_uri or sns_top
         azure_logout = (
             f"https://login.microsoftonline.com/{settings.azure_tenant_id}/oauth2/v2.0/logout"
             f"?post_logout_redirect_uri={post_logout}"
@@ -235,7 +249,7 @@ def logout(settings: Settings = Depends(get_settings)):
 
     # GCP / other: simple-sns トップへ
     else:
-        redirect_url = f"{base_path}/" if base_path else "/"
+        redirect_url = sns_top
 
     response = RedirectResponse(url=redirect_url)
     response.delete_cookie("id_token", path="/")
