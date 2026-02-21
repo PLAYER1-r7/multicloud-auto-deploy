@@ -104,11 +104,13 @@ jobs:
             --allow-unauthenticated \
             --port 8080 \
             --set-env-vars "API_BASE_URL=${{ secrets.GCP_API_ENDPOINT }}" \
-            --set-env-vars "AUTH_PROVIDER=gcp" \
-            --set-env-vars "AUTH_DISABLED=${{ steps.env.outputs.auth_disabled }}" \
+            --set-env-vars "AUTH_PROVIDER=firebase" \
+            --set-env-vars "AUTH_DISABLED=false" \
             --set-env-vars "STAGE_NAME=sns" \
-            --set-env-vars "GCP_CLIENT_ID=${{ secrets.GCP_OIDC_CLIENT_ID }}" \
-            --set-env-vars "GCP_REDIRECT_URI=${{ secrets.GCP_FRONTEND_WEB_REDIRECT_URI }}" \
+            --set-env-vars "FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }}" \
+            --set-env-vars "FIREBASE_AUTH_DOMAIN=${{ secrets.FIREBASE_AUTH_DOMAIN }}" \
+            --set-env-vars "FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
+            --set-env-vars "FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }}" \
             --project ${{ secrets.GCP_PROJECT_ID }}
 
           URL=$(gcloud run services describe multicloud-auto-deploy-${ENV}-frontend-web \

@@ -30,18 +30,18 @@
         </div>
       </form>
     {% elif firebase_config %}
-      <p>Sign in with Firebase (Google)</p>
-      <div id="firebase-auth-container"></div>
+      <p>Sign in with your Google account</p>
       <div class="actions">
-        <button id="firebase-login-btn" class="button icon-only" type="button" aria-label="Sign in with Google">
-           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M7 10V7a5 5 0 0 1 10 0v3"></path>
-              <rect x="4" y="10" width="16" height="10" rx="2"></rect>
-           </svg>
-           <span>Sign in with Google</span>
+        <button id="firebase-login-btn" class="button" type="button" aria-label="Sign in with Google">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 10V7a5 5 0 0 1 10 0v3"></path>
+            <rect x="4" y="10" width="16" height="10" rx="2"></rect>
+          </svg>
+          <span>Sign in with Google</span>
         </button>
       </div>
-      
+      <p id="firebase-status" class="muted" style="display:none"></p>
+
       <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -49,21 +49,47 @@
         const firebaseConfig = {{ firebase_config | tojson }};
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        
-        document.getElementById('firebase-login-btn').addEventListener('click', () => {
-             const provider = new GoogleAuthProvider();
-             signInWithPopup(auth, provider)
-                .then((result) => {
-                    const user = result.user;
-                    return user.getIdToken().then(idToken => {
-                        // Set cookie and redirect
-                        document.cookie = `id_token=${idToken}; path=/; max-age=3600; SameSite=Lax`;
-                        window.location.href = "{{ base_path }}/";
-                    });
-                }).catch((error) => {
-                    console.error("Firebase Auth Error", error);
-                    alert("Login failed: " + error.message);
-                });
+
+        const btn = document.getElementById('firebase-login-btn');
+        const statusEl = document.getElementById('firebase-status');
+
+        function showStatus(msg, isError) {
+          statusEl.textContent = msg;
+          statusEl.style.display = 'block';
+          statusEl.style.color = isError ? 'var(--danger, #e53e3e)' : '';
+        }
+
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          showStatus('Googleに接続中...', false);
+          try {
+            const provider = new GoogleAuthProvider();
+            const result = await signInWithPopup(auth, provider);
+            showStatus('本人確認中...', false);
+
+            // Firebase IDトークン取得（有効期限1時間）
+            const idToken = await result.user.getIdToken();
+
+            // httponly Cookieとして /session エンドポイントで保存
+            const res = await fetch("{{ base_path }}/session", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id_token: idToken, expires_in: 3600 }),
+              credentials: "same-origin",
+            });
+
+            if (!res.ok) {
+              const text = await res.text().catch(() => '');
+              throw new Error("Session error (" + res.status + "): " + text);
+            }
+
+            showStatus('ログイン成功。リダイレクト中...', false);
+            window.location.replace("{{ base_path }}/");
+          } catch (error) {
+            console.error("Firebase Auth Error", error);
+            showStatus("ログインに失敗しました: " + error.message, true);
+            btn.disabled = false;
+          }
         });
       </script>
 
