@@ -159,7 +159,8 @@ uploads_bucket = gcp.storage.Bucket(
             origins=allowed_origins_list,
             methods=["GET", "HEAD", "PUT", "OPTIONS"],
             response_headers=["Content-Type",
-                              "Authorization", "X-Requested-With"],
+                              "Authorization", "X-Requested-With",
+                              "x-ms-blob-type"],
             max_age_seconds=3600,
         )
     ],
