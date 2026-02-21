@@ -1,7 +1,7 @@
 
 (function() {
 function initUploads() {
-  console.log("uploads.js initializing v9 fixed");
+  console.log("uploads.js initializing v10");
   const form = document.getElementById("post-form");
   if (!form) return;
 

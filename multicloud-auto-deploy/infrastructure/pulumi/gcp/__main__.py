@@ -179,6 +179,14 @@ gcp.storage.BucketIAMBinding(
     members=[f"serviceAccount:{default_compute_sa.email}"],
 )
 
+# Allow public (unauthenticated) read access to uploaded images
+gcp.storage.BucketIAMBinding(
+    "uploads-bucket-public-read",
+    bucket=uploads_bucket.name,
+    role="roles/storage.objectViewer",
+    members=["allUsers"],
+)
+
 # Grant Compute SA serviceAccountTokenCreator on itself (for signed URL generation)
 gcp.serviceaccount.IAMBinding(
     "compute-sa-token-creator",

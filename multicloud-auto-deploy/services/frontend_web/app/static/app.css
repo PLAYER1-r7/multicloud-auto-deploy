@@ -133,8 +133,8 @@ body::before {
 
 [data-theme="dark"] body::before {
   background:
-    url("/static/starfield-dark.svg"),
-    url("/static/ring-dark.svg"),
+    url("./starfield-dark.svg"),
+    url("./ring-dark.svg"),
     radial-gradient(circle 400px at 50% 50%,
       rgba(255, 180, 100, 0.9) 0%,
       rgba(220, 140, 80, 0.85) 15%,
