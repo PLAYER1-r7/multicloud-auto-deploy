@@ -21,10 +21,27 @@ export interface CreatePostInput {
   content: string;
   tags?: string[];
   is_markdown?: boolean;
+  imageKeys?: string[];
 }
 
 export interface UpdatePostInput {
   content?: string;
   tags?: string[];
   is_markdown?: boolean;
+}
+
+export interface PresignedUrl {
+  url: string;
+  key: string;
+}
+
+export interface PresignedUrlsResponse {
+  urls: PresignedUrl[];
+}
+
+export interface Profile {
+  userId: string;
+  nickname?: string | null;
+  bio?: string | null;
+  avatarUrl?: string | null;
 }

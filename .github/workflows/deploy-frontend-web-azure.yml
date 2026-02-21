@@ -68,6 +68,22 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Get Azure Auth Settings
+        id: azure_auth
+        run: |
+          # Extract tenant_id from AZURE_CREDENTIALS JSON
+          CREDS='${{ secrets.AZURE_CREDENTIALS }}'
+          echo "tenant_id=$(echo $CREDS | jq -r '.tenantId')" >> $GITHUB_OUTPUT
+
+          # AFD custom domain for redirect URIs
+          RG="${{ steps.env.outputs.rg }}"
+          PROFILE="${{ steps.env.outputs.afd_profile }}"
+          HOSTNAME=$(az afd endpoint list \
+            --profile-name "$PROFILE" \
+            --resource-group "$RG" \
+            --query '[0].hostName' -o tsv 2>/dev/null || echo "")
+          echo "afd_hostname=${HOSTNAME}" >> $GITHUB_OUTPUT
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -86,6 +102,12 @@ jobs:
           # Required secret: AZURE_API_ENDPOINT (per GitHub environment)
           # e.g. https://multicloud-auto-deploy-staging-api.azurewebsites.net
           VITE_API_URL: ${{ secrets.AZURE_API_ENDPOINT }}
+          VITE_AUTH_PROVIDER: azure
+          VITE_AZURE_TENANT_ID: ${{ steps.azure_auth.outputs.tenant_id }}
+          # Required secret: AZURE_AD_CLIENT_ID (Azure AD app registration client ID for frontend)
+          VITE_AZURE_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+          VITE_AZURE_REDIRECT_URI: https://${{ steps.azure_auth.outputs.afd_hostname }}/sns/auth/callback
+          VITE_AZURE_LOGOUT_URI: https://${{ steps.azure_auth.outputs.afd_hostname }}/sns/
         run: |
           npm run build
           echo "✅ Build complete ($(du -sh dist | cut -f1))"

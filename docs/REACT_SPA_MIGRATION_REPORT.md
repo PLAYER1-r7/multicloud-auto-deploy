@@ -17,10 +17,10 @@ the old Python origin.
 **Final test result: 9/9 production integration tests passed.**
 
 | Cloud | API Health | API CRUD | React SPA `/sns/` |
-|-------|-----------|----------|-------------------|
-| AWS   | ✅        | ✅       | ✅                |
-| Azure | ✅        | ✅       | ✅                |
-| GCP   | ✅        | ✅       | ✅                |
+| ----- | ---------- | -------- | ----------------- |
+| AWS   | ✅         | ✅       | ✅                |
+| Azure | ✅         | ✅       | ✅                |
+| GCP   | ✅         | ✅       | ✅                |
 
 ---
 
@@ -45,11 +45,11 @@ server-side runtime — only HTML, JS, and CSS.
 Three GitHub Actions workflows were rewritten to build the React SPA and deploy to
 each cloud's object storage:
 
-| Workflow file | Old behavior | New behavior |
-|---------------|-------------|--------------|
-| `deploy-frontend-web-aws.yml` | Build Docker image, deploy to Lambda | `npm run build`, sync to `s3://<bucket>/sns/`, invalidate CloudFront |
-| `deploy-frontend-web-azure.yml` | Build Docker image, deploy to Function App | `npm run build`, upload to Azure Blob `$web/sns/`, purge AFD cache |
-| `deploy-frontend-web-gcp.yml` | Build Docker image, deploy to Cloud Run | `npm run build`, copy to GCS bucket `sns/` prefix, invalidate CDN |
+| Workflow file                   | Old behavior                               | New behavior                                                         |
+| ------------------------------- | ------------------------------------------ | -------------------------------------------------------------------- |
+| `deploy-frontend-web-aws.yml`   | Build Docker image, deploy to Lambda       | `npm run build`, sync to `s3://<bucket>/sns/`, invalidate CloudFront |
+| `deploy-frontend-web-azure.yml` | Build Docker image, deploy to Function App | `npm run build`, upload to Azure Blob `$web/sns/`, purge AFD cache   |
+| `deploy-frontend-web-gcp.yml`   | Build Docker image, deploy to Cloud Run    | `npm run build`, copy to GCS bucket `sns/` prefix, invalidate CDN    |
 
 ### Key workflow details
 
@@ -70,11 +70,11 @@ RBAC propagation latency in CI/CD pipelines.
 
 ### CI/CD Run Results (push to `main` on 2026-02-21)
 
-| Cloud | Workflow run ID | Result |
-|-------|----------------|--------|
-| AWS   | 22259819720    | ✅ succeeded |
-| GCP   | 22259819725    | ✅ succeeded |
-| Azure | 22259819728    | ✅ succeeded |
+| Cloud | Workflow run ID | Result       |
+| ----- | --------------- | ------------ |
+| AWS   | 22259819720     | ✅ succeeded |
+| GCP   | 22259819725     | ✅ succeeded |
+| Azure | 22259819728     | ✅ succeeded |
 
 ---
 
@@ -86,11 +86,11 @@ routing `/sns*` traffic to the old Python SSR origin.
 
 ### Root Cause Summary
 
-| Cloud | CDN Resource | Old origin (incorrect) | New origin (correct) |
-|-------|-------------|------------------------|----------------------|
-| AWS CloudFront | Distribution `E214XONKTXJEJD` — `/sns*` behavior | `frontend-web` (API Gateway → Lambda SSR) | S3 bucket `multicloud-auto-deploy-production-frontend` |
-| Azure AFD | Route `multicloud-auto-deploy-production-sns-route` | `frontend-web-origin-group` (deleted Function App) | `multicloud-auto-deploy-production-origin-group` (Blob Storage) |
-| GCP Cloud CDN | URL map `multicloud-auto-deploy-production-cdn-urlmap` | `/sns/*` path rule → `frontend-web-backend` (Cloud Run NEG) | (removed — falls through to default GCS backend bucket) |
+| Cloud          | CDN Resource                                           | Old origin (incorrect)                                      | New origin (correct)                                            |
+| -------------- | ------------------------------------------------------ | ----------------------------------------------------------- | --------------------------------------------------------------- |
+| AWS CloudFront | Distribution `E214XONKTXJEJD` — `/sns*` behavior       | `frontend-web` (API Gateway → Lambda SSR)                   | S3 bucket `multicloud-auto-deploy-production-frontend`          |
+| Azure AFD      | Route `multicloud-auto-deploy-production-sns-route`    | `frontend-web-origin-group` (deleted Function App)          | `multicloud-auto-deploy-production-origin-group` (Blob Storage) |
+| GCP Cloud CDN  | URL map `multicloud-auto-deploy-production-cdn-urlmap` | `/sns/*` path rule → `frontend-web-backend` (Cloud Run NEG) | (removed — falls through to default GCS backend bucket)         |
 
 ---
 
@@ -125,12 +125,12 @@ A CloudFront Function `spa-sns-rewrite-{stack}` (viewer-request event) was creat
 
 ```javascript
 function handler(event) {
-    var request = event.request;
-    var uri = request.uri;
-    if (uri === "/sns" || uri === "/sns/") {
-        request.uri = "/sns/index.html";
-    }
-    return request;
+  var request = event.request;
+  var uri = request.uri;
+  if (uri === "/sns" || uri === "/sns/") {
+    request.uri = "/sns/index.html";
+  }
+  return request;
 }
 ```
 
@@ -245,20 +245,20 @@ Result: 9/9 passed  🎉
 
 ## Production Endpoints (as of 2026-02-21)
 
-| Cloud | API (direct) | Frontend CDN |
-|-------|-------------|--------------|
-| AWS   | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com` | `https://d1qob7569mn5nw.cloudfront.net` |
+| Cloud | API (direct)                                                                                     | Frontend CDN                                                      |
+| ----- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| AWS   | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com`                                    | `https://d1qob7569mn5nw.cloudfront.net`                           |
 | Azure | `https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net` | `https://mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` |
-| GCP   | `https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app` | `https://www.gcp.ashnova.jp` |
+| GCP   | `https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app`                          | `https://www.gcp.ashnova.jp`                                      |
 
 ---
 
 ## Commits
 
-| Commit | Message |
-|--------|---------|
+| Commit    | Message                                                            |
+| --------- | ------------------------------------------------------------------ |
 | `6aff4ac` | feat: migrate frontend deploy workflows to React SPA (S3/Blob/GCS) |
-| `d7df295` | fix: update CloudFront /sns\* behavior to S3 origin + CF Function |
+| `d7df295` | fix: update CloudFront /sns\* behavior to S3 origin + CF Function  |
 
 ---
 
@@ -282,6 +282,7 @@ aws cloudfront publish-function \
 ```
 
 The function ARN follows the pattern:
+
 ```
 arn:aws:cloudfront::<ACCOUNT_ID>:function/spa-sns-rewrite-<STACK>
 ```

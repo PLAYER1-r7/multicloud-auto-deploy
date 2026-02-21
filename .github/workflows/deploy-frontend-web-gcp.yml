@@ -85,6 +85,12 @@ jobs:
           VITE_BASE_PATH: /sns/
           # GCP_API_ENDPOINT secret: e.g. https://multicloud-auto-deploy-staging-api-xxxx-an.a.run.app
           VITE_API_URL: ${{ secrets.GCP_API_ENDPOINT }}
+          VITE_AUTH_PROVIDER: firebase
+          # Firebase project config — add these secrets in GitHub environment settings
+          VITE_FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
         run: |
           npm run build
           echo "✅ Build complete ($(du -sh dist | cut -f1))"
@@ -102,9 +108,9 @@ jobs:
             -h "Content-Type:text/html" \
             cp services/frontend_react/dist/index.html "gs://${BUCKET}/sns/index.html"
 
-          # svgアイコン
+          # SVGアイコン・背景画像
           gsutil -m -h "Cache-Control:public, max-age=3600" \
-            cp services/frontend_react/dist/vite.svg "gs://${BUCKET}/sns/vite.svg" 2>/dev/null || true
+            cp services/frontend_react/dist/*.svg "gs://${BUCKET}/sns/" 2>/dev/null || true
 
           echo "✅ Deployed to gs://${BUCKET}/sns/"
 

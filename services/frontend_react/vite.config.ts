@@ -4,24 +4,25 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // VITE_BASE_PATH: 本番ビルドのサブパス指定 (例: /sns/)
-  // 未設定時は '/' (standalone モード)
+  // VITE_BASE_PATH: set to /sns/ when deploying under /sns/ prefix
+  // Defaults to '/' for standalone dev
   base: process.env.VITE_BASE_PATH || '/',
   server: {
-    // dev server: /posts /profiles /uploads /storage → ローカルサービスに転送
+    // dev server: proxy API paths to local backend
     proxy: {
-      '/posts': { target: 'http://localhost:8000', changeOrigin: true },
-      '/profiles': { target: 'http://localhost:8000', changeOrigin: true },
-      '/uploads': { target: 'http://localhost:8000', changeOrigin: true },
-      '/health': { target: 'http://localhost:8000', changeOrigin: true },
-      // MinIO 画像プロキシ—プレサインド URL の /storage/{bucket}/{key}を
-      // フロントエンド開発時に直接 MinIO へ転送する
-      '/storage': { target: 'http://localhost:9000', changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/storage/, '') },
+      '/posts':    { target: 'http://localhost:8000', changeOrigin: true },
+      '/profile':  { target: 'http://localhost:8000', changeOrigin: true },
+      '/uploads':  { target: 'http://localhost:8000', changeOrigin: true },
+      '/health':   { target: 'http://localhost:8000', changeOrigin: true },
+      '/storage':  {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/storage/, ''),
+      },
     },
   },
+  // Remove tailwind/postcss — we use app.css from frontend_web directly
   test: {
-    // Vitest 設定
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

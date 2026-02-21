@@ -146,24 +146,24 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 
 ### Production Endpoints
 
-| Cloud     | CDN / Endpoint                                             | API Endpoint                                                   | Distribution ID        |
-| --------- | ---------------------------------------------------------- | -------------------------------------------------------------- | ---------------------- |
-| **AWS**   | `d1qob7569mn5nw.cloudfront.net` / `www.aws.ashnova.jp`     | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com`  | E214XONKTXJEJD         |
+| Cloud     | CDN / Endpoint                                            | API Endpoint                                                                                     | Distribution ID        |
+| --------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------- |
+| **AWS**   | `d1qob7569mn5nw.cloudfront.net` / `www.aws.ashnova.jp`    | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com`                                    | E214XONKTXJEJD         |
 | **Azure** | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | `https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net` | mcad-production-diev0w |
-| **GCP**   | `www.gcp.ashnova.jp`                                       | `https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app` | -  |
+| **GCP**   | `www.gcp.ashnova.jp`                                      | `https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app`                          | -                      |
 
 **AWS Production SNS App** (`https://www.aws.ashnova.jp/sns/`):
 
-| Item                  | Value                                                         |
-| --------------------- | ------------------------------------------------------------- |
-| Frontend              | React SPA — S3 `multicloud-auto-deploy-production-frontend/sns/` |
-| CF Function           | `spa-sns-rewrite-production` (LIVE) — rewrites `/sns/` → `/sns/index.html` |
-| Lambda (API)          | `multicloud-auto-deploy-production-api`                       |
-| API_BASE_URL          | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com` |
-| Cognito Pool          | `ap-northeast-1_50La963P2`                                    |
-| Cognito Client        | `4h3b285v1a9746sqhukk5k3a7i`                                  |
-| Cognito Redirect      | `https://www.aws.ashnova.jp/sns/auth/callback`                |
-| DynamoDB              | `multicloud-auto-deploy-production-posts`                     |
+| Item             | Value                                                                      |
+| ---------------- | -------------------------------------------------------------------------- |
+| Frontend         | React SPA — S3 `multicloud-auto-deploy-production-frontend/sns/`           |
+| CF Function      | `spa-sns-rewrite-production` (LIVE) — rewrites `/sns/` → `/sns/index.html` |
+| Lambda (API)     | `multicloud-auto-deploy-production-api`                                    |
+| API_BASE_URL     | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com`              |
+| Cognito Pool     | `ap-northeast-1_50La963P2`                                                 |
+| Cognito Client   | `4h3b285v1a9746sqhukk5k3a7i`                                               |
+| Cognito Redirect | `https://www.aws.ashnova.jp/sns/auth/callback`                             |
+| DynamoDB         | `multicloud-auto-deploy-production-posts`                                  |
 
 ### Custom Domain Status (ashnova.jp) — 2026-02-21
 
@@ -175,19 +175,19 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 
 #### Completed Work (2026-02-21)
 
-| Cloud | Work                                                                                      | Result                                                                                                                                                                                                                                 |
-| ----- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AWS   | ACM certificate verification                                                              | ✅ Confirmed cert `914b86b1` for `www.aws.ashnova.jp` (expires 2027-03-12) ISSUED                                                                                                                                                      |
-| AWS   | Set alias + ACM cert directly via `aws cloudfront update-distribution` (2026-02-21)      | ✅ Set alias `www.aws.ashnova.jp` + cert `914b86b1` on Distribution `E214XONKTXJEJD` → resolved `NET::ERR_CERT_COMMON_NAME_INVALID` → HTTP/2 200 operational                                                                          |
-| AWS   | Fix Production `frontend-web` Lambda environment variables (2026-02-21)                  | ✅ Fixed `API_BASE_URL` empty→`localhost:8000` fallback (cause: `deploy-frontend-web-aws.yml` depended on secrets; production secrets not set) → updated CI/CD to use Pulumi outputs (commit `fd1f422`)                                |
-| Azure | `az afd custom-domain create` + route attach                                              | ✅ DNS Approved → Managed Cert Succeeded (GeoTrust, 2026-02-21 – 2026-08-21)                                                                                                                                                          |
-| Azure | AFD route disable→enable toggle                                                           | ✅ Triggered deployment to edge nodes → HTTPS 200 operational                                                                                                                                                                          |
-| Azure | `az afd custom-domain update` (cert edge deploy)                                          | ✅ `CN=www.azure.ashnova.jp` cert distributed to AFD POP                                                                                                                                                                               |
-| Azure | Set `frontend-web` Function App environment variables                                     | ✅ API_BASE_URL, AUTH_PROVIDER, AZURE_TENANT_ID, AZURE_CLIENT_ID, etc. configured                                                                                                                                                      |
-| Azure | Add Azure AD app redirect URI                                                             | ✅ Added `https://www.azure.ashnova.jp/sns/auth/callback`                                                                                                                                                                              |
-| GCP   | `pulumi up --stack production` (SSL cert creation)                                        | ✅ cert `multicloud-auto-deploy-production-ssl-cert-3ee2c3ce` PROVISIONING                                                                                                                                                             |
-| GCP   | Add ACTIVE cert `ashnova-production-cert-c41311`                                          | ✅ Added to HTTPS proxy → `https://www.gcp.ashnova.jp` HTTPS operational immediately                                                                                                                                                   |
-| GCP   | Update Firebase authorized domains                                                        | ✅ Added `www.gcp.ashnova.jp` to Firebase Auth authorized domains                                                                                                                                                                      |
+| Cloud | Work                                                                                | Result                                                                                                                                                                                                  |
+| ----- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AWS   | ACM certificate verification                                                        | ✅ Confirmed cert `914b86b1` for `www.aws.ashnova.jp` (expires 2027-03-12) ISSUED                                                                                                                       |
+| AWS   | Set alias + ACM cert directly via `aws cloudfront update-distribution` (2026-02-21) | ✅ Set alias `www.aws.ashnova.jp` + cert `914b86b1` on Distribution `E214XONKTXJEJD` → resolved `NET::ERR_CERT_COMMON_NAME_INVALID` → HTTP/2 200 operational                                            |
+| AWS   | Fix Production `frontend-web` Lambda environment variables (2026-02-21)             | ✅ Fixed `API_BASE_URL` empty→`localhost:8000` fallback (cause: `deploy-frontend-web-aws.yml` depended on secrets; production secrets not set) → updated CI/CD to use Pulumi outputs (commit `fd1f422`) |
+| Azure | `az afd custom-domain create` + route attach                                        | ✅ DNS Approved → Managed Cert Succeeded (GeoTrust, 2026-02-21 – 2026-08-21)                                                                                                                            |
+| Azure | AFD route disable→enable toggle                                                     | ✅ Triggered deployment to edge nodes → HTTPS 200 operational                                                                                                                                           |
+| Azure | `az afd custom-domain update` (cert edge deploy)                                    | ✅ `CN=www.azure.ashnova.jp` cert distributed to AFD POP                                                                                                                                                |
+| Azure | Set `frontend-web` Function App environment variables                               | ✅ API_BASE_URL, AUTH_PROVIDER, AZURE_TENANT_ID, AZURE_CLIENT_ID, etc. configured                                                                                                                       |
+| Azure | Add Azure AD app redirect URI                                                       | ✅ Added `https://www.azure.ashnova.jp/sns/auth/callback`                                                                                                                                               |
+| GCP   | `pulumi up --stack production` (SSL cert creation)                                  | ✅ cert `multicloud-auto-deploy-production-ssl-cert-3ee2c3ce` PROVISIONING                                                                                                                              |
+| GCP   | Add ACTIVE cert `ashnova-production-cert-c41311`                                    | ✅ Added to HTTPS proxy → `https://www.gcp.ashnova.jp` HTTPS operational immediately                                                                                                                    |
+| GCP   | Update Firebase authorized domains                                                  | ✅ Added `www.gcp.ashnova.jp` to Firebase Auth authorized domains                                                                                                                                       |
 
 #### Remaining Work
 
@@ -273,11 +273,11 @@ gcloud compute addresses list --project=ashnova \
 
 ### Background on Unused IPs
 
-| Name                           | Estimated History                                                                                                                                                                   |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `simple-sns-frontend-ip`       | Created in early project days (when the project was named `simple-sns`, 2026-01-30). Not referenced in Pulumi code or any Forwarding Rule.                                          |
-| `ashnova-production-ip-c41311` | Created for Production CDN (as indicated by the Pulumi suffix `c41311`, 2026-02-11), but later replaced by `multicloud-auto-deploy-production-cdn-ip` and became unnecessary.       |
-| `multicloud-frontend-ip`       | Created 2026-02-14. No references found anywhere in the codebase or documentation. Assumed to have been reserved experimentally and abandoned.                                      |
+| Name                           | Estimated History                                                                                                                                                             |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `simple-sns-frontend-ip`       | Created in early project days (when the project was named `simple-sns`, 2026-01-30). Not referenced in Pulumi code or any Forwarding Rule.                                    |
+| `ashnova-production-ip-c41311` | Created for Production CDN (as indicated by the Pulumi suffix `c41311`, 2026-02-11), but later replaced by `multicloud-auto-deploy-production-cdn-ip` and became unnecessary. |
+| `multicloud-frontend-ip`       | Created 2026-02-14. No references found anywhere in the codebase or documentation. Assumed to have been reserved experimentally and abandoned.                                |
 
 > **Note**: All three are unlinked from any Pulumi code or Forwarding Rule and can be released immediately.
 
@@ -299,37 +299,37 @@ gcloud compute addresses delete simple-sns-frontend-ip          --global --proje
 
 ### All Buckets (Project: ashnova)
 
-| Bucket Name                                                              | Size      | Verdict       | Notes                                                                                |
-| ------------------------------------------------------------------------ | --------- | ------------- | ------------------------------------------------------------------------------------ |
-| `ashnova-multicloud-auto-deploy-production-frontend`                     | —         | ✅ Active     | Managed by Pulumi                                                                    |
-| `ashnova-multicloud-auto-deploy-production-function-source`              | 5 MB      | ✅ Active     | Managed by Pulumi                                                                    |
-| `ashnova-multicloud-auto-deploy-production-uploads`                      | —         | ✅ Active     | Managed by Pulumi                                                                    |
-| `ashnova-multicloud-auto-deploy-staging-frontend`                        | —         | ✅ Active     | Managed by Pulumi                                                                    |
-| `ashnova-multicloud-auto-deploy-staging-function-source`                 | 5 MB      | ✅ Active     | Managed by Pulumi                                                                    |
-| `ashnova-multicloud-auto-deploy-staging-landing`                         | 8 KB      | ✅ Active     | Managed by Pulumi                                                                    |
-| `ashnova-multicloud-auto-deploy-staging-uploads`                         | —         | ✅ Active     | Managed by Pulumi                                                                    |
-| `ashnova.firebasestorage.app`                                            | —         | ✅ Keep       | Firebase system-managed                                                              |
-| `ashnova_cloudbuild`                                                     | —         | ✅ Keep       | Cloud Build system-managed                                                           |
-| `gcf-v2-sources-899621454670-asia-northeast1`                            | 433 MB    | ✅ Keep       | Source for active Cloud Function v2                                                  |
-| `gcf-v2-uploads-899621454670.asia-northeast1.cloudfunctions.appspot.com` | —         | ✅ Keep       | Cloud Functions upload staging                                                       |
-| `ashnova-staging-frontend`                                               | **empty** | 🗑️ **Delete** | Terraform legacy. Replaced by `ashnova-multicloud-auto-deploy-staging-frontend`      |
-| `ashnova-staging-function-source`                                        | **65 MB** | 🗑️ **Delete** | Terraform legacy. Contains old zip from 2026-02-14                                   |
-| `multicloud-auto-deploy-tfstate`                                         | **empty** | 🗑️ **Delete** | Old Terraform state bucket. Empty.                                                   |
-| `multicloud-auto-deploy-tfstate-gcp`                                     | **6 KB**  | 🗑️ **Delete** | Holds only the Terraform state for the two buckets above                             |
+| Bucket Name                                                              | Size      | Verdict       | Notes                                                                           |
+| ------------------------------------------------------------------------ | --------- | ------------- | ------------------------------------------------------------------------------- |
+| `ashnova-multicloud-auto-deploy-production-frontend`                     | —         | ✅ Active     | Managed by Pulumi                                                               |
+| `ashnova-multicloud-auto-deploy-production-function-source`              | 5 MB      | ✅ Active     | Managed by Pulumi                                                               |
+| `ashnova-multicloud-auto-deploy-production-uploads`                      | —         | ✅ Active     | Managed by Pulumi                                                               |
+| `ashnova-multicloud-auto-deploy-staging-frontend`                        | —         | ✅ Active     | Managed by Pulumi                                                               |
+| `ashnova-multicloud-auto-deploy-staging-function-source`                 | 5 MB      | ✅ Active     | Managed by Pulumi                                                               |
+| `ashnova-multicloud-auto-deploy-staging-landing`                         | 8 KB      | ✅ Active     | Managed by Pulumi                                                               |
+| `ashnova-multicloud-auto-deploy-staging-uploads`                         | —         | ✅ Active     | Managed by Pulumi                                                               |
+| `ashnova.firebasestorage.app`                                            | —         | ✅ Keep       | Firebase system-managed                                                         |
+| `ashnova_cloudbuild`                                                     | —         | ✅ Keep       | Cloud Build system-managed                                                      |
+| `gcf-v2-sources-899621454670-asia-northeast1`                            | 433 MB    | ✅ Keep       | Source for active Cloud Function v2                                             |
+| `gcf-v2-uploads-899621454670.asia-northeast1.cloudfunctions.appspot.com` | —         | ✅ Keep       | Cloud Functions upload staging                                                  |
+| `ashnova-staging-frontend`                                               | **empty** | 🗑️ **Delete** | Terraform legacy. Replaced by `ashnova-multicloud-auto-deploy-staging-frontend` |
+| `ashnova-staging-function-source`                                        | **65 MB** | 🗑️ **Delete** | Terraform legacy. Contains old zip from 2026-02-14                              |
+| `multicloud-auto-deploy-tfstate`                                         | **empty** | 🗑️ **Delete** | Old Terraform state bucket. Empty.                                              |
+| `multicloud-auto-deploy-tfstate-gcp`                                     | **6 KB**  | 🗑️ **Delete** | Holds only the Terraform state for the two buckets above                        |
 
 ### Background on Deletable Buckets
 
-| Bucket Name                          | Estimated History                                                                                                                                                                    |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ashnova-staging-frontend`           | Frontend bucket from the old Terraform config (`ashnova-staging-*` naming). Fully migrated to `ashnova-multicloud-auto-deploy-staging-frontend` (Pulumi-managed). Empty.            |
-| `ashnova-staging-function-source`    | Cloud Function source bucket from the same Terraform config. Contains a stale 65 MB zip from 2026-02-14. Replaced by `ashnova-multicloud-auto-deploy-staging-function-source` (5 MB).|
-| `multicloud-auto-deploy-tfstate`     | Created as a candidate for AWS Terraform state bucket, never used. Empty.                                                                                                            |
-| `multicloud-auto-deploy-tfstate-gcp` | Holds the Terraform state for the `ashnova-staging-*` two buckets. No `.tf` files exist in the codebase. Delete all four as a set.                                                  |
+| Bucket Name                          | Estimated History                                                                                                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ashnova-staging-frontend`           | Frontend bucket from the old Terraform config (`ashnova-staging-*` naming). Fully migrated to `ashnova-multicloud-auto-deploy-staging-frontend` (Pulumi-managed). Empty.              |
+| `ashnova-staging-function-source`    | Cloud Function source bucket from the same Terraform config. Contains a stale 65 MB zip from 2026-02-14. Replaced by `ashnova-multicloud-auto-deploy-staging-function-source` (5 MB). |
+| `multicloud-auto-deploy-tfstate`     | Created as a candidate for AWS Terraform state bucket, never used. Empty.                                                                                                             |
+| `multicloud-auto-deploy-tfstate-gcp` | Holds the Terraform state for the `ashnova-staging-*` two buckets. No `.tf` files exist in the codebase. Delete all four as a set.                                                    |
 
 ### Bonus: Broken Cloud Function (related resource)
 
-| Resource                               | State      | Details                                                                                                                          |
-| -------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Resource                               | State      | Details                                                                                                                                                           |
+| -------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mcad-staging-api` (Cloud Function v2) | **FAILED** | `Cloud Run service not found` error. The Cloud Run service was deleted but the Function definition remains. No references in Pulumi/current code. Safe to delete. |
 
 ### Delete Commands
