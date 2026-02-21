@@ -1,7 +1,7 @@
 # 07 — Environment Status
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-21 (All 3 clouds: custom domain HTTPS fully operational + SNS tests 14/14 PASS + AWS HTTPS certificate fix applied directly + AWS Production SNS localhost:8000 fixed)
+> Last verified: 2026-02-21 (All 3 clouds: React SPA migration complete + production integration tests 9/9 PASS + custom domain HTTPS fully operational)
 
 ---
 
@@ -140,27 +140,30 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 
 ## Production Environment
 
-> Production has its own independent Pulumi stack (deployed). Resources are separate from staging.
+> Production has its own independent Pulumi stack (deployed). Resources are separate from staging.  
+> Frontend is served as **React SPA** (Vite build) from object storage via CDN — `frontend_web` (Python SSR) is no longer used in production.
+> Full migration report: [REACT_SPA_MIGRATION_REPORT.md](REACT_SPA_MIGRATION_REPORT.md)
 
 ### Production Endpoints
 
-| Cloud     | CDN / Endpoint                                            | API Endpoint                                                  | Distribution ID        |
-| --------- | --------------------------------------------------------- | ------------------------------------------------------------- | ---------------------- |
-| **AWS**   | `d1qob7569mn5nw.cloudfront.net` / `www.aws.ashnova.jp`    | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com` | E214XONKTXJEJD         |
-| **Azure** | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | —                                                             | mcad-production-diev0w |
-| **GCP**   | `34.8.38.222`                                             | —                                                             | -                      |
+| Cloud     | CDN / Endpoint                                             | API Endpoint                                                   | Distribution ID        |
+| --------- | ---------------------------------------------------------- | -------------------------------------------------------------- | ---------------------- |
+| **AWS**   | `d1qob7569mn5nw.cloudfront.net` / `www.aws.ashnova.jp`     | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com`  | E214XONKTXJEJD         |
+| **Azure** | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | `https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net` | mcad-production-diev0w |
+| **GCP**   | `www.gcp.ashnova.jp`                                       | `https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app` | -  |
 
 **AWS Production SNS App** (`https://www.aws.ashnova.jp/sns/`):
 
-| Item              | Value                                                         |
-| ----------------- | ------------------------------------------------------------- |
-| Lambda (API)      | `multicloud-auto-deploy-production-api`                       |
-| Lambda (frontend) | `multicloud-auto-deploy-production-frontend-web`              |
-| API_BASE_URL      | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com` |
-| Cognito Pool      | `ap-northeast-1_50La963P2`                                    |
-| Cognito Client    | `4h3b285v1a9746sqhukk5k3a7i`                                  |
-| Cognito Redirect  | `https://www.aws.ashnova.jp/sns/auth/callback`                |
-| DynamoDB          | `multicloud-auto-deploy-production-posts`                     |
+| Item                  | Value                                                         |
+| --------------------- | ------------------------------------------------------------- |
+| Frontend              | React SPA — S3 `multicloud-auto-deploy-production-frontend/sns/` |
+| CF Function           | `spa-sns-rewrite-production` (LIVE) — rewrites `/sns/` → `/sns/index.html` |
+| Lambda (API)          | `multicloud-auto-deploy-production-api`                       |
+| API_BASE_URL          | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com` |
+| Cognito Pool          | `ap-northeast-1_50La963P2`                                    |
+| Cognito Client        | `4h3b285v1a9746sqhukk5k3a7i`                                  |
+| Cognito Redirect      | `https://www.aws.ashnova.jp/sns/auth/callback`                |
+| DynamoDB              | `multicloud-auto-deploy-production-posts`                     |
 
 ### Custom Domain Status (ashnova.jp) — 2026-02-21
 
@@ -206,6 +209,24 @@ gcloud compute target-https-proxies update multicloud-auto-deploy-production-cdn
 test-cloud-env.sh production → PASS: 14, FAIL: 0, WARN: 3 (all POST 401 = expected auth guard)
 test-azure-sns.sh            → PASS: 10, FAIL: 0 (www.azure.ashnova.jp dedicated tests)
 test-gcp-sns.sh              → PASS: 10, FAIL: 0 (www.gcp.ashnova.jp dedicated tests)
+```
+
+#### React SPA Migration Test Results (2026-02-21)
+
+```
+AWS API Health:   ✅  HTTP 200  status=ok  provider=aws
+AWS API CRUD:     ✅  POST→GET(7 msgs)→DELETE 200
+AWS React SPA:    ✅  HTTP 200  vite.svg, /sns/assets/index-CNhWHZ0v.js
+
+Azure API Health: ✅  HTTP 200  status=ok  provider=azure
+Azure API CRUD:   ✅  POST→GET(3 msgs)→DELETE 200
+Azure React SPA:  ✅  HTTP 200  vite.svg, /sns/assets/index-D99WuiGj.js
+
+GCP API Health:   ✅  HTTP 200  status=ok  provider=gcp
+GCP API CRUD:     ✅  POST→GET(20 msgs)→DELETE 200
+GCP React SPA:    ✅  HTTP 200  vite.svg, /sns/assets/index-eZZwVqtD.js
+
+Result: 9/9 passed 🎉
 ```
 
 ---
