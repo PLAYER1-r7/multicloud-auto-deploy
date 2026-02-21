@@ -242,6 +242,9 @@ TOKEN=$(aws cognito-idp initiate-auth \
 
 ## [RB-10] Start the local development environment
 
+> **ホストマシン**: ARM (Apple Silicon M-series Mac)
+> Dev Container 内から実行してください。
+
 ```bash
 cd /workspaces/ashnova/multicloud-auto-deploy
 
@@ -255,6 +258,24 @@ curl http://localhost:8000/health
 # Check logs
 docker compose logs -f api
 ```
+
+### 環境変数オーバーライド（デバッグ用）
+
+特定のバックエンドに向きを変えたい場合は `.env` ファイルを作成：
+
+```bash
+# services/api/.env または docker-compose の env_file で指定
+CLOUD_PROVIDER=local
+AUTH_DISABLED=true
+API_BASE_URL=http://localhost:8000
+```
+
+### ARM 注意事項
+
+- ローカル docker compose は**ネイティブ ARM** で動作 (問題なし)
+- Lambda 向けパッケージビルドは `--platform linux/amd64` 必須  
+  → 通常は GitHub Actions (ubuntu-latest = x86_64) で実施
+- GCP Cloud Function ZIP ビルドも同様（CI で自動処理）
 
 ---
 

@@ -1,17 +1,17 @@
 # 07 — Environment Status
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-20 (post simple-sns fix — all flows verified)
+> Last verified: 2026-02-21 (GCP API fix deployed — /posts 500 error resolved)
 
 ---
 
 ## Staging Environment Summary
 
-| Cloud     | Landing (`/`) | SNS App (`/sns/`) | API                                  |
-| --------- | ------------- | ----------------- | ------------------------------------ |
-| **GCP**   | ✅            | ✅                | ✅ Cloud Run                         |
-| **AWS**   | ✅            | ✅                | ✅ Lambda (fully operational)         |
-| **Azure** | ✅            | ✅                | ✅ Azure Functions                   |
+| Cloud     | Landing (`/`) | SNS App (`/sns/`) | API                                |
+| --------- | ------------- | ----------------- | ---------------------------------- |
+| **GCP**   | ✅            | ✅                | ✅ Cloud Run (fix deployed 2026-02-21) |
+| **AWS**   | ✅            | ✅                | ✅ Lambda (fully operational)      |
+| **Azure** | ✅            | ✅                | ✅ Azure Functions                 |
 
 ---
 
@@ -22,17 +22,17 @@ CDN URL  : https://d1tf3uumcm4bo1.cloudfront.net
 API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 ```
 
-| Resource              | Name / ID                                                 | Status |
-| --------------------- | --------------------------------------------------------- | ------ |
-| CloudFront            | `E1TBH4R432SZBZ`                                          | ✅     |
-| S3 (frontend)         | `multicloud-auto-deploy-staging-frontend`                 | ✅     |
-| S3 (images)          | `multicloud-auto-deploy-staging-images` (CORS: \*)        | ✅     |
-| Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, 512MB) | ✅     |
-| Lambda (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (512MB, 30s) | ✅     |
-| API Gateway           | `z42qmqdqac` (HTTP API v2)                                | ✅     |
-| DynamoDB              | `multicloud-auto-deploy-staging-posts` (PAY_PER_REQUEST)  | ✅     |
-| Cognito               | Pool `ap-northeast-1_AoDxOvCib` / Client `1k41lqkds4oah55ns8iod30dv2` | ✅ |
-| WAF                   | WebACL attached to CloudFront                             | ✅     |
+| Resource              | Name / ID                                                             | Status |
+| --------------------- | --------------------------------------------------------------------- | ------ |
+| CloudFront            | `E1TBH4R432SZBZ`                                                      | ✅     |
+| S3 (frontend)         | `multicloud-auto-deploy-staging-frontend`                             | ✅     |
+| S3 (images)           | `multicloud-auto-deploy-staging-images` (CORS: \*)                    | ✅     |
+| Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, 512MB)             | ✅     |
+| Lambda (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (512MB, 30s)            | ✅     |
+| API Gateway           | `z42qmqdqac` (HTTP API v2)                                            | ✅     |
+| DynamoDB              | `multicloud-auto-deploy-staging-posts` (PAY_PER_REQUEST)              | ✅     |
+| Cognito               | Pool `ap-northeast-1_AoDxOvCib` / Client `1k41lqkds4oah55ns8iod30dv2` | ✅     |
+| WAF                   | WebACL attached to CloudFront                                         | ✅     |
 
 **Confirmed working (verified 2026-02-20)**:
 
@@ -87,10 +87,18 @@ API URL  : https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app
 | Firestore      | `(default)` — collections: messages, posts         | ✅     |
 | Backend Bucket | `multicloud-auto-deploy-staging-cdn-backend`       | ✅     |
 
-**Unresolved issues**:
+**Fixed issues (2026-02-21)**:
+
+- `GcpBackend` が `like_post`/`unlike_post` abstract method を未実装 → `TypeError` → `/posts` が 500 エラー  
+  → `like_post`/`unlike_post` スタブ実装を追加 (commit `a9bc85e`)
+- `frontend-web` Cloud Run の `API_BASE_URL` が未設定 → localhost:8000 を参照  
+  → `gcloud run services update` で `API_BASE_URL=https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app` を設定
+
+**Remaining issues**:
 
 - HTTPS not configured (HTTP only). Requires `TargetHttpsProxy` + managed SSL certificate.
 - SPA deep links return HTTP 404 (works correctly in browsers).
+- Firebase Auth (`GCP_CLIENT_ID`, `GCP_REDIRECT_URI`) 未設定のため認証フロー未確認。現在 `AUTH_DISABLED=true`。
 
 ---
 

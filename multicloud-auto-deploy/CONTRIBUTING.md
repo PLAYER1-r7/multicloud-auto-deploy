@@ -4,6 +4,9 @@ Multi-Cloud Auto Deploy Platform へのコントリビューションをあり�
 
 ## 開発環境のセットアップ
 
+> **推奨環境**: VS Code Dev Container（`.devcontainer/`）を使用してください。  
+> ホストマシン: **ARM (Apple Silicon M-series Mac)** 対応済み。
+
 1. **リポジトリをフォーク**
 
 2. **クローン**
@@ -12,29 +15,25 @@ git clone https://github.com/YOUR_USERNAME/multicloud-auto-deploy.git
 cd multicloud-auto-deploy
 ```
 
-3. **依存関係のインストール**
-```bash
-# フロントエンド
-cd services/frontend
-npm install
-
-# バックエンド
-cd ../backend
-pip install -r requirements.txt -r requirements-dev.txt
-```
+3. **Dev Container で開く**（推奨）
+   - VS Code で `Reopen in Container` を実行
+   - または GitHub Codespaces で開く
+   - 初回は `.devcontainer/setup.sh` が自動で実行されます
 
 4. **ローカルで実行**
 ```bash
-# Docker Composeを使用
-docker-compose up
+# Docker Compose で全サービス起動
+docker compose up -d
 
-# または個別に
-# Frontend
-cd services/frontend && npm run dev
-
-# Backend
-cd services/backend && uvicorn src.main:app --reload
+# 確認
+curl http://localhost:8000/health    # API
+open http://localhost:3000/sns/      # SNS フロントエンド
 ```
+
+> ⚠️ **ARM (Apple Silicon) 注意事項**
+> - ローカル docker compose はネイティブ ARM で動作します
+> - Lambda 向けビルドは `--platform linux/amd64` が必要（CI/CD で自動処理）
+> - GCP Cloud Run ビルドは Cloud Build で行うため ARM 問題なし
 
 ## ブランチ戦略
 
