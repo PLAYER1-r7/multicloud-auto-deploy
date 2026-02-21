@@ -1,0 +1,21 @@
+# Azure Functions Requirements
+# Optimized for Azure Functions runtime
+
+# FastAPI Core
+fastapi==0.115.0
+pydantic==2.9.0
+pydantic-settings==2.5.2
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.9
+pyjwt==2.9.0
+requests==2.32.3
+
+# Azure-specific dependencies
+azure-cosmos==4.8.0
+azure-storage-blob==12.23.0
+azure-identity==1.18.0
+azure-functions==1.20.0
+
+# Database (optional - only if using)
+# psycopg2-binary==2.9.9
+# sqlalchemy==2.0.35

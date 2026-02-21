@@ -1,0 +1,30 @@
+# Ruff configuration for Simple SNS API
+# Replaces: flake8, isort, pep8-naming, pyupgrade, and more
+
+[lint]
+# Enable: pyflakes (F), pycodestyle (E/W), isort (I), pep8-naming (N),
+#         pyupgrade (UP), bugbear (B), simplify (SIM), unused args (ARG)
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "ARG"]
+
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "B008",   # do not perform function calls in default arguments (FastAPI Depends pattern)
+    "N802",   # function name should be lowercase (some FastAPI patterns use PascalCase)
+    "N803",   # argument name should be lowercase (nextToken is camelCase by API contract)
+    "SIM108", # use ternary instead of if-else (readability preference)
+    "ARG001", # unused first argument (common in event handlers / overrides)
+    "ARG002", # unused second argument
+]
+
+[lint.per-file-ignores]
+# Tests: allow assert statements, anonymous comparisons, unused fixtures
+"tests/**" = ["S101", "ARG", "N803"]
+
+[lint.isort]
+known-first-party = ["app"]
+
+[format]
+# Black-compatible defaults
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

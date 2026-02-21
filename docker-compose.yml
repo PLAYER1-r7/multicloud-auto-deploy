@@ -1,0 +1,160 @@
+services:
+  # ========================================
+  # FastAPI Backend (New Python implementation)
+  # ========================================
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - CLOUD_PROVIDER=local
+      - CORS_ORIGINS=*
+      - AUTH_DISABLED=true
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - DYNAMODB_TABLE_NAME=simple-sns-local
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - AWS_DEFAULT_REGION=ap-northeast-1
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET_NAME=simple-sns
+      - MINIO_PUBLIC_ENDPOINT=http://localhost:9000
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./services/api/app:/app/app
+    depends_on:
+      minio:
+        condition: service_healthy
+      dynamodb-local:
+        condition: service_started
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ========================================
+  # FastAPI SSR Web Frontend (Simple SNS)
+  # ========================================
+  frontend_web:
+    build:
+      context: ./services/frontend_web
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - API_BASE_URL=http://api:8000
+      - AUTH_PROVIDER=local
+      - AUTH_DISABLED=true
+    volumes:
+      - ./services/frontend_web/app:/app/app
+    depends_on:
+      - api
+
+  # ========================================
+  # Reflex Web Frontend (New Python implementation)
+  # ========================================
+  frontend_reflex:
+    build:
+      context: ./services/frontend_reflex
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002" # Frontend
+      - "3003:3003" # Reflex backend (WebSocket)
+    environment:
+      - API_URL=http://api:8000
+    volumes:
+      - ./services/frontend_reflex:/app
+      - /app/.web
+    depends_on:
+      - api
+
+  # ========================================
+  # Static Site + Simple SNS at /sns/
+  # ========================================
+  static_site:
+    build:
+      context: .
+      dockerfile: static-site/Dockerfile
+    ports:
+      - "8090:8090"
+    depends_on:
+      - api
+
+  # ========================================
+  # React SPA Frontend (Vite + Tailwind, served via nginx)
+  # ========================================
+  frontend_react:
+    build:
+      context: ./services/frontend_react
+      dockerfile: Dockerfile
+      args:
+        # Browser-side: uses host port (localhost:8000) not container hostname
+        - VITE_API_URL=http://localhost:8000
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+
+  # ========================================
+  # MinIO CORS setup (one-shot init container)
+  # ========================================
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./minio-cors.json:/tmp/minio-cors.json:ro
+    entrypoint: |
+      /bin/sh -c "
+        mc alias set local http://minio:9000 minioadmin minioadmin
+        mc mb --ignore-existing local/images local/simple-sns 2>/dev/null || true
+        mc anonymous set download local/images
+        mc anonymous set download local/simple-sns
+        mc cors set local/simple-sns /tmp/minio-cors.json 2>/dev/null ||
+          aws --endpoint-url http://minio:9000 s3api put-bucket-cors \
+            --bucket simple-sns --cors-configuration file:///tmp/minio-cors.json 2>/dev/null ||
+          echo 'CORS setup skipped for simple-sns bucket'
+        mc cors set local/images /tmp/minio-cors.json 2>/dev/null ||
+          aws --endpoint-url http://minio:9000 s3api put-bucket-cors \
+            --bucket images --cors-configuration file:///tmp/minio-cors.json 2>/dev/null ||
+          echo 'CORS setup skipped for images bucket'
+        echo 'MinIO setup complete'
+      "
+    restart: on-failure
+
+  # ========================================
+  # DynamoDB Local (NoSQL, mirrors AWS DynamoDB)
+  # ========================================
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    ports:
+      - "8001:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+
+  # ========================================
+  # MinIO (S3-compatible storage for local dev)
+  # ========================================
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001" # Console
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+networks:
+  default:
+    name: multicloud-network
+
+volumes:
+  minio-data:

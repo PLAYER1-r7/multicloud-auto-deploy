@@ -1,0 +1,66 @@
+name: Deploy Landing Page to GCP
+
+on:
+  push:
+    branches:
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
+    paths:
+      - "static-site/**"
+      - ".github/workflows/deploy-landing-gcp.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  GCP_PROJECT_ID: ashnova
+  GCP_REGION: asia-northeast1
+  # Landing page is deployed to the same bucket as the frontend (root level)
+  # so Cloud CDN serves it at / while the React SNS app lives under /sns/
+  BUCKET_NAME: ashnova-multicloud-auto-deploy-staging-frontend
+
+jobs:
+  deploy-landing:
+    name: Deploy Landing Page to GCP Cloud Storage
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Deploy to Cloud Storage
+        run: |
+          gcloud storage cp static-site/*.html gs://${{ env.BUCKET_NAME }}/ \
+            --cache-control="public, max-age=3600"
+
+      - name: Invalidate CDN Cache
+        run: |
+          gcloud compute url-maps invalidate-cdn-cache multicloud-auto-deploy-staging-cdn-urlmap \
+            --path "/*" \
+            --project=${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Deployment Success
+        run: |
+          echo "✅ Landing page deployed successfully!"
+          echo "🌐 URL: http://34.117.111.182/"

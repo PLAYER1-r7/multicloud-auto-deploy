@@ -1,0 +1,199 @@
+% Custom LaTeX Header for Documentation
+
+% Better table support
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{ltablex}  % Combine longtable with tabularx for better column handling
+\keepXColumns  % Preserve X column widths across pages
+\usepackage{ragged2e}
+\usepackage{etoolbox}
+
+% Define column types with better text wrapping
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+
+% Code listing improvements
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{seqsplit}
+
+% Better font setup for CJK
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Serif CJK JP}
+\setCJKsansfont{Noto Sans CJK JP}
+\setCJKmonofont{Noto Sans Mono CJK JP}
+
+% English fonts
+\setmainfont{Latin Modern Roman}
+\setsansfont{Latin Modern Sans}
+\setmonofont{DejaVu Sans Mono}[Scale=0.9]
+
+% Code listing style
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=flexible,
+    keepspaces=true,
+    showstringspaces=false,
+    tabsize=4,
+    frame=single,
+    framesep=5pt,
+    rulecolor=\color{gray!30},
+    backgroundcolor=\color{gray!5},
+    commentstyle=\color{green!40!black},
+    keywordstyle=\color{blue!70!black}\bfseries,
+    stringstyle=\color{red!70!black},
+    numberstyle=\tiny\color{gray},
+    numbers=left,
+    numbersep=8pt,
+    xleftmargin=15pt,
+    xrightmargin=5pt,
+}
+
+% Table styling
+\usepackage{colortbl}
+\definecolor{tableheader}{RGB}{240,240,240}
+\definecolor{tablerow}{RGB}{250,250,250}
+
+% Better table row spacing
+\renewcommand{\arraystretch}{1.5}
+\setlength{\tabcolsep}{6pt}
+
+% Improve table cell text wrapping
+\newcommand{\PreserveBackslash}[1]{\let\temp=\\#1\let\\=\temp}
+\let\PBS=\PreserveBackslash
+
+% Force longtable to use full page width and wrap text
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{0pt}
+\setlength{\LTpre}{0.5\baselineskip}
+\setlength{\LTpost}{0.5\baselineskip}
+
+% Allow breaking long words and URLs in tables
+\emergencystretch=3em
+\tolerance=9999
+\hyphenpenalty=10000
+\exhyphenpenalty=0  % Allow breaking at existing hyphens (was 10000)
+
+% Reduce table font size and allow sloppy line breaking
+\AtBeginEnvironment{longtable}{%
+  \small
+  \sloppy
+  \exhyphenpenalty=0  % Allow breaking at hyphens in table cells
+  \setlength{\emergencystretch}{3em}%
+}
+
+% Page layout is handled by pandoc's geometry variable
+% Do not set geometry here to avoid conflicts
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhead[L]{\leftmark}
+\fancyhead[R]{\thepage}
+\fancyfoot[C]{}
+
+% Better link colors
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    filecolor=magenta,
+    urlcolor=blue!70!black,
+    citecolor=blue!70!black,
+    pdftitle={Multi-Cloud Auto-Deploy Platform Documentation},
+    pdfauthor={PLAYER1-r7},
+    pdfsubject={Complete Documentation},
+    pdfkeywords={AWS, Azure, GCP, Multi-Cloud, DevOps, CI/CD},
+    bookmarksnumbered=true,
+    bookmarksopen=true,
+}
+
+% Chapter and section styling
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries}{\chaptertitlename\ \thechapter}{20pt}{\Huge}
+\titleformat{\section}
+  {\normalfont\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}
+  {\normalfont\large\bfseries}{\thesubsection}{1em}{}
+
+% Better spacing
+\usepackage{setspace}
+\setstretch{1.15}
+
+% Code block improvements for inline code
+\let\oldtexttt\texttt
+\renewcommand{\texttt}[1]{%
+  \colorbox{gray!10}{%
+    \begingroup
+    \small
+    \RaggedRight
+    \hyphenchar\font=`\-% Allow hyphenation at hyphens
+    \exhyphenpenalty=0% No penalty for breaking at existing hyphens
+    \binoppenalty=10000% Don't break at binary operators
+    \relpenalty=10000% Don't break at relations
+    \oldtexttt{\seqsplit{#1}}%
+    \endgroup
+  }%
+}
+
+% Better list spacing
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=*,itemsep=0.3em,parsep=0.2em,topsep=0.5em,partopsep=0em}
+\setlist[itemize,1]{label=\textbullet,leftmargin=1.5em}
+\setlist[itemize,2]{label=\textendash,leftmargin=2.5em}
+\setlist[itemize,3]{label=\ensuremath{\circ},leftmargin=3.5em}
+\setlist[itemize,4]{label=\ensuremath{\ast},leftmargin=4.5em}
+\setlist[enumerate]{leftmargin=1.5em}
+\setlist[enumerate,2]{leftmargin=2.5em}
+\setlist[enumerate,3]{leftmargin=3.5em}
+
+% Redefine tightlist to add spacing
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0.3em}%
+  \setlength{\parskip}{0.2em}%
+}
+
+% Graphics support
+\usepackage{graphicx}
+\usepackage{float}
+
+% Set default image size for diagrams (Mermaid charts)
+% Icons will be explicitly sized smaller via Pandoc attributes
+\setkeys{Gin}{width=0.8\linewidth,height=0.6\textheight,keepaspectratio}
+
+% Better captions
+\usepackage{caption}
+\captionsetup{
+  font=small,
+  labelfont=bf,
+  format=hang,
+  justification=raggedright,
+  singlelinecheck=false,
+}
+
+% Footnote improvements
+\usepackage[bottom]{footmisc}
+
+% Prevent orphans and widows
+\widowpenalty=10000
+\clubpenalty=10000
+
+% Better table of contents
+\usepackage{tocloft}
+\setlength{\cftbeforechapskip}{0.5em}
+\renewcommand{\cftchapfont}{\bfseries}
+\renewcommand{\cftchappagefont}{\bfseries}
+
+% Line breaking in URLs
+\usepackage{url}
+\urlstyle{same}
+\Urlmuskip=0mu plus 1mu
+
+% Better handling of long tables across pages
+\usepackage{ltablex}
+\keepXColumns

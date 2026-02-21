@@ -1,0 +1,52 @@
+{
+    "FunctionName": "multicloud-auto-deploy-production-api",
+    "FunctionArn": "arn:aws:lambda:ap-northeast-1:278280499340:function:multicloud-auto-deploy-production-api",
+    "Runtime": "python3.12",
+    "Role": "arn:aws:iam::278280499340:role/multicloud-auto-deploy-production-lambda-role",
+    "Handler": "index.handler",
+    "CodeSize": 79852,
+    "Description": "",
+    "Timeout": 30,
+    "MemorySize": 512,
+    "LastModified": "2026-02-16T18:55:24.000+0000",
+    "CodeSha256": "EHey9H6bz83C6PZZfKE8KLGgGfoWUEBP7hxh+8M0DSk=",
+    "Version": "$LATEST",
+    "Environment": {
+        "Variables": {
+            "SECRET_NAME": "multicloud-auto-deploy/production/app-config",
+            "ENVIRONMENT": "production",
+            "IMAGES_BUCKET_NAME": "multicloud-auto-deploy-production-images",
+            "COGNITO_REGION": "us-east-1",
+            "COGNITO_CLIENT_ID": "3i4m4fpr3b33l8a61hvq7ua9mp",
+            "COGNITO_USER_POOL_ID": "ap-northeast-1_eKezcQaeb",
+            "POSTS_TABLE_NAME": "multicloud-auto-deploy-production-posts",
+            "CLOUD_PROVIDER": "aws"
+        }
+    },
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "4531c6e0-feeb-4630-9edd-9ef83fad1ffb",
+    "State": "Active",
+    "LastUpdateStatus": "InProgress",
+    "LastUpdateStatusReason": "The function is being created.",
+    "LastUpdateStatusReasonCode": "Creating",
+    "PackageType": "Zip",
+    "Architectures": [
+        "x86_64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:ap-northeast-1::runtime:db3c84011294fca0fe7b1a23046dff08606163e107373f3875220c35007134cf"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/multicloud-auto-deploy-production-api"
+    }
+}

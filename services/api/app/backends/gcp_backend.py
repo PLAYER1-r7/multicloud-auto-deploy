@@ -1,0 +1,531 @@
+"""
+GCP Backend Implementation
+Firestore + Cloud Storage + Firebase Auth
+"""
+import base64
+import json
+import logging
+import secrets
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
+
+from app.auth import UserInfo
+from app.backends.base import BackendBase
+from app.config import settings
+from app.models import (
+    CreatePostBody,
+    Post,
+    ProfileResponse,
+    ProfileUpdateRequest,
+    UpdatePostBody,
+)
+
+logger = logging.getLogger(__name__)
+
+# Global client instances (lazy initialization)
+_firestore_client = None
+_storage_client = None
+
+
+def _get_firestore():
+    """Get or create Firestore client"""
+    global _firestore_client
+    if _firestore_client:
+        return _firestore_client
+
+    if not settings.gcp_project_id:
+        raise ValueError("GCP_PROJECT_ID environment variable is required")
+
+    try:
+        from google.cloud import firestore
+        _firestore_client = firestore.Client(project=settings.gcp_project_id)
+        logger.info(
+            f"Firestore client initialized for project: {settings.gcp_project_id}")
+        return _firestore_client
+    except ImportError:
+        raise ImportError(
+            "google-cloud-firestore package is required for GCP backend") from None
+
+
+def _get_storage():
+    """Get or create Cloud Storage client"""
+    global _storage_client
+    if _storage_client:
+        return _storage_client
+
+    if not settings.gcp_project_id:
+        raise ValueError("GCP_PROJECT_ID environment variable is required")
+
+    try:
+        from google.cloud import storage
+        _storage_client = storage.Client(project=settings.gcp_project_id)
+        logger.info(
+            f"Cloud Storage client initialized for project: {settings.gcp_project_id}")
+        return _storage_client
+    except ImportError:
+        raise ImportError(
+            "google-cloud-storage package is required for GCP backend") from None
+
+
+def _encode_token(payload: Optional[dict[str, Any]]) -> Optional[str]:
+    """Encode pagination token"""
+    if not payload:
+        return None
+    raw = json.dumps(payload).encode("utf-8")
+    return base64.b64encode(raw).decode("utf-8")
+
+
+def _decode_token(token: Optional[str]) -> Optional[dict[str, Any]]:
+    """Decode pagination token"""
+    if not token:
+        return None
+    try:
+        raw = base64.b64decode(token.encode("utf-8"))
+        return json.loads(raw.decode("utf-8"))
+    except Exception:
+        logger.warning("Invalid pagination token provided")
+        return None
+
+
+def _now_iso() -> str:
+    """Get current timestamp in ISO format"""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _get_gcp_signing_credentials():
+    """Get credentials that support URL signing on Cloud Run / Compute Engine.
+
+    Cloud Run uses Compute Engine credentials which don't contain a private key.
+    We work around this by using the IAM signBlob API through google.auth.iam.Signer.
+    This requires the service account to have roles/iam.serviceAccountTokenCreator on itself.
+    """
+    try:
+        import urllib.request
+
+        import google.auth
+        import google.auth.transport.requests
+        from google.auth import iam as google_iam
+        from google.oauth2 import service_account as sa_module
+
+        credentials, _ = google.auth.default()
+        auth_request = google.auth.transport.requests.Request()
+        credentials.refresh(auth_request)
+
+        # Retrieve the default service account email from the GCP metadata server
+        req = urllib.request.Request(
+            "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email",
+            headers={"Metadata-Flavor": "Google"},
+        )
+        sa_email = urllib.request.urlopen(
+            req, timeout=2).read().decode("utf-8")
+        logger.info(f"Using IAM signing credentials for SA: {sa_email}")
+
+        # Create an IAM-based signer that calls the signBlob REST API
+        signer = google_iam.Signer(auth_request, credentials, sa_email)
+
+        return sa_module.Credentials(
+            signer=signer,
+            service_account_email=sa_email,
+            token_uri="https://oauth2.googleapis.com/token",
+        )
+    except Exception as e:
+        logger.warning(f"Could not create IAM signing credentials: {e}")
+        return None
+
+
+def _build_image_urls(keys: list[str]) -> Optional[list[str]]:
+    """Build public URLs for Cloud Storage objects"""
+    if not keys:
+        return None
+    if not settings.gcp_storage_bucket:
+        raise ValueError("GCP_STORAGE_BUCKET environment variable is required")
+
+    # Public URL format: https://storage.googleapis.com/BUCKET_NAME/OBJECT_NAME
+    return [
+        f"https://storage.googleapis.com/{settings.gcp_storage_bucket}/{key}"
+        for key in keys
+    ]
+
+
+class GcpBackend(BackendBase):
+    """GCP実装 (Firestore + Cloud Storage + Firebase Auth)"""
+
+    def __init__(self):
+        """Initialize GCP backend"""
+        logger.info("Initializing GCP backend")
+        # Clients are lazily initialized when first used
+
+    def list_posts(
+        self,
+        limit: int,
+        next_token: Optional[str],
+        tag: Optional[str],
+    ) -> tuple[list[Post], Optional[str]]:
+        """List posts from Firestore"""
+        try:
+            from google.cloud import firestore
+        except ImportError:
+            raise ImportError(
+                "google-cloud-firestore is required for GCP backend") from None
+
+        db = _get_firestore()
+        posts_ref = db.collection(settings.gcp_posts_collection)
+
+        # Order by createdAt DESC, then postId DESC for stable pagination
+        query = posts_ref.order_by(
+            "createdAt", direction=firestore.Query.DESCENDING)
+        query = query.order_by(
+            "postId", direction=firestore.Query.DESCENDING).limit(limit)
+
+        # Handle pagination cursor
+        cursor = _decode_token(next_token)
+        if cursor and cursor.get("createdAt") and cursor.get("postId"):
+            query = query.start_after({
+                "createdAt": cursor["createdAt"],
+                "postId": cursor["postId"]
+            })
+
+        try:
+            docs = list(query.stream())
+            logger.info(f"Found {len(docs)} posts in Firestore")
+        except Exception as e:
+            logger.error(f"Firestore query failed: {e}")
+            raise
+
+        posts: list[Post] = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+
+            # Handle image keys (may be list or single value)
+            raw_image_keys = data.get("imageKeys")
+            image_keys = raw_image_keys or ([] if data.get(
+                "imageKey") is None else [data.get("imageKey")])
+            image_keys = [key for key in image_keys if isinstance(key, str)]
+
+            post = Post(
+                postId=data.get("postId"),
+                userId=data.get("userId"),
+                nickname=data.get("nickname"),
+                content=data.get("content"),
+                createdAt=data.get("createdAt"),
+                updatedAt=data.get("updatedAt") or data.get("createdAt"),
+                isMarkdown=data.get("isMarkdown", False),
+                tags=data.get("tags"),
+                imageUrls=_build_image_urls(image_keys),
+            )
+            posts.append(post)
+
+        # Client-side tag filtering (Firestore doesn't support array-contains with pagination)
+        if tag:
+            posts = [p for p in posts if p.tags and tag in p.tags]
+
+        # Generate next token
+        next_out = None
+        if docs:
+            last = docs[-1].to_dict() or {}
+            next_out = _encode_token({
+                "createdAt": last.get("createdAt"),
+                "postId": last.get("postId")
+            })
+
+        return posts, next_out
+
+    def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
+        """Create a new post in Firestore"""
+        logger.info(f"Creating post for user {user.user_id}")
+
+        db = _get_firestore()
+        post_id = str(uuid.uuid4())
+        created_at = _now_iso()
+
+        # Get user's nickname from profile
+        profile_doc = db.collection(
+            settings.gcp_profiles_collection).document(user.user_id).get()
+        profile = profile_doc.to_dict() if profile_doc.exists else None
+        nickname = profile.get("nickname") if profile else None
+        if not nickname:
+            # Use user_id as fallback if nickname not found
+            nickname = user.user_id
+
+        # Build post document
+        item: dict[str, Any] = {
+            "postId": post_id,
+            "userId": user.user_id,
+            "content": body.content,
+            "createdAt": created_at,
+            "updatedAt": created_at,
+            "docType": "post",
+        }
+
+        if body.image_keys:
+            item["imageKeys"] = body.image_keys
+        if body.is_markdown:
+            item["isMarkdown"] = True
+        if body.tags:
+            item["tags"] = body.tags
+        if nickname:
+            item["nickname"] = nickname
+
+        logger.info(
+            f"Writing post {post_id} to Firestore collection {settings.gcp_posts_collection}")
+        db.collection(settings.gcp_posts_collection).document(
+            post_id).set(item)
+
+        return {
+            "post_id": post_id,
+            "postId": post_id,
+            "user_id": user.user_id,
+            "userId": user.user_id,
+            "content": body.content,
+            "tags": body.tags or [],
+            "created_at": created_at,
+            "createdAt": created_at,
+        }
+
+    def delete_post(self, post_id: str, user: UserInfo) -> dict:
+        """Delete a post from Firestore"""
+        db = _get_firestore()
+        post_ref = db.collection(
+            settings.gcp_posts_collection).document(post_id)
+        doc = post_ref.get()
+
+        if not doc.exists:
+            raise ValueError(f"Post not found: {post_id}")
+
+        data = doc.to_dict() or {}
+
+        # Check permissions
+        if not user.is_admin and data.get("userId") != user.user_id:
+            raise PermissionError(
+                "You do not have permission to delete this post")
+
+        # Delete associated images from Cloud Storage
+        image_keys = data.get("imageKeys") or ([] if data.get(
+            "imageKey") is None else [data.get("imageKey")])
+        image_keys = [key for key in image_keys if isinstance(key, str)]
+
+        if image_keys and settings.gcp_storage_bucket:
+            storage_client = _get_storage()
+            bucket = storage_client.bucket(settings.gcp_storage_bucket)
+            for key in image_keys:
+                try:
+                    bucket.blob(key).delete()
+                    logger.info(f"Deleted image: {key}")
+                except Exception as e:
+                    logger.error(f"Failed to delete image {key}: {e}")
+
+        # Delete post document
+        post_ref.delete()
+        logger.info(f"Deleted post {post_id}")
+
+        return {
+            "status": "deleted",
+            "post_id": post_id,
+        }
+
+    def get_post(self, post_id: str) -> dict:
+        """Get a single post from Firestore"""
+        db = _get_firestore()
+        post_ref = db.collection(
+            settings.gcp_posts_collection).document(post_id)
+        doc = post_ref.get()
+
+        if not doc.exists:
+            raise ValueError(f"Post not found: {post_id}")
+
+        data = doc.to_dict() or {}
+
+        # Return in consistent format
+        return {
+            "id": post_id,
+            "postId": post_id,
+            "post_id": post_id,
+            "userId": data.get("userId"),
+            "user_id": data.get("userId"),
+            "content": data.get("content"),
+            "tags": data.get("tags", []),
+            "createdAt": data.get("createdAt"),
+            "created_at": data.get("createdAt"),
+            "updatedAt": data.get("updatedAt"),
+            "updated_at": data.get("updatedAt"),
+            "imageUrls": data.get("imageKeys", []),
+            "image_urls": data.get("imageKeys", []),
+        }
+
+    def update_post(self, post_id: str, body: UpdatePostBody, user: UserInfo) -> dict:
+        """Update a post in Firestore"""
+        db = _get_firestore()
+        post_ref = db.collection(
+            settings.gcp_posts_collection).document(post_id)
+        doc = post_ref.get()
+
+        if not doc.exists:
+            raise ValueError(f"Post not found: {post_id}")
+
+        data = doc.to_dict() or {}
+
+        # Check permissions
+        if not user.is_admin and data.get("userId") != user.user_id:
+            raise PermissionError(
+                "You do not have permission to update this post")
+
+        # Build update data
+        now = _now_iso()
+        update_data: dict[str, Any] = {
+            "updatedAt": now,
+        }
+
+        if body.content is not None:
+            update_data["content"] = body.content
+        if body.tags is not None:
+            update_data["tags"] = body.tags
+        if body.image_keys is not None:
+            update_data["imageKeys"] = body.image_keys
+
+        # Update document
+        post_ref.update(update_data)
+        logger.info(f"Updated post {post_id}")
+
+        return {
+            "status": "updated",
+            "post_id": post_id,
+            "updated_at": now,
+        }
+
+    def get_profile(self, user_id: str) -> ProfileResponse:
+        """Get user profile from Firestore"""
+        db = _get_firestore()
+        doc = db.collection(
+            settings.gcp_profiles_collection).document(user_id).get()
+
+        if not doc.exists:
+            return ProfileResponse(userId=user_id, nickname="")
+
+        data = doc.to_dict() or {}
+
+        return ProfileResponse(
+            userId=user_id,
+            nickname=data.get("nickname") or "",
+            updatedAt=data.get("updatedAt"),
+            createdAt=data.get("createdAt"),
+        )
+
+    def update_profile(
+        self,
+        user: UserInfo,
+        body: ProfileUpdateRequest,
+    ) -> ProfileResponse:
+        """Update user profile in Firestore"""
+        db = _get_firestore()
+        now = _now_iso()
+        profile_ref = db.collection(
+            settings.gcp_profiles_collection).document(user.user_id)
+        existing = profile_ref.get()
+
+        # Preserve createdAt if exists
+        created_at = now
+        if existing.exists:
+            created_at = (existing.to_dict() or {}).get(
+                "createdAt") or created_at
+
+        item = {
+            "userId": user.user_id,
+            "nickname": body.nickname,
+            "updatedAt": now,
+            "createdAt": created_at,
+            "docType": "profile",
+        }
+        profile_ref.set(item)
+        logger.info(f"Updated profile for user {user.user_id}")
+
+        return ProfileResponse(
+            userId=user.user_id,
+            nickname=body.nickname,
+            updatedAt=now,
+            createdAt=created_at,
+        )
+
+    def generate_upload_urls(self, count: int, user: UserInfo, content_types: Optional[list[str]] = None) -> list[dict[str, str]]:
+        """Generate signed URLs for Cloud Storage uploads"""
+        if not settings.gcp_storage_bucket:
+            raise ValueError(
+                "GCP_STORAGE_BUCKET environment variable is required")
+
+        storage_client = _get_storage()
+        bucket = storage_client.bucket(settings.gcp_storage_bucket)
+
+        post_id = str(uuid.uuid4())
+        ext_map = {
+            "image/jpeg": "jpeg", "image/jpg": "jpeg",
+            "image/png": "png", "image/gif": "gif",
+            "image/webp": "webp", "image/heic": "heic", "image/heif": "heif",
+        }
+
+        urls = []
+        for index in range(count):
+            # Use per-file content type if provided, default to image/jpeg
+            content_type = (
+                content_types[index]
+                if content_types and index < len(content_types) and content_types[index]
+                else "image/jpeg"
+            )
+            ext = ext_map.get(content_type, "jpeg")
+            key = f"images/{post_id}-{index}-{secrets.token_hex(8)}.{ext}"
+            blob = bucket.blob(key)
+
+            # Generate signed URL
+            # - With gcp_service_account set: impersonate that SA (explicit)
+            # - Otherwise: use IAM signing via the default Compute Engine SA
+            generate_url_kwargs = {}
+            if settings.gcp_service_account:
+                try:
+                    import google.auth
+                    from google.auth import impersonated_credentials
+
+                    source_credentials, _ = google.auth.default()
+                    signing_credentials = impersonated_credentials.Credentials(
+                        source_credentials=source_credentials,
+                        target_principal=settings.gcp_service_account,
+                        target_scopes=[
+                            "https://www.googleapis.com/auth/cloud-platform"],
+                        lifetime=3600,
+                    )
+                    generate_url_kwargs["credentials"] = signing_credentials
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to create impersonated credentials: {e}")
+            else:
+                # Cloud Run / Compute Engine: use IAM signBlob-based credentials
+                signing_creds = _get_gcp_signing_credentials()
+                if signing_creds:
+                    generate_url_kwargs["credentials"] = signing_creds
+
+            try:
+                url = blob.generate_signed_url(
+                    version="v4",
+                    expiration=timedelta(
+                        seconds=settings.presigned_url_expiry),
+                    method="PUT",
+                    content_type=content_type,
+                    **generate_url_kwargs,
+                )
+                urls.append({
+                    "url": url,
+                    "key": key,
+                    "fields": "",
+                })
+                logger.info(f"Generated upload URL for key: {key}")
+            except Exception as e:
+                logger.error(f"Failed to generate signed URL: {e}")
+                raise
+
+        return urls
+
+    def like_post(self, post_id: str, user: UserInfo) -> dict:
+        """いいね機能（未実装）"""
+        return {"post_id": post_id, "liked": True}
+
+    def unlike_post(self, post_id: str, user: UserInfo) -> dict:
+        """いいね取り消し機能（未実装）"""
+        return {"post_id": post_id, "liked": False}

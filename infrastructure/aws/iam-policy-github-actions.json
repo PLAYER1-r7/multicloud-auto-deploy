@@ -1,0 +1,74 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LambdaUpdatePermissions",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:UpdateFunctionCode",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:UpdateFunctionConfiguration"
+      ],
+      "Resource": [
+        "arn:aws:lambda:ap-northeast-1:278280499340:function:multicloud-auto-deploy-*"
+      ]
+    },
+    {
+      "Sid": "LambdaLayerPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:PublishLayerVersion",
+        "lambda:GetLayerVersion",
+        "lambda:DeleteLayerVersion"
+      ],
+      "Resource": [
+        "arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-*",
+        "arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-*:*",
+        "arn:aws:lambda:ap-northeast-1:770693421928:layer:Klayers-*"
+      ]
+    },
+    {
+      "Sid": "S3DeploymentPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket",
+        "s3:PutObjectAcl"
+      ],
+      "Resource": [
+        "arn:aws:s3:::multicloud-auto-deploy-*",
+        "arn:aws:s3:::multicloud-auto-deploy-*/*"
+      ]
+    },
+    {
+      "Sid": "CloudFrontPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateInvalidation",
+        "cloudfront:GetInvalidation",
+        "cloudfront:ListInvalidations",
+        "cloudfront:CreateOriginAccessControl",
+        "cloudfront:GetOriginAccessControl",
+        "cloudfront:UpdateOriginAccessControl",
+        "cloudfront:DeleteOriginAccessControl",
+        "cloudfront:ListOriginAccessControls"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "APIGatewayPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET",
+        "apigateway:POST"
+      ],
+      "Resource": [
+        "arn:aws:apigateway:ap-northeast-1::/restapis/*",
+        "arn:aws:apigateway:ap-northeast-1::/apis/*"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,164 @@
+name: Deploy Frontend Web to Azure
+
+on:
+  push:
+    branches:
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
+    paths:
+      - "services/frontend_web/**"
+      - ".github/workflows/deploy-frontend-web-azure.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  PYTHON_VERSION: "3.12"
+
+concurrency:
+  group: deploy-frontend-web-azure-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build frontend_web for Azure Functions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build package with bundled dependencies
+        working-directory: services/frontend_web
+        run: |
+          # Install dependencies into .python_packages for Azure Linux Consumption
+          pip install --target .python_packages/lib/site-packages \
+            --no-cache-dir --upgrade -r requirements.txt
+
+          # Cleanup unnecessary files
+          find .python_packages -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find .python_packages -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          find .python_packages -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+
+          # Create deployment zip with bundled deps
+          zip -r release.zip app/ function_app.py host.json requirements.txt .python_packages/
+          echo "✅ Package created:"
+          ls -lh release.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-web-app
+          path: services/frontend_web/release.zip
+
+  deploy:
+    name: Deploy to Azure Functions
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            ENV="production"
+          else
+            ENV="staging"
+          fi
+          echo "env_name=$ENV" >> $GITHUB_OUTPUT
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-web-app
+          path: /tmp/deploy
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create Function App if not exists
+        run: |
+          ENV="${{ steps.env.outputs.env_name }}"
+          RG="multicloud-auto-deploy-${ENV}-rg"
+          APP_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
+          LOCATION="japaneast"
+
+          # Check if Function App already exists
+          if az functionapp show --name "$APP_NAME" --resource-group "$RG" &>/dev/null; then
+            echo "✅ Function App $APP_NAME already exists"
+          else
+            echo "Creating Function App $APP_NAME..."
+            # Find the functions storage account (mcadfunc*)
+            STORAGE=$(az storage account list --resource-group "$RG" \
+              --query "[?starts_with(name,'mcadfunc')].name | [0]" -o tsv)
+            if [ -z "$STORAGE" ]; then
+              echo "❌ Could not find functions storage account in $RG"
+              exit 1
+            fi
+            echo "Using storage account: $STORAGE"
+            az functionapp create \
+              --name "$APP_NAME" \
+              --resource-group "$RG" \
+              --consumption-plan-location "$LOCATION" \
+              --runtime python \
+              --runtime-version 3.12 \
+              --functions-version 4 \
+              --storage-account "$STORAGE" \
+              --os-type Linux
+            echo "✅ Function App $APP_NAME created"
+            # Give the app time to initialize
+            sleep 30
+          fi
+
+      - name: Deploy to Azure Functions
+        run: |
+          ENV="${{ steps.env.outputs.env_name }}"
+          RG="multicloud-auto-deploy-${ENV}-rg"
+          APP_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
+
+          # Remove WEBSITE_RUN_FROM_PACKAGE to avoid conflict with zipdeploy
+          az functionapp config appsettings delete \
+            --resource-group "$RG" --name "$APP_NAME" \
+            --setting-names WEBSITE_RUN_FROM_PACKAGE 2>/dev/null || true
+
+          # Find the zip file
+          ZIP_PATH=$(find /tmp/deploy -name "release.zip" | head -1)
+          echo "Zip file: $ZIP_PATH"
+          ls -lh "$ZIP_PATH"
+
+          # Deploy using Kudu zipdeploy
+          az functionapp deployment source config-zip \
+            --resource-group "$RG" \
+            --name "$APP_NAME" \
+            --src "$ZIP_PATH" \
+            --timeout 600
+          echo "✅ $APP_NAME deployed"
+
+      - name: Configure App Settings
+        run: |
+          az functionapp config appsettings set \
+            --name multicloud-auto-deploy-${{ steps.env.outputs.env_name }}-frontend-web \
+            --resource-group multicloud-auto-deploy-${{ steps.env.outputs.env_name }}-rg \
+            --settings STAGE_NAME=sns
+          echo "✅ STAGE_NAME=sns configured"

@@ -1,0 +1,65 @@
+name: Deploy Landing Page to AWS
+
+on:
+  push:
+    branches:
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
+    paths:
+      - "static-site/**"
+      - ".github/workflows/deploy-landing-aws.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  AWS_REGION: ap-northeast-1
+  # Landing page is deployed to the same bucket as the frontend (root level)
+  # so CloudFront serves it at / while the React SNS app lives under /sns/
+  S3_BUCKET: multicloud-auto-deploy-staging-frontend
+
+jobs:
+  deploy-landing:
+    name: Deploy Landing Page to AWS S3
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync static-site/ s3://${{ env.S3_BUCKET }}/ \
+            --cache-control "public, max-age=3600" \
+            --exclude "*" \
+            --include "*.html"
+
+      - name: Invalidate CloudFront Cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id E1TBH4R432SZBZ \
+            --paths "/*" \
+            --no-cli-pager
+
+      - name: Deployment Success
+        run: |
+          echo "✅ Landing page deployed successfully!"
+          echo "🌐 URL: https://d1tf3uumcm4bo1.cloudfront.net/"

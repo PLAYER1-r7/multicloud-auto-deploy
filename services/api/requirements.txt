@@ -1,0 +1,52 @@
+# Multi-Cloud API Requirements
+# ⚠️ This file contains ALL dependencies for ALL cloud providers.
+# For production deployments, use cloud-specific requirements files:
+#   - requirements-aws.txt (AWS Lambda with Klayers)
+#   - requirements-azure.txt (Azure Functions)
+#   - requirements-gcp.txt (GCP Cloud Functions)
+#
+# This file is used for:
+#   - Local development
+#   - Testing
+#   - Docker builds
+
+# FastAPI Core
+fastapi==0.115.0
+pydantic==2.9.0
+pydantic-settings==2.5.2
+uvicorn[standard]==0.32.0
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.9
+pyjwt==2.9.0
+requests==2.32.3
+
+# Database (NoSQL — DynamoDB Local uses boto3, already listed under AWS)
+
+# AWS
+boto3==1.35.0
+mangum==0.17.0
+
+# Azure
+azure-cosmos==4.8.0
+azure-storage-blob==12.23.0
+azure-identity==1.18.0
+azure-functions==1.20.0  # Azure Functions runtime
+
+# GCP
+google-cloud-firestore==2.19.0
+google-cloud-storage==2.18.0
+functions-framework==3.5.0  # Cloud Functions runtime
+
+# S3-compatible (MinIO for local dev)
+minio==7.2.9
+
+# Testing
+pytest==9.0.2
+pytest-asyncio==1.3.0
+pytest-mock==3.15.1
+pytest-cov==7.0.0
+httpx==0.28.1
+anyio[trio]==4.12.1
+
+# Linting / formatting (dev only — not needed in Lambda/Cloud Function bundles)
+ruff==0.15.1

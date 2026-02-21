@@ -1,0 +1,296 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches:
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
+    paths:
+      - "services/**"
+      - "infrastructure/pulumi/gcp/**"
+      - ".github/workflows/deploy-gcp.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  GCP_REGION: asia-northeast1
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+
+# Prevent concurrent Pulumi updates on the same stack (causes 409 Conflict)
+concurrency:
+  group: deploy-gcp-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    # develop→staging, main→production, 手動→選択した環境
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Install Pulumi Python Dependencies
+        run: |
+          cd infrastructure/pulumi/gcp
+          pip install -r requirements.txt
+
+      - name: Determine Pulumi Stack Name
+        id: set_stack
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            STACK_NAME="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            STACK_NAME="production"
+          else
+            STACK_NAME="staging"
+          fi
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "📦 Using Pulumi stack: $STACK_NAME"
+
+      - name: Initialize Pulumi Stack
+        run: |
+          cd infrastructure/pulumi/gcp
+          pulumi login
+          pulumi stack select ${{ steps.set_stack.outputs.stack_name }} 2>/dev/null || pulumi stack init ${{ steps.set_stack.outputs.stack_name }}
+          pulumi config set gcp:project ${{ secrets.GCP_PROJECT_ID }}
+          pulumi config set gcp:region asia-northeast1
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Remove SecretVersion from Pulumi state (IAM permission workaround)
+        run: |
+          cd infrastructure/pulumi/gcp
+          STACK="${{ steps.set_stack.outputs.stack_name }}"
+          # Remove SecretVersion from Pulumi state to prevent 403 on create/refresh
+          # (Pulumi SA lacks secretmanager.versions.access permission)
+          # This is idempotent: fails silently if resource is not in state
+          pulumi state delete \
+            "urn:pulumi:${STACK}::multicloud-auto-deploy-gcp::gcp:secretmanager/secretVersion:SecretVersion::app-secret-version" \
+            --yes 2>/dev/null && echo "✅ Removed SecretVersion from state" || echo "✅ SecretVersion not in state (already clean)"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Deploy Infrastructure with Pulumi
+        id: pulumi
+        uses: pulumi/actions@v5
+        with:
+          command: up
+          stack-name: ${{ steps.set_stack.outputs.stack_name }}
+          work-dir: infrastructure/pulumi/gcp
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Get Pulumi Outputs
+        id: pulumi_outputs
+        run: |
+          cd infrastructure/pulumi/gcp
+          echo "function_source_bucket=$(pulumi stack output function_source_bucket)" >> $GITHUB_OUTPUT
+          echo "frontend_bucket=$(pulumi stack output frontend_bucket)" >> $GITHUB_OUTPUT
+          echo "function_name=$(pulumi stack output function_name)" >> $GITHUB_OUTPUT
+          echo "cdn_ip_address=$(pulumi stack output cdn_ip_address)" >> $GITHUB_OUTPUT
+          echo "uploads_bucket=$(pulumi stack output uploads_bucket)" >> $GITHUB_OUTPUT
+          echo "compute_sa_email=$(pulumi stack output compute_sa_email)" >> $GITHUB_OUTPUT
+
+      - name: Package Cloud Function
+        run: |
+          cd services/api
+
+          echo "📦 Creating optimized deployment package..."
+
+          # Create deployment directory
+          rm -rf .deployment
+          mkdir -p .deployment
+
+          # Install GCP-specific dependencies only
+          echo "Installing GCP-specific dependencies..."
+          pip install --target .deployment --no-cache-dir -r requirements-gcp.txt
+
+          # Aggressive cleanup of unnecessary files
+          echo "Cleaning up unnecessary files..."
+          find .deployment -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
+          find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
+          find .deployment -type f -name "*.so" -delete 2>/dev/null || true
+
+          # Remove test and documentation files
+          find .deployment -type f -name "test_*.py" -delete 2>/dev/null || true
+          find .deployment -type f -name "*_test.py" -delete 2>/dev/null || true
+          find .deployment -type d -name "docs" -exec rm -rf {} + 2>/dev/null || true
+          find .deployment -type d -name "examples" -exec rm -rf {} + 2>/dev/null || true
+
+          # Copy application code
+          cp -r app .deployment/
+          # Rename function.py to main.py for Cloud Functions
+          cp function.py .deployment/main.py
+          cp requirements-gcp.txt .deployment/requirements.txt
+
+          # Clean up app __pycache__
+          find .deployment/app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+          # Create ZIP package with maximum compression
+          cd .deployment
+          zip -r9 -q ../function-source.zip .
+          cd ..
+
+          echo "✅ Package created:"
+          ls -lh function-source.zip
+          PACKAGE_SIZE=$(du -h function-source.zip | cut -f1)
+          PACKAGE_SIZE_KB=$(du -k function-source.zip | cut -f1)
+          echo "📦 Package size: $PACKAGE_SIZE ($PACKAGE_SIZE_KB KB)"
+
+          # Show size breakdown
+          echo ""
+          echo "📊 Top 10 largest items in package:"
+          unzip -l function-source.zip | sort -k4 -n -r | head -n 11
+
+      - name: Deploy Cloud Function
+        id: deploy_function
+        run: |
+          # Use values from Pulumi outputs
+          PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+          FUNCTION_NAME="${{ steps.pulumi_outputs.outputs.function_name }}"
+          FUNCTION_BUCKET="${{ steps.pulumi_outputs.outputs.function_source_bucket }}"
+          REGION=${{ env.GCP_REGION }}
+
+          echo "🚀 Deploying Cloud Function: $FUNCTION_NAME"
+          echo "  Project: $PROJECT_ID"
+          echo "  Bucket: $FUNCTION_BUCKET"
+          echo "  Region: $REGION"
+
+          # Upload source to GCS
+          gsutil cp services/api/function-source.zip gs://$FUNCTION_BUCKET/function-source.zip
+
+          # Get CDN IP from Pulumi outputs for CORS
+          # GCP Classic HTTP LB serves over HTTP (not HTTPS), so both schemes are included
+          CDN_URL="${{ steps.pulumi_outputs.outputs.cdn_ip_address }}"
+          CORS_ORIGINS="http://${CDN_URL},https://${CDN_URL},http://localhost:5173"
+
+          echo "🔒 CORS Origins: $CORS_ORIGINS"
+
+          # Determine environment
+          DEPLOY_ENV="${{ steps.set_stack.outputs.stack_name }}"
+          # Auth is enabled in both staging and production (Firebase for GCP)
+          AUTH_DISABLED_VALUE="false"
+          UPLOADS_BUCKET="${{ steps.pulumi_outputs.outputs.uploads_bucket }}"
+
+          # Create env vars file to avoid escaping issues with special characters
+          echo "ENVIRONMENT: ${DEPLOY_ENV}" > /tmp/env-vars.yaml
+          echo "CLOUD_PROVIDER: gcp" >> /tmp/env-vars.yaml
+          echo "GCP_PROJECT_ID: $PROJECT_ID" >> /tmp/env-vars.yaml
+          echo "GCP_POSTS_COLLECTION: posts" >> /tmp/env-vars.yaml
+          echo "GCP_PROFILES_COLLECTION: profiles" >> /tmp/env-vars.yaml
+          echo "AUTH_DISABLED: \"$AUTH_DISABLED_VALUE\"" >> /tmp/env-vars.yaml
+          echo "AUTH_PROVIDER: firebase" >> /tmp/env-vars.yaml
+          echo "GCP_STORAGE_BUCKET: $UPLOADS_BUCKET" >> /tmp/env-vars.yaml
+          echo "GCP_SERVICE_ACCOUNT: ${{ steps.pulumi_outputs.outputs.compute_sa_email }}" >> /tmp/env-vars.yaml
+          echo "CORS_ORIGINS: \"$CORS_ORIGINS\"" >> /tmp/env-vars.yaml
+
+          echo "📝 Environment variables file created (ENVIRONMENT=$DEPLOY_ENV, AUTH_DISABLED=$AUTH_DISABLED_VALUE, AUTH_PROVIDER=firebase, GCP_STORAGE_BUCKET=$UPLOADS_BUCKET)"
+
+          # Deploy function with env vars from file
+          gcloud functions deploy $FUNCTION_NAME \
+            --gen2 \
+            --region=$REGION \
+            --runtime=python312 \
+            --source=gs://$FUNCTION_BUCKET/function-source.zip \
+            --entry-point=handler \
+            --trigger-http \
+            --allow-unauthenticated \
+            --max-instances=10 \
+            --memory=512MB \
+            --timeout=60s \
+            --env-vars-file=/tmp/env-vars.yaml
+
+          # Get function URL
+          FUNCTION_URL=$(gcloud functions describe $FUNCTION_NAME --region=$REGION --gen2 --format="value(serviceConfig.uri)")
+          echo "api_url=$FUNCTION_URL" >> $GITHUB_OUTPUT
+
+          echo "✅ Cloud Function deployed successfully"
+          echo "  URL: $FUNCTION_URL"
+
+      - name: Build Frontend
+        run: |
+          # Use API URL from Cloud Functions deployment
+          API_URL="${{ steps.deploy_function.outputs.api_url }}"
+
+          echo "Building frontend with API URL: $API_URL"
+
+          cd services/frontend_react
+          npm install
+          VITE_API_URL=$API_URL npm run build
+
+      - name: Deploy Frontend to Cloud Storage
+        run: |
+          # Use bucket name from Pulumi output
+          BUCKET_NAME="${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
+
+          echo "Deploying frontend to bucket: $BUCKET_NAME"
+
+          # Upload frontend to Cloud Storage
+          gsutil -m cp -r services/frontend_react/dist/* gs://$BUCKET_NAME/
+
+          # Make objects public
+          gsutil -m acl ch -u AllUsers:R gs://$BUCKET_NAME/** || true
+
+      - name: Restore Landing Page
+        run: |
+          BUCKET_NAME="${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
+          # React app assets are under /assets/; only index.html conflicts with the landing page
+          # Use static-site/ from 
+          gcloud storage cp \
+            static-site/index.html \
+            gs://$BUCKET_NAME/index.html \
+            --cache-control="public, max-age=3600"
+          echo "✅ Landing page restored to gs://$BUCKET_NAME/index.html"
+          gcloud compute url-maps invalidate-cdn-cache multicloud-auto-deploy-staging-cdn-urlmap \
+            --path "/*" \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --quiet
+
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "✅ GCP deployment succeeded!"
+          echo "📍 Function URL: ${{ steps.deploy_function.outputs.api_url }}"
+          echo "🌐 Frontend Bucket: ${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ GCP deployment failed!"

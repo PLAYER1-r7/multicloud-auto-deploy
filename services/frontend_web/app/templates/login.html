@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Login | Simple SNS{% endblock %}
+{% block content %}
+  <section class="panel">
+    <h1>Login</h1>
+    {% if auth_disabled %}
+      <p>Local Development Mode - Enter any username</p>
+      <form method="post" action="{{ base_path }}/login" class="form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input 
+            type="text" 
+            id="username" 
+            name="username" 
+            required 
+            pattern="[a-zA-Z0-9_-]+" 
+            placeholder="Enter username (alphanumeric, -, _)"
+            autocomplete="username"
+          />
+          <small class="muted">Only alphanumeric characters, hyphens, and underscores are allowed.</small>
+        </div>
+        <div class="actions">
+          <button type="submit" class="button">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 10V7a5 5 0 0 1 10 0v3"></path>
+              <rect x="4" y="10" width="16" height="10" rx="2"></rect>
+            </svg>
+            <span>Sign In</span>
+          </button>
+        </div>
+      </form>
+    {% elif firebase_config %}
+      <p>Sign in with your Google account</p>
+      <div class="actions">
+        <button id="firebase-login-btn" class="button" type="button" aria-label="Sign in with Google">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 10V7a5 5 0 0 1 10 0v3"></path>
+            <rect x="4" y="10" width="16" height="10" rx="2"></rect>
+          </svg>
+          <span>Sign in with Google</span>
+        </button>
+      </div>
+      <p id="firebase-status" class="muted" style="display:none"></p>
+
+      <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        const firebaseConfig = {{ firebase_config | tojson }};
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        const btn = document.getElementById('firebase-login-btn');
+        const statusEl = document.getElementById('firebase-status');
+
+        function showStatus(msg, isError) {
+          statusEl.textContent = msg;
+          statusEl.style.display = 'block';
+          statusEl.style.color = isError ? 'var(--danger, #e53e3e)' : '';
+        }
+
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          showStatus('Googleに接続中...', false);
+          try {
+            const provider = new GoogleAuthProvider();
+            const result = await signInWithPopup(auth, provider);
+            showStatus('本人確認中...', false);
+
+            // Firebase IDトークン取得（有効期限1時間）
+            const idToken = await result.user.getIdToken();
+
+            // httponly Cookieとして /session エンドポイントで保存
+            const res = await fetch("{{ base_path }}/session", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id_token: idToken, expires_in: 3600 }),
+              credentials: "same-origin",
+            });
+
+            if (!res.ok) {
+              const text = await res.text().catch(() => '');
+              throw new Error("Session error (" + res.status + "): " + text);
+            }
+
+            showStatus('ログイン成功。リダイレクト中...', false);
+            window.location.replace("{{ base_path }}/");
+          } catch (error) {
+            console.error("Firebase Auth Error", error);
+            showStatus("ログインに失敗しました: " + error.message, true);
+            btn.disabled = false;
+          }
+        });
+      </script>
+
+    {% elif login_url %}
+      <p>Use {{ provider_label }} to sign in.</p>
+      <div class="actions">
+        <button class="button icon-only" type="button" data-href="{{ login_url }}" aria-label="Open login">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 10V7a5 5 0 0 1 10 0v3"></path>
+            <rect x="4" y="10" width="16" height="10" rx="2"></rect>
+          </svg>
+          <span class="sr-only">Open login</span>
+        </button>
+        {% if logout_url %}
+          <button class="button ghost icon-only" type="button" data-href="{{ logout_url }}" aria-label="Logout">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 16l-4-4 4-4"></path>
+              <path d="M5 12h10"></path>
+              <path d="M13 5h6v14h-6"></path>
+            </svg>
+            <span class="sr-only">Logout</span>
+          </button>
+        {% endif %}
+      </div>
+      <p class="muted">You will be redirected to /callback after login.</p>
+    {% else %}
+      <p>Login is not configured yet.</p>
+      <p class="muted">Set provider-specific auth variables for {{ provider_label }}.</p>
+    {% endif %}
+    <p class="muted">API base: {{ api_base_url }}</p>
+  </section>
+{% endblock %}

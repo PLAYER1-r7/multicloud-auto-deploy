@@ -1,0 +1,64 @@
+name: Deploy Landing Page to Azure
+
+on:
+  push:
+    branches:
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
+    paths:
+      - "static-site/**"
+      - ".github/workflows/deploy-landing-azure.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  # Landing page is deployed to the same storage account as the frontend (root level)
+  # so Azure Front Door serves it at / while the React SNS app lives under /sns/
+  AZURE_STORAGE_ACCOUNT: mcadwebd45ihd
+  AZURE_RESOURCE_GROUP: multicloud-auto-deploy-staging-rg
+
+jobs:
+  deploy-landing:
+    name: Deploy Landing Page to Azure Storage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Storage
+        run: |
+          az storage blob upload-batch \
+            --account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
+            --auth-mode key \
+            --destination '$web' \
+            --source static-site/ \
+            --pattern "*.html" \
+            --overwrite \
+            --content-cache-control "public, max-age=3600"
+
+      - name: Purge Azure Front Door Cache
+        run: |
+          az afd endpoint purge \
+            --profile-name multicloud-auto-deploy-staging-fd \
+            --resource-group multicloud-auto-deploy-staging-rg \
+            --endpoint-name mcad-staging-d45ihd \
+            --content-paths "/*"
+
+      - name: Deployment Success
+        run: |
+          echo "✅ Landing page deployed successfully!"
+          echo "🌐 URL: https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/"

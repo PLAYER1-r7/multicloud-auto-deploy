@@ -1,0 +1,12 @@
+# AWS Lambda Application Code Requirements
+# Dependencies in this file are deployed with the Lambda function code
+# Most dependencies are in the Lambda Layer (requirements-layer.txt)
+# 
+# This file should remain minimal to keep Lambda package size under 50MB
+# for direct ZIP upload (no S3 required)
+
+# Note: All main dependencies (FastAPI, Pydantic, Mangum, etc.) are in Lambda Layer
+# Note: boto3 is pre-installed in Lambda runtime, no need to include
+
+# Currently, all dependencies are in Lambda Layer
+# If you need additional dependencies for your function code only, add them here
