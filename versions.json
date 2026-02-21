@@ -1,13 +1,13 @@
 {
   "aws-static-site": {
-    "version": "1.0.12",
+    "version": "1.0.13",
     "description": "AWS S3 + CloudFront 静的サイト (ランディングページ)",
     "status": "stable",
     "cdn_url": "https://d1tf3uumcm4bo1.cloudfront.net",
     "custom_domain": "https://www.aws.ashnova.jp"
   },
   "azure-static-site": {
-    "version": "1.0.8",
+    "version": "1.0.9",
     "description": "Azure Blob + Front Door 静的サイト (ランディングページ)",
     "status": "stable",
     "note": "AFD 経由 /sns/* 間欠的 502 解消済み (2026-02-25): Dynamic Y1 → FC1 FlexConsumption 移行、20/20 = 100% OK",
@@ -15,7 +15,7 @@
     "custom_domain": "https://www.azure.ashnova.jp"
   },
   "gcp-static-site": {
-    "version": "1.0.12",
+    "version": "1.0.13",
     "description": "GCP GCS + Cloud CDN 静的サイト (ランディングページ)",
     "status": "stable",
     "note": "HTTPS未設定 (HTTP only)。TargetHttpsProxy + SSL証明書の設定が残課題",
@@ -23,7 +23,7 @@
     "custom_domain": "https://www.gcp.ashnova.jp"
   },
   "simple-sns": {
-    "version": "1.0.12",
+    "version": "1.0.13",
     "description": "React SNS アプリ (Vite + TypeScript + Tailwind CSS / 全クラウド共通デプロイ)",
     "status": "stable",
     "path": "services/frontend_react"
