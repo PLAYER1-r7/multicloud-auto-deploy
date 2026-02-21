@@ -397,7 +397,7 @@ class LocalBackend(BackendBase):
         })
         return self.get_profile(user.user_id)
 
-    def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
+    def generate_upload_urls(self, count: int, user: UserInfo, content_types: Optional[list[str]] = None) -> list[dict[str, str]]:
         """画像アップロード用の署名付き URL を生成"""
         urls = []
         if not self.minio_client:

@@ -446,7 +446,7 @@ class GcpBackend(BackendBase):
             createdAt=created_at,
         )
 
-    def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
+    def generate_upload_urls(self, count: int, user: UserInfo, content_types: Optional[list[str]] = None) -> list[dict[str, str]]:
         """Generate signed URLs for Cloud Storage uploads"""
         if not settings.gcp_storage_bucket:
             raise ValueError(

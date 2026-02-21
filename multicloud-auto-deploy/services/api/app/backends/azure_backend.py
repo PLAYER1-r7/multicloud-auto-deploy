@@ -469,7 +469,7 @@ class AzureBackend(BackendBase):
             createdAt=created_at,
         )
 
-    def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
+    def generate_upload_urls(self, count: int, user: UserInfo, content_types: Optional[list[str]] = None) -> list[dict[str, str]]:
         """Generate SAS URLs for Blob Storage uploads"""
         if not settings.azure_storage_account_name or not settings.azure_storage_account_key:
             raise ValueError("Azure Storage configuration is required")
@@ -498,3 +498,11 @@ class AzureBackend(BackendBase):
             logger.info(f"Generated SAS URL for key: {key}")
 
         return urls
+
+    def like_post(self, post_id: str, user: UserInfo) -> dict:
+        """いいね機能（未実装）"""
+        return {"post_id": post_id, "liked": True}
+
+    def unlike_post(self, post_id: str, user: UserInfo) -> dict:
+        """いいね取り消し機能（未実装）"""
+        return {"post_id": post_id, "liked": False}
