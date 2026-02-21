@@ -224,10 +224,17 @@ make version-azure-afd-resolved
 
 ### バージョンバンプのスキップ
 
-コミットメッセージに `[skip-version-bump]` を含めると pre-commit hook と GitHub Actions の両方がスキップされる。
+| 対象 | スキップ方法 |
+|---|---|
+| pre-commit hook (パッチZ) | 環境変数 `SKIP_VERSION_BUMP=1 git commit -m "..."` |
+| GitHub Actions (マイナーY) | コミットメッセージに `[skip-version-bump]` を含める |
 
 ```bash
-git commit -m "docs: update readme [skip-version-bump]"
+# pre-commit フックをスキップしてコミット
+SKIP_VERSION_BUMP=1 git commit -m "docs: update readme"
+
+# GitHub Actions のマイナーバンプをスキップ (botコミットのループ防止用)
+git commit -m "chore: some change [skip-version-bump]"
 ```
 
 ### Azure AFD 解消手順
