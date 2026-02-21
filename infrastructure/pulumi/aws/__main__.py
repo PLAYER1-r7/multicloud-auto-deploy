@@ -866,21 +866,28 @@ else:
 if stack == "production":
     cloudfront_kwargs["web_acl_id"] = waf_web_acl.arn
 
-# /sns* → frontend_web Lambda (Simple SNS, server-side Python app)
-# CachingDisabled + AllViewer policies forward all cookies/headers (required for session auth)
+# /sns* → S3 bucket (React SPA static files)
+# React SPA はビルド済み静的ファイルなので S3 オリジンを使用
+# CloudFront Function で /sns/ → /sns/index.html にリライト (SPA ルーティング対応)
+cf_function_name = f"spa-sns-rewrite-{stack}"
+caller_identity = aws.get_caller_identity()
+cf_function_arn = f"arn:aws:cloudfront::{caller_identity.account_id}:function/{cf_function_name}"
 cloudfront_kwargs["ordered_cache_behaviors"] = [
     aws.cloudfront.DistributionOrderedCacheBehaviorArgs(
         path_pattern="/sns*",
-        target_origin_id="frontend-web",
+        target_origin_id=frontend_bucket.bucket_regional_domain_name,
         viewer_protocol_policy="redirect-to-https",
-        allowed_methods=["DELETE", "GET", "HEAD",
-                         "OPTIONS", "PATCH", "POST", "PUT"],
+        allowed_methods=["GET", "HEAD", "OPTIONS"],
         cached_methods=["GET", "HEAD"],
         compress=True,
-        # Managed CachingDisabled policy (no caching — dynamic SSR app)
-        cache_policy_id="4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
-        # Managed AllViewer policy (forward all headers, query strings, cookies)
-        origin_request_policy_id="b689b0a8-53d0-40ab-baf2-68738e2966ac",
+        # Managed CachingOptimized policy (静的ファイル向けキャッシュ)
+        cache_policy_id="658327ea-f89d-4fab-a63d-7e88639e58f6",
+        function_associations=[
+            aws.cloudfront.DistributionOrderedCacheBehaviorFunctionAssociationArgs(
+                event_type="viewer-request",
+                function_arn=cf_function_arn,
+            )
+        ],
     )
 ]
 
