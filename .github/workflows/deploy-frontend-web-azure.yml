@@ -93,37 +93,44 @@ jobs:
       - name: Deploy to Azure Blob Storage
         run: |
           STORAGE="${{ steps.env.outputs.storage_account }}"
+          RG="${{ steps.env.outputs.rg }}"
+
+          # ストレージアカウントキーを取得（Blob Data ロール不要、listKeys権限で可能）
+          ACCOUNT_KEY=$(az storage account keys list \
+            --account-name "$STORAGE" \
+            --resource-group "$RG" \
+            --query '[0].value' -o tsv)
 
           # assets (長期キャッシュ・immutable)
           az storage blob upload-batch \
             --account-name "$STORAGE" \
+            --account-key "$ACCOUNT_KEY" \
             --destination '$web/sns' \
             --source services/frontend_react/dist/ \
             --pattern "assets/*" \
             --content-cache-control "public, max-age=31536000, immutable" \
-            --overwrite true \
-            --auth-mode login
+            --overwrite true
 
           # index.html (短期キャッシュ)
           az storage blob upload-batch \
             --account-name "$STORAGE" \
+            --account-key "$ACCOUNT_KEY" \
             --destination '$web/sns' \
             --source services/frontend_react/dist/ \
             --pattern "*.html" \
             --content-cache-control "public, max-age=300" \
             --content-type "text/html" \
-            --overwrite true \
-            --auth-mode login
+            --overwrite true
 
           # その他ファイル (svg等)
           az storage blob upload-batch \
             --account-name "$STORAGE" \
+            --account-key "$ACCOUNT_KEY" \
             --destination '$web/sns' \
             --source services/frontend_react/dist/ \
             --pattern "*.svg" \
             --content-cache-control "public, max-age=3600" \
-            --overwrite true \
-            --auth-mode login
+            --overwrite true
 
           echo "✅ Deployed to blob: ${STORAGE}/\$web/sns/"
 
