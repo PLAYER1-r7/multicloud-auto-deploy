@@ -22,6 +22,7 @@ on:
 env:
   AWS_REGION: ap-northeast-1
   PYTHON_VERSION: "3.12"
+  PULUMI_PYTHON_VERSION: "3.13"
 
 concurrency:
   group: deploy-frontend-web-aws-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
@@ -71,6 +72,30 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Install Pulumi Python Dependencies
+        run: |
+          cd infrastructure/pulumi/aws
+          pip install -r requirements.txt
+
+      - name: Get Pulumi Outputs
+        id: pulumi_outputs
+        run: |
+          cd infrastructure/pulumi/aws
+          STACK="${{ steps.env.outputs.env_name }}"
+          pulumi login
+          pulumi stack select "$STACK" 2>/dev/null || pulumi stack select staging
+          echo "api_gateway_endpoint=$(pulumi stack output api_gateway_endpoint)" >> $GITHUB_OUTPUT
+          echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)"      >> $GITHUB_OUTPUT
+          echo "custom_domain=$(pulumi stack output custom_domain 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+          echo "cognito_client_id=$(pulumi stack output cognito_client_id)"      >> $GITHUB_OUTPUT
+          echo "cognito_domain=$(pulumi stack output cognito_domain)"            >> $GITHUB_OUTPUT
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
       - name: Build Lambda Layer (dependencies)
         run: |
           cd services/frontend_web
@@ -112,34 +137,68 @@ jobs:
         run: |
           ENV="${{ steps.env.outputs.env_name }}"
           FUNCTION_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
-          API_URL="${{ secrets.API_GATEWAY_ENDPOINT }}"
+
+          # Use Pulumi outputs (authoritative source; secrets are ignored)
+          API_URL="${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}"
+          CF_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
+          CLIENT_ID="${{ steps.pulumi_outputs.outputs.cognito_client_id }}"
+          COGNITO_DOMAIN_VAL="${{ steps.pulumi_outputs.outputs.cognito_domain }}.auth.${{ env.AWS_REGION }}.amazoncognito.com"
+
+          # Use custom domain (e.g. www.aws.ashnova.jp) when set, else CloudFront domain
+          CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
+          SITE_DOMAIN="${CUSTOM_DOMAIN:-$CF_DOMAIN}"
+
+          # Guard: abort if critical values are empty
+          if [[ -z "$API_URL" || -z "$CF_DOMAIN" || -z "$CLIENT_ID" ]]; then
+            echo "❌ Critical Pulumi outputs are empty. Aborting."
+            echo "   API_URL='$API_URL'"
+            echo "   CF_DOMAIN='$CF_DOMAIN'"
+            echo "   CLIENT_ID='$CLIENT_ID'"
+            exit 1
+          fi
+
+          echo "🌐 Site domain for Cognito callbacks: $SITE_DOMAIN"
+
+          # Wait for Lambda to be ready before code update
+          echo "⏳ Waiting for Lambda to be ready..."
+          aws lambda wait function-updated \
+            --function-name "$FUNCTION_NAME" --region ${{ env.AWS_REGION }}
 
           # Update function code
           aws lambda update-function-code \
-            --function-name $FUNCTION_NAME \
+            --function-name "$FUNCTION_NAME" \
             --region ${{ env.AWS_REGION }} \
             --zip-file fileb://services/frontend_web/lambda.zip
+
+          # Wait for code update before configuration update
+          aws lambda wait function-updated \
+            --function-name "$FUNCTION_NAME" --region ${{ env.AWS_REGION }}
 
           # Build env vars
           cat > /tmp/frontend-web-env.json << EOF
           {
             "Variables": {
+              "ENVIRONMENT": "$ENV",
               "API_BASE_URL": "${API_URL}",
               "AUTH_PROVIDER": "aws",
-              "AUTH_DISABLED": "${{ steps.env.outputs.auth_disabled }}",
+              "AUTH_DISABLED": "false",
               "STAGE_NAME": "sns",
-              "COGNITO_DOMAIN": "${{ secrets.COGNITO_DOMAIN }}",
-              "COGNITO_CLIENT_ID": "${{ secrets.COGNITO_CLIENT_ID }}",
-              "COGNITO_REDIRECT_URI": "${{ secrets.FRONTEND_WEB_REDIRECT_URI }}"
+              "COGNITO_DOMAIN": "${COGNITO_DOMAIN_VAL}",
+              "COGNITO_CLIENT_ID": "${CLIENT_ID}",
+              "COGNITO_REDIRECT_URI": "https://${SITE_DOMAIN}/sns/auth/callback",
+              "COGNITO_LOGOUT_URI": "https://${SITE_DOMAIN}/sns/"
             }
           }
           EOF
 
           # Update configuration
           aws lambda update-function-configuration \
-            --function-name $FUNCTION_NAME \
+            --function-name "$FUNCTION_NAME" \
             --region ${{ env.AWS_REGION }} \
             --layers ${{ steps.layer.outputs.layer_arn }} \
-            --environment file:///tmp/frontend-web-env.json
+            --environment file:///tmp/frontend-web-env.json \
+            --output json || { echo "❌ Configuration update failed!"; exit 1; }
 
           echo "✅ frontend_web deployed to $FUNCTION_NAME"
+          echo "   API_BASE_URL=$API_URL"
+          echo "   COGNITO_REDIRECT_URI=https://${SITE_DOMAIN}/sns/auth/callback"

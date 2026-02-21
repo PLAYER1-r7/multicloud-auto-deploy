@@ -125,6 +125,7 @@ jobs:
           echo "frontend_bucket_name=$(pulumi stack output frontend_bucket_name)" >> $GITHUB_OUTPUT
           echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)" >> $GITHUB_OUTPUT
           echo "cloudfront_distribution_id=$(pulumi stack output cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+          echo "custom_domain=$(pulumi stack output custom_domain 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$(pulumi stack output cognito_user_pool_id)" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
           echo "cognito_domain=$(pulumi stack output cognito_domain)" >> $GITHUB_OUTPUT
@@ -255,7 +256,13 @@ jobs:
 
           # Get CloudFront domain for CORS
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
-          CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},http://localhost:5173"
+          CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
+          # Include custom domain in CORS if set
+          if [[ -n "$CUSTOM_DOMAIN" ]]; then
+            CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},https://${CUSTOM_DOMAIN},http://localhost:5173"
+          else
+            CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},http://localhost:5173"
+          fi
 
           echo "🔒 CORS Origins: $CORS_ORIGINS"
 
@@ -305,10 +312,14 @@ jobs:
           STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
           FRONTEND_WEB_LAMBDA="multicloud-auto-deploy-${STACK_NAME}-frontend-web"
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
+          CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
           COGNITO_DOMAIN="${{ steps.pulumi_outputs.outputs.cognito_domain }}"
           CLIENT_ID="${{ steps.pulumi_outputs.outputs.cognito_client_id }}"
           API_ENDPOINT="${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}"
           DEPLOY_ENV="${{ steps.set_stack.outputs.stack_name }}"
+
+          # Use custom domain for Cognito callbacks if available, else CloudFront domain
+          SITE_DOMAIN="${CUSTOM_DOMAIN:-$CLOUDFRONT_DOMAIN}"
 
           # Validate critical values are not empty
           if [[ -z "$API_ENDPOINT" || -z "$CLOUDFRONT_DOMAIN" || -z "$CLIENT_ID" || -z "$COGNITO_DOMAIN" ]]; then
@@ -319,6 +330,8 @@ jobs:
             echo "   COGNITO_DOMAIN='$COGNITO_DOMAIN'"
             exit 1
           fi
+
+          echo "🌐 Site domain for Cognito callbacks: $SITE_DOMAIN"
 
           # Wait for any in-progress Lambda updates before configuration update
           echo "⏳ Waiting for frontend-web Lambda to be ready..."
@@ -338,8 +351,8 @@ jobs:
               "API_BASE_URL": "$API_ENDPOINT",
               "COGNITO_CLIENT_ID": "$CLIENT_ID",
               "COGNITO_DOMAIN": "${COGNITO_DOMAIN}.auth.${{ env.AWS_REGION }}.amazoncognito.com",
-              "COGNITO_REDIRECT_URI": "https://${CLOUDFRONT_DOMAIN}/sns/auth/callback",
-              "COGNITO_LOGOUT_URI": "https://${CLOUDFRONT_DOMAIN}/sns/"
+              "COGNITO_REDIRECT_URI": "https://${SITE_DOMAIN}/sns/auth/callback",
+              "COGNITO_LOGOUT_URI": "https://${SITE_DOMAIN}/sns/"
             }
           }
           EOF
