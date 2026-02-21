@@ -1,17 +1,17 @@
 # 07 — Environment Status
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-21 (GCP Firebase Auth + image upload/display fully implemented)
+> Last verified: 2026-02-21 (3クラウド全staging テスト実施済み — Azure AUTH_DISABLED修正)
 
 ---
 
 ## Staging Environment Summary
 
-| Cloud     | Landing (`/`) | SNS App (`/sns/`) | API                                |
-| --------- | ------------- | ----------------- | ---------------------------------- |
+| Cloud     | Landing (`/`) | SNS App (`/sns/`) | API                                       |
+| --------- | ------------- | ----------------- | ----------------------------------------- |
 | **GCP**   | ✅            | ✅                | ✅ Cloud Run + Firebase Auth (2026-02-21) |
-| **AWS**   | ✅            | ✅                | ✅ Lambda (fully operational)      |
-| **Azure** | ✅            | ✅                | ✅ Azure Functions                 |
+| **AWS**   | ✅            | ✅                | ✅ Lambda (fully operational)             |
+| **Azure** | ✅            | ✅                | ✅ Azure Functions                        |
 
 ---
 
@@ -65,8 +65,18 @@ API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneas
 | Cosmos DB       | `simple-sns-cosmos` (Serverless)                                      | ✅     |
 | Resource Group  | `multicloud-auto-deploy-staging-rg`                                   | ✅     |
 
+**Confirmed working (verified 2026-02-21)**:
+
+- Azure AD login → `/sns/auth/callback` → session cookie set ✅
+- `GET /posts`, `GET /posts?limit=5`, `GET /posts?limit=5&tag=test` ✅
+- `GET /posts/nonexistent-id` → 404 ✅
+- Auth guard: `POST /posts` without token → 401 ✅
+- Auth guard: `POST /uploads/presigned-urls` without token → 401 ✅
+- Frontend `/sns/` → 200 ✅
+
 **Unresolved issues**:
 
+- SPA deep links (`/sns/unknown-path` via Front Door) return 404 JSON (not SPA fallback). AWS CloudFront has this configured; Azure Front Door does not.
 - End-to-end verification of `PUT /posts/{id}` is incomplete.
 - WAF not configured (Front Door Standard SKU).
 
@@ -80,15 +90,15 @@ API URL          : https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.ru
 Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app
 ```
 
-| Resource               | Name / ID                                                          | Status |
-| ---------------------- | ------------------------------------------------------------------ | ------ |
-| Global IP              | `34.117.111.182`                                                   | ✅     |
-| GCS Bucket (frontend)  | `ashnova-multicloud-auto-deploy-staging-frontend`                  | ✅     |
-| GCS Bucket (uploads)   | `ashnova-multicloud-auto-deploy-staging-uploads` (public read)     | ✅     |
-| Cloud Run (API)        | `multicloud-auto-deploy-staging-api` (Python 3.12)                 | ✅     |
+| Resource                 | Name / ID                                                         | Status |
+| ------------------------ | ----------------------------------------------------------------- | ------ |
+| Global IP                | `34.117.111.182`                                                  | ✅     |
+| GCS Bucket (frontend)    | `ashnova-multicloud-auto-deploy-staging-frontend`                 | ✅     |
+| GCS Bucket (uploads)     | `ashnova-multicloud-auto-deploy-staging-uploads` (public read)    | ✅     |
+| Cloud Run (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12)                | ✅     |
 | Cloud Run (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (Docker, port 8080) | ✅     |
-| Firestore              | `(default)` — collections: messages, posts                         | ✅     |
-| Backend Bucket         | `multicloud-auto-deploy-staging-cdn-backend`                       | ✅     |
+| Firestore                | `(default)` — collections: messages, posts                        | ✅     |
+| Backend Bucket           | `multicloud-auto-deploy-staging-cdn-backend`                      | ✅     |
 
 **Confirmed working (verified 2026-02-21)**:
 
