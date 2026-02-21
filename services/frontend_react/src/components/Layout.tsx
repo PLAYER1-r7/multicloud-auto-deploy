@@ -1,28 +1,26 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { isLoggedIn, logout } = useAuth();
   const navigate = useNavigate();
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('theme') as 'light' | 'dark' | null;
-    if (saved === 'dark' || saved === 'light') return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-      ? 'dark'
-      : 'light';
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const saved = localStorage.getItem("theme") as "light" | "dark" | null;
+    if (saved === "dark" || saved === "light") return saved;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
   });
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
   }, [theme]);
 
-  const toggleTheme = () =>
-    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
-  const handleLogout = () =>
-    logout(window.location.origin);
+  const handleLogout = () => logout(window.location.origin);
 
   return (
     <>
@@ -31,7 +29,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <button
             className="brand brand-button"
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() => navigate("/")}
             aria-label="Home"
           >
             <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -46,7 +44,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <button
               className="button ghost nav-button icon-only"
               type="button"
-              onClick={() => navigate('/')}
+              onClick={() => navigate("/")}
               aria-label="Home"
             >
               <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -60,7 +58,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <button
               className="button ghost nav-button icon-only"
               type="button"
-              onClick={() => navigate('/profile')}
+              onClick={() => navigate("/profile")}
               aria-label="Profile"
             >
               <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -89,7 +87,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <button
                 className="button ghost nav-button icon-only"
                 type="button"
-                onClick={() => navigate('/login')}
+                onClick={() => navigate("/login")}
                 aria-label="Login"
               >
                 <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -107,7 +105,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               type="button"
               id="theme-toggle"
               onClick={toggleTheme}
-              aria-pressed={theme === 'dark'}
+              aria-pressed={theme === "dark"}
               aria-label="Toggle theme"
             >
               {/* Sun */}
@@ -115,20 +113,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 className="icon icon-sun"
                 viewBox="0 0 24 24"
                 aria-hidden="true"
-                style={{ display: theme === 'dark' ? 'block' : 'none' }}
+                style={{ display: theme === "dark" ? "block" : "none" }}
               >
                 <circle cx="12" cy="12" r="4" />
-                <path d="M12 2v3" /><path d="M12 19v3" />
-                <path d="M2 12h3" /><path d="M19 12h3" />
-                <path d="M4.5 4.5l2.1 2.1" /><path d="M17.4 17.4l2.1 2.1" />
-                <path d="M4.5 19.5l2.1-2.1" /><path d="M17.4 6.6l2.1-2.1" />
+                <path d="M12 2v3" />
+                <path d="M12 19v3" />
+                <path d="M2 12h3" />
+                <path d="M19 12h3" />
+                <path d="M4.5 4.5l2.1 2.1" />
+                <path d="M17.4 17.4l2.1 2.1" />
+                <path d="M4.5 19.5l2.1-2.1" />
+                <path d="M17.4 6.6l2.1-2.1" />
               </svg>
               {/* Moon */}
               <svg
                 className="icon icon-moon"
                 viewBox="0 0 24 24"
                 aria-hidden="true"
-                style={{ display: theme === 'light' ? 'block' : 'none' }}
+                style={{ display: theme === "light" ? "block" : "none" }}
               >
                 <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z" />
               </svg>
@@ -138,7 +140,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="container" style={{ paddingTop: '1rem' }}>
+      <main className="container" style={{ paddingTop: "1rem" }}>
         {children}
       </main>
     </>

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { profileApi } from '../api/profile';
-import type { Profile } from '../types/message';
-import { useAuth } from '../contexts/AuthContext';
-import Alert from '../components/Alert';
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { profileApi } from "../api/profile";
+import type { Profile } from "../types/message";
+import { useAuth } from "../contexts/AuthContext";
+import Alert from "../components/Alert";
 
 export default function ProfilePage() {
   const { isLoggedIn } = useAuth();
@@ -11,36 +11,46 @@ export default function ProfilePage() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const [nickname, setNickname] = useState('');
+  const [nickname, setNickname] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!isLoggedIn) { setLoading(false); return; }
+    if (!isLoggedIn) {
+      setLoading(false);
+      return;
+    }
     profileApi
       .getProfile()
       .then((p) => {
         setProfile(p);
-        setNickname(p.nickname ?? '');
+        setNickname(p.nickname ?? "");
       })
-      .catch((e: unknown) => setError((e as Error).message ?? 'Failed to load profile'))
+      .catch((e: unknown) =>
+        setError((e as Error).message ?? "Failed to load profile"),
+      )
       .finally(() => setLoading(false));
   }, [isLoggedIn]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nickname.trim()) { setError('ニックネームを入力してください'); return; }
+    if (!nickname.trim()) {
+      setError("ニックネームを入力してください");
+      return;
+    }
     setSaving(true);
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
     try {
-      const updated = await profileApi.updateProfile({ nickname: nickname.trim() });
+      const updated = await profileApi.updateProfile({
+        nickname: nickname.trim(),
+      });
       setProfile(updated);
-      setSuccess('プロフィールを更新しました');
+      setSuccess("プロフィールを更新しました");
     } catch (e: unknown) {
-      setError((e as Error).message ?? 'Failed to update profile');
+      setError((e as Error).message ?? "Failed to update profile");
     } finally {
       setSaving(false);
     }
@@ -61,7 +71,7 @@ export default function ProfilePage() {
             <button
               className="button"
               type="button"
-              onClick={() => navigate('/login')}
+              onClick={() => navigate("/login")}
             >
               Sign in
             </button>
@@ -76,13 +86,15 @@ export default function ProfilePage() {
             </div>
             <div>
               <div className="label">Nickname</div>
-              <div className="value">{profile.nickname ?? '-'}</div>
+              <div className="value">{profile.nickname ?? "-"}</div>
             </div>
           </div>
 
           <form className="form" onSubmit={handleSave}>
             <div className="field">
-              <label className="label" htmlFor="nickname">Nickname</label>
+              <label className="label" htmlFor="nickname">
+                Nickname
+              </label>
               <input
                 className="input"
                 id="nickname"
@@ -95,7 +107,7 @@ export default function ProfilePage() {
             </div>
             <div className="actions">
               <button className="button" type="submit" disabled={saving}>
-                {saving ? '保存中...' : 'Save'}
+                {saving ? "保存中..." : "Save"}
               </button>
             </div>
           </form>

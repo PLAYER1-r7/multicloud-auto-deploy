@@ -4,7 +4,7 @@
 # ============================================================
 #
 # Tests the full simple-sns stack on AWS staging:
-#   - CloudFront CDN + frontend-web Lambda (SSR)
+#   - CloudFront CDN + React SPA (static files, /sns/)
 #   - API Lambda (FastAPI) via API Gateway
 #   - Cognito-protected endpoints
 #   - Image upload (presigned URL generation)
@@ -26,8 +26,8 @@
 # How to get a Cognito access token for testing:
 #   1. Open https://d1tf3uumcm4bo1.cloudfront.net/sns/ in a browser
 #   2. Log in with your Cognito account
-#   3. Open DevTools → Application → Cookies
-#   4. Copy the value of the `access_token` cookie
+#   3. Open DevTools → Application → Local Storage → select the page origin
+#   4. Copy the value of the `access_token` key
 #   5. Pass it as --token <value>
 #
 # Alternatively, using the Cognito CLI flow:
@@ -382,11 +382,11 @@ fi
 
 # ════════════════════════════════════════════════════════════
 sep
-echo -e "${BOLD}Section 8 — frontend-web Lambda env-var sanity check${NC}"
+echo -e "${BOLD}Section 8 — React SPA build-time env-var sanity check${NC}"
 sep
 
-# Verify that the SNS app does NOT show "localhost" in its HTML
-# (checks that API_BASE_URL env var is set correctly in the Lambda)
+# Verify that the React SPA does NOT embed "localhost" in its HTML
+# (checks that VITE_API_URL was set correctly at build time)
 SNS_BODY=$(curl -s --max-time 15 --compressed "$CF_URL/sns/" 2>/dev/null || echo "")
 if echo "$SNS_BODY" | grep -q "localhost"; then
   fail "GET /sns/ env-var sanity: page exposes 'localhost' — env vars may be wrong"

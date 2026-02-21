@@ -4,7 +4,7 @@
 # ==============================================================
 #
 # Tests the full simple-sns stack on Azure staging:
-#   - Azure Front Door CDN + frontend-web Function App (SSR/FastAPI)
+#   - Azure Front Door CDN + React SPA (static files served from Blob Storage, /sns/)
 #   - API Function App (FastAPI) backed by Cosmos DB
 #   - Azure AD protected endpoints
 #   - Image upload (Blob Storage SAS URL generation)
@@ -26,8 +26,8 @@
 # How to get an Azure AD access token for testing:
 #   1. Open https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/sns/ in a browser
 #   2. Log in with your Azure AD account
-#   3. Open DevTools → Application → Cookies
-#   4. Copy the value of the `access_token` cookie
+#   3. Open DevTools → Application → Local Storage → select the page origin
+#   4. Copy the value of the `id_token` key
 #   5. Pass it as --token <value>
 #
 # Exit codes:
@@ -41,7 +41,6 @@ set -euo pipefail
 
 # ── defaults ──────────────────────────────────────────────────
 FD_URL="${FD_URL:-https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net}"
-FW_URL="${FW_URL:-https://multicloud-auto-deploy-staging-frontend-web.azurewebsites.net}"
 API_URL="${API_URL:-https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net}"
 TOKEN=""
 VERBOSE=false
@@ -71,7 +70,6 @@ Usage: $0 [OPTIONS]
 
 Options:
   -f, --fd    <url>    Front Door base URL  (default: $FD_URL)
-  -w, --fw    <url>    Frontend-web Function App direct URL (default: $FW_URL)
   -a, --api   <url>    API Function App base URL (default: $API_URL)
   -t, --token <token>  Azure AD access token (required for auth tests)
   -v, --verbose        Print full response bodies
@@ -88,7 +86,6 @@ EOF
 while [[ $# -gt 0 ]]; do
   case $1 in
     -f|--fd)    FD_URL="$2";  shift 2 ;;
-    -w|--fw)    FW_URL="$2";  shift 2 ;;
     -a|--api)   API_URL="$2"; shift 2 ;;
     -t|--token) TOKEN="$2";   shift 2 ;;
     -v|--verbose) VERBOSE=true; shift ;;
@@ -99,7 +96,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 FD_URL="${FD_URL%/}"
-FW_URL="${FW_URL%/}"
 API_URL="${API_URL%/}"
 
 # ── dependency check ──────────────────────────────────────────
@@ -157,29 +153,20 @@ echo -e "${BOLD}============================================================${NC
 echo -e "${BOLD}  Azure Simple-SNS — End-to-End Test Suite${NC}"
 echo -e "${BOLD}============================================================${NC}"
 echo -e "  Front Door  : ${CYAN}$FD_URL${NC}"
-echo -e "  Frontend-web: ${CYAN}$FW_URL${NC}"
 echo -e "  API Function: ${CYAN}$API_URL${NC}"
 echo -e "  Auth token  : $([ -n "$TOKEN" ] && echo "${CYAN}provided${NC}" || echo "${YELLOW}not provided (auth tests will be skipped)${NC}")"
 echo ""
 
 # ════════════════════════════════════════════════════════════
 sep
-echo -e "${BOLD}Section 1 — Frontend-web Function App (direct)${NC}"
+echo -e "${BOLD}Section 1 — Front Door CDN + React SPA (static)${NC}"
 sep
 
-run_test "Frontend-web /sns/health returns 200" \
-  GET "$FW_URL/sns/health"
+run_test "AFD GET /sns/ returns 200" \
+  GET "$FD_URL/sns/"
 
-if echo "$LAST_BODY" | jq -e '.status == "ok"' >/dev/null 2>&1; then
-  ok "  .status == \"ok\" (FastAPI running)"
-else
-  fail "  Unexpected /sns/health response: $(echo "$LAST_BODY" | head -c 200)"
-fi
-
-run_test "Frontend-web /sns/ returns 200 (HTML)" \
-  GET "$FW_URL/sns/"
-
-SNS_CT=$(curl -s --max-time 20 -D - "$FW_URL/sns/" -o /dev/null 2>/dev/null \
+# Verify Content-Type is text/html
+SNS_CT=$(curl -s --max-time 25 -D - "$FD_URL/sns/" -o /dev/null 2>/dev/null \
   | grep -i '^content-type:' | head -1 | tr -d '\r\n' || echo "")
 if echo "$SNS_CT" | grep -qi 'text/html'; then
   ok "  SNS page Content-Type is text/html  [$SNS_CT]"
@@ -187,11 +174,28 @@ else
   fail "  SNS page unexpected Content-Type: $SNS_CT"
 fi
 
-run_test "Frontend-web /sns/login page returns 200 (HTML)" \
-  GET "$FW_URL/sns/login"
+# Verify the page contains the React SPA root element
+SNS_BODY=$(curl -s --max-time 25 --compressed "$FD_URL/sns/" 2>/dev/null || echo "")
+if echo "$SNS_BODY" | grep -q '<div id="root"'; then
+  ok "  React SPA root element (<div id=\"root\">) found"
+  PASS=$((PASS + 1))
+else
+  fail "  React SPA root element not found in /sns/ page"
+  FAIL=$((FAIL + 1))
+fi
 
-run_test "Frontend-web /sns/static/app.css returns 200" \
-  GET "$FW_URL/sns/static/app.css"
+# Verify the SPA does not contain Python/Jinja2 SSR artifacts
+if echo "$SNS_BODY" | grep -qi 'jinja\|fastapi\|uvicorn'; then
+  fail "  /sns/ page still contains SSR artifacts (Jinja/FastAPI)"
+  FAIL=$((FAIL + 1))
+else
+  ok "  No SSR artifacts in React SPA page"
+  PASS=$((PASS + 1))
+fi
+
+# React SPA routing: deep links should also return 200 + HTML (SPA index)
+run_test "AFD GET / returns 200 (landing page)" \
+  GET "$FD_URL/"
 
 # ════════════════════════════════════════════════════════════
 sep
@@ -219,20 +223,20 @@ fi
 
 # ════════════════════════════════════════════════════════════
 sep
-echo -e "${BOLD}Section 3 — Front Door CDN routing${NC}"
+echo -e "${BOLD}Section 3 — Front Door CDN routing (API)${NC}"
 sep
 
-run_test "Front Door /sns/health via CDN returns 200" \
-  GET "$FD_URL/sns/health"
+run_test "Front Door /api/health via CDN returns 200" \
+  GET "$FD_URL/api/health"
 
-run_test "Front Door /sns/ returns 200 (HTML)" \
-  GET "$FD_URL/sns/"
+run_test "Front Door GET /api/posts via CDN returns 200" \
+  GET "$FD_URL/api/posts"
 
-run_test "Front Door /sns/login returns 200 (HTML)" \
-  GET "$FD_URL/sns/login"
-
-run_test "Front Door /sns/static/app.css returns 200 (static file)" \
-  GET "$FD_URL/sns/static/app.css"
+# Auth guard via CDN
+run_test "Front Door POST /api/posts without token returns 401" \
+  POST "$FD_URL/api/posts" \
+  --data '{"content":"cdn auth guard test"}' \
+  --expect 401
 
 # ════════════════════════════════════════════════════════════
 sep
@@ -298,16 +302,22 @@ else
     fail "  Presigned URL missing in response"
   fi
 
-  # 5-5. Create post with image_url
-  run_test "POST /api/posts with image_url creates post" \
+  # 5-5. Create post with imageKeys (React SPA format)
+  KEYS_2=$(python3 -c "
+import json, uuid
+keys = [f'testuser/{uuid.uuid4()}.jpg', f'testuser/{uuid.uuid4()}.jpg']
+print(json.dumps({'content': '[test] Azure E2E post with imageKeys', 'imageKeys': keys}))
+")
+  run_test "POST /api/posts with imageKeys returns 201" \
     POST "$API_URL/api/posts" \
     --header "$AUTHH" \
-    --data "{\"content\":\"Azure E2E test post with image $(date +%s)\",\"image_url\":\"https://mcadwebd45ihd.blob.core.windows.net/images/test.jpg\"}"
+    --data "$KEYS_2" \
+    --expect 201
 
-  if echo "$LAST_BODY" | jq -e '.id' >/dev/null 2>&1; then
-    IMG_POST_ID=$(echo "$LAST_BODY" | jq -r '.id')
-    ok "  Post with image_url created: id=$IMG_POST_ID"
-    CREATED_POST_IDS+=("$IMG_POST_ID")
+  if echo "$LAST_BODY" | jq -e '.id // .postId' >/dev/null 2>&1; then
+    IMG_POST_ID=$(echo "$LAST_BODY" | jq -r '.id // .postId // ""')
+    [[ -n "$IMG_POST_ID" && "$IMG_POST_ID" != "null" ]] && CREATED_POST_IDS+=("$IMG_POST_ID")
+    ok "  Post with imageKeys created: id=$IMG_POST_ID"
   fi
 
   # 5-6. List posts — should include ours

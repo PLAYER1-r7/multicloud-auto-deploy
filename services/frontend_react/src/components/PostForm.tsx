@@ -1,13 +1,13 @@
-import { useRef, useState } from 'react';
-import { postsApi } from '../api/posts';
-import { uploadsApi } from '../api/uploads';
-import Alert from './Alert';
+import { useRef, useState } from "react";
+import { postsApi } from "../api/posts";
+import { uploadsApi } from "../api/uploads";
+import Alert from "./Alert";
 
 const ALLOWED_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/heic',
-  'image/heif',
+  "image/jpeg",
+  "image/png",
+  "image/heic",
+  "image/heif",
 ]);
 
 interface PostFormProps {
@@ -15,12 +15,12 @@ interface PostFormProps {
 }
 
 export default function PostForm({ onCreated }: PostFormProps) {
-  const [content, setContent] = useState('');
-  const [tags, setTags] = useState('');
+  const [content, setContent] = useState("");
+  const [tags, setTags] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
-  const [error, setError] = useState('');
-  const [status, setStatus] = useState('');
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -28,32 +28,39 @@ export default function PostForm({ onCreated }: PostFormProps) {
     const selected = Array.from(e.target.files ?? []);
     const invalid = selected.filter((f) => !ALLOWED_TYPES.has(f.type));
     if (invalid.length > 0) {
-      setError('JPEG/PNG/HEIC/HEIF のみ対応しています');
+      setError("JPEG/PNG/HEIC/HEIF のみ対応しています");
       return;
     }
     if (selected.length > 16) {
-      setError('画像は最大16枚までです');
+      setError("画像は最大16枚までです");
       return;
     }
-    setError('');
+    setError("");
     setFiles(selected);
     setPreviews(selected.map((f) => URL.createObjectURL(f)));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim()) { setError('投稿内容を入力してください'); return; }
-    setError('');
+    if (!content.trim()) {
+      setError("投稿内容を入力してください");
+      return;
+    }
+    setError("");
     setSubmitting(true);
 
     try {
       let imageKeys: string[] = [];
 
       if (files.length > 0) {
-        setStatus('画像をアップロード中...');
+        setStatus("画像をアップロード中...");
         const contentTypes = files.map((f) => f.type);
-        const { urls } = await uploadsApi.getPresignedUrls(files.length, contentTypes);
-        if (urls.length !== files.length) throw new Error('URL数が一致しません');
+        const { urls } = await uploadsApi.getPresignedUrls(
+          files.length,
+          contentTypes,
+        );
+        if (urls.length !== files.length)
+          throw new Error("URL数が一致しません");
 
         imageKeys = await Promise.all(
           files.map(async (file, i) => {
@@ -63,7 +70,7 @@ export default function PostForm({ onCreated }: PostFormProps) {
         );
       }
 
-      setStatus('投稿中...');
+      setStatus("投稿中...");
       const tagList = tags
         .split(/[\s,]+/)
         .map((t) => t.trim())
@@ -76,20 +83,20 @@ export default function PostForm({ onCreated }: PostFormProps) {
       });
 
       // Reset form
-      setContent('');
-      setTags('');
+      setContent("");
+      setTags("");
       setFiles([]);
       setPreviews([]);
-      if (fileRef.current) fileRef.current.value = '';
-      setStatus('');
+      if (fileRef.current) fileRef.current.value = "";
+      setStatus("");
       onCreated?.();
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
           ?.detail ??
-        (err instanceof Error ? err.message : '投稿に失敗しました');
+        (err instanceof Error ? err.message : "投稿に失敗しました");
       setError(msg);
-      setStatus('');
+      setStatus("");
     } finally {
       setSubmitting(false);
     }
@@ -101,7 +108,9 @@ export default function PostForm({ onCreated }: PostFormProps) {
       <Alert type="error" message={error} />
       <form className="form" id="post-form" onSubmit={handleSubmit}>
         <div className="field">
-          <label className="label" htmlFor="content">投稿内容</label>
+          <label className="label" htmlFor="content">
+            投稿内容
+          </label>
           <textarea
             className="input textarea"
             id="content"
@@ -114,7 +123,9 @@ export default function PostForm({ onCreated }: PostFormProps) {
         </div>
 
         <div className="field">
-          <label className="label" htmlFor="tags">タグ (スペース区切り)</label>
+          <label className="label" htmlFor="tags">
+            タグ (スペース区切り)
+          </label>
           <input
             className="input"
             id="tags"
@@ -143,7 +154,12 @@ export default function PostForm({ onCreated }: PostFormProps) {
           {previews.length > 0 && (
             <div className="preview-grid">
               {previews.map((src, i) => (
-                <img key={i} src={src} alt={`Preview ${i + 1}`} className="preview-image" />
+                <img
+                  key={i}
+                  src={src}
+                  alt={`Preview ${i + 1}`}
+                  className="preview-image"
+                />
               ))}
             </div>
           )}
@@ -151,7 +167,9 @@ export default function PostForm({ onCreated }: PostFormProps) {
 
         <div className="actions">
           {status && (
-            <span className="muted" style={{ marginRight: 10 }}>{status}</span>
+            <span className="muted" style={{ marginRight: 10 }}>
+              {status}
+            </span>
           )}
           <button
             className="button icon-only"

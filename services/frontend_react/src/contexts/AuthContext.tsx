@@ -5,8 +5,8 @@ import React, {
   useEffect,
   useMemo,
   useState,
-} from 'react';
-import { getLogoutUrl, authProvider } from '../config/auth';
+} from "react";
+import { getLogoutUrl, authProvider } from "../config/auth";
 
 // ---- Types ----
 interface AuthState {
@@ -18,7 +18,11 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   /** Save tokens returned from auth provider callback / Firebase SDK */
-  setTokens: (params: { idToken?: string; accessToken?: string; expiresIn?: number }) => void;
+  setTokens: (params: {
+    idToken?: string;
+    accessToken?: string;
+    expiresIn?: number;
+  }) => void;
   /** Clear tokens and redirect to provider logout */
   logout: (currentOrigin: string) => void;
 }
@@ -26,8 +30,8 @@ interface AuthContextValue extends AuthState {
 // ---- Context ----
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const TOKEN_KEY_ACCESS = 'access_token';
-const TOKEN_KEY_ID     = 'id_token';
+const TOKEN_KEY_ACCESS = "access_token";
+const TOKEN_KEY_ID = "id_token";
 
 function readToken(): string | null {
   return (
@@ -44,8 +48,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Stay in sync across tabs
   useEffect(() => {
     const onStorage = () => setToken(readToken());
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const setTokens = useCallback(
@@ -86,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
 
     // Firebase: no hosted logout URL; the SDK sign-out is handled in LoginPage
-    if (authProvider === 'firebase') {
+    if (authProvider === "firebase") {
       return;
     }
 
@@ -113,6 +117,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 // ---- Hook ----
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
+  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
   return ctx;
 }

@@ -1,19 +1,24 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { authProvider, isFirebase, FIREBASE_CONFIG, getLoginUrl } from '../config/auth';
-import { useAuth } from '../contexts/AuthContext';
-import Alert from '../components/Alert';
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  authProvider,
+  isFirebase,
+  FIREBASE_CONFIG,
+  getLoginUrl,
+} from "../config/auth";
+import { useAuth } from "../contexts/AuthContext";
+import Alert from "../components/Alert";
 
 export default function LoginPage() {
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
-  const [status, setStatus] = useState('');
-  const [error, setError] = useState('');
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
   const firebaseInitialized = useRef(false);
 
   // Already logged in → go home
   useEffect(() => {
-    if (isLoggedIn) navigate('/', { replace: true });
+    if (isLoggedIn) navigate("/", { replace: true });
   }, [isLoggedIn, navigate]);
 
   // ----- AWS Cognito / Azure AD: simple redirect -----
@@ -22,26 +27,31 @@ export default function LoginPage() {
     if (url) {
       window.location.href = url;
     } else {
-      setError('認証設定が不完全です。管理者に連絡してください。');
+      setError("認証設定が不完全です。管理者に連絡してください。");
     }
   };
 
   // ----- Firebase: dynamic import + signInWithPopup -----
   const handleFirebaseLogin = async () => {
-    setStatus('Googleに接続中...');
-    setError('');
+    setStatus("Googleに接続中...");
+    setError("");
     try {
       // @ts-ignore — CDN URL dynamic import, no TypeScript type declarations available
-      const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js') as {
-        initializeApp: (config: object) => object;
-        getApps: () => object[];
-      };
+      const { initializeApp, getApps } =
+        (await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js")) as {
+          initializeApp: (config: object) => object;
+          getApps: () => object[];
+        };
       // @ts-ignore
-      const { getAuth, signInWithPopup, GoogleAuthProvider } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js') as {
-        getAuth: () => object;
-        signInWithPopup: (auth: object, provider: object) => Promise<{ user: { getIdToken: () => Promise<string> } }>;
-        GoogleAuthProvider: new () => object;
-      };
+      const { getAuth, signInWithPopup, GoogleAuthProvider } =
+        (await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js")) as {
+          getAuth: () => object;
+          signInWithPopup: (
+            auth: object,
+            provider: object,
+          ) => Promise<{ user: { getIdToken: () => Promise<string> } }>;
+          GoogleAuthProvider: new () => object;
+        };
 
       if (!firebaseInitialized.current) {
         if (getApps().length === 0) initializeApp(FIREBASE_CONFIG);
@@ -49,29 +59,30 @@ export default function LoginPage() {
       }
 
       const auth = getAuth();
-      setStatus('本人確認中...');
+      setStatus("本人確認中...");
       const result = await signInWithPopup(auth, new GoogleAuthProvider());
       const idToken = await result.user.getIdToken();
 
       // Store token in localStorage — AuthContext will pick it up
-      localStorage.setItem('id_token', idToken);
-      window.dispatchEvent(new Event('storage'));
-      navigate('/', { replace: true });
+      localStorage.setItem("id_token", idToken);
+      window.dispatchEvent(new Event("storage"));
+      navigate("/", { replace: true });
     } catch (e: unknown) {
-      const msg = (e as { message?: string }).message ?? 'ログインに失敗しました';
+      const msg =
+        (e as { message?: string }).message ?? "ログインに失敗しました";
       setError(msg);
-      setStatus('');
+      setStatus("");
     }
   };
 
   const providerLabel =
-    authProvider === 'aws'
-      ? 'Cognito'
-      : authProvider === 'azure'
-        ? 'Azure AD'
-        : authProvider === 'firebase'
-          ? 'Google'
-          : '—';
+    authProvider === "aws"
+      ? "Cognito"
+      : authProvider === "azure"
+        ? "Azure AD"
+        : authProvider === "firebase"
+          ? "Google"
+          : "—";
 
   const handleLogin = isFirebase ? handleFirebaseLogin : handleRedirectLogin;
 
@@ -98,7 +109,11 @@ export default function LoginPage() {
         </button>
       </div>
 
-      {status && <p className="muted" style={{ marginTop: '0.5rem' }}>{status}</p>}
+      {status && (
+        <p className="muted" style={{ marginTop: "0.5rem" }}>
+          {status}
+        </p>
+      )}
     </section>
   );
 }

@@ -1,42 +1,39 @@
-import { useCallback, useEffect, useState } from 'react';
-import { postsApi } from '../api/posts';
-import type { Post } from '../types/message';
-import { useAuth } from '../contexts/AuthContext';
-import PostCard from '../components/PostCard';
-import PostForm from '../components/PostForm';
-import Alert from '../components/Alert';
+import { useCallback, useEffect, useState } from "react";
+import { postsApi } from "../api/posts";
+import type { Post } from "../types/message";
+import { useAuth } from "../contexts/AuthContext";
+import PostCard from "../components/PostCard";
+import PostForm from "../components/PostForm";
+import Alert from "../components/Alert";
 
 export default function HomePage() {
   const { isLoggedIn } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [nextToken, setNextToken] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
   // Search / filter
   const [showSearch, setShowSearch] = useState(false);
-  const [tagFilter, setTagFilter] = useState('');
-  const [keyword, setKeyword] = useState('');
-  const [appliedTag, setAppliedTag] = useState('');
-  const [appliedKeyword, setAppliedKeyword] = useState('');
+  const [tagFilter, setTagFilter] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [appliedTag, setAppliedTag] = useState("");
+  const [appliedKeyword, setAppliedKeyword] = useState("");
 
-  const loadPosts = useCallback(
-    async (tag?: string, reset = true) => {
-      if (reset) setLoading(true);
-      try {
-        const res = await postsApi.getPosts(20, null, tag || null);
-        setPosts(res.items);
-        setNextToken(res.nextToken ?? null);
-        setError('');
-      } catch (e: unknown) {
-        setError((e as Error).message ?? 'Failed to load posts');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
-  );
+  const loadPosts = useCallback(async (tag?: string, reset = true) => {
+    if (reset) setLoading(true);
+    try {
+      const res = await postsApi.getPosts(20, null, tag || null);
+      setPosts(res.items);
+      setNextToken(res.nextToken ?? null);
+      setError("");
+    } catch (e: unknown) {
+      setError((e as Error).message ?? "Failed to load posts");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadPosts();
@@ -50,11 +47,11 @@ export default function HomePage() {
   };
 
   const handleClear = () => {
-    setTagFilter('');
-    setKeyword('');
-    setAppliedTag('');
-    setAppliedKeyword('');
-    loadPosts('');
+    setTagFilter("");
+    setKeyword("");
+    setAppliedTag("");
+    setAppliedKeyword("");
+    loadPosts("");
   };
 
   const handleLoadMore = async () => {
@@ -105,7 +102,9 @@ export default function HomePage() {
           <h2>検索</h2>
           <form className="form" onSubmit={handleSearch}>
             <div className="field">
-              <label className="label" htmlFor="tagFilter">タグ検索</label>
+              <label className="label" htmlFor="tagFilter">
+                タグ検索
+              </label>
               <input
                 className="input"
                 id="tagFilter"
@@ -116,7 +115,9 @@ export default function HomePage() {
               />
             </div>
             <div className="field">
-              <label className="label" htmlFor="searchKeyword">投稿内容検索</label>
+              <label className="label" htmlFor="searchKeyword">
+                投稿内容検索
+              </label>
               <input
                 className="input"
                 id="searchKeyword"
@@ -127,7 +128,11 @@ export default function HomePage() {
               />
             </div>
             <div className="actions">
-              <button className="button icon-only" type="submit" aria-label="Search">
+              <button
+                className="button icon-only"
+                type="submit"
+                aria-label="Search"
+              >
                 <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="11" cy="11" r="7" />
                   <path d="M20 20l-3.5-3.5" />
@@ -141,7 +146,8 @@ export default function HomePage() {
                 aria-label="Clear"
               >
                 <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M18 6L6 18" /><path d="M6 6l12 12" />
+                  <path d="M18 6L6 18" />
+                  <path d="M6 6l12 12" />
                 </svg>
                 <span className="sr-only">クリア</span>
               </button>
@@ -167,7 +173,10 @@ export default function HomePage() {
         ) : displayed.length === 0 ? (
           <p className="muted">投稿がありません。</p>
         ) : (
-          <ul className="posts" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+          <ul
+            className="posts"
+            style={{ margin: 0, padding: 0, listStyle: "none" }}
+          >
             {displayed.map((post) => (
               <li key={post.postId}>
                 <PostCard post={post} onDeleted={handleDeleted} />
@@ -176,14 +185,14 @@ export default function HomePage() {
           </ul>
         )}
         {nextToken && !appliedKeyword && (
-          <div className="actions" style={{ marginTop: '1rem' }}>
+          <div className="actions" style={{ marginTop: "1rem" }}>
             <button
               className="button ghost"
               type="button"
               onClick={handleLoadMore}
               disabled={loadingMore}
             >
-              {loadingMore ? '読み込み中...' : 'もっと見る'}
+              {loadingMore ? "読み込み中..." : "もっと見る"}
             </button>
           </div>
         )}

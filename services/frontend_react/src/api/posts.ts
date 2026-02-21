@@ -1,5 +1,10 @@
-import apiClient from './client';
-import type { Post, PostsResponse, CreatePostInput, UpdatePostInput } from '../types/message';
+import apiClient from "./client";
+import type {
+  Post,
+  PostsResponse,
+  CreatePostInput,
+  UpdatePostInput,
+} from "../types/message";
 
 export const postsApi = {
   async getPosts(
@@ -7,7 +12,7 @@ export const postsApi = {
     nextToken?: string | null,
     tag?: string | null,
   ): Promise<PostsResponse> {
-    const res = await apiClient.get<PostsResponse>('/posts', {
+    const res = await apiClient.get<PostsResponse>("/posts", {
       params: {
         limit,
         ...(nextToken ? { next_token: nextToken } : {}),
@@ -23,7 +28,7 @@ export const postsApi = {
   },
 
   async createPost(data: CreatePostInput): Promise<Post> {
-    const res = await apiClient.post<Post>('/posts', data);
+    const res = await apiClient.post<Post>("/posts", data);
     return res.data;
   },
 
