@@ -123,6 +123,7 @@ jobs:
           echo "function_name=$(pulumi stack output function_name)" >> $GITHUB_OUTPUT
           echo "cdn_ip_address=$(pulumi stack output cdn_ip_address)" >> $GITHUB_OUTPUT
           echo "uploads_bucket=$(pulumi stack output uploads_bucket)" >> $GITHUB_OUTPUT
+          echo "compute_sa_email=$(pulumi stack output compute_sa_email)" >> $GITHUB_OUTPUT
 
       - name: Package Cloud Function
         run: |
@@ -218,6 +219,7 @@ jobs:
           echo "AUTH_DISABLED: \"$AUTH_DISABLED_VALUE\"" >> /tmp/env-vars.yaml
           echo "AUTH_PROVIDER: firebase" >> /tmp/env-vars.yaml
           echo "GCP_STORAGE_BUCKET: $UPLOADS_BUCKET" >> /tmp/env-vars.yaml
+          echo "GCP_SERVICE_ACCOUNT: ${{ steps.pulumi_outputs.outputs.compute_sa_email }}" >> /tmp/env-vars.yaml
           echo "CORS_ORIGINS: \"$CORS_ORIGINS\"" >> /tmp/env-vars.yaml
 
           echo "📝 Environment variables file created (ENVIRONMENT=$DEPLOY_ENV, AUTH_DISABLED=$AUTH_DISABLED_VALUE, AUTH_PROVIDER=firebase, GCP_STORAGE_BUCKET=$UPLOADS_BUCKET)"
