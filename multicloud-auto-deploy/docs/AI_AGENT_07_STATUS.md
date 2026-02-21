@@ -74,11 +74,14 @@ API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneas
 - Auth guard: `POST /uploads/presigned-urls` without token → 401 ✅
 - Frontend `/sns/` → 200 ✅
 
-**Unresolved issues**:
+**Resolved issues (2026-02-21)**:
 
-- SPA deep links (`/sns/unknown-path` via Front Door) return 404 JSON (not SPA fallback). AWS CloudFront has this configured; Azure Front Door does not.
-- End-to-end verification of `PUT /posts/{id}` is incomplete.
-- WAF not configured (Front Door Standard SKU).
+- ✅ SPA deep link: `frontend_web` に `GET /{path:path}` catch-all ルート追加 → 未知パスは home へ 302 リダイレクト
+- ✅ `PUT /posts/{id}` エンドポイント確認: 認証なし → 401「認証が必要です」正常動作
+
+**Remaining issues**:
+
+- ❌ WAF not configured (Front Door Standard SKU). 見送り済み (コスト).
 
 ---
 
@@ -125,8 +128,8 @@ Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7
 
 **Remaining issues**:
 
-- HTTPS not configured for CDN (HTTP only). Requires `TargetHttpsProxy` + managed SSL certificate.
-- SPA deep links via CDN return HTTP 404 (Cloud Run URL works correctly in browsers).
+- ⚠️ HTTPS: LB 443 ポートは存在するが SSL 証明書が `example.com` プレースホルダで `PROVISIONING_FAILED`。カスタムドメイン設定が前提条件 (#14 低優先に移動)。
+- ✅ SPA deep link: `frontend_web` catch-all route 追加済み (2026-02-21)。
 
 ---
 

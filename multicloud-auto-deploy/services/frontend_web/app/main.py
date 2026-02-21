@@ -40,16 +40,19 @@ app.mount(_static_path, StaticFiles(
     directory=os.path.join(_APP_DIR, "static")), name="static")
 
 app.include_router(auth.router, prefix=prefix)
-app.include_router(views.router, prefix=prefix)
 
 
 def _health() -> dict:
     return {"status": "ok"}
 
 
+# NOTE: health エンドポイントは views.router より先に登録する。
+# views.router 末尾の catch-all (/{path:path}) より優先させるため。
 app.add_api_route(
     f"{prefix}/health" if prefix else "/health",
     _health,
     methods=["GET"],
     name="health",
 )
+
+app.include_router(views.router, prefix=prefix)

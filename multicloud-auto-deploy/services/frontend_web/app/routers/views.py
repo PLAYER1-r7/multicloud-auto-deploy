@@ -2,7 +2,7 @@ from typing import Any
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import Response as _Response
+from fastapi.responses import RedirectResponse, Response as _Response
 from fastapi.templating import Jinja2Templates
 import requests
 
@@ -380,3 +380,14 @@ async def storage_proxy(path: str, request: Request):
         if k.lower() not in ("transfer-encoding", "connection", "content-encoding")
     }
     return _Response(content=resp.content, status_code=resp.status_code, headers=resp_headers)
+
+
+@router.get("/{path:path}", name="catch_all", include_in_schema=False)
+def catch_all(
+    path: str, request: Request, settings: Settings = Depends(get_settings)
+) -> _Response:
+    """SPA deep link fallback: 未定義パスへの GET はホームページへリダイレクト (302)。
+    Azure/GCP の frontend_web で AWS CloudFront のカスタムエラーページに相当する動作を実現する。
+    """
+    home_url = str(request.url_for("home"))
+    return RedirectResponse(url=home_url, status_code=302)

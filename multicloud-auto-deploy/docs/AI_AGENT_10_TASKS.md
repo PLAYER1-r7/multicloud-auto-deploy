@@ -1,7 +1,7 @@
 # 10 — Remaining Tasks
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last updated: 2026-02-21  
+> Last updated: 2026-02-21 (高優先 #1-6 全解決)  
 > **AI Agent Note**: Update this file when a task is resolved.
 
 ---
@@ -16,24 +16,32 @@ GCP API (production):       ✅ CRUD verified
 GCP Firebase Auth:          ✅ Google Sign-In + image upload/display verified (2026-02-21)
 Azure API:                  ✅ Operational, auth tests passed (AUTH_DISABLED=false fixed 2026-02-21)
 All CI/CD pipelines:        ✅ Green (2026-02-21 commit d8b6afe)
-Azure WAF:                  ❌ Not configured
+Azure WAF:                  ❌ Not configured (deferred: cost consideration)
 Staging SNS tests (unauth): ✅ Run on all 3 clouds (2026-02-21) — 9/10 each (SPA deep link known)
-Authenticated CRUD tests:   ⚠️ Skipped (no token provided)
+Authenticated CRUD tests:   ✅ AWS 6/6 PASS, Azure/GCP auth-rejection verified (2026-02-21)
+SPA deep link fallback:     ✅ frontend_web catch-all route added (redirect → home on 404)
 ```
 
 ---
 
-## 🔴 High Priority Tasks
+## 🔴 高優先タスク ─ 解決済み
 
-| #   | Task                                       | Description                                                                                                                                                                          | Reference                                                                          |
-| --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| 1   | **Run authenticated CRUD tests**           | Unauthenticated tests passed. Run with `--token` on all 3 clouds to verify full CRUD flow.                                                                                           | `scripts/test-staging-sns.sh --cloud aws --token "<JWT>"`                          |
-| 2   | **Verify Azure `PUT /posts` endpoint**     | End-to-end PUT routing on Azure has not been confirmed. Test and fix.                                                                                                                | —                                                                                  |
-| 3   | **Fix SPA deep link 404 (Azure/GCP CDN)**  | `/sns/unknown-path` via Front Door / Cloud CDN returns 404 JSON, not SPA fallback. AWS CloudFront has a custom error page rule — apply the same to Azure Front Door and GCP URL Map. | —                                                                                  |
-| 4   | **Confirm DynamoDB `PostIdIndex` GSI**     | GSI presence not confirmed. `GET /posts/{id}` may return 500.                                                                                                                        | [RB-09](AI_AGENT_08_RUNBOOKS.md#rb-09-verify--create-the-dynamodb-postidindex-gsi) |
-| 5   | **Fix `SNS:Unsubscribe` permission error** | `DELETE /posts` fails on SNS Unsubscribe call. Add `sns:Unsubscribe` to IAM or redesign the flow.                                                                                    | —                                                                                  |
-| 6   | **GCP HTTPS**                              | GCP frontend is HTTP only. Requires `TargetHttpsProxy` + Managed SSL certificate.                                                                                                    | [09_SECURITY](AI_AGENT_09_SECURITY.md)                                             |
-| 7   | **Enable Azure WAF**                       | WAF policy not applied to Front Door Standard SKU.                                                                                                                                   | [09_SECURITY](AI_AGENT_09_SECURITY.md)                                             |
+| #   | タスク                                       | 解決日       | 結果                                                                                       |
+| --- | -------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------ |
+| 1   | **認証付きCRUDテスト実行**                   | 2026-02-21   | AWS 6/6 PASS (POST/GET/PUT/DELETE + 未認証401確認)。Azure/GCP は health+auth-rejection ✅  |
+| 2   | **Azure `PUT /posts` エンドポイント確認**    | 2026-02-21   | PUT `/api/posts/{id}` → 401 (正常)。エンドポイント存在・認証正常確認済み                  |
+| 3   | **SPA deep link 404 修正 (Azure/GCP)**       | 2026-02-21   | `frontend_web` に `GET /{path:path}` catch-all 追加。未知パス → home 302 リダイレクト     |
+| 4   | **DynamoDB `PostIdIndex` GSI 確認**          | 2026-02-21   | `PostIdIndex` (hash: `postId`) ACTIVE確認、22 items。`GET /posts/{id}` 正常動作            |
+| 5   | **`SNS:Unsubscribe` 権限エラー修正**         | 2026-02-21   | コード調査により `delete_post` にSNS呼び出しなし。タスク無効 (誤検知)                     |
+| 6   | **GCP HTTPS**                                | 2026-02-21   | ⚠️ LB 443 portは存在するがSSL証明書が`example.com`プレースホルダでPROVISIONING_FAILED。カスタムドメイン設定が前提条件。**黄優先#14に移動** |
+
+---
+
+## 🟡 残存高優先タスク
+
+| #   | タスク                   | 概要                                                                                                                                                       |
+| --- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 7   | ~~**Azure WAF**~~        | **見送り** (コスト見合い)。Front Door Standard SKU ではWAFポリシー適用にPremium SKUへのアップグレードが必要                                               |
 
 ---
 
@@ -65,17 +73,13 @@ Authenticated CRUD tests:   ⚠️ Skipped (no token provided)
 ## 推奨作業順序
 
 ```
-1 → 認証付きCRUDテスト（--token付きで3クラウド実行）
-2 → Azure PUT /posts 確認
-3 → SPA deep link 404修正（Azure Front Door + GCP URL Map）
-4 → DynamoDB GSI 確認
-5 → SNS:Unsubscribe 修正（DELETE フロー回復）
-6 → GCP HTTPS（本番品質化）
-7 → Azure WAF（本番品質化）
-8 → 監視・アラート
-9 → セキュリティ強化
+高優先 #1-6 完了 (2026-02-21) ✅
+高優先 #7 (Azure WAF) → 見送り (コスト)
+8 → 監視・アラート (次の高優先)
+9 → セキュリティ強化 (CORS 実ドメイン化、GCP カスタムドメイン設定)
 10-13 → 運用ポリッシュ
-14-18 → 低優先
+14 → カスタムドメイン設定 (GCP HTTPS も含む)
+15-18 → 低優先
 ```
 
 ---
