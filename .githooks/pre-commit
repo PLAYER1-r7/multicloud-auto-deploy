@@ -3,10 +3,12 @@
 # .githooks/pre-commit
 # コミット前に全コンポーネントのパッチバージョン(Z)を自動インクリメント
 #
-# スキップ条件:
-#   - 環境変数 SKIP_VERSION_BUMP=1 が設定されている
-#   - コミットメッセージに [skip-version-bump] が含まれる
-#     例: git commit -m "chore: update readme [skip-version-bump]"
+# スキップ方法:
+#   SKIP_VERSION_BUMP=1 git commit -m "message"
+#
+# 注意: [skip-version-bump] はコミットメッセージへの記載は GitHub Actions
+#       (マイナーバンプ) のスキップ用。pre-commit 時点では commit message
+#       はまだ確定していないため、pre-commit のスキップには環境変数を使用。
 #
 # このフックを有効化するには:
 #   make hooks-install
@@ -23,15 +25,6 @@ VERSIONS_FILE="${REPO_ROOT}/versions.json"
 # --- スキップ: 環境変数チェック ---
 if [[ "${SKIP_VERSION_BUMP:-0}" == "1" ]]; then
   exit 0
-fi
-
-# --- スキップ: 準備中のコミットメッセージチェック (COMMIT_EDITMSG) ---
-COMMIT_MSG_FILE="${REPO_ROOT}/.git/COMMIT_EDITMSG"
-if [[ -f "$COMMIT_MSG_FILE" ]]; then
-  COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
-  if [[ "$COMMIT_MSG" == *"[skip-version-bump]"* ]]; then
-    exit 0
-  fi
 fi
 
 # --- スキップ: versions.json が唯一の変更ファイルの場合 (ループ防止) ---
