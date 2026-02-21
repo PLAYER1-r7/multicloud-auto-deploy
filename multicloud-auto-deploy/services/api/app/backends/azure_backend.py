@@ -348,6 +348,10 @@ class AzureBackend(BackendBase):
             raise ValueError(f"Post not found: {post_id}") from None
 
         # Return in consistent format
+        image_keys = post.get("imageKeys") or ([] if post.get(
+            "imageKey") is None else [post.get("imageKey")])
+        image_keys = [key for key in image_keys if isinstance(key, str)]
+        image_urls = _build_image_urls(image_keys) or []
         return {
             "id": post_id,
             "postId": post_id,
@@ -360,8 +364,8 @@ class AzureBackend(BackendBase):
             "created_at": post.get("createdAt"),
             "updatedAt": post.get("updatedAt"),
             "updated_at": post.get("updatedAt"),
-            "imageUrls": post.get("imageKeys", []),
-            "image_urls": post.get("imageKeys", []),
+            "imageUrls": image_urls,
+            "image_urls": image_urls,
         }
 
     def update_post(self, post_id: str, body: UpdatePostBody, user: UserInfo) -> dict:
