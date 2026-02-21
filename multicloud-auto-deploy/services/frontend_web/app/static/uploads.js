@@ -144,18 +144,21 @@ function initUploads() {
           const data = await res1.json();
           const urls = data.urls || [];
 
-          // 2. Upload to Blob Storage
+          // 2. Upload to storage
           const keys = await Promise.all(files.map(async (file, i) => {
                const u = urls[i]; 
                if (!u) throw new Error("Missing upload URL");
-               await fetch(u.url, {
+               // x-ms-blob-type is Azure Blob Storage specific; do NOT send for GCS
+               const uploadHeaders = { "Content-Type": contentTypes[i] };
+               if (u.url.includes(".blob.core.windows.net")) {
+                   uploadHeaders["x-ms-blob-type"] = "BlockBlob";
+               }
+               const uploadRes = await fetch(u.url, {
                    method: "PUT",
-                   headers: { 
-                       "Content-Type": contentTypes[i],
-                       "x-ms-blob-type": "BlockBlob"
-                   },
+                   headers: uploadHeaders,
                    body: file
                });
+               if (!uploadRes.ok) throw new Error(`Upload failed (${uploadRes.status})`);
                return u.key;
           }));
 
