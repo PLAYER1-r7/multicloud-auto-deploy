@@ -456,11 +456,22 @@ class GcpBackend(BackendBase):
         bucket = storage_client.bucket(settings.gcp_storage_bucket)
 
         post_id = str(uuid.uuid4())
-        content_type = "image/jpeg"  # Default content type
+        ext_map = {
+            "image/jpeg": "jpeg", "image/jpg": "jpeg",
+            "image/png": "png", "image/gif": "gif",
+            "image/webp": "webp", "image/heic": "heic", "image/heif": "heif",
+        }
 
         urls = []
         for index in range(count):
-            key = f"images/{post_id}-{index}-{secrets.token_hex(8)}.jpeg"
+            # Use per-file content type if provided, default to image/jpeg
+            content_type = (
+                content_types[index]
+                if content_types and index < len(content_types) and content_types[index]
+                else "image/jpeg"
+            )
+            ext = ext_map.get(content_type, "jpeg")
+            key = f"images/{post_id}-{index}-{secrets.token_hex(8)}.{ext}"
             blob = bucket.blob(key)
 
             # Generate signed URL
