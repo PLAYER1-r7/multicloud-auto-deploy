@@ -9,19 +9,27 @@
 ```
 User
   │
-  ├─ [AWS]   CloudFront ──► S3 (landing + SNS app)
+  ├─ [AWS]   CloudFront ──► S3 (React SPA: landing + SNS pages)  ← static
   │         API Gateway v2 ──► Lambda (Python 3.12) ──► DynamoDB
   │
-  ├─ [Azure] Front Door ──► Blob Storage $web (landing + SNS app)
-  │         Azure Functions ──► Cosmos DB (Serverless)
+  ├─ [Azure] Front Door ─┬─ /sns/* ──► Azure Functions frontend-web (Python FastAPI)
+  │                       └─ /*     ──► Blob Storage $web (landing)
+  │         Azure Functions func ──► Cosmos DB (Serverless)
   │
-  └─ [GCP]   Cloud CDN (IP: 34.117.111.182) ──► GCS (landing + SNS app)
-             Cloud Run ──► Firestore
+  └─ [GCP]   Cloud LB ─┬─ /sns/* ──► Cloud Run frontend-web (Python FastAPI + Jinja2)
+                        └─ /*     ──► GCS (landing)
+             Cloud Run api ──► Firestore
 ```
+
+> ⚠️ **Frontend architecture inconsistency**: AWS uses a React SPA (static S3) for the SNS
+> pages, while Azure and GCP still serve the SNS app from a Python FastAPI server
+> (`services/frontend_web`). The original plan was Python-on-Lambda for both frontend and
+> backend, but Lambda cannot render HTML. AWS was migrated to React first;
+> Azure and GCP remain on the server-side Python implementation.
 
 ---
 
-## Storage Path Structure (shared across all 3 clouds)
+## Storage Path Structure
 
 ```
 bucket-root/
@@ -30,7 +38,7 @@ bucket-root/
 ├── aws/
 ├── azure/
 ├── gcp/
-└── sns/               ← React SNS app (Vite build, base="/sns/")
+└── sns/               ← React SNS app (AWS only — Vite build, base="/sns/")
     ├── index.html
     └── assets/
         ├── index-*.js
@@ -42,39 +50,77 @@ bucket-root/
 | Content       | AWS                | Azure       | GCP                |
 | ------------- | ------------------ | ----------- | ------------------ |
 | Landing pages | `s3://bucket/`     | `$web/`     | `gs://bucket/`     |
-| SNS React app | `s3://bucket/sns/` | `$web/sns/` | `gs://bucket/sns/` |
+| SNS pages     | `s3://bucket/sns/` (React SPA) | Azure Functions `frontend-web` (Python) | Cloud Run `frontend-web` (Python) |
+
+> Azure と GCP の SNS ページは静的ファイルではなく Python サーバーが動的に生成する。
 
 ---
 
 ## AWS Architecture Detail
 
 ```
-CloudFront (E1TBH4R432SZBZ)
-  ├── /sns/* → S3: multicloud-auto-deploy-staging-frontend/sns/
-  └── /*     → S3: multicloud-auto-deploy-staging-frontend/  (landing)
+CloudFront (E1TBH4R432SZBZ / staging, E214XONKTXJEJD / production)
+  ├── /sns/* → API Gateway → Lambda: frontend-web  (SNS API: auth, posts, etc.)
+  └── /*     → S3: multicloud-auto-deploy-{env}-frontend/  (React SPA + landing)
 
-API Gateway v2 HTTP (z42qmqdqac)
-  └── $default → Lambda: multicloud-auto-deploy-staging-api
-                  └── DynamoDB: simple-sns-messages (PAY_PER_REQUEST)
+S3: multicloud-auto-deploy-{env}-frontend
+  ├── index.html        ← React SPA entrypoint (Vite build)
+  ├── assets/           ← JS / CSS bundles
+  └── (landing, aws/, azure/, gcp/ pages)
+
+API Gateway v2 HTTP (z42qmqdqac / staging)
+  └── $default → Lambda: multicloud-auto-deploy-{env}-api  (backend)
+                  └── DynamoDB: multicloud-auto-deploy-{env}-posts (PAY_PER_REQUEST)
+                       ← Single Table Design (PK/SK)
+                       ← POSTS パーティション: 投稿データ (GSI: postId / userId / createdAt)
+                       ← PROFILES パーティション: ユーザープロフィール
+                  └── S3: multicloud-auto-deploy-{env}-images (画像アップロード)
+                       ← IMAGES_BUCKET_NAME 環境変数で参照
+
+Lambda: multicloud-auto-deploy-{env}-frontend-web  [legacy — Python SSR, superseded by S3/React]
 ```
+
+**Note**: `frontend-web` Lambda は当初 Python で SNS 画面を SSR するために作られたが、
+React + S3 へ移行済み。Lambda 自体は削除されていない場合があるが、CloudFront の
+`/sns/*` behavior は現在 API Gateway（バックエンド API）を向いている。
 
 **Lambda Layer**: `multicloud-auto-deploy-staging-dependencies`  
 — Contains only FastAPI / Mangum / JWT dependencies; boto3 is included in the Lambda runtime.  
 — App code (~78 KB) and Layer (~8-10 MB) are deployed separately.
 
+**主要環境変数**: `POSTS_TABLE_NAME`, `IMAGES_BUCKET_NAME`, `COGNITO_USER_POOL_ID`  
+**Observability**: AWS Lambda Powertools (Logger / Tracer / Metrics) — `SimpleSNS` namespace
+
 ---
 
 ## Azure Architecture Detail
 
+> ⚠️ **Not yet migrated to React**: frontend is served by Python FastAPI on Azure Functions.
+> See System Overview note above.
+
 ```
 Front Door (multicloud-auto-deploy-staging-fd)
   endpoint: mcad-staging-d45ihd
-  ├── /sns/* → origin: mcadwebd45ihd.z11.web.core.windows.net ($web/sns/)
-  └── /*     → origin: mcadwebd45ihd.z11.web.core.windows.net ($web/)
+  ├── /sns/*  → origin: Azure Functions frontend-web  (Python FastAPI, SNS pages)
+  │               multicloud-auto-deploy-staging-frontend-web-v2.azurewebsites.net
+  └── /*      → origin: Blob Storage $web  (landing pages only)
+                  mcadwebd45ihd.z11.web.core.windows.net
 
-Azure Functions: multicloud-auto-deploy-staging-func
-  └── HTTP Trigger: /api/HttpTrigger
-        └── Cosmos DB: simple-sns-cosmos (Serverless)
+Azure Functions frontend-web (FC1 FlexConsumption)  ← serves /sns/* pages
+  └── HTTP Trigger: /{*route}
+        ← FastAPI (custom ASGI bridge, no Mangum) + Jinja2 / API responses
+        ← STAGE_NAME=sns, API_BASE_URL=<func endpoint>
+
+Azure Functions: multicloud-auto-deploy-staging-func (Flex Consumption)  ← backend API
+  └── HTTP Trigger: /{*route}  (function name: HttpTrigger)
+        │  ← FastAPI (Mangum-less, カスタム ASGI ブリッジ) にフォワード
+        └── Cosmos DB (Serverless)
+             ← DB: simple-sns  /  Container: items
+             ← 環境変数: COSMOS_DB_ENDPOINT / COSMOS_DB_KEY
+             ← COSMOS_DB_DATABASE (default: simple-sns)
+             ← COSMOS_DB_CONTAINER (default: items)
+        └── Azure Blob Storage: images コンテナー (画像アップロード)
+             ← AZURE_STORAGE_ACCOUNT_NAME / AZURE_STORAGE_ACCOUNT_KEY / AZURE_STORAGE_CONTAINER
 ```
 
 **Resource Group**: `multicloud-auto-deploy-staging-rg` (japaneast)  
@@ -84,28 +130,45 @@ Azure Functions: multicloud-auto-deploy-staging-func
 
 ## GCP Architecture Detail
 
+> ⚠️ **Not yet migrated to React**: frontend is served by Python FastAPI on Cloud Run.
+> See System Overview note above.
+
 ```
 Global IP: 34.117.111.182
   └── HTTP Forwarding Rule
-        └── URL Map (default)
-              └── Backend Bucket: multicloud-auto-deploy-staging-cdn-backend
-                    └── GCS: ashnova-multicloud-auto-deploy-staging-frontend
-                          ├── / → index.html (landing)
-                          └── /sns/ → sns/index.html
+        └── URL Map
+              ├── /sns/* → Backend Service → Cloud Run: frontend-web  (Python FastAPI, SNS pages)
+              └── /*     → Backend Bucket  → GCS: ashnova-multicloud-auto-deploy-staging-frontend
+                                                    (landing pages only)
 
-Cloud Run: multicloud-auto-deploy-staging-api  (API)
-  └── Firestore (default) — collections: messages, posts
-  └── GCS: ashnova-multicloud-auto-deploy-staging-uploads (presigned URL upload/image display)
-
-Cloud Run: multicloud-auto-deploy-staging-frontend-web  (SSR Frontend)
+Cloud Run: multicloud-auto-deploy-staging-frontend-web  (SNS Frontend — Python SSR)
   URL: https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app
   └── FastAPI + Jinja2 templates (Auth: Firebase Google Sign-In)
   └── Proxies API requests to multicloud-auto-deploy-staging-api
+
+Cloud Run: multicloud-auto-deploy-staging-api  (Backend API)
+  └── Firestore (default)
+       ← posts コレクション: 投稿データ  (GCP_POSTS_COLLECTION 、default: posts)
+       ← profiles コレクション: ユーザープロフィール  (GCP_PROFILES_COLLECTION、default: profiles)
+  └── GCS: ashnova-multicloud-auto-deploy-staging-uploads (presigned URL upload/image display)
+       ← GCP_STORAGE_BUCKET 環境変数で参照
 ```
 
 **Note**: GCP uses a Classic External LB (`EXTERNAL` scheme).  
-SPA deep links return HTTP 404 with an HTML body (works in browsers, returns 404 in curl).  
-True HTTP 200 responses require migration to `EXTERNAL_MANAGED` (not yet implemented).
+URL Map path-based routing (`/sns/*` → Cloud Run) requires `EXTERNAL_MANAGED`; currently may fall back to GCS for all paths — needs verification.
+
+---
+
+## API Routes
+
+| Router prefix    | 主なエンドポイント                      | 認証       |
+| ---------------- | --------------------------------------- | ---------- |
+| `/posts`         | GET/POST/PUT/DELETE (投稿 CRUD)         | 必要       |
+| `/uploads`       | POST (presigned URL 発行)               | 必要       |
+| `/profile`       | GET/PUT (プロフィール取得・更新)        | 必要       |
+| `/api/messages/` | 旧フロントエンド互換エイリアス (legacy) | オプション |
+
+旧フロントエンドとの後方互換のため `/api/messages/` エイリアスは維持されているが、新規実装は `/posts` を使用する。
 
 ---
 
