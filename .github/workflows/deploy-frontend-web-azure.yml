@@ -101,8 +101,16 @@ jobs:
         run: |
           ENV="${{ steps.env.outputs.env_name }}"
           RG="multicloud-auto-deploy-${ENV}-rg"
-          APP_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
           LOCATION="japaneast"
+
+          # production は FC1 移行済みの -v2 アプリを優先使用
+          BASE_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
+          if az functionapp show --name "${BASE_NAME}-v2" --resource-group "$RG" &>/dev/null; then
+            APP_NAME="${BASE_NAME}-v2"
+          else
+            APP_NAME="$BASE_NAME"
+          fi
+          echo "app_name=$APP_NAME" >> $GITHUB_ENV
 
           # Check if Function App already exists
           if az functionapp show --name "$APP_NAME" --resource-group "$RG" &>/dev/null; then
@@ -117,16 +125,23 @@ jobs:
               exit 1
             fi
             echo "Using storage account: $STORAGE"
+            # FC1 FlexConsumption で作成（Dynamic Y1 は AFD との stale TCP 問題を起こすため使用禁止）
             az functionapp create \
               --name "$APP_NAME" \
               --resource-group "$RG" \
-              --consumption-plan-location "$LOCATION" \
+              --flexconsumption-location "$LOCATION" \
               --runtime python \
               --runtime-version 3.12 \
-              --functions-version 4 \
-              --storage-account "$STORAGE" \
-              --os-type Linux
-            echo "✅ Function App $APP_NAME created"
+              --storage-account "$STORAGE"
+            echo "✅ Function App $APP_NAME created (FC1 FlexConsumption)"
+            # スケール設定：インスタンス固定 + 常時起動（コールドスタート防止）
+            az functionapp scale config set \
+              --name "$APP_NAME" --resource-group "$RG" \
+              --maximum-instance-count 1
+            az functionapp scale config always-ready set \
+              --name "$APP_NAME" --resource-group "$RG" \
+              --settings "http=1"
+            echo "✅ Scale config set (maxInstances=1, alwaysReady http=1)"
             # Give the app time to initialize
             sleep 30
           fi
@@ -135,7 +150,8 @@ jobs:
         run: |
           ENV="${{ steps.env.outputs.env_name }}"
           RG="multicloud-auto-deploy-${ENV}-rg"
-          APP_NAME="multicloud-auto-deploy-${ENV}-frontend-web"
+          # app_name は前のステップで設定済み（-v2 が存在する場合はそちらを使用）
+          APP_NAME="${app_name:-multicloud-auto-deploy-${ENV}-frontend-web}"
 
           # Remove WEBSITE_RUN_FROM_PACKAGE to avoid conflict with zipdeploy
           az functionapp config appsettings delete \
@@ -157,8 +173,11 @@ jobs:
 
       - name: Configure App Settings
         run: |
+          ENV="${{ steps.env.outputs.env_name }}"
+          RG="multicloud-auto-deploy-${ENV}-rg"
+          APP_NAME="${app_name:-multicloud-auto-deploy-${ENV}-frontend-web}"
           az functionapp config appsettings set \
-            --name multicloud-auto-deploy-${{ steps.env.outputs.env_name }}-frontend-web \
-            --resource-group multicloud-auto-deploy-${{ steps.env.outputs.env_name }}-rg \
+            --name "$APP_NAME" \
+            --resource-group "$RG" \
             --settings STAGE_NAME=sns
-          echo "✅ STAGE_NAME=sns configured"
+          echo "✅ STAGE_NAME=sns configured for $APP_NAME"

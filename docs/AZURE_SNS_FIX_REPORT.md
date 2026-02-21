@@ -1,39 +1,39 @@
-# Azure Simple-SNS 修正レポート
+# Azure Simple-SNS Fix Report
 
-## 概要
+## Overview
 
-Azure 環境における `simple-sns` フロントエンドウェブアプリ (Azure Functions Python v2) が
-503/404 エラーを返していた問題を特定・修正し、完全動作する状態に復元しました。
+Identified and resolved the issue causing the `simple-sns` frontend web app (Azure Functions Python v2)
+in the Azure environment to return 503/404 errors, restoring it to full working condition.
 
 ---
 
-## 問題の状況
+## Problem Status
 
-| エンドポイント             | 修正前                  | 修正後                  |
+| Endpoint                   | Before Fix              | After Fix               |
 | -------------------------- | ----------------------- | ----------------------- |
 | `GET /sns/health`          | 503 Service Unavailable | 200 `{"status":"ok"}`   |
-| `GET /sns/`                | 503 Service Unavailable | 200 HTML ホームページ   |
-| `GET /sns/login`           | 503 Service Unavailable | 200 HTML ログインページ |
-| `GET /sns/static/app.css`  | 503 Service Unavailable | 200 CSS ファイル        |
-| `POST /api/posts` (未認証) | 正常                    | 401 (認証ガード動作)    |
+| `GET /sns/`                | 503 Service Unavailable | 200 HTML Home page      |
+| `GET /sns/login`           | 503 Service Unavailable | 200 HTML Login page     |
+| `GET /sns/static/app.css`  | 503 Service Unavailable | 200 CSS file            |
+| `POST /api/posts` (unauth) | Working                 | 401 (auth guard active) |
 
 ---
 
-## 特定された問題と修正内容
+## Identified Issues and Fixes
 
-### 問題 1: `host.json` の JSON 構文エラー (根本原因・503 の直接原因)
+### Issue 1: `host.json` JSON Syntax Error (Root Cause — Direct Cause of 503)
 
-**ファイル**: `services/frontend_web/host.json`
+**File**: `services/frontend_web/host.json`
 
 ```json
-// 修正前 (❌ 無効なJSON)
+// Before fix (❌ invalid JSON)
 {
   "version": "2.0",
   "extensions": {"http": {"routePrefix": ""}}
 }
-}  // ← 余分な閉じ括弧
+}  // ← extra closing brace
 
-// 修正後 (✅ 有効なJSON)
+// After fix (✅ valid JSON)
 {
   "version": "2.0",
   "extensions": {"http": {"routePrefix": ""}},
@@ -44,79 +44,79 @@ Azure 環境における `simple-sns` フロントエンドウェブアプリ (A
 }
 ```
 
-**影響**: 全エンドポイントが 503 を返していた
+**Impact**: All endpoints returned 503
 
 ---
 
-### 問題 2: Function App デプロイ方式の不一致 (Functions が空)
+### Issue 2: Function App Deployment Method Mismatch (Functions Empty)
 
-**原因**: `WEBSITE_RUN_FROM_PACKAGE` に外部 SAS URL を設定していた。Dynamic Consumption (Y1) Linux
-プランでは、外部 URL から ZIP をマウントした場合、Python v2 プログラミングモデルの関数が登録されない。
+**Cause**: `WEBSITE_RUN_FROM_PACKAGE` was configured with an external SAS URL. On a Dynamic Consumption (Y1) Linux
+plan, when a ZIP is mounted from an external URL, Python v2 programming model functions are not registered.
 
-**調査過程**:
+**Investigation**:
 
-- `admin/functions` → `[]` (空)
-- `admin/host/status` → `state: Running` (ホストは正常)
-- Application Insights → トレースなし (Python ワーカーが関数を検出できていない)
+- `admin/functions` → `[]` (empty)
+- `admin/host/status` → `state: Running` (host is healthy)
+- Application Insights → no traces (Python worker could not detect functions)
 
-**修正**: `WEBSITE_RUN_FROM_PACKAGE` 設定を削除し、`az functionapp deployment source config-zip`
-(Kudu ZIP デプロイ) に切り替え。コードが `/home/site/wwwroot/` に展開されることで、
-Python ワーカーが `function_app.py` を正常に読み込めるようになった。
+**Fix**: Removed the `WEBSITE_RUN_FROM_PACKAGE` setting and switched to `az functionapp deployment source config-zip`
+(Kudu ZIP deploy). By extracting code to `/home/site/wwwroot/`,
+the Python worker can correctly load `function_app.py`.
 
 ```bash
-# 修正前 (❌ 外部 URL　→ Functions 未登録)
+# Before fix (❌ external URL → functions not registered)
 WEBSITE_RUN_FROM_PACKAGE = https://mcadfuncd45ihd.blob.core.windows.net/...
 
-# 修正後 (✅ config-zip デプロイ)
+# After fix (✅ config-zip deploy)
 az functionapp deployment source config-zip \
   --resource-group "multicloud-auto-deploy-staging-rg" \
   --name "multicloud-auto-deploy-staging-frontend-web" \
   --src frontend-web-x86.zip
-# → WEBSITE_RUN_FROM_PACKAGE が自動設定 (Kudu 管理の URL)
+# → WEBSITE_RUN_FROM_PACKAGE is set automatically (Kudu-managed URL)
 ```
 
 ---
 
-### 問題 3: CPU アーキテクチャ不一致 (pydantic_core インポートエラー)
+### Issue 3: CPU Architecture Mismatch (pydantic_core Import Error)
 
-**エラー**: `ModuleNotFoundError: No module named 'pydantic_core._pydantic_core'`
+**Error**: `ModuleNotFoundError: No module named 'pydantic_core._pydantic_core'`
 
-**原因**: 開発環境が `aarch64` (ARM64) なのに対し、Azure Functions は `x86_64` (AMD64) で動作。
-ローカルで `pip install --target` すると `aarch64` 向けのコンパイル済み `.so` がインストールされ、
-Azure で実行すると CPU アーキテクチャ不一致でロードに失敗する。
+**Cause**: The development environment is `aarch64` (ARM64), but Azure Functions runs on `x86_64` (AMD64).
+Running `pip install --target` locally installs compiled `.so` files for `aarch64`,
+which fail to load on Azure due to CPU architecture mismatch.
 
-**修正**: Docker の `linux/amd64` プラットフォームを指定してパッケージをビルド。
+**Fix**: Build packages using Docker with the `linux/amd64` platform.
 
 ```bash
-# ❌ ローカルビルド (aarch64 → Azure で動作しない)
+# ❌ Local build (aarch64 → does not work on Azure)
 pip3 install pydantic==2.9.0 fastapi==0.115.0 --target build/
 
-# ✅ x86_64 向けビルド (Docker 使用)
+# ✅ x86_64 build (using Docker)
 docker run --rm \
   --platform linux/amd64 \
   -v "$(pwd):/workspace" \
   python:3.12-slim \
   pip install pydantic==2.9.0 fastapi==0.115.0 --target /workspace/build-x86
 
-# 作成した zip をデプロイ
+# Deploy the created zip
 az functionapp deployment source config-zip \
   --src frontend-web-x86.zip ...
 ```
 
 ---
 
-### 問題 4: 静的ファイル・テンプレートの相対パス参照
+### Issue 4: Relative Path References for Static Files and Templates
 
-**ファイル**: `services/frontend_web/app/main.py`, `app/routers/views.py`, `app/routers/auth.py`
+**Files**: `services/frontend_web/app/main.py`, `app/routers/views.py`, `app/routers/auth.py`
 
-Azure Functions では CWD が保証されないため、相対パスが機能しない。
+In Azure Functions, the CWD is not guaranteed, so relative paths do not work.
 
 ```python
-# ❌ 修正前 (相対パス)
+# ❌ Before fix (relative paths)
 StaticFiles(directory="app/static")
 Jinja2Templates(directory="app/templates")
 
-# ✅ 修正後 (__file__ 基準の絶対パス)
+# ✅ After fix (absolute paths relative to __file__)
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 StaticFiles(directory=os.path.join(_APP_DIR, "static"))
 
@@ -126,14 +126,14 @@ Jinja2Templates(directory=_TEMPLATES_DIR)
 
 ---
 
-### 問題 5: `function_app.py` の同期ハンドラ
+### Issue 5: Synchronous Handler in `function_app.py`
 
-**原因**: `AsgiMiddleware.handle()` (同期) を使用していた。
+**Cause**: `AsgiMiddleware.handle()` (synchronous) was being used.
 
-**修正**: 手動 ASGI 変換 (API Function App と同じパターン) に切り替え。
+**Fix**: Switched to manual ASGI conversion (same pattern as the API Function App).
 
 ```python
-# ✅ 修正後 (手動 ASGI + エラー診断機能)
+# ✅ After fix (manual ASGI + error diagnostics)
 _IMPORT_ERROR: str | None = None
 fastapi_app = None
 try:
@@ -151,17 +151,17 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
             body=f"<h1>Import Error</h1><pre>{_IMPORT_ERROR}</pre>",
             status_code=503
         )
-    # ... 手動 ASGI 変換
+    # ... manual ASGI conversion
 ```
 
 ---
 
-## デプロイ手順 (再現可能)
+## Deployment Procedure (Reproducible)
 
 ```bash
 cd multicloud-auto-deploy/services/frontend_web
 
-# 1. x86_64 向けパッケージをビルド
+# 1. Build packages for x86_64
 docker run --rm \
   --platform linux/amd64 \
   -v "$(pwd):/workspace" \
@@ -172,28 +172,28 @@ docker run --rm \
     requests==2.32.3 itsdangerous==2.2.0 \
     --target /workspace/build-x86 --quiet"
 
-# 2. ソースコードを追加
+# 2. Add source code
 cp -r app function_app.py host.json requirements.txt build-x86/
-touch build-x86/app/__init__.py  # namespace package 対応
+touch build-x86/app/__init__.py  # namespace package support
 
-# 3. ZIP 作成
+# 3. Create ZIP
 cd build-x86 && zip -r ../frontend-web-x86.zip . \
   --exclude "*.pyc" --exclude "__pycache__/*"
 cd ..
 
-# 4. デプロイ
+# 4. Deploy
 az functionapp deployment source config-zip \
   --resource-group "multicloud-auto-deploy-staging-rg" \
   --name "multicloud-auto-deploy-staging-frontend-web" \
   --src frontend-web-x86.zip
 
-# 5. 動作確認
+# 5. Verify
 ./scripts/test-sns-azure.sh
 ```
 
 ---
 
-## テスト結果
+## Test Results
 
 ```
 ============================================================
@@ -227,158 +227,239 @@ Section 4 — Auth guard (unauthenticated = 401)
   ✅  POST /api/posts without token returns 401  [HTTP 401]
   ✅  POST /api/uploads/presigned-urls without token returns 401  [HTTP 401]
 
-Test Results: PASS=16 FAIL=0 SKIP=7 (認証テストはトークン必要)
+Test Results: PASS=16 FAIL=0 SKIP=7 (auth tests require token)
 ✅ All tests passed!
 ```
 
 ---
 
-## アーキテクチャ概要
+## Architecture Overview
 
 ```
-ブラウザ
+Browser
   │
   ▼
 Azure Front Door (mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net)
   ├── /sns/*  → frontend-web Function App (Consumption Linux, Python 3.12)
-  │               FastAPI SSR → テンプレート (Jinja2) + API 呼び出し
-  │               AUTH_DISABLED=true (Azure AD 認証はフロントエンド描画のみ)
+  │               FastAPI SSR → templates (Jinja2) + API calls
+  │               AUTH_DISABLED=true (Azure AD auth for frontend rendering only)
   │
   └── /*      → Azure Blob Static Web (index.html)
 
 frontend-web → API Function App (Flex Consumption, Python 3.12)
-                 (server-side fetch: /api/posts, /api/profile など)
-                 Cosmos DB (messages/messages コンテナ, docType="post")
-                 Azure Blob Storage (画像アップロード SAS URL 生成)
+                 (server-side fetch: /api/posts, /api/profile etc.)
+                 Cosmos DB (messages/messages container, docType="post")
+                 Azure Blob Storage (image upload SAS URL generation)
 ```
 
 ---
 
-## 注意事項 (今後の運用)
+## Notes (Ongoing Operations)
 
-1. **デプロイは必ず `linux/amd64` Docker ビルドで**: 開発環境が ARM64 の場合、
-   ローカルビルドした zip は Azure で pydantic_core エラーになる。
+1. **Always use `linux/amd64` Docker build for deployment**: If the development environment is ARM64,
+   a locally built zip will cause pydantic_core errors on Azure.
 
-2. **config-zip を使用すること**: `WEBSITE_RUN_FROM_PACKAGE` に外部 SAS URL を
-   直接設定する方法は Dynamic Consumption Linux では Python v2 モデルで関数が登録されない。
+2. **Use config-zip**: Setting an external SAS URL directly in `WEBSITE_RUN_FROM_PACKAGE`
+   does not register Python v2 model functions on Dynamic Consumption Linux.
 
-3. **Cold Start に注意**: Consumption プランのため、アイドル後の初回リクエストに
-   数十秒かかる場合がある。Front Door のヘルスプローブが `/sns/health` を定期確認。
+3. **Watch for cold starts**: Since this is on the Consumption plan, the first request after an idle period
+   may take tens of seconds. The Front Door health probe periodically checks `/sns/health`.
 
 ---
 
-## Issue 2: AFD 経由 `/sns/*` 間欠的 502 エラー（調査中）
+## Issue 2: Intermittent 502 Errors via AFD on `/sns/*` ✅ Resolved
 
-> **発生日**: 2026-02-21  
-> **対象**: `www.azure.ashnova.jp/sns/*`（Production）  
-> **状態**: 🔴 **未解決** — 継続調査中
+> **Investigation Started**: 2026-02-21  
+> **Resolved**: 2026-02-25  
+> **Target**: `www.azure.ashnova.jp/sns/*` (Production)  
+> **Status**: ✅ **Resolved** — 0/20 = 0% failure rate confirmed
 
-### 症状
+### Resolution Summary
 
-- `www.azure.ashnova.jp/sns/health` への AFD 経由アクセスが **約 50% の確率で HTTP 502** を返す
-- Function App 直接アクセス（`multicloud-auto-deploy-production-frontend-web.azurewebsites.net`）は **100% 成功**
-- 502 应答は即時返却（**0.08〜0.36 秒**）→ AFD がオリジンへの接続を試みずに返している
+**Root Cause**: Dynamic Consumption (Y1) Function App instances are periodically recycled.
+AFD Standard cannot detect the TCP disconnect during recycling, leaving a stale connection in its pool.
+The next request assigned to the stale connection is immediately returned as 502.
+
+**Fix**: Migrated the production Function App from **Dynamic Consumption (Y1) → FC1 FlexConsumption**
+with `maximumInstanceCount=1` + `alwaysReady http=1` to keep exactly one stable instance at all times.
+
+#### Changes Made
+
+| Resource | Change |
+| -------- | ------ |
+| New Function App | `multicloud-auto-deploy-production-frontend-web-v2` (FC1, `instanceMemoryMB=2048`) |
+| Scale config | `maximumInstanceCount=1`, `alwaysReady http=1` (no cold start, no instance churn) |
+| ZIP deployed | `frontend-web-prod-new.zip` (x86_64, pydantic_core confirmed) |
+| AFD Origin | `multicloud-auto-deploy-production-frontend-web-origin` → hostName updated to v2 |
+| Old Function App | `multicloud-auto-deploy-production-frontend-web` (Y1) — **stopped** (pending deletion) |
+| CI/CD Workflow | `deploy-frontend-web-azure.yml`: `--consumption-plan-location` → `--flexconsumption-location` + scale config |
+
+#### Final Test Results (20 trials, 5-second intervals)
 
 ```
-AFD 経由テスト結果（典型例）:
+After AFD origin switch to v2 + v1 stopped (5-minute edge propagation wait):
+  1 – 20: all HTTP 200 (0.09 – 1.76s)
+Result: OK=20 NG=0 / 20  ← 0% failure rate
+```
+
+#### Key Commands Used
+
+```bash
+# Created FC1 FlexConsumption Function App
+az functionapp create \
+  --name multicloud-auto-deploy-production-frontend-web-v2 \
+  --resource-group multicloud-auto-deploy-production-rg \
+  --flexconsumption-location japaneast \
+  --runtime python --runtime-version 3.12 \
+  --storage-account mcadfuncdiev0w
+
+# Scale config: fix to 1 instance, always warm
+az functionapp scale config set \
+  --name multicloud-auto-deploy-production-frontend-web-v2 \
+  --resource-group multicloud-auto-deploy-production-rg \
+  --maximum-instance-count 1
+az functionapp scale config always-ready set \
+  --name multicloud-auto-deploy-production-frontend-web-v2 \
+  --resource-group multicloud-auto-deploy-production-rg \
+  --settings "http=1"
+
+# Deployed x86_64 ZIP
+az functionapp deployment source config-zip \
+  --name multicloud-auto-deploy-production-frontend-web-v2 \
+  --resource-group multicloud-auto-deploy-production-rg \
+  --src services/frontend_web/frontend-web-prod-new.zip
+
+# Updated AFD origin to v2
+az afd origin update \
+  --resource-group multicloud-auto-deploy-production-rg \
+  --profile-name multicloud-auto-deploy-production-fd \
+  --origin-group-name multicloud-auto-deploy-production-frontend-web-origin-group \
+  --origin-name multicloud-auto-deploy-production-frontend-web-origin \
+  --host-name multicloud-auto-deploy-production-frontend-web-v2.azurewebsites.net \
+  --origin-host-header multicloud-auto-deploy-production-frontend-web-v2.azurewebsites.net
+
+# Stopped old v1 (stale TCP source)
+az functionapp stop \
+  --name multicloud-auto-deploy-production-frontend-web \
+  --resource-group multicloud-auto-deploy-production-rg
+```
+
+#### Lessons Learned
+
+- `--consumption-plan-location` creates Dynamic Y1 → do NOT use with AFD (stale TCP problem)
+- `--flexconsumption-location` creates FC1 → stable with `maximumInstanceCount=1`
+- Azure Kestrel strips `Connection: close` headers returned by the app (cannot be used as mitigation)
+- AFD origin updates take up to 5 minutes for full edge propagation
+- `az functionapp update --plan` does not support Linux→Linux plan migration (Windows only)
+
+---
+
+### Symptoms
+
+- AFD-routed access to `www.azure.ashnova.jp/sns/health` returns **HTTP 502 approximately 50% of the time**
+- Direct Function App access (`multicloud-auto-deploy-production-frontend-web.azurewebsites.net`) **succeeds 100%**
+- 502 responses are returned instantly (**0.08–0.36 seconds**) → AFD is returning the error without attempting a connection to the origin
+
+```
+AFD test results (typical example):
   1: 200 (0.27s)
-  2: 502 (0.10s)  ← 即時
+  2: 502 (0.10s)  ← instant
   3: 200 (0.26s)
-  4: 502 (0.10s)  ← 即時
+  4: 502 (0.10s)  ← instant
 …
 OK=10 NG=10 / 20
 ```
 
-### 判明した事実
+### Findings
 
-| 項目                       | 内容                                                           |
-| -------------------------- | -------------------------------------------------------------- |
-| Function App 直接          | 6/6 = 100% HTTP 200                                            |
-| AFD 経由                   | 約 50% HTTP 502（即時返却）                                    |
-| 502 のレスポンスボディ     | AFD 標準エラー HTML（249 bytes）= AFD 自身が生成               |
-| `x-cache` ヘッダー         | `CONFIG_NOCACHE`（キャッシュではない）                         |
-| AFD Edge Node              | 同一ノード `15bbd5d46d5` から 200 と 502 両方が返る            |
-| AFD の DNS                 | 2 つの IP: `13.107.246.46`、`13.107.213.46` — 両方で同パターン |
-| Function App の HTTP/2     | `http20Enabled: true`（無効化しても改善なし）                  |
-| Function App の SKU        | Dynamic Consumption (Y1)、`alwaysOn: false`                    |
-| Function App の OS/Runtime | Linux / Python 3.12                                            |
+| Item                       | Detail                                                           |
+| -------------------------- | ---------------------------------------------------------------- |
+| Function App (direct)      | 6/6 = 100% HTTP 200                                              |
+| Via AFD                    | ~50% HTTP 502 (instant response)                                 |
+| 502 response body          | AFD standard error HTML (249 bytes) = generated by AFD itself    |
+| `x-cache` header           | `CONFIG_NOCACHE` (not cached)                                    |
+| AFD Edge Node              | Both 200 and 502 returned from same node `15bbd5d46d5`           |
+| AFD DNS                    | 2 IPs: `13.107.246.46`, `13.107.213.46` — same pattern on both  |
+| Function App HTTP/2        | `http20Enabled: true` (disabling did not improve)                |
+| Function App SKU           | Dynamic Consumption (Y1), `alwaysOn: false`                      |
+| Function App OS/Runtime    | Linux / Python 3.12                                              |
 
-### 試みた対策と結果
+### Attempted Mitigations and Results
 
-| 対策                                                  | 結果               |
-| ----------------------------------------------------- | ------------------ |
-| AFD `originResponseTimeoutSeconds` 30s → 60s          | 502 継続           |
-| AFD health probe 間隔 100s → 30s                      | 502 継続           |
-| AFD `sampleSize` 4→2、`successfulSamplesRequired` 3→1 | 502 継続           |
-| Function App 再起動                                   | 502 継続           |
-| SNS Route 無効化→有効化                               | 502 継続           |
-| `http20Enabled` false（HTTP/2 無効化）                | 502 継続           |
-| `WEBSITE_KEEPALIVE_TIMEOUT=30` 設定                   | 502 継続（確認中） |
-| `pulumi up`（origin group 再設定）                    | 502 継続           |
+| Mitigation                                            | Result              |
+| ----------------------------------------------------- | ------------------- |
+| AFD `originResponseTimeoutSeconds` 30s → 60s          | 502 continues       |
+| AFD health probe interval 100s → 30s                  | 502 continues       |
+| AFD `sampleSize` 4→2, `successfulSamplesRequired` 3→1 | 502 continues       |
+| Function App restart                                  | 502 continues       |
+| SNS Route disable → enable                            | 502 continues       |
+| `http20Enabled` false (HTTP/2 disabled)               | 502 continues       |
+| `WEBSITE_KEEPALIVE_TIMEOUT=30` set                    | 502 continues (monitoring) |
+| `pulumi up` (origin group reconfigured)               | 502 continues       |
 
-### 根本原因の仮説
+### Root Cause Hypothesis
 
-**AFD Standard の stale TCP 接続プール問題**
+**AFD Standard stale TCP connection pool issue**
 
 ```
 AFD Edge Node
   ├── Connection Pool
-  │     ├── Conn A  → Function App インスタンス X（稼働中）→ 200 ✅
-  │     └── Conn B  → Function App インスタンス Y（再サイクル済）→ TCP 切断 → 502 ❌
+  │     ├── Conn A  → Function App instance X (running)  → 200 ✅
+  │     └── Conn B  → Function App instance Y (recycled) → TCP disconnected → 502 ❌
   │
-  └── 新規接続は即成功、stale 接続は即 502
+  └── New connections succeed immediately; stale connections return 502 instantly
 ```
 
-Dynamic Consumption では Function App インスタンスが定期的に再サイクルされる。
-AFD はその際の TCP 接続断を検知できず、stale 接続プールに残り続ける。
-次のリクエストが stale 接続に割り当てられると即時 502 になる。
+On Dynamic Consumption, Function App instances are recycled periodically.
+AFD cannot detect the TCP disconnect during recycling and the stale connection remains in the pool.
+When the next request is assigned to the stale connection, it immediately returns 502.
 
-**証拠**:
+**Evidence**:
 
-- 502 が即時返却（AFD→オリジン接続なし）
-- Function App 直接は 100% 成功（インスタンス自体は正常）
-- パターンが規則的（再サイクル後は 1 回 502、その後 200 に戻る）
+- 502 is returned instantly (no AFD→origin connection attempted)
+- Direct Function App access succeeds 100% (instances themselves are healthy)
+- Pattern is regular (one 502 after each recycle, then returns to 200)
 
-### 現在の設定状態（2026-02-21）
+### Current Configuration State (2026-02-21)
 
 ```bash
 # Function App
-WEBSITE_KEEPALIVE_TIMEOUT=30    # 追加済み
-WEBSITE_WARMUP_PATH=/sns/health  # 追加済み
-http20Enabled=false              # 無効化済み
+WEBSITE_KEEPALIVE_TIMEOUT=30    # added
+WEBSITE_WARMUP_PATH=/sns/health  # added
+http20Enabled=false              # disabled
 
 # AFD Origin Group
-probeIntervalInSeconds=30        # 30s（Pulumi 適用済み）
-sampleSize=2                     # 緩和済み（4→2）
-successfulSamplesRequired=1      # 緩和済み（3→1）
+probeIntervalInSeconds=30        # 30s (applied via Pulumi)
+sampleSize=2                     # relaxed (4→2)
+successfulSamplesRequired=1      # relaxed (3→1)
 
 # AFD Profile
-originResponseTimeoutSeconds=60  # 延長済み（30s→60s）
+originResponseTimeoutSeconds=60  # extended (30s→60s)
 ```
 
-### 次の調査方針（別チャットで継続）
+### Next Investigation Steps (Continue in Separate Chat)
 
-優先度順。上から試す。
+In priority order. Try from the top.
 
-1. **`WEBSITE_KEEPALIVE_TIMEOUT` の長期効果確認**  
-   設定直後は効果不明。30 分以上継続テストして改善するか確認。
+1. **Confirm long-term effect of `WEBSITE_KEEPALIVE_TIMEOUT`**  
+   Effect is unclear immediately after setting. Run continuous tests for 30+ minutes to check for improvement.
 
    ```bash
    OK=0; NG=0
    for i in $(seq 1 30); do
      CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://www.azure.ashnova.jp/sns/health")
      if [ "$CODE" = "200" ]; then ((OK++)); else ((NG++)); echo "FAIL $i: $CODE"; fi
-     sleep 60  # 1分間隔で30回 = 30分
+     sleep 60  # 30 times at 1-minute intervals = 30 minutes
    done
    echo "OK=$OK NG=$NG / 30"
    ```
 
-2. **AFD ルールセットで `Connection: close` ヘッダー付与**（最有望）  
-   AFD→オリジン間の TCP 接続を Keep-Alive させず毎回新規接続させる。
-   → デプロイが必要（下記「デプロイが必要なサービス」参照）
+2. **Add `Connection: close` header via AFD Rule Set** (most promising)  
+   Force AFD→origin TCP connections to be created fresh each time (no Keep-Alive).
+   → Requires deployment (see "Services Requiring Deployment" below)
 
-3. **`WEBSITE_IDLE_TIMEOUT_IN_MINUTES` 調整**  
-   Function App インスタンスのアイドルタイムアウトを延ばしてインスタンス再サイクルを抑制。
+3. **Adjust `WEBSITE_IDLE_TIMEOUT_IN_MINUTES`**  
+   Extend Function App instance idle timeout to suppress instance recycling.
 
    ```bash
    az functionapp config appsettings set \
@@ -387,26 +468,26 @@ originResponseTimeoutSeconds=60  # 延長済み（30s→60s）
      --settings "WEBSITE_IDLE_TIMEOUT_IN_MINUTES=60"
    ```
 
-4. **Flex Consumption への移行**  
-   Dynamic Consumption (Y1) の代わりに Flex Consumption を使うことで
-   `instanceMemoryMB` / `maximumInstanceCount` が設定可能になり、インスタンスが安定する。
-   Pulumi の `azure.web.WebApp` の `kind` + `serverFarmId` を変更する。
+4. **Migrate to Flex Consumption**  
+   Using Flex Consumption instead of Dynamic Consumption (Y1) enables
+   `instanceMemoryMB` / `maximumInstanceCount` settings, stabilizing instances.
+   Requires changing `kind` + `serverFarmId` in Pulumi's `azure.web.WebApp`.
 
-5. **AFD Premium SKU への移行検討**  
-   AFD Standard の接続プール管理に問題がある可能性。
-   Premium では Private Link 経由の接続が利用可能で挙動が異なる。
-   ただしコストが大幅増加するため最終手段。
+5. **Consider migrating to AFD Premium SKU**  
+   There may be a connection pool management issue with AFD Standard.
+   Premium allows Private Link connections with different behavior.
+   Significant cost increase — last resort.
 
-6. **Azure Support へのチケット起票**  
-   AFD Standard + Dynamic Consumption の既知の stale connection 問題として記録がある可能性。
+6. **File an Azure Support ticket**  
+   This may be a known stale connection issue with AFD Standard + Dynamic Consumption.
 
 ---
 
-### 調査再開時のセットアップ（必要なツール）
+### Setup for Resuming Investigation (Required Tools)
 
-調査中に使ったコマンドと、次回から使えるようにしておくとよいツール。
+Commands used during investigation, plus tools useful to have ready for next time.
 
-#### 1. 環境変数（毎回設定）
+#### 1. Environment Variables (Set Each Time)
 
 ```bash
 export RG="multicloud-auto-deploy-production-rg"
@@ -419,10 +500,10 @@ export HOSTNAME="multicloud-auto-deploy-production-frontend-web.azurewebsites.ne
 export AFD_URL="https://www.azure.ashnova.jp"
 ```
 
-#### 2. 502 率確認スクリプト（標準テスト）
+#### 2. 502 Rate Check Script (Standard Test)
 
 ```bash
-# 10回テスト（5秒間隔）
+# 10 tests (5-second intervals)
 OK=0; NG=0
 for i in $(seq 1 10); do
   TIMING=$(curl -s -o /dev/null -w "%{http_code}/%{time_total}" --max-time 15 "$AFD_URL/sns/health")
@@ -434,17 +515,17 @@ done
 echo "OK=$OK NG=$NG / 10"
 ```
 
-#### 3. AFD IP 別テスト（どの Edge Node が問題か特定）
+#### 3. AFD Test by IP (Identify Which Edge Node Has the Problem)
 
 ```bash
-# AFD の IP を取得（通常 2 つ返る）
+# Get AFD IPs (usually returns 2)
 python3 -c "
 import socket
 ips = list(set([r[4][0] for r in socket.getaddrinfo('www.azure.ashnova.jp', 443, socket.AF_INET)]))
 print('AFD IPs:', ips)
 "
 
-# 特定 IP に固定してテスト
+# Test pinned to a specific IP
 IP1="13.107.246.46"
 IP2="13.107.213.46"
 for IP in $IP1 $IP2; do
@@ -457,25 +538,25 @@ for IP in $IP1 $IP2; do
 done
 ```
 
-#### 4. AFD 設定の現在状態確認
+#### 4. Check Current AFD Configuration
 
 ```bash
-# Origin Group 設定
+# Origin Group settings
 az afd origin-group show --profile-name $FD --resource-group $RG \
   --origin-group-name $OG \
   --query "{loadBalancing:loadBalancingSettings, healthProbe:healthProbeSettings}" -o json
 
-# Origin 設定
+# Origin settings
 az afd origin show --profile-name $FD --resource-group $RG \
   --origin-group-name $OG --origin-name $ORIGIN \
   --query "{hostname:hostName, enabled:enabledState, priority:priority}" -o json
 
-# Route 設定
+# Route settings
 az afd route list --profile-name $FD --resource-group $RG --endpoint-name $EP \
   --query "[].{name:name, patterns:patternsToMatch, enabled:enabledState}" -o table
 ```
 
-#### 5. Function App 設定確認
+#### 5. Check Function App Configuration
 
 ```bash
 az functionapp show --name $FUNC_WEB --resource-group $RG \
@@ -485,10 +566,10 @@ az functionapp config appsettings list --name $FUNC_WEB --resource-group $RG \
   --query "[?name=='WEBSITE_KEEPALIVE_TIMEOUT' || name=='WEBSITE_WARMUP_PATH' || name=='WEBSITE_IDLE_TIMEOUT_IN_MINUTES'].{name:name,value:value}" -o table
 ```
 
-#### 6. `dig` が使えない場合の DNS 確認（このコンテナでは `dig` が未インストール）
+#### 6. DNS Lookup Without `dig` (Not Installed in This Container)
 
 ```bash
-# dig の代替
+# Alternative to dig
 python3 -c "
 import socket
 host = 'www.azure.ashnova.jp'
@@ -499,24 +580,24 @@ for af, name in [(socket.AF_INET, 'IPv4'), (socket.AF_INET6, 'IPv6')]:
     except: print(f'{name}: none')
 "
 
-# dig をインストールする場合
+# To install dig
 sudo apt-get install -y dnsutils
 ```
 
 ---
 
-### デプロイが必要なサービス
+### Services Requiring Deployment
 
-調査の結果、以下の Azure サービスのデプロイが有効と考えられる。
+Based on the investigation, deploying the following Azure services is considered effective.
 
-#### 優先度 HIGH: AFD ルールセット（`Connection: close` ヘッダー）
+#### Priority HIGH: AFD Rule Set (`Connection: close` header)
 
-stale TCP 接続問題の根本対処。AFD→Function App 間の HTTP 接続を毎回新規作成させる。
+Fundamental fix for stale TCP connection issue. Forces AFD→Function App HTTP connections to be created fresh each time.
 
-**Pulumi コード追加箇所**: `infrastructure/pulumi/azure/__main__.py`
+**Pulumi code insertion point**: `infrastructure/pulumi/azure/__main__.py`
 
 ```python
-# AFD Rule Set: Connection: close を強制してstale connection を防ぐ
+# AFD Rule Set: Force Connection: close to prevent stale connections
 frontend_web_rule_set = azure.cdn.RuleSet(
     "frontdoor-frontend-web-rule-set",
     rule_set_name=f"{project_name}-{stack}-fw-rs",
@@ -531,7 +612,7 @@ frontend_web_connection_close_rule = azure.cdn.Rule(
     profile_name=frontdoor_profile.name,
     resource_group_name=resource_group.name,
     order=1,
-    # 条件なし = 全リクエストに適用
+    # No conditions = apply to all requests
     conditions=[],
     actions=[
         azure.cdn.DeliveryRuleResponseHeaderActionArgs(
@@ -546,7 +627,7 @@ frontend_web_connection_close_rule = azure.cdn.Rule(
     ],
 )
 
-# frontdoor_sns_route の rule_sets に追加
+# Add to frontdoor_sns_route's rule_sets
 # frontdoor_sns_route = azure.cdn.Route(
 #     ...
 #     rule_sets=[azure.cdn.ResourceReferenceArgs(id=frontend_web_rule_set.id)],
@@ -554,15 +635,15 @@ frontend_web_connection_close_rule = azure.cdn.Rule(
 # )
 ```
 
-CLI で先に試す場合:
+To try via CLI first:
 
 ```bash
-# ルールセット作成
+# Create rule set
 az afd rule-set create \
   --resource-group $RG --profile-name $FD \
   --rule-set-name fwconnclose
 
-# ルール追加（Connection: close）
+# Add rule (Connection: close)
 az afd rule create \
   --resource-group $RG --profile-name $FD \
   --rule-set-name fwconnclose \
@@ -573,24 +654,24 @@ az afd rule create \
   --header-name Connection \
   --header-value close
 
-# SNS Route にルールセットをアタッチ
+# Attach rule set to SNS Route
 az afd route update \
   --resource-group $RG --profile-name $FD \
   --endpoint-name $EP --route-name multicloud-auto-deploy-production-sns-route \
   --rule-sets fwconnclose
 ```
 
-#### 優先度 MEDIUM: Flex Consumption プランへの移行
+#### Priority MEDIUM: Migrate to Flex Consumption Plan
 
-Dynamic Consumption (Y1) → Flex Consumption に変更してインスタンス安定性を向上。
-**注意**: Pulumi コードへの変更が必要。現在は手動デプロイされた Function App を参照しているため、Pulumi の外で変更する必要がある可能性がある。
+Change Dynamic Consumption (Y1) → Flex Consumption to improve instance stability.
+**Note**: Requires changes to Pulumi code. Since the current Function App was deployed manually, changes may need to be made outside Pulumi.
 
 ```bash
-# 現在のプランを確認
+# Check current plan
 az functionapp show --name $FUNC_WEB --resource-group $RG \
   --query "{planName:serverFarmId, sku:sku}" -o json
 
-# Flex Consumption プランを作成（Japan East）
+# Create Flex Consumption plan (Japan East)
 az functionapp plan create \
   --resource-group $RG \
   --name multicloud-auto-deploy-production-flex-plan \
@@ -598,17 +679,17 @@ az functionapp plan create \
   --sku FC1 \
   --is-linux true
 
-# Function App を新プランに移行
+# Migrate Function App to new plan
 az functionapp update \
   --name $FUNC_WEB \
   --resource-group $RG \
   --plan multicloud-auto-deploy-production-flex-plan
 ```
 
-### 関連コミット
+### Related Commits
 
-| コミット  | 内容                                                                           |
-| --------- | ------------------------------------------------------------------------------ |
-| `9ed48d6` | CI/CD バグ修正（SNS dist が `$web` を上書きする問題）                          |
-| `27a44af` | AFD タイムアウト延長・ウォームアップ設定・ランディングページ修正               |
-| `(最新)`  | `WEBSITE_KEEPALIVE_TIMEOUT=30`、`http20Enabled=false`、AFD origin group 再設定 |
+| Commit    | Description                                                                              |
+| --------- | ---------------------------------------------------------------------------------------- |
+| `9ed48d6` | CI/CD bug fix (issue where SNS dist overwrote `$web`)                                    |
+| `27a44af` | AFD timeout extension, warmup settings, landing page fix                                 |
+| `(latest)` | `WEBSITE_KEEPALIVE_TIMEOUT=30`, `http20Enabled=false`, AFD origin group reconfiguration |

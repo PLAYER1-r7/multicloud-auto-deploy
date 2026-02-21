@@ -34,7 +34,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(
             body=f"<h1>Import Error</h1><pre>{_IMPORT_ERROR}</pre>",
             status_code=503,
-            headers={"Content-Type": "text/html"},
+            headers={"Content-Type": "text/html", "Connection": "close"},
         )
 
     # CORS preflight
@@ -47,6 +47,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
                 "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
                 "Access-Control-Allow-Headers": "Content-Type, Authorization, Cookie",
                 "Access-Control-Max-Age": "86400",
+                "Connection": "close",
             },
         )
 
@@ -92,7 +93,7 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(
             body=f"<h1>Internal Server Error</h1><pre>{type(e).__name__}: {e}</pre>",
             status_code=500,
-            headers={"Content-Type": "text/html"},
+            headers={"Content-Type": "text/html", "Connection": "close"},
         )
 
     response_body = b"".join(body_parts)
@@ -107,6 +108,14 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
             set_cookie_values.append(val)
         else:
             response_headers[key] = val
+
+    # Force Connection: close so Azure Front Door does NOT keep a persistent TCP
+    # connection to this Function App instance.  Without this, AFD pools 2+ connections
+    # and round-robins across them; when Consumption-plan instances are recycled, one
+    # of the pooled connections dies (silent TCP half-close) → alternating 502 pattern.
+    # Sending Connection: close on every response causes AFD to close that connection
+    # after it receives the response, eliminating the stale-connection pool.
+    response_headers["Connection"] = "close"
 
     http_response = func.HttpResponse(
         body=response_body,
