@@ -1,7 +1,7 @@
 # 07 — Environment Status
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-21 (全3クラウド カスタムドメイン HTTPS 完全稼働 + SNS テスト 14/14 PASS)
+> Last verified: 2026-02-21 (All 3 clouds: custom domain HTTPS fully operational + SNS tests 14/14 PASS + AWS HTTPS certificate fix applied directly + AWS Production SNS localhost:8000 fixed)
 
 ---
 
@@ -101,17 +101,17 @@ Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7
 
 **Fixed issues (2026-02-21)**:
 
-- `GcpBackend` が `like_post`/`unlike_post` abstract method を未実装 → `TypeError` → `/posts` が 500 エラー  
-  → `like_post`/`unlike_post` スタブ実装を追加 (commit `a9bc85e`)
-- `frontend-web` Cloud Run の `API_BASE_URL` が未設定 → localhost:8000 を参照  
-  → `gcloud run services update` で環境変数設定
-- Firebase Auth 未実装 → Google Sign-In フロー全体を実装 (commit `3813577`)
-- GCS CORS に `x-ms-blob-type` ヘッダー未登録 → CORS更新 + uploads.js修正 (commit `1cf53b7`, `b5b4de5`)
-- GCS 署名URL生成で `content_type` が `"image/jpeg"` ハードコード → `content_types[index]` を正しく使用 (commit `148b7b5`)
-- Firebase IDトークン期限切れ (401) → `onIdTokenChanged` で自動リフレッシュ (commit `8110d20`)
-- CI/CD に `GCP_SERVICE_ACCOUNT` 環境変数未設定 → `deploy-gcp.yml` に追加 (commit `27b10cc`)
-- CSS の背景SVGが絶対パス `/static/` → 相対パス `./` に修正 (commit `0ed0805`)
-- GCS uploads バケットが非公開 → `allUsers:objectViewer` 付与 + Pulumi定義に追加 (commit `0ed0805`)
+- `GcpBackend` had unimplemented `like_post`/`unlike_post` abstract methods → `TypeError` → `/posts` returned 500
+  → Added stub implementations for `like_post`/`unlike_post` (commit `a9bc85e`)
+- `frontend-web` Cloud Run `API_BASE_URL` was unset → falling back to localhost:8000
+  → Set environment variable via `gcloud run services update`
+- Firebase Auth not implemented → Implemented the full Google Sign-In flow (commit `3813577`)
+- `x-ms-blob-type` header not registered in GCS CORS → Updated CORS + fixed uploads.js (commits `1cf53b7`, `b5b4de5`)
+- GCS presigned URL generation had `content_type` hardcoded as `"image/jpeg"` → Now uses `content_types[index]` correctly (commit `148b7b5`)
+- Firebase ID token expiry (401) → Auto-refresh via `onIdTokenChanged` (commit `8110d20`)
+- `GCP_SERVICE_ACCOUNT` env var missing in CI/CD → Added to `deploy-gcp.yml` (commit `27b10cc`)
+- CSS background SVGs used absolute path `/static/` → Changed to relative path `./` (commit `0ed0805`)
+- GCS uploads bucket was private → Granted `allUsers:objectViewer` + added IAMBinding to Pulumi definition (commit `0ed0805`)
 
 **Remaining issues**:
 
@@ -140,32 +140,43 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 
 ## Production Environment
 
-> Currently sharing the same resources as staging.  
-> Independent production stack deployment is planned as **REMAINING_TASKS #13**.
+> Production has its own independent Pulumi stack (deployed). Resources are separate from staging.
 
 ### Production Endpoints
 
-| Cloud     | Endpoint                                                  | Distribution ID        |
-| --------- | --------------------------------------------------------- | ---------------------- |
-| **AWS**   | `d1qob7569mn5nw.cloudfront.net`                           | E214XONKTXJEJD         |
-| **Azure** | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | mcad-production-diev0w |
-| **GCP**   | `34.8.38.222`                                             | -                      |
+| Cloud     | CDN / Endpoint                                             | API Endpoint                                                  | Distribution ID        |
+| --------- | ---------------------------------------------------------- | ------------------------------------------------------------- | ---------------------- |
+| **AWS**   | `d1qob7569mn5nw.cloudfront.net` / `www.aws.ashnova.jp`    | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com` | E214XONKTXJEJD         |
+| **Azure** | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | —                                                             | mcad-production-diev0w |
+| **GCP**   | `34.8.38.222`                                              | —                                                             | -                      |
+
+**AWS Production SNS App** (`https://www.aws.ashnova.jp/sns/`):
+
+| Item              | Value                                                            |
+| ----------------- | ---------------------------------------------------------------- |
+| Lambda (API)      | `multicloud-auto-deploy-production-api`                          |
+| Lambda (frontend) | `multicloud-auto-deploy-production-frontend-web`                 |
+| API_BASE_URL      | `https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com`   |
+| Cognito Pool      | `ap-northeast-1_50La963P2`                                       |
+| Cognito Client    | `4h3b285v1a9746sqhukk5k3a7i`                                     |
+| Cognito Redirect  | `https://www.aws.ashnova.jp/sns/auth/callback`                   |
+| DynamoDB          | `multicloud-auto-deploy-production-posts`                        |
 
 ### Custom Domain Status (ashnova.jp) — 2026-02-21
 
 | Cloud     | URL                          | Status                                                                                        |
 | --------- | ---------------------------- | --------------------------------------------------------------------------------------------- |
-| **AWS**   | https://www.aws.ashnova.jp   | ✅ **完全稼働** (HTTP/2 200, ACM cert + CloudFront alias)                                     |
-| **Azure** | https://www.azure.ashnova.jp | ✅ **完全稼働** (HTTPS 200, DigiCert/GeoTrust managed cert, AFD route active)                 |
-| **GCP**   | https://www.gcp.ashnova.jp   | ✅ **完全稼働** (HTTPS 200, TLS cert active via ACTIVE cert `ashnova-production-cert-c41311`) |
+| **AWS**   | https://www.aws.ashnova.jp   | ✅ **Fully operational** (HTTP/2 200, ACM cert `914b86b1` + CloudFront alias set directly — details: [AWS_HTTPS_FIX_REPORT.md](AWS_HTTPS_FIX_REPORT.md)) |
+| **Azure** | https://www.azure.ashnova.jp | ✅ **Fully operational** (HTTPS 200, DigiCert/GeoTrust managed cert, AFD route active)                 |
+| **GCP**   | https://www.gcp.ashnova.jp   | ✅ **Fully operational** (HTTPS 200, TLS cert active via ACTIVE cert `ashnova-production-cert-c41311`) |
 
 #### 完了した作業 (2026-02-21)
 
-| Cloud | 作業                                                  | 結果                                                                                          |
-| ----- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| AWS   | `aws acm request-certificate` → ISSUED                | ✅ ARN: `arn:aws:acm:us-east-1:278280499340:certificate/fafdb594-5de6-4072-9576-e4af6b6e3487` |
-| AWS   | `pulumi up --stack production` (CloudFront alias追加) | ✅ Distribution `E214XONKTXJEJD` に `www.aws.ashnova.jp` alias 追加済み                       |
-| AWS   | Lambda 環境変数設定 (`ignore_changes` 回避)           | ✅ API*BASE_URL, COGNITO*\*, AUTH_PROVIDER, ENVIRONMENT 設定済み                              |
+| Cloud | 作業                                                                              | 結果                                                                                                                                        |
+| ----- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| AWS   | ACM 証明書確認                                                                    | ✅ `www.aws.ashnova.jp` 向け証明書 `914b86b1` (有効期限 2027-03-12) ISSUED 確認                                                             |
+| AWS   | `aws cloudfront update-distribution` で alias + ACM 証明書を直接設定（2026-02-21）| ✅ Distribution `E214XONKTXJEJD` へ alias `www.aws.ashnova.jp` + cert `914b86b1` 設定 → `NET::ERR_CERT_COMMON_NAME_INVALID` 解消 → HTTP/2 200 稼働 |
+| AWS   | Production `frontend-web` Lambda 環境変数修正 (2026-02-21)                        | ✅ `API_BASE_URL` が空→`localhost:8000` フォールバックを修正（原因: `deploy-frontend-web-aws.yml` が secrets 依存；production secrets 未設定）→ Pulumi outputs を使うよう CI/CD 修正（commit `fd1f422`） |
 | Azure | `az afd custom-domain create` + route attach          | ✅ DNS Approved → Managed Cert Succeeded (GeoTrust, 2026-02-21 〜 2026-08-21)                 |
 | Azure | AFD route disable→enable トグル                       | ✅ edge nodes への deployment トリガー → HTTPS 200 稼働                                       |
 | Azure | `az afd custom-domain update` (cert edge deploy)      | ✅ `CN=www.azure.ashnova.jp` cert が AFD POP に配布済み                                       |
@@ -175,26 +186,26 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 | GCP   | ACTIVE cert `ashnova-production-cert-c41311` 追加     | ✅ HTTPS プロキシに追加 → `https://www.gcp.ashnova.jp` HTTPS 即時稼働                         |
 | GCP   | Firebase authorized domains 更新                      | ✅ `www.gcp.ashnova.jp` を Firebase Auth authorized domains に追加                            |
 
-#### 残作業
+#### Remaining Work
 
-- **GCP**: `multicloud-auto-deploy-production-ssl-cert-3ee2c3ce` が ACTIVE になったら `ashnova-production-cert-c41311` をプロキシから削除可能
+- **GCP**: Once `multicloud-auto-deploy-production-ssl-cert-3ee2c3ce` becomes ACTIVE, `ashnova-production-cert-c41311` can be removed from the proxy
 
 ```bash
-# GCP SSL cert 確認
+# Check GCP SSL cert status
 gcloud compute ssl-certificates describe multicloud-auto-deploy-production-ssl-cert-3ee2c3ce \
   --global --format="value(managed.status)"
-# ACTIVE になったら:
+# Once ACTIVE:
 gcloud compute target-https-proxies update multicloud-auto-deploy-production-cdn-https-proxy \
   --global \
   --ssl-certificates=multicloud-auto-deploy-production-ssl-cert-3ee2c3ce
 ```
 
-#### 全クラウドテスト結果 (2026-02-21 最終確認)
+#### All-Cloud Test Results (final check 2026-02-21)
 
 ```
-test-cloud-env.sh production → PASS: 14, FAIL: 0, WARN: 3 (全て POST 401 = 正常な認証ガード)
-test-azure-sns.sh            → PASS: 10, FAIL: 0 (www.azure.ashnova.jp 専用テスト)
-test-gcp-sns.sh              → PASS: 10, FAIL: 0 (www.gcp.ashnova.jp 専用テスト)
+test-cloud-env.sh production → PASS: 14, FAIL: 0, WARN: 3 (all POST 401 = expected auth guard)
+test-azure-sns.sh            → PASS: 10, FAIL: 0 (www.azure.ashnova.jp dedicated tests)
+test-gcp-sns.sh              → PASS: 10, FAIL: 0 (www.gcp.ashnova.jp dedicated tests)
 ```
 
 ---
