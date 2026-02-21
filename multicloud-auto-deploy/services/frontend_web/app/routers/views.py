@@ -10,7 +10,8 @@ from app.config import Settings, get_settings
 from app.routers.auth import _template_context, _get_auth_urls
 
 router = APIRouter()
-_TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates")
+_TEMPLATES_DIR = os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), "..", "templates")
 templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 
 

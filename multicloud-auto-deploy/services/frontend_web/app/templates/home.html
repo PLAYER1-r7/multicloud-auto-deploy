@@ -207,6 +207,34 @@
 
 {% block scripts %}
 <script src="{{ base_path }}/static/uploads.js?v=10"></script>
+{% if auth_provider == "firebase" and firebase_config %}
+<script type="module">
+  // Firebase ID token auto-refresh
+  // When the Firebase token is refreshed (every ~1h), update the httponly cookie
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAuth, onIdTokenChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+  const firebaseConfig = {{ firebase_config | tojson }};
+  const app = initializeApp(firebaseConfig, "home-refresh");
+  const auth = getAuth(app);
+
+  onIdTokenChanged(auth, async (user) => {
+    if (user) {
+      try {
+        const idToken = await user.getIdToken();
+        await fetch("{{ base_path }}/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id_token: idToken }),
+        });
+        console.log("Firebase token refreshed");
+      } catch (e) {
+        console.warn("Token refresh failed:", e);
+      }
+    }
+  });
+</script>
+{% endif %}
 <script>
   // 投稿削除機能
   document.addEventListener('DOMContentLoaded', function() {

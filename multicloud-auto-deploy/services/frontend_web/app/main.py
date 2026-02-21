@@ -36,7 +36,8 @@ app.add_middleware(COOPMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 _static_path = f"{prefix}/static" if prefix else "/static"
-app.mount(_static_path, StaticFiles(directory=os.path.join(_APP_DIR, "static")), name="static")
+app.mount(_static_path, StaticFiles(
+    directory=os.path.join(_APP_DIR, "static")), name="static")
 
 app.include_router(auth.router, prefix=prefix)
 app.include_router(views.router, prefix=prefix)

@@ -29,11 +29,21 @@ def _template_context(request: Request, settings: Settings, **extra: Any) -> dic
         logged_in = bool(request.cookies.get("id_token")
                          or request.cookies.get("access_token"))
         username = None
+    firebase_config = None
+    if getattr(settings, 'auth_provider', None) == "firebase":
+        firebase_config = {
+            "apiKey": getattr(settings, 'firebase_api_key', ''),
+            "authDomain": getattr(settings, 'firebase_auth_domain', ''),
+            "projectId": getattr(settings, 'firebase_project_id', '') or getattr(settings, 'gcp_project_id', ''),
+            "appId": getattr(settings, 'firebase_app_id', ''),
+        }
     return {
         "request": request,
         "logged_in": logged_in,
         "username": username,
         "auth_disabled": getattr(settings, 'auth_disabled', False),
+        "auth_provider": getattr(settings, 'auth_provider', None),
+        "firebase_config": firebase_config,
         "base_path": _base_path(request, settings),
         **extra,
     }
