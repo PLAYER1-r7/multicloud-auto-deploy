@@ -1,0 +1,71 @@
+name: Version Bump (Minor) on Push
+
+# プッシュのたびにマイナーバージョン (Y) を +1 し Z をリセット
+# 例: 1.0.5 → 1.1.0
+#
+# スキップ条件:
+#   コミットメッセージに "[skip-version-bump]" を含む場合
+#   (このワークフロー自身が作るコミットがループしないための ガード)
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths-ignore:
+      - "versions.json"      # versions.json のみの変更はスキップ (ループ防止)
+      - "docs/**"
+      - "*.md"
+
+permissions:
+  contents: write            # バージョンバンプコミットを push するために必要
+
+jobs:
+  version-bump-minor:
+    runs-on: ubuntu-latest
+
+    # [skip-version-bump] を含むコミットはスキップ
+    if: "!contains(github.event.head_commit.message, '[skip-version-bump]')"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # GITHUB_TOKEN で push できるようにするため fetch-depth 0 は不要
+          # ただし botコミットを正しく push するため token を使用
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: バンプスクリプトに実行権限を付与
+        run: chmod +x scripts/bump-version.sh
+
+      - name: マイナーバージョン (Y) をインクリメント
+        run: |
+          SKIP_VERSION_BUMP=0 ./scripts/bump-version.sh minor all
+
+      - name: バージョン変更の確認
+        run: |
+          echo "=== versions.json (更新後) ==="
+          cat versions.json
+
+      - name: Git 設定
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: コミットとプッシュ
+        run: |
+          # 変更があった場合のみコミット
+          if git diff --quiet versions.json; then
+            echo "ℹ️  versions.json に変更なし。スキップします。"
+          else
+            git add versions.json
+            # [skip-version-bump] を含めることでこのワークフローの再実行を防ぐ
+            git commit -m "chore: bump minor version on push to ${{ github.ref_name }} [skip-version-bump]"
+            git push
+            echo "✅ マイナーバージョンをプッシュしました"
+          fi

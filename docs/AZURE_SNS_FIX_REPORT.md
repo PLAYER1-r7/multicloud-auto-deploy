@@ -358,12 +358,252 @@ originResponseTimeoutSeconds=60  # 延長済み（30s→60s）
 
 ### 次の調査方針（別チャットで継続）
 
-1. **`WEBSITE_KEEPALIVE_TIMEOUT` の効果確認**: 30 分以上継続テストして改善するか確認
-2. **Azure Support / Known Issues 調査**: AFD Standard + Dynamic Consumption の既知の stale connection 問題
-3. **`WEBSITE_IDLE_TIMEOUT_IN_MINUTES` 調整**: インスタンス再サイクル頻度を変更
-4. **AFD ルールセットで `Connection: close` ヘッダー付与**: TCP 接続の再利用を強制的に防ぐ
-5. **Premium SKU への移行検討**: AFD Standard の接続プール管理が改善している可能性
-6. **Flex Consumption への移行**: `alwaysOn` 相当の設定が可能で、インスタンス再サイクルを抑制
+優先度順。上から試す。
+
+1. **`WEBSITE_KEEPALIVE_TIMEOUT` の長期効果確認**  
+   設定直後は効果不明。30 分以上継続テストして改善するか確認。
+
+   ```bash
+   OK=0; NG=0
+   for i in $(seq 1 30); do
+     CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://www.azure.ashnova.jp/sns/health")
+     if [ "$CODE" = "200" ]; then ((OK++)); else ((NG++)); echo "FAIL $i: $CODE"; fi
+     sleep 60  # 1分間隔で30回 = 30分
+   done
+   echo "OK=$OK NG=$NG / 30"
+   ```
+
+2. **AFD ルールセットで `Connection: close` ヘッダー付与**（最有望）  
+   AFD→オリジン間の TCP 接続を Keep-Alive させず毎回新規接続させる。
+   → デプロイが必要（下記「デプロイが必要なサービス」参照）
+
+3. **`WEBSITE_IDLE_TIMEOUT_IN_MINUTES` 調整**  
+   Function App インスタンスのアイドルタイムアウトを延ばしてインスタンス再サイクルを抑制。
+
+   ```bash
+   az functionapp config appsettings set \
+     --name multicloud-auto-deploy-production-frontend-web \
+     --resource-group multicloud-auto-deploy-production-rg \
+     --settings "WEBSITE_IDLE_TIMEOUT_IN_MINUTES=60"
+   ```
+
+4. **Flex Consumption への移行**  
+   Dynamic Consumption (Y1) の代わりに Flex Consumption を使うことで
+   `instanceMemoryMB` / `maximumInstanceCount` が設定可能になり、インスタンスが安定する。
+   Pulumi の `azure.web.WebApp` の `kind` + `serverFarmId` を変更する。
+
+5. **AFD Premium SKU への移行検討**  
+   AFD Standard の接続プール管理に問題がある可能性。
+   Premium では Private Link 経由の接続が利用可能で挙動が異なる。
+   ただしコストが大幅増加するため最終手段。
+
+6. **Azure Support へのチケット起票**  
+   AFD Standard + Dynamic Consumption の既知の stale connection 問題として記録がある可能性。
+
+---
+
+### 調査再開時のセットアップ（必要なツール）
+
+調査中に使ったコマンドと、次回から使えるようにしておくとよいツール。
+
+#### 1. 環境変数（毎回設定）
+
+```bash
+export RG="multicloud-auto-deploy-production-rg"
+export FD="multicloud-auto-deploy-production-fd"
+export EP="mcad-production-diev0w"
+export OG="multicloud-auto-deploy-production-frontend-web-origin-group"
+export ORIGIN="multicloud-auto-deploy-production-frontend-web-origin"
+export FUNC_WEB="multicloud-auto-deploy-production-frontend-web"
+export HOSTNAME="multicloud-auto-deploy-production-frontend-web.azurewebsites.net"
+export AFD_URL="https://www.azure.ashnova.jp"
+```
+
+#### 2. 502 率確認スクリプト（標準テスト）
+
+```bash
+# 10回テスト（5秒間隔）
+OK=0; NG=0
+for i in $(seq 1 10); do
+  TIMING=$(curl -s -o /dev/null -w "%{http_code}/%{time_total}" --max-time 15 "$AFD_URL/sns/health")
+  CODE="${TIMING%%/*}"; TIME="${TIMING##*/}"
+  if [ "$CODE" = "200" ]; then ((OK++)); else ((NG++)); fi
+  echo "  $i: $CODE (${TIME}s)"
+  sleep 5
+done
+echo "OK=$OK NG=$NG / 10"
+```
+
+#### 3. AFD IP 別テスト（どの Edge Node が問題か特定）
+
+```bash
+# AFD の IP を取得（通常 2 つ返る）
+python3 -c "
+import socket
+ips = list(set([r[4][0] for r in socket.getaddrinfo('www.azure.ashnova.jp', 443, socket.AF_INET)]))
+print('AFD IPs:', ips)
+"
+
+# 特定 IP に固定してテスト
+IP1="13.107.246.46"
+IP2="13.107.213.46"
+for IP in $IP1 $IP2; do
+  echo "=== $IP ==="
+  for i in $(seq 1 5); do
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+      --resolve "www.azure.ashnova.jp:443:$IP" "$AFD_URL/sns/health")
+    echo "  $i: $CODE"; sleep 3
+  done
+done
+```
+
+#### 4. AFD 設定の現在状態確認
+
+```bash
+# Origin Group 設定
+az afd origin-group show --profile-name $FD --resource-group $RG \
+  --origin-group-name $OG \
+  --query "{loadBalancing:loadBalancingSettings, healthProbe:healthProbeSettings}" -o json
+
+# Origin 設定
+az afd origin show --profile-name $FD --resource-group $RG \
+  --origin-group-name $OG --origin-name $ORIGIN \
+  --query "{hostname:hostName, enabled:enabledState, priority:priority}" -o json
+
+# Route 設定
+az afd route list --profile-name $FD --resource-group $RG --endpoint-name $EP \
+  --query "[].{name:name, patterns:patternsToMatch, enabled:enabledState}" -o table
+```
+
+#### 5. Function App 設定確認
+
+```bash
+az functionapp show --name $FUNC_WEB --resource-group $RG \
+  --query "{sku:sku, state:state, alwaysOn:siteConfig.alwaysOn, http20:siteConfig.http20Enabled}" -o json
+
+az functionapp config appsettings list --name $FUNC_WEB --resource-group $RG \
+  --query "[?name=='WEBSITE_KEEPALIVE_TIMEOUT' || name=='WEBSITE_WARMUP_PATH' || name=='WEBSITE_IDLE_TIMEOUT_IN_MINUTES'].{name:name,value:value}" -o table
+```
+
+#### 6. `dig` が使えない場合の DNS 確認（このコンテナでは `dig` が未インストール）
+
+```bash
+# dig の代替
+python3 -c "
+import socket
+host = 'www.azure.ashnova.jp'
+for af, name in [(socket.AF_INET, 'IPv4'), (socket.AF_INET6, 'IPv6')]:
+    try:
+        ips = list(set([r[4][0] for r in socket.getaddrinfo(host, 443, af)]))
+        print(f'{name}: {ips}')
+    except: print(f'{name}: none')
+"
+
+# dig をインストールする場合
+sudo apt-get install -y dnsutils
+```
+
+---
+
+### デプロイが必要なサービス
+
+調査の結果、以下の Azure サービスのデプロイが有効と考えられる。
+
+#### 優先度 HIGH: AFD ルールセット（`Connection: close` ヘッダー）
+
+stale TCP 接続問題の根本対処。AFD→Function App 間の HTTP 接続を毎回新規作成させる。
+
+**Pulumi コード追加箇所**: `infrastructure/pulumi/azure/__main__.py`
+
+```python
+# AFD Rule Set: Connection: close を強制してstale connection を防ぐ
+frontend_web_rule_set = azure.cdn.RuleSet(
+    "frontdoor-frontend-web-rule-set",
+    rule_set_name=f"{project_name}-{stack}-fw-rs",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+)
+
+frontend_web_connection_close_rule = azure.cdn.Rule(
+    "frontdoor-connection-close-rule",
+    rule_name="ForceConnectionClose",
+    rule_set_name=frontend_web_rule_set.name,
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    order=1,
+    # 条件なし = 全リクエストに適用
+    conditions=[],
+    actions=[
+        azure.cdn.DeliveryRuleResponseHeaderActionArgs(
+            name="ModifyResponseHeader",
+            parameters=azure.cdn.HeaderActionParametersArgs(
+                type_name="DeliveryRuleHeaderActionParameters",
+                header_action="Overwrite",
+                header_name="Connection",
+                value="close",
+            ),
+        )
+    ],
+)
+
+# frontdoor_sns_route の rule_sets に追加
+# frontdoor_sns_route = azure.cdn.Route(
+#     ...
+#     rule_sets=[azure.cdn.ResourceReferenceArgs(id=frontend_web_rule_set.id)],
+#     ...
+# )
+```
+
+CLI で先に試す場合:
+
+```bash
+# ルールセット作成
+az afd rule-set create \
+  --resource-group $RG --profile-name $FD \
+  --rule-set-name fwconnclose
+
+# ルール追加（Connection: close）
+az afd rule create \
+  --resource-group $RG --profile-name $FD \
+  --rule-set-name fwconnclose \
+  --rule-name ForceConnectionClose \
+  --order 1 \
+  --action-name ModifyResponseHeader \
+  --header-action Overwrite \
+  --header-name Connection \
+  --header-value close
+
+# SNS Route にルールセットをアタッチ
+az afd route update \
+  --resource-group $RG --profile-name $FD \
+  --endpoint-name $EP --route-name multicloud-auto-deploy-production-sns-route \
+  --rule-sets fwconnclose
+```
+
+#### 優先度 MEDIUM: Flex Consumption プランへの移行
+
+Dynamic Consumption (Y1) → Flex Consumption に変更してインスタンス安定性を向上。
+**注意**: Pulumi コードへの変更が必要。現在は手動デプロイされた Function App を参照しているため、Pulumi の外で変更する必要がある可能性がある。
+
+```bash
+# 現在のプランを確認
+az functionapp show --name $FUNC_WEB --resource-group $RG \
+  --query "{planName:serverFarmId, sku:sku}" -o json
+
+# Flex Consumption プランを作成（Japan East）
+az functionapp plan create \
+  --resource-group $RG \
+  --name multicloud-auto-deploy-production-flex-plan \
+  --location japaneast \
+  --sku FC1 \
+  --is-linux true
+
+# Function App を新プランに移行
+az functionapp update \
+  --name $FUNC_WEB \
+  --resource-group $RG \
+  --plan multicloud-auto-deploy-production-flex-plan
+```
 
 ### 関連コミット
 

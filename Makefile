@@ -1,4 +1,5 @@
-.PHONY: help install test-aws test-azure test-gcp test-all deploy-aws deploy-azure deploy-gcp build-frontend build-backend clean
+.PHONY: help install test-aws test-azure test-gcp test-all deploy-aws deploy-azure deploy-gcp build-frontend build-backend clean \
+        hooks-install version version-major version-minor version-patch version-azure-afd-resolved
 
 # Default target
 help:
@@ -17,6 +18,16 @@ help:
 	@echo "  terraform-plan - Plan Terraform changes for AWS"
 	@echo "  terraform-apply - Apply Terraform changes for AWS"
 	@echo "  clean          - Clean build artifacts"
+	@echo ""
+	@echo "Version management:"
+	@echo "  hooks-install              - git hooks を有効化 (初回セットアップ時に実行)"
+	@echo "  version                    - 現在のバージョン一覧を表示"
+	@echo "  version-major COMPONENT=<name|all>  - メジャー(X)を手動インクリメント"
+	@echo "  version-minor COMPONENT=<name|all>  - マイナー(Y)を手動インクリメント"
+	@echo "  version-patch COMPONENT=<name|all>  - パッチ(Z)を手動インクリメント"
+	@echo "  version-azure-afd-resolved - Azure AFD 解消後: 0.9.x → 1.0.0"
+	@echo ""
+	@echo "Components: aws-static-site  azure-static-site  gcp-static-site  simple-sns  all"
 
 # Install dependencies
 install:
@@ -108,3 +119,49 @@ clean:
 	rm -rf services/backend/lambda.zip
 	rm -rf services/backend/.venv
 	@echo "✅ Clean complete"
+
+# ============================================================
+# バージョン管理
+# ============================================================
+
+# git hooks を有効化 (初回セットアップ時に実行)
+hooks-install:
+	@echo "🔧 git hooks を .githooks に設定..."
+	git config core.hooksPath .githooks
+	chmod +x .githooks/pre-commit
+	chmod +x scripts/bump-version.sh
+	@echo "✅ git hooks 有効化完了"
+	@echo "   コミット時に自動でパッチ(Z)をインクリメントします"
+	@echo "   プッシュ時は GitHub Actions がマイナー(Y)をインクリメントします"
+
+# 現在のバージョン一覧
+version:
+	@chmod +x scripts/bump-version.sh
+	@./scripts/bump-version.sh show
+
+# メジャー(X)を手動インクリメント
+# 使用例: make version-major COMPONENT=all
+#          make version-major COMPONENT=aws-static-site
+COMPONENT ?= all
+version-major:
+	@chmod +x scripts/bump-version.sh
+	@./scripts/bump-version.sh major $(COMPONENT)
+	@echo "📝 次のコマンドでコミットしてください:"
+	@echo "   git add versions.json && git commit -m 'chore: bump major version [skip-version-bump]'"
+
+version-minor:
+	@chmod +x scripts/bump-version.sh
+	@./scripts/bump-version.sh minor $(COMPONENT)
+	@echo "📝 次のコマンドでコミットしてください:"
+	@echo "   git add versions.json && git commit -m 'chore: bump minor version [skip-version-bump]'"
+
+version-patch:
+	@chmod +x scripts/bump-version.sh
+	@./scripts/bump-version.sh patch $(COMPONENT)
+	@echo "📝 次のコマンドでコミットしてください:"
+	@echo "   git add versions.json && git commit -m 'chore: bump patch version [skip-version-bump]'"
+
+# Azure AFD 解消後に 0.9.x → 1.0.0 へ昇格
+version-azure-afd-resolved:
+	@chmod +x scripts/bump-version.sh
+	@./scripts/bump-version.sh azure-afd-resolved

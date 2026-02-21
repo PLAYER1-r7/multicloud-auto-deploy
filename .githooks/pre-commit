@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# ============================================================
+# .githooks/pre-commit
+# コミット前に全コンポーネントのパッチバージョン(Z)を自動インクリメント
+#
+# スキップ条件:
+#   - 環境変数 SKIP_VERSION_BUMP=1 が設定されている
+#   - コミットメッセージに [skip-version-bump] が含まれる
+#     例: git commit -m "chore: update readme [skip-version-bump]"
+#
+# このフックを有効化するには:
+#   make hooks-install
+#   または
+#   git config core.hooksPath .githooks
+# ============================================================
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+BUMP_SCRIPT="${REPO_ROOT}/scripts/bump-version.sh"
+VERSIONS_FILE="${REPO_ROOT}/versions.json"
+
+# --- スキップ: 環境変数チェック ---
+if [[ "${SKIP_VERSION_BUMP:-0}" == "1" ]]; then
+  exit 0
+fi
+
+# --- スキップ: 準備中のコミットメッセージチェック (COMMIT_EDITMSG) ---
+COMMIT_MSG_FILE="${REPO_ROOT}/.git/COMMIT_EDITMSG"
+if [[ -f "$COMMIT_MSG_FILE" ]]; then
+  COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+  if [[ "$COMMIT_MSG" == *"[skip-version-bump]"* ]]; then
+    exit 0
+  fi
+fi
+
+# --- スキップ: versions.json が唯一の変更ファイルの場合 (ループ防止) ---
+STAGED=$(git diff --cached --name-only)
+if [[ "$STAGED" == "versions.json" ]]; then
+  exit 0
+fi
+
+# --- バンプスクリプトが存在するか確認 ---
+if [[ ! -x "$BUMP_SCRIPT" ]]; then
+  echo "⚠️  bump-version.sh が見つからないかまたは実行権限がありません。バージョンバンプをスキップします。"
+  exit 0
+fi
+
+echo "🔖 [pre-commit] パッチバージョン (Z) をインクリメント..."
+"$BUMP_SCRIPT" patch all
+
+# versions.json をコミットに追加
+git add "$VERSIONS_FILE"
+
+echo "✅ versions.json をコミットに含めました"

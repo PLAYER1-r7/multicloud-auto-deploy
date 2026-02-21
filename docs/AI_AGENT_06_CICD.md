@@ -164,6 +164,85 @@ gh run watch <run-id>
 
 ---
 
+## バージョン管理
+
+> 成果物ごとに `X.Y.Z` 形式でバージョンを追跡する。  
+> バージョン定義ファイル: [`versions.json`](../versions.json)
+
+### コンポーネント一覧と初期バージョン
+
+| コンポーネント        | 初期バージョン | 理由                                     |
+| --------------------- | -------------- | ---------------------------------------- |
+| `aws-static-site`     | `1.0.0`        | 安定稼働中                               |
+| `azure-static-site`   | `0.9.0`        | AFD 経由 `/sns/*` 間欠的 502 未解消      |
+| `gcp-static-site`     | `1.0.0`        | 安定稼働中 (HTTPS未設定は残課題)         |
+| `simple-sns`          | `1.0.0`        | React SNS アプリ、全クラウド共通デプロイ |
+
+### バージョン規則
+
+| 桁 | 名称      | インクリメント条件               | 方法                          |
+| -- | --------- | -------------------------------- | ----------------------------- |
+| X  | メジャー  | 手動指示のみ                     | `make version-major`          |
+| Y  | マイナー  | `develop` / `main` へのプッシュ  | GitHub Actions `version-bump.yml` が自動実行 |
+| Z  | パッチ    | コミットのたびに                 | `pre-commit` git hook が自動実行 |
+
+### 実装ファイル
+
+| ファイル                               | 役割                                                  |
+| -------------------------------------- | ----------------------------------------------------- |
+| `versions.json`                        | 全コンポーネントの現在バージョンを格納                |
+| `scripts/bump-version.sh`             | バージョン操作スクリプト (patch / minor / major 対応) |
+| `.githooks/pre-commit`                | コミット前にパッチ(Z)を自動インクリメント             |
+| `.github/workflows/version-bump.yml`  | push 時にマイナー(Y)を自動インクリメント              |
+
+### セットアップ (初回のみ)
+
+```bash
+make hooks-install
+# → git config core.hooksPath .githooks を設定
+# → コミット時に自動で Z をインクリメント
+```
+
+### よく使うコマンド
+
+```bash
+# 現在のバージョン一覧
+make version
+
+# メジャーバージョンを手動で上げる (X+1)
+make version-major COMPONENT=all          # 全コンポーネント
+make version-major COMPONENT=simple-sns   # 指定コンポーネントのみ
+
+# Azure AFD 解消後に 0.9.x → 1.0.0 へ昇格
+make version-azure-afd-resolved
+
+# スクリプトを直接呼ぶ場合
+./scripts/bump-version.sh show
+./scripts/bump-version.sh major simple-sns
+./scripts/bump-version.sh azure-afd-resolved
+```
+
+### バージョンバンプのスキップ
+
+コミットメッセージに `[skip-version-bump]` を含めると pre-commit hook と GitHub Actions の両方がスキップされる。
+
+```bash
+git commit -m "docs: update readme [skip-version-bump]"
+```
+
+### Azure AFD 解消手順
+
+Azure Front Door の間欠的 502 が解消されたら:
+
+```bash
+make version-azure-afd-resolved
+git add versions.json
+git commit -m "chore: upgrade azure-static-site to 1.0.0 (AFD resolved) [skip-version-bump]"
+git push
+```
+
+---
+
 ## Next Section
 
 → [07 — Environment Status](AI_AGENT_07_STATUS.md)
