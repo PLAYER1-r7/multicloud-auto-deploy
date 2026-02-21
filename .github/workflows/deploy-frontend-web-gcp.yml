@@ -1,4 +1,4 @@
-name: Deploy Frontend Web to GCP
+name: Deploy Frontend Web (React SPA) to GCP
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
     paths:
-      - "multicloud-auto-deploy/services/frontend_web/**"
+      - "services/frontend_react/**"
       - ".github/workflows/deploy-frontend-web-gcp.yml"
   workflow_dispatch:
     inputs:
@@ -21,7 +21,7 @@ on:
 
 env:
   GCP_REGION: asia-northeast1
-  IMAGE_NAME: frontend-web
+  NODE_VERSION: "20"
 
 concurrency:
   group: deploy-frontend-web-gcp-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Build & Deploy frontend_web to Cloud Run
+    name: Build & Deploy React SPA to GCS/Cloud CDN
     runs-on: ubuntu-latest
     environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
 
@@ -52,6 +52,11 @@ jobs:
             ENV="staging"
           fi
           echo "env_name=$ENV" >> $GITHUB_OUTPUT
+          # GCS bucket follows predictable naming convention
+          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          echo "bucket=${PROJECT_ID}-multicloud-auto-deploy-${ENV}-frontend" >> $GITHUB_OUTPUT
+          echo "urlmap=multicloud-auto-deploy-${ENV}-cdn-urlmap"             >> $GITHUB_OUTPUT
+          echo "📦 Deploying to: $ENV"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -63,53 +68,63 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: services/frontend_react/package-lock.json
 
-      - name: Create Artifact Registry repository (if not exists)
+      - name: Install dependencies
+        working-directory: services/frontend_react
+        run: npm ci
+
+      - name: Build React SPA
+        working-directory: services/frontend_react
+        env:
+          VITE_BASE_PATH: /sns/
+          # GCP_API_ENDPOINT secret: e.g. https://multicloud-auto-deploy-staging-api-xxxx-an.a.run.app
+          VITE_API_URL: ${{ secrets.GCP_API_ENDPOINT }}
         run: |
-          gcloud artifacts repositories create multicloud-auto-deploy \
-            --repository-format=docker \
-            --location=${{ env.GCP_REGION }} \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --description="Docker images for multicloud-auto-deploy" \
-            2>/dev/null || echo "Repository already exists"
+          npm run build
+          echo "✅ Build complete ($(du -sh dist | cut -f1))"
 
-      - name: Set image tag
-        id: image
+      - name: Deploy to GCS
+        run: |
+          BUCKET="${{ steps.env.outputs.bucket }}"
+
+          # assets (immutable long-lived cache)
+          gsutil -m -h "Cache-Control:public, max-age=31536000, immutable" \
+            cp -r services/frontend_react/dist/assets "gs://${BUCKET}/sns/"
+
+          # index.html (short cache)
+          gsutil -h "Cache-Control:public, max-age=300" \
+            -h "Content-Type:text/html" \
+            cp services/frontend_react/dist/index.html "gs://${BUCKET}/sns/index.html"
+
+          # svgアイコン
+          gsutil -m -h "Cache-Control:public, max-age=3600" \
+            cp services/frontend_react/dist/vite.svg "gs://${BUCKET}/sns/vite.svg" 2>/dev/null || true
+
+          echo "✅ Deployed to gs://${BUCKET}/sns/"
+
+      - name: Invalidate Cloud CDN Cache
+        run: |
+          URLMAP="${{ steps.env.outputs.urlmap }}"
+          gcloud compute url-maps invalidate-cdn-cache "$URLMAP" \
+            --path "/sns/*" \
+            --global \
+            --async \
+            --project "${{ secrets.GCP_PROJECT_ID }}"
+          echo "✅ CDN invalidation issued for /sns/*"
+
+      - name: Deployment Summary
         run: |
           ENV="${{ steps.env.outputs.env_name }}"
-          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/multicloud-auto-deploy/${IMAGE_NAME}-${ENV}:${{ github.sha }}"
-          echo "tag=$IMAGE" >> $GITHUB_OUTPUT
-
-      - name: Build Docker image
-        working-directory: multicloud-auto-deploy/services/frontend_web
-        run: docker build -t ${{ steps.image.outputs.tag }} .
-
-      - name: Push Docker image
-        run: docker push ${{ steps.image.outputs.tag }}
-
-      - name: Deploy to Cloud Run
-        run: |
-          ENV="${{ steps.env.outputs.env_name }}"
-          gcloud run deploy multicloud-auto-deploy-${ENV}-frontend-web \
-            --image ${{ steps.image.outputs.tag }} \
-            --region ${{ env.GCP_REGION }} \
-            --platform managed \
-            --allow-unauthenticated \
-            --port 8080 \
-            --set-env-vars "API_BASE_URL=${{ secrets.GCP_API_ENDPOINT }}" \
-            --set-env-vars "AUTH_PROVIDER=firebase" \
-            --set-env-vars "AUTH_DISABLED=false" \
-            --set-env-vars "STAGE_NAME=sns" \
-            --set-env-vars "FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }}" \
-            --set-env-vars "FIREBASE_AUTH_DOMAIN=${{ secrets.FIREBASE_AUTH_DOMAIN }}" \
-            --set-env-vars "FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
-            --set-env-vars "FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }}" \
-            --project ${{ secrets.GCP_PROJECT_ID }}
-
-          URL=$(gcloud run services describe multicloud-auto-deploy-${ENV}-frontend-web \
-            --region ${{ env.GCP_REGION }} \
-            --project ${{ secrets.GCP_PROJECT_ID }} \
-            --format 'value(status.url)')
-          echo "✅ frontend_web deployed: $URL"
+          LB_IP=$(gcloud compute forwarding-rules list \
+            --global \
+            --filter="name~multicloud-auto-deploy-${ENV}-cdn-lb" \
+            --format="value(IPAddress)" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" 2>/dev/null | head -1 || echo "(see GCP console)")
+          echo "✅ Deployed to: http://${LB_IP}/sns/"
+          echo "   GCS Bucket : ${{ steps.env.outputs.bucket }}/sns/"
