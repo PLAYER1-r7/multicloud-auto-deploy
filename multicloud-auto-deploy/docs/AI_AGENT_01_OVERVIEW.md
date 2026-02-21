@@ -16,7 +16,7 @@
 
 ---
 
-## Live Endpoints (staging, 2026-02-20)
+## Live Endpoints (staging, 2026-02-21)
 
 ### AWS (ap-northeast-1)
 
@@ -36,11 +36,12 @@
 
 ### GCP (asia-northeast1)
 
-| Purpose         | URL                                                                                         |
-| --------------- | ------------------------------------------------------------------------------------------- |
-| CDN (Cloud CDN) | `http://34.117.111.182`                                                                     |
-| API (Cloud Run) | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`                        |
-| GCS direct      | `https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html` |
+| Purpose                      | URL                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------- |
+| CDN (Cloud CDN)              | `http://34.117.111.182`                                                                     |
+| API (Cloud Run)              | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`                        |
+| Web Frontend (Cloud Run)     | `https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app`               |
+| GCS direct                   | `https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html` |
 
 ---
 
@@ -70,9 +71,9 @@ Infrastructure
   AWS state fallback: s3://multicloud-auto-deploy-pulumi-state
 
 Authentication
-  AWS:   Amazon Cognito  (auto-provisioned by Pulumi)
-  Azure: Azure AD        (auto-provisioned by Pulumi)
-  GCP:   Firebase Auth   (auto-provisioned by Pulumi)
+  AWS:   Amazon Cognito  (auto-provisioned by Pulumi)  ✅ verified
+  Azure: Azure AD        (auto-provisioned by Pulumi)  ✅ verified
+  GCP:   Firebase Auth   (Google Sign-In, httponly Cookie session)  ✅ verified 2026-02-21
   Staging: AUTH_DISABLED=false  ← WARNING: was mistakenly set to true in the past
 ```
 

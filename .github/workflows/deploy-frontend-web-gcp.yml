@@ -52,11 +52,6 @@ jobs:
             ENV="staging"
           fi
           echo "env_name=$ENV" >> $GITHUB_OUTPUT
-          if [ "$ENV" == "staging" ]; then
-            echo "auth_disabled=true" >> $GITHUB_OUTPUT
-          else
-            echo "auth_disabled=false" >> $GITHUB_OUTPUT
-          fi
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2

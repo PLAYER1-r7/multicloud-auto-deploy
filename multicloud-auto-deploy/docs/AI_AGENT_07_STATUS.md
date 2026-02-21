@@ -1,7 +1,7 @@
 # 07 — Environment Status
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-21 (GCP API fix deployed — /posts 500 error resolved)
+> Last verified: 2026-02-21 (GCP Firebase Auth + image upload/display fully implemented)
 
 ---
 
@@ -9,7 +9,7 @@
 
 | Cloud     | Landing (`/`) | SNS App (`/sns/`) | API                                |
 | --------- | ------------- | ----------------- | ---------------------------------- |
-| **GCP**   | ✅            | ✅                | ✅ Cloud Run (fix deployed 2026-02-21) |
+| **GCP**   | ✅            | ✅                | ✅ Cloud Run + Firebase Auth (2026-02-21) |
 | **AWS**   | ✅            | ✅                | ✅ Lambda (fully operational)      |
 | **Azure** | ✅            | ✅                | ✅ Azure Functions                 |
 
@@ -75,30 +75,48 @@ API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneas
 ## GCP (asia-northeast1)
 
 ```
-CDN URL  : http://34.117.111.182
-API URL  : https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app
+CDN URL          : http://34.117.111.182
+API URL          : https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app
+Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app
 ```
 
-| Resource       | Name / ID                                          | Status |
-| -------------- | -------------------------------------------------- | ------ |
-| Global IP      | `34.117.111.182`                                   | ✅     |
-| GCS Bucket     | `ashnova-multicloud-auto-deploy-staging-frontend`  | ✅     |
-| Cloud Run      | `multicloud-auto-deploy-staging-api` (Python 3.12) | ✅     |
-| Firestore      | `(default)` — collections: messages, posts         | ✅     |
-| Backend Bucket | `multicloud-auto-deploy-staging-cdn-backend`       | ✅     |
+| Resource               | Name / ID                                                          | Status |
+| ---------------------- | ------------------------------------------------------------------ | ------ |
+| Global IP              | `34.117.111.182`                                                   | ✅     |
+| GCS Bucket (frontend)  | `ashnova-multicloud-auto-deploy-staging-frontend`                  | ✅     |
+| GCS Bucket (uploads)   | `ashnova-multicloud-auto-deploy-staging-uploads` (public read)     | ✅     |
+| Cloud Run (API)        | `multicloud-auto-deploy-staging-api` (Python 3.12)                 | ✅     |
+| Cloud Run (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (Docker, port 8080) | ✅     |
+| Firestore              | `(default)` — collections: messages, posts                         | ✅     |
+| Backend Bucket         | `multicloud-auto-deploy-staging-cdn-backend`                       | ✅     |
+
+**Confirmed working (verified 2026-02-21)**:
+
+- Firebase Google Sign-In → `/sns/auth/callback` → httponly Cookie session ✅
+- Post feed, create/edit/delete post ✅
+- Image upload: GCS presigned URLs (signed via IAM `signBlob` API), up to 16 files per post ✅
+- Uploaded images displayed in post feed ✅
+- Firebase ID token auto-refresh (`onIdTokenChanged`) ✅
+- Dark theme background SVGs (starfield, ring) rendered correctly ✅
 
 **Fixed issues (2026-02-21)**:
 
 - `GcpBackend` が `like_post`/`unlike_post` abstract method を未実装 → `TypeError` → `/posts` が 500 エラー  
   → `like_post`/`unlike_post` スタブ実装を追加 (commit `a9bc85e`)
 - `frontend-web` Cloud Run の `API_BASE_URL` が未設定 → localhost:8000 を参照  
-  → `gcloud run services update` で `API_BASE_URL=https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app` を設定
+  → `gcloud run services update` で環境変数設定
+- Firebase Auth 未実装 → Google Sign-In フロー全体を実装 (commit `3813577`)
+- GCS CORS に `x-ms-blob-type` ヘッダー未登録 → CORS更新 + uploads.js修正 (commit `1cf53b7`, `b5b4de5`)
+- GCS 署名URL生成で `content_type` が `"image/jpeg"` ハードコード → `content_types[index]` を正しく使用 (commit `148b7b5`)
+- Firebase IDトークン期限切れ (401) → `onIdTokenChanged` で自動リフレッシュ (commit `8110d20`)
+- CI/CD に `GCP_SERVICE_ACCOUNT` 環境変数未設定 → `deploy-gcp.yml` に追加 (commit `27b10cc`)
+- CSS の背景SVGが絶対パス `/static/` → 相対パス `./` に修正 (commit `0ed0805`)
+- GCS uploads バケットが非公開 → `allUsers:objectViewer` 付与 + Pulumi定義に追加 (commit `0ed0805`)
 
 **Remaining issues**:
 
-- HTTPS not configured (HTTP only). Requires `TargetHttpsProxy` + managed SSL certificate.
-- SPA deep links return HTTP 404 (works correctly in browsers).
-- Firebase Auth (`GCP_CLIENT_ID`, `GCP_REDIRECT_URI`) 未設定のため認証フロー未確認。現在 `AUTH_DISABLED=true`。
+- HTTPS not configured for CDN (HTTP only). Requires `TargetHttpsProxy` + managed SSL certificate.
+- SPA deep links via CDN return HTTP 404 (Cloud Run URL works correctly in browsers).
 
 ---
 
