@@ -252,14 +252,20 @@ app_registration = azuread.Application(
             [
                 # Legacy / fallback
                 f"https://{project_name}-{stack}-web.azurewebsites.net/callback",
-                # Local development
+                # Local development — login callbacks
                 "http://localhost:3000/callback",
                 "https://localhost:3000/callback",
                 "http://localhost:5173/sns/auth/callback",
                 "https://localhost:5173/sns/auth/callback",
+                # Local development — post-logout redirects
+                "http://localhost:5173/sns/",
             ]
             + (
-                [f"https://{frontend_domain}/sns/auth/callback"]
+                [
+                    # FrontDoor — login callback + post-logout redirect
+                    f"https://{frontend_domain}/sns/auth/callback",
+                    f"https://{frontend_domain}/sns/",
+                ]
                 if frontend_domain else []
             )
         ),

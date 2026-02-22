@@ -200,7 +200,40 @@ jobs:
           echo "🔐 Azure AD Client ID: $(pulumi stack output azure_ad_client_id)"
           echo "🗄️  Cosmos DB Account: $(pulumi stack output cosmos_account_name)"
 
-      - name: Package Function App
+      - name: Update Azure AD App Redirect URIs
+        # Ensures ALL required redirect URIs are registered (login callbacks + post-logout redirects).
+        # Pulumi only manages FrontDoor-based URIs; custom domain and /sns/ logout URIs are added here.
+        run: |
+          AD_APP_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
+          FRONTDOOR="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
+          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"
+
+          # Build redirect URI list: login callbacks (/sns/auth/callback) + logout redirects (/sns/)
+          URIS=(
+            "http://localhost:3000/callback"
+            "https://localhost:3000/callback"
+            "http://localhost:5173/sns/auth/callback"
+            "https://localhost:5173/sns/auth/callback"
+            "http://localhost:5173/sns/"
+          )
+
+          # Add FrontDoor URIs
+          if [ -n "$FRONTDOOR" ]; then
+            URIS+=("https://${FRONTDOOR}/sns/auth/callback")
+            URIS+=("https://${FRONTDOOR}/sns/")
+          fi
+
+          # Add custom domain URIs
+          if [ -n "$AZURE_CUSTOM_DOMAIN" ]; then
+            URIS+=("https://${AZURE_CUSTOM_DOMAIN}/sns/auth/callback")
+            URIS+=("https://${AZURE_CUSTOM_DOMAIN}/sns/")
+          fi
+
+          echo "🔐 Registering redirect URIs on Azure AD App (${AD_APP_ID}):"
+          for uri in "${URIS[@]}"; do echo "   $uri"; done
+
+          az ad app update --id "$AD_APP_ID" --web-redirect-uris "${URIS[@]}"
+          echo "✅ Azure AD redirect URIs updated"
         run: |
           cd services/api
 
