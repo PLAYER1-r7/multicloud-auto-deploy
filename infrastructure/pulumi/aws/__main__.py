@@ -10,9 +10,13 @@ Architecture:
 Cost: ~$2-5/month for low traffic
 """
 
+import base64
+import pathlib
+import os
 import json
 import pulumi
 import pulumi_aws as aws
+import monitoring
 
 # Configuration
 config = pulumi.Config()
@@ -23,7 +27,12 @@ project_name = "multicloud-auto-deploy"
 
 # CORS allowed origins (configurable per environment)
 allowed_origins = config.get("allowedOrigins") or "*"
-allowed_origins_list = allowed_origins.split(",") if allowed_origins != "*" else ["*"]
+allowed_origins_list = allowed_origins.split(
+    ",") if allowed_origins != "*" else ["*"]
+
+# CloudFront domain (set after first deploy: pulumi config set cloudFrontDomain <domain>)
+# Used for Cognito callback/logout URLs and frontend_web redirect URIs
+cf_domain = config.get("cloudFrontDomain") or ""
 
 # Common tags
 common_tags = {
@@ -136,11 +145,11 @@ user_pool_client = aws.cognito.UserPoolClient(
     callback_urls=[
         "http://localhost:8080/callback",
         "https://localhost:8080/callback",
-    ],
+    ] + ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else []),
     logout_urls=[
         "http://localhost:8080/",
         "https://localhost:8080/",
-    ],
+    ] + ([f"https://{cf_domain}/sns/"] if cf_domain else []),
     access_token_validity=1,
     id_token_validity=1,
     refresh_token_validity=30,
@@ -300,6 +309,59 @@ lambda_policy = aws.iam.RolePolicy(
 )
 
 # ========================================
+# Lambda Layer (Dependencies)
+# ========================================
+# Lambda Layer with all dependencies (FastAPI, Pydantic, Mangum, etc.)
+# Build with: ./scripts/build-lambda-layer.sh
+# The layer ZIP is automatically managed by Pulumi
+
+
+# Path to Lambda Layer ZIP
+# Strategy: Use GITHUB_WORKSPACE env var in CI, fallback to relative path for local development
+workspace_root = os.environ.get("GITHUB_WORKSPACE")
+if workspace_root:
+    # GitHub Actions: GITHUB_WORKSPACE points to repository root (/home/runner/work/multicloud-auto-deploy/multicloud-auto-deploy)
+    # Build step creates ZIP at services/api/lambda-layer.zip (relative to repository root)
+    layer_zip_path = pathlib.Path(
+        workspace_root) / "services" / "api" / "lambda-layer.zip"
+else:
+    # Local development: Calculate relative path from this file
+    # __file__ -> infrastructure/pulumi/aws/__main__.py
+    # Go up 3 levels to reach project root, then down to services/api
+    layer_zip_path = pathlib.Path(
+        __file__).parent.parent.parent / "services" / "api" / "lambda-layer.zip"
+
+# Check if layer ZIP exists
+if not layer_zip_path.exists():
+    pulumi.log.warn(
+        f"Lambda Layer ZIP not found at {layer_zip_path}. "
+        "Run './scripts/build-lambda-layer.sh' to build the layer. "
+        "Using placeholder for now."
+    )
+    # Create a minimal placeholder if ZIP doesn't exist
+    layer_zip_path = None
+else:
+    pulumi.log.info(
+        f"Lambda Layer ZIP found: {layer_zip_path} ({os.path.getsize(layer_zip_path) / 1024 / 1024:.2f} MB)")
+
+# Create Lambda Layer (only if ZIP exists)
+lambda_layer = None
+if layer_zip_path:
+    lambda_layer = aws.lambda_.LayerVersion(
+        "dependencies-layer",
+        layer_name=f"{project_name}-{stack}-dependencies",
+        code=pulumi.FileArchive(str(layer_zip_path)),
+        compatible_runtimes=["python3.12"],
+        description=f"Dependencies for {project_name} {stack} (FastAPI, Mangum, Pydantic, etc.)",
+        opts=pulumi.ResourceOptions(
+            # Delete old versions automatically (keeps only latest)
+            delete_before_replace=True,
+        ),
+    )
+    pulumi.export("lambda_layer_arn", lambda_layer.arn)
+    pulumi.export("lambda_layer_version", lambda_layer.version)
+
+# ========================================
 # Lambda Function (FastAPI with Mangum)
 # ========================================
 # Note: Lambda function code is deployed separately using deploy-lambda-aws.sh script
@@ -307,7 +369,6 @@ lambda_policy = aws.iam.RolePolicy(
 
 # Create a minimal placeholder Lambda function
 # The actual code will be deployed via CI/CD or deploy script
-import base64
 
 placeholder_code = """
 import json
@@ -322,26 +383,38 @@ lambda_function = aws.lambda_.Function(
     "api-function",
     name=f"{project_name}-{stack}-api",
     runtime="python3.12",
-    handler="index.handler",
+    handler="app.main.handler",  # FastAPI application entry point with Mangum
     role=lambda_role.arn,
-    memory_size=256 if stack == "staging" else 512,  # Cost optimization for staging
+    # 512MB for both staging and production (cold start performance)
+    memory_size=512,
     timeout=30,
+    # Use x86_64 for compatibility with custom layers
     architectures=["x86_64"],
+    # Lambda Layer is automatically managed by Pulumi
+    # If lambda-layer.zip exists, it will be deployed as a Layer Version
+    # and automatically attached to this function
+    layers=[lambda_layer.arn] if lambda_layer else [],
     # Use inline code or skip code updates
     # Code will be uploaded separately via deploy-lambda-aws.sh
-    code=pulumi.AssetArchive({"index.py": pulumi.StringAsset(placeholder_code)}),
-    # Skip code updates if function already exists
-    opts=pulumi.ResourceOptions(ignore_changes=["code", "source_code_hash"]),
+    code=pulumi.AssetArchive(
+        {"index.py": pulumi.StringAsset(placeholder_code)}),
+    # Skip code and layer updates: deployed by deploy-aws.yml workflow
+    # Layers are managed by the CI/CD pipeline (lambda-layer.zip is built at deploy time)
+    opts=pulumi.ResourceOptions(
+        ignore_changes=["code", "source_code_hash", "layers"]),
     environment={
         "variables": {
             "ENVIRONMENT": stack,
             "CLOUD_PROVIDER": "aws",
+            "AUTH_PROVIDER": "cognito",
+            "AUTH_DISABLED": "false",
             "SECRET_NAME": app_secret.name,
             "COGNITO_USER_POOL_ID": user_pool.id,
             "COGNITO_CLIENT_ID": user_pool_client.id,
             "COGNITO_REGION": region,
             "POSTS_TABLE_NAME": posts_table.name,
             "IMAGES_BUCKET_NAME": images_bucket.id,
+            "CORS_ORIGINS": allowed_origins,
         }
     },
     tags=common_tags,
@@ -360,7 +433,9 @@ lambda_url = aws.lambda_.FunctionUrl(
     },
 )
 
-# Alternative: API Gateway HTTP API v2 (more features)
+# ========================================
+# API Gateway HTTP API v2
+# ========================================
 api_gateway = aws.apigatewayv2.Api(
     "http-api",
     name=f"{project_name}-{stack}-api",
@@ -374,7 +449,7 @@ api_gateway = aws.apigatewayv2.Api(
     tags=common_tags,
 )
 
-# API Gateway Integration with Lambda
+# API Gateway Integration with Lambda (backend api)
 integration = aws.apigatewayv2.Integration(
     "lambda-integration",
     api_id=api_gateway.id,
@@ -607,7 +682,7 @@ cloudfront_kwargs = {
             s3_origin_config=aws.cloudfront.DistributionOriginS3OriginConfigArgs(
                 origin_access_identity=cloudfront_oai.cloudfront_access_identity_path,
             ),
-        )
+        ),
     ],
     "default_cache_behavior": aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
         target_origin_id=frontend_bucket.bucket_regional_domain_name,
@@ -642,18 +717,76 @@ cloudfront_kwargs = {
             restriction_type="none",
         ),
     ),
-    "viewer_certificate": aws.cloudfront.DistributionViewerCertificateArgs(
-        cloudfront_default_certificate=True,
-    ),
     "tags": common_tags,
 }
+
+# Custom domain configuration (optional)
+custom_domain = config.get("customDomain")  # e.g., aws.yourdomain.com
+acm_certificate_arn = config.get(
+    "acmCertificateArn"
+)  # ACM certificate ARN in us-east-1
+
+if custom_domain and acm_certificate_arn:
+    cloudfront_kwargs["aliases"] = [custom_domain]
+    cloudfront_kwargs["viewer_certificate"] = (
+        aws.cloudfront.DistributionViewerCertificateArgs(
+            acm_certificate_arn=acm_certificate_arn,
+            ssl_support_method="sni-only",
+            minimum_protocol_version="TLSv1.2_2021",
+        )
+    )
+else:
+    cloudfront_kwargs["viewer_certificate"] = (
+        aws.cloudfront.DistributionViewerCertificateArgs(
+            cloudfront_default_certificate=True,
+        )
+    )
 
 # Add WAF only for production
 if stack == "production":
     cloudfront_kwargs["web_acl_id"] = waf_web_acl.arn
 
+# /sns* → S3 bucket (React SPA static files)
+# React SPA はビルド済み静的ファイルなので S3 オリジンを使用
+# CloudFront Function で /sns/ → /sns/index.html にリライト (SPA ルーティング対応)
+cf_function_name = f"spa-sns-rewrite-{stack}"
+caller_identity = aws.get_caller_identity()
+cf_function_arn = f"arn:aws:cloudfront::{caller_identity.account_id}:function/{cf_function_name}"
+cloudfront_kwargs["ordered_cache_behaviors"] = [
+    aws.cloudfront.DistributionOrderedCacheBehaviorArgs(
+        path_pattern="/sns*",
+        target_origin_id=frontend_bucket.bucket_regional_domain_name,
+        viewer_protocol_policy="redirect-to-https",
+        allowed_methods=["GET", "HEAD", "OPTIONS"],
+        cached_methods=["GET", "HEAD"],
+        compress=True,
+        # Managed CachingOptimized policy (静的ファイル向けキャッシュ)
+        cache_policy_id="658327ea-f89d-4fab-a63d-7e88639e58f6",
+        function_associations=[
+            aws.cloudfront.DistributionOrderedCacheBehaviorFunctionAssociationArgs(
+                event_type="viewer-request",
+                function_arn=cf_function_arn,
+            )
+        ],
+    )
+]
+
 cloudfront_distribution = aws.cloudfront.Distribution(
     "cloudfront-distribution", **cloudfront_kwargs
+)
+
+# ========================================
+# Monitoring and Alerts
+# ========================================
+alarm_email = config.get("alarmEmail")
+monitoring_resources = monitoring.setup_monitoring(
+    project_name=project_name,
+    stack=stack,
+    lambda_function_name=lambda_function.name,
+    api_gateway_id=api_gateway.id,
+    api_gateway_name=api_gateway.name,
+    cloudfront_distribution_id=cloudfront_distribution.id,
+    alarm_email=alarm_email,
 )
 
 # ========================================
@@ -668,14 +801,21 @@ pulumi.export("api_url", api_gateway.api_endpoint)  # For workflow
 pulumi.export("frontend_bucket_name", frontend_bucket.id)
 pulumi.export(
     "frontend_url",
-    frontend_bucket.website_endpoint.apply(lambda endpoint: f"http://{endpoint}"),
+    frontend_bucket.website_endpoint.apply(
+        lambda endpoint: f"http://{endpoint}"),
 )
 pulumi.export("cloudfront_distribution_id", cloudfront_distribution.id)
 pulumi.export("cloudfront_domain", cloudfront_distribution.domain_name)
 pulumi.export(
     "cloudfront_url",
-    cloudfront_distribution.domain_name.apply(lambda domain: f"https://{domain}"),
+    cloudfront_distribution.domain_name.apply(
+        lambda domain: f"https://{domain}"),
 )
+# Custom domain exports (if configured)
+if custom_domain:
+    pulumi.export("custom_domain", custom_domain)
+    pulumi.export("custom_domain_url", f"https://{custom_domain}")
+    pulumi.export("acm_certificate_arn", acm_certificate_arn)
 # WAF exports only for production
 if stack == "production":
     pulumi.export("waf_web_acl_id", waf_web_acl.id)
@@ -690,6 +830,23 @@ pulumi.export("posts_table_name", posts_table.name)
 pulumi.export("posts_table_arn", posts_table.arn)
 pulumi.export("images_bucket_name", images_bucket.id)
 pulumi.export("images_bucket_arn", images_bucket.arn)
+
+# Monitoring exports
+if monitoring_resources["sns_topic"]:
+    pulumi.export("monitoring_sns_topic_arn",
+                  monitoring_resources["sns_topic"].arn)
+pulumi.export(
+    "monitoring_lambda_alarms", list(
+        monitoring_resources["lambda_alarms"].keys())
+)
+pulumi.export(
+    "monitoring_api_alarms", list(
+        monitoring_resources["api_gateway_alarms"].keys())
+)
+pulumi.export(
+    "monitoring_cloudfront_alarms",
+    list(monitoring_resources["cloudfront_alarms"].keys()),
+)
 
 # Cost estimation
 pulumi.export(

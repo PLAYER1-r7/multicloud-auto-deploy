@@ -6,8 +6,8 @@ on:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
     paths:
-      - "multicloud-auto-deploy/services/**"
-      - "multicloud-auto-deploy/infrastructure/pulumi/aws/**"
+      - "services/**"
+      - "infrastructure/pulumi/aws/**"
       - ".github/workflows/deploy-aws.yml"
   workflow_dispatch:
     inputs:
@@ -61,7 +61,7 @@ jobs:
 
       - name: Install Pulumi Python Dependencies
         run: |
-          cd multicloud-auto-deploy/infrastructure/pulumi/aws
+          cd infrastructure/pulumi/aws
           pip install -r requirements.txt
 
       - name: Determine Pulumi Stack Name
@@ -79,7 +79,7 @@ jobs:
 
       - name: Initialize Pulumi Stack
         run: |
-          cd multicloud-auto-deploy/infrastructure/pulumi/aws
+          cd infrastructure/pulumi/aws
           pulumi login
           pulumi stack select ${{ steps.set_stack.outputs.stack_name }} 2>/dev/null || pulumi stack init ${{ steps.set_stack.outputs.stack_name }}
           pulumi config set aws:region ${{ env.AWS_REGION }}
@@ -88,7 +88,7 @@ jobs:
 
       - name: Remove stuck obsolete resources from Pulumi state
         run: |
-          cd multicloud-auto-deploy/infrastructure/pulumi/aws
+          cd infrastructure/pulumi/aws
           STACK="${{ steps.set_stack.outputs.stack_name }}"
           # These landing-* resources were removed from code but remain in state.
           # Pulumi tries to delete them on every up, but fails:
@@ -111,7 +111,7 @@ jobs:
         with:
           command: up
           stack-name: ${{ steps.set_stack.outputs.stack_name }}
-          work-dir: multicloud-auto-deploy/infrastructure/pulumi/aws
+          work-dir: infrastructure/pulumi/aws
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           AWS_REGION: ${{ env.AWS_REGION }}
@@ -119,12 +119,13 @@ jobs:
       - name: Get Pulumi Outputs
         id: pulumi_outputs
         run: |
-          cd multicloud-auto-deploy/infrastructure/pulumi/aws
+          cd infrastructure/pulumi/aws
           echo "lambda_function_name=$(pulumi stack output lambda_function_name)" >> $GITHUB_OUTPUT
           echo "api_gateway_endpoint=$(pulumi stack output api_gateway_endpoint)" >> $GITHUB_OUTPUT
           echo "frontend_bucket_name=$(pulumi stack output frontend_bucket_name)" >> $GITHUB_OUTPUT
           echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)" >> $GITHUB_OUTPUT
           echo "cloudfront_distribution_id=$(pulumi stack output cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+          echo "custom_domain=$(pulumi stack output custom_domain 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$(pulumi stack output cognito_user_pool_id)" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
           echo "cognito_domain=$(pulumi stack output cognito_domain)" >> $GITHUB_OUTPUT
@@ -135,7 +136,7 @@ jobs:
       - name: Build Lambda Layer
         id: build_layer
         run: |
-          cd multicloud-auto-deploy/services/api
+          cd services/api
           rm -rf .build-layer lambda-layer.zip
 
           # Build Lambda Layer (dependencies only)
@@ -148,7 +149,7 @@ jobs:
 
       - name: Package Backend (Application Code Only)
         run: |
-          cd multicloud-auto-deploy/services/api
+          cd services/api
           rm -rf .build lambda.zip
           mkdir -p .build/package
 
@@ -188,7 +189,7 @@ jobs:
           LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
             --layer-name $LAYER_NAME \
             --description "Dependencies for FastAPI + Mangum + JWT (Python 3.13)" \
-            --zip-file fileb://multicloud-auto-deploy/services/api/lambda-layer.zip \
+            --zip-file fileb://services/api/lambda-layer.zip \
             --compatible-runtimes python3.13 \
             --region ${{ env.AWS_REGION }} \
             --query LayerVersionArn \
@@ -217,9 +218,9 @@ jobs:
 
           # Debug: Check lambda.zip exists and show size
           echo "📦 Checking lambda.zip..."
-          ls -lh multicloud-auto-deploy/services/api/lambda.zip || { echo "❌ lambda.zip not found!"; exit 1; }
+          ls -lh services/api/lambda.zip || { echo "❌ lambda.zip not found!"; exit 1; }
 
-          SIZE_MB=$(du -m multicloud-auto-deploy/services/api/lambda.zip | cut -f1)
+          SIZE_MB=$(du -m services/api/lambda.zip | cut -f1)
 
           if [ $SIZE_MB -lt 50 ]; then
             # Direct upload (faster!)
@@ -227,7 +228,7 @@ jobs:
             aws lambda update-function-code \
               --function-name $LAMBDA_FUNCTION \
               --region ${{ env.AWS_REGION }} \
-              --zip-file fileb://multicloud-auto-deploy/services/api/lambda.zip \
+              --zip-file fileb://services/api/lambda.zip \
               --output json || { echo "❌ Lambda update failed!"; exit 1; }
           else
             # S3 upload for large packages
@@ -235,7 +236,7 @@ jobs:
             S3_KEY="lambda-deployments/lambda-$(date +%Y%m%d-%H%M%S).zip"
             
             echo "☁️  Uploading to S3: s3://$S3_BUCKET/$S3_KEY"
-            aws s3 cp multicloud-auto-deploy/services/api/lambda.zip s3://$S3_BUCKET/$S3_KEY || { echo "❌ S3 upload failed!"; exit 1; }
+            aws s3 cp services/api/lambda.zip s3://$S3_BUCKET/$S3_KEY || { echo "❌ S3 upload failed!"; exit 1; }
             
             echo "🚀 Updating Lambda from S3"
             aws lambda update-function-code \
@@ -255,7 +256,13 @@ jobs:
 
           # Get CloudFront domain for CORS
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
-          CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},http://localhost:5173"
+          CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
+          # Include custom domain in CORS if set
+          if [[ -n "$CUSTOM_DOMAIN" ]]; then
+            CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},https://${CUSTOM_DOMAIN},http://localhost:5173"
+          else
+            CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},http://localhost:5173"
+          fi
 
           echo "🔒 CORS Origins: $CORS_ORIGINS"
 
@@ -299,93 +306,12 @@ jobs:
           echo "✅ Lambda function updated successfully with Layer(s) and environment variables"
           echo "api_endpoint=${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}" >> $GITHUB_OUTPUT
 
-      - name: Update frontend-web Lambda
-        run: |
-          set -e
-          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
-          FRONTEND_WEB_LAMBDA="multicloud-auto-deploy-${STACK_NAME}-frontend-web"
-          CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
-          COGNITO_DOMAIN="${{ steps.pulumi_outputs.outputs.cognito_domain }}"
-          CLIENT_ID="${{ steps.pulumi_outputs.outputs.cognito_client_id }}"
-          API_ENDPOINT="${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}"
-          DEPLOY_ENV="${{ steps.set_stack.outputs.stack_name }}"
-
-          # Validate critical values are not empty
-          if [[ -z "$API_ENDPOINT" || -z "$CLOUDFRONT_DOMAIN" || -z "$CLIENT_ID" || -z "$COGNITO_DOMAIN" ]]; then
-            echo "❌ Critical Pulumi outputs are empty. Aborting to prevent overwriting Lambda config."
-            echo "   API_ENDPOINT='$API_ENDPOINT'"
-            echo "   CLOUDFRONT_DOMAIN='$CLOUDFRONT_DOMAIN'"
-            echo "   CLIENT_ID='$CLIENT_ID'"
-            echo "   COGNITO_DOMAIN='$COGNITO_DOMAIN'"
-            exit 1
-          fi
-
-          # Wait for any in-progress Lambda updates before configuration update
-          echo "⏳ Waiting for frontend-web Lambda to be ready..."
-          aws lambda wait function-updated \
-            --function-name "$FRONTEND_WEB_LAMBDA" \
-            --region ${{ env.AWS_REGION }}
-          echo "✅ frontend-web Lambda ready for configuration update"
-
-          echo "🔐 Updating frontend-web Lambda with Cognito settings..."
-          cat > /tmp/frontend-web-env.json << EOF
-          {
-            "Variables": {
-              "ENVIRONMENT": "$DEPLOY_ENV",
-              "AUTH_PROVIDER": "aws",
-              "AUTH_DISABLED": "false",
-              "STAGE_NAME": "sns",
-              "API_BASE_URL": "$API_ENDPOINT",
-              "COGNITO_CLIENT_ID": "$CLIENT_ID",
-              "COGNITO_DOMAIN": "${COGNITO_DOMAIN}.auth.${{ env.AWS_REGION }}.amazoncognito.com",
-              "COGNITO_REDIRECT_URI": "https://${CLOUDFRONT_DOMAIN}/sns/auth/callback",
-              "COGNITO_LOGOUT_URI": "https://${CLOUDFRONT_DOMAIN}/sns/"
-            }
-          }
-          EOF
-
-          aws lambda update-function-configuration \
-            --function-name "$FRONTEND_WEB_LAMBDA" \
-            --region ${{ env.AWS_REGION }} \
-            --environment file:///tmp/frontend-web-env.json \
-            --output json || { echo "❌ frontend-web Lambda update failed!"; exit 1; }
-
-          echo "✅ frontend-web Lambda updated with Cognito settings"
-
-      - name: Build Frontend
-        run: |
-          cd multicloud-auto-deploy/services/frontend_react
-          npm install
-          npm run build
-        env:
-          VITE_API_URL: ${{ steps.update_lambda.outputs.api_endpoint }}
-
-      - name: Deploy Frontend to S3
-        run: |
-          S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
-          aws s3 sync multicloud-auto-deploy/services/frontend_react/dist/ s3://$S3_BUCKET/ --delete
-
-      - name: Restore Landing Page
-        run: |
-          S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
-          DIST_ID="${{ steps.pulumi_outputs.outputs.cloudfront_distribution_id }}"
-          # React app assets are under /assets/; only index.html conflicts with the landing page
-          # Use root-level static-site/ (same as deploy-landing-aws.yml)
-          aws s3 cp static-site/index.html s3://$S3_BUCKET/index.html \
-            --cache-control "public, max-age=3600" \
-            --content-type "text/html"
-          echo "✅ Landing page restored to s3://$S3_BUCKET/index.html"
-          aws cloudfront create-invalidation \
-            --distribution-id "$DIST_ID" \
-            --paths "/index.html" \
-            --no-cli-pager
-
       - name: Notify Success
         if: success()
         run: |
           echo "✅ AWS deployment succeeded!"
-          echo "📍 API Endpoint: ${{ steps.update_lambda.outputs.api_endpoint }}"
-          echo "🌐 Frontend: ${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
+          echo "📍 API Endpoint: ${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}"
+          echo "🌐 Frontend: https://${{ steps.pulumi_outputs.outputs.cloudfront_domain }}/sns/"
 
       - name: Notify Failure
         if: failure()

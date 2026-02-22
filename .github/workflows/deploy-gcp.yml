@@ -6,8 +6,8 @@ on:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
     paths:
-      - "multicloud-auto-deploy/services/**"
-      - "multicloud-auto-deploy/infrastructure/pulumi/gcp/**"
+      - "services/**"
+      - "infrastructure/pulumi/gcp/**"
       - ".github/workflows/deploy-gcp.yml"
   workflow_dispatch:
     inputs:
@@ -64,7 +64,7 @@ jobs:
 
       - name: Install Pulumi Python Dependencies
         run: |
-          cd multicloud-auto-deploy/infrastructure/pulumi/gcp
+          cd infrastructure/pulumi/gcp
           pip install -r requirements.txt
 
       - name: Determine Pulumi Stack Name
@@ -82,7 +82,7 @@ jobs:
 
       - name: Initialize Pulumi Stack
         run: |
-          cd multicloud-auto-deploy/infrastructure/pulumi/gcp
+          cd infrastructure/pulumi/gcp
           pulumi login
           pulumi stack select ${{ steps.set_stack.outputs.stack_name }} 2>/dev/null || pulumi stack init ${{ steps.set_stack.outputs.stack_name }}
           pulumi config set gcp:project ${{ secrets.GCP_PROJECT_ID }}
@@ -92,7 +92,7 @@ jobs:
 
       - name: Remove SecretVersion from Pulumi state (IAM permission workaround)
         run: |
-          cd multicloud-auto-deploy/infrastructure/pulumi/gcp
+          cd infrastructure/pulumi/gcp
           STACK="${{ steps.set_stack.outputs.stack_name }}"
           # Remove SecretVersion from Pulumi state to prevent 403 on create/refresh
           # (Pulumi SA lacks secretmanager.versions.access permission)
@@ -109,7 +109,7 @@ jobs:
         with:
           command: up
           stack-name: ${{ steps.set_stack.outputs.stack_name }}
-          work-dir: multicloud-auto-deploy/infrastructure/pulumi/gcp
+          work-dir: infrastructure/pulumi/gcp
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
@@ -117,7 +117,7 @@ jobs:
       - name: Get Pulumi Outputs
         id: pulumi_outputs
         run: |
-          cd multicloud-auto-deploy/infrastructure/pulumi/gcp
+          cd infrastructure/pulumi/gcp
           echo "function_source_bucket=$(pulumi stack output function_source_bucket)" >> $GITHUB_OUTPUT
           echo "frontend_bucket=$(pulumi stack output frontend_bucket)" >> $GITHUB_OUTPUT
           echo "function_name=$(pulumi stack output function_name)" >> $GITHUB_OUTPUT
@@ -127,7 +127,7 @@ jobs:
 
       - name: Package Cloud Function
         run: |
-          cd multicloud-auto-deploy/services/api
+          cd services/api
 
           echo "📦 Creating optimized deployment package..."
 
@@ -195,7 +195,7 @@ jobs:
           echo "  Region: $REGION"
 
           # Upload source to GCS
-          gsutil cp multicloud-auto-deploy/services/api/function-source.zip gs://$FUNCTION_BUCKET/function-source.zip
+          gsutil cp services/api/function-source.zip gs://$FUNCTION_BUCKET/function-source.zip
 
           # Get CDN IP from Pulumi outputs for CORS
           # GCP Classic HTTP LB serves over HTTP (not HTTPS), so both schemes are included
@@ -244,45 +244,6 @@ jobs:
 
           echo "✅ Cloud Function deployed successfully"
           echo "  URL: $FUNCTION_URL"
-
-      - name: Build Frontend
-        run: |
-          # Use API URL from Cloud Functions deployment
-          API_URL="${{ steps.deploy_function.outputs.api_url }}"
-
-          echo "Building frontend with API URL: $API_URL"
-
-          cd multicloud-auto-deploy/services/frontend_react
-          npm install
-          VITE_API_URL=$API_URL npm run build
-
-      - name: Deploy Frontend to Cloud Storage
-        run: |
-          # Use bucket name from Pulumi output
-          BUCKET_NAME="${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
-
-          echo "Deploying frontend to bucket: $BUCKET_NAME"
-
-          # Upload frontend to Cloud Storage
-          gsutil -m cp -r multicloud-auto-deploy/services/frontend_react/dist/* gs://$BUCKET_NAME/
-
-          # Make objects public
-          gsutil -m acl ch -u AllUsers:R gs://$BUCKET_NAME/** || true
-
-      - name: Restore Landing Page
-        run: |
-          BUCKET_NAME="${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
-          # React app assets are under /assets/; only index.html conflicts with the landing page
-          # Use root-level static-site/ (same as deploy-landing-gcp.yml)
-          gcloud storage cp \
-            static-site/index.html \
-            gs://$BUCKET_NAME/index.html \
-            --cache-control="public, max-age=3600"
-          echo "✅ Landing page restored to gs://$BUCKET_NAME/index.html"
-          gcloud compute url-maps invalidate-cdn-cache multicloud-auto-deploy-staging-cdn-urlmap \
-            --path "/*" \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --quiet
 
       - name: Notify Success
         if: success()
