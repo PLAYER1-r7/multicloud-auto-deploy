@@ -434,7 +434,7 @@ spa_rewrite_rule = azure.cdn.Rule(
         ),
     ],
     actions=[
-        azure.cdn.DeliveryRuleUrlRewriteActionArgs(
+        azure.cdn.UrlRewriteActionArgs(
             name="UrlRewrite",
             parameters=azure.cdn.UrlRewriteActionParametersArgs(
                 type_name="DeliveryRuleUrlRewriteActionParameters",
