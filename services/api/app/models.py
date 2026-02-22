@@ -1,6 +1,5 @@
+from typing import Optional, Any
 from enum import Enum
-from typing import Any, Optional
-
 from pydantic import BaseModel, Field, model_serializer
 
 
@@ -20,7 +19,7 @@ class Post(BaseModel):
     user_id: str = Field(..., alias="userId")
     nickname: Optional[str] = None
     content: str
-    is_markdown: Optional[bool] = Field(None, alias="isMarkdown")
+    is_markdown: bool = Field(False, alias="isMarkdown")
     image_urls: Optional[list[str]] = Field(None, alias="imageUrls")
     tags: Optional[list[str]] = None
     created_at: str = Field(..., alias="createdAt")
@@ -37,7 +36,7 @@ class Post(BaseModel):
             "userId": self.user_id,
             "nickname": self.nickname,
             "content": self.content,
-            "isMarkdown": self.is_markdown if self.is_markdown is not None else False,
+            "isMarkdown": self.is_markdown,
             "imageUrls": self.image_urls,
             "tags": self.tags,
             "createdAt": self.created_at,
@@ -56,20 +55,7 @@ class CreatePostBody(BaseModel):
 
     content: str = Field(..., min_length=1, max_length=10000)
     is_markdown: bool = Field(False, alias="isMarkdown")
-    image_keys: Optional[list[str]] = Field(
-        None, alias="imageKeys", max_length=16)
-    tags: Optional[list[str]] = Field(None, max_length=10)
-
-    model_config = {"populate_by_name": True}
-
-
-class UpdatePostBody(BaseModel):
-    """投稿更新リクエスト"""
-
-    content: Optional[str] = Field(None, min_length=1, max_length=10000)
-    is_markdown: Optional[bool] = Field(None, alias="isMarkdown")
-    image_keys: Optional[list[str]] = Field(
-        None, alias="imageKeys", max_length=16)
+    image_keys: Optional[list[str]] = Field(None, alias="imageKeys")  # 枚数制限はルートで settings.max_images_per_post により強制
     tags: Optional[list[str]] = Field(None, max_length=10)
 
     model_config = {"populate_by_name": True}
@@ -125,18 +111,20 @@ class ProfileUpdateRequest(BaseModel):
 class UploadUrlsRequest(BaseModel):
     """アップロードURL生成リクエスト"""
 
-    count: int = Field(..., ge=1, le=16)
+    count: int = Field(..., ge=1, le=100)  # 絶対上限 100、実際の制限は settings.max_images_per_post
     content_types: Optional[list[str]] = Field(
         None,
         alias="contentTypes",
         description="各ファイルのContent-Type (image/jpeg, image/png 等)",
     )
 
+    model_config = {"populate_by_name": True}
+
 
 class UploadUrlsResponse(BaseModel):
     """アップロードURLレスポンス"""
 
-    urls: list[dict[str, str]]  # [{"url": "...", "key": "..."}]
+    urls: list[dict[str, str]]  # [{"uploadUrl": "...", "key": "..."}]
 
 
 class HealthResponse(BaseModel):

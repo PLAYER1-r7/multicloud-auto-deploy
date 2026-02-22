@@ -91,10 +91,20 @@ export default function PostForm({ onCreated }: PostFormProps) {
       setStatus("");
       onCreated?.();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ??
-        (err instanceof Error ? err.message : "投稿に失敗しました");
+      const rawDetail = (
+        err as { response?: { data?: { detail?: unknown } } }
+      )?.response?.data?.detail;
+      let msg: string;
+      if (typeof rawDetail === "string") {
+        msg = rawDetail;
+      } else if (Array.isArray(rawDetail) && rawDetail.length > 0) {
+        // Pydantic validation error: [{type, loc, msg, input, ctx}]
+        const first = rawDetail[0] as { msg?: string; loc?: string[] };
+        const field = first.loc?.slice(1).join(".") ?? "";
+        msg = field ? `${field}: ${first.msg}` : (first.msg ?? "入力エラー");
+      } else {
+        msg = err instanceof Error ? err.message : "投稿に失敗しました";
+      }
       setError(msg);
       setStatus("");
     } finally {
