@@ -6,8 +6,8 @@ on:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
     paths:
-      - "multicloud-auto-deploy/services/**"
-      - "multicloud-auto-deploy/infrastructure/pulumi/azure/**"
+      - "services/**"
+      - "infrastructure/pulumi/azure/**"
       - ".github/workflows/deploy-azure.yml"
   workflow_dispatch:
     inputs:
@@ -60,7 +60,7 @@ jobs:
 
       - name: Install Pulumi Python Dependencies
         run: |
-          cd multicloud-auto-deploy/infrastructure/pulumi/azure
+          cd infrastructure/pulumi/azure
           pip install -r requirements.txt
 
       - name: Determine Pulumi Stack Name
@@ -78,7 +78,7 @@ jobs:
 
       - name: Initialize Pulumi Stack
         run: |
-          cd multicloud-auto-deploy/infrastructure/pulumi/azure
+          cd infrastructure/pulumi/azure
           pulumi login
           pulumi stack select ${{ steps.set_stack.outputs.stack_name }} 2>/dev/null || pulumi stack init ${{ steps.set_stack.outputs.stack_name }}
           pulumi config set azure-native:location japaneast
@@ -103,13 +103,31 @@ jobs:
       # Azure Portal quota limitations prevent IaC-based App Service Plan creation
       # Function App created manually: multicloud-auto-deploy-staging-func (FC1 Flex Consumption)
 
+      - name: Cancel any pending Pulumi operations
+        run: |
+          cd infrastructure/pulumi/azure
+          # Cancel any in-progress update
+          pulumi cancel --yes 2>/dev/null || true
+          # Clear any leftover pending operations from interrupted deployments
+          pulumi stack export > /tmp/pulumi-state.json 2>/dev/null || true
+          if jq -e '.deployment.pending_operations | length > 0' /tmp/pulumi-state.json > /dev/null 2>&1; then
+            echo "Found pending operations - clearing..."
+            jq '.deployment.pending_operations = []' /tmp/pulumi-state.json > /tmp/pulumi-state-clean.json
+            pulumi stack import --force < /tmp/pulumi-state-clean.json
+            echo "Pending operations cleared"
+          else
+            echo "No pending operations found"
+          fi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5
         with:
           command: up
           stack-name: ${{ steps.set_stack.outputs.stack_name }}
-          work-dir: multicloud-auto-deploy/infrastructure/pulumi/azure
+          work-dir: infrastructure/pulumi/azure
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           ARM_CLIENT_ID: ${{ steps.azure_env.outputs.client_id }}
@@ -121,7 +139,7 @@ jobs:
       - name: Get Pulumi Outputs
         id: pulumi_outputs
         run: |
-          cd multicloud-auto-deploy/infrastructure/pulumi/azure
+          cd infrastructure/pulumi/azure
 
           # Get resource names from Pulumi
           echo "resource_group_name=$(pulumi stack output resource_group_name)" >> $GITHUB_OUTPUT
@@ -167,7 +185,7 @@ jobs:
 
       - name: Package Function App
         run: |
-          cd multicloud-auto-deploy/services/api
+          cd services/api
 
           echo "📦 Creating optimized deployment package..."
 
@@ -319,7 +337,18 @@ jobs:
               AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
               AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
               CORS_ORIGINS="${CORS_ORIGINS}" \
+              WEBSITE_WARMUP_PATH="/sns/health" \
+              WEBSITE_KEEPALIVE_TIMEOUT="30" \
             > /dev/null
+
+          # Disable HTTP/2 on Function App to prevent AFD stale TCP connection pool issue
+          # AFD Standard uses HTTP/2 multiplexing which can hold stale streams after
+          # Dynamic Consumption instance recycling, causing intermittent 502 errors
+          az functionapp config set \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --http20 false \
+            --output none
 
           echo "🔐 Azure AD Authentication configured:"
           echo "  Tenant ID: ${{ steps.azure_env.outputs.tenant_id }}"
@@ -342,7 +371,7 @@ jobs:
             az functionapp deployment source config-zip \
               --resource-group $RESOURCE_GROUP \
               --name $FUNCTION_APP \
-              --src multicloud-auto-deploy/services/api/function-app.zip \
+              --src services/api/function-app.zip \
               --timeout 600 \
               2>&1 | tee deploy_log.txt || true
             
@@ -396,7 +425,7 @@ jobs:
 
       - name: Build Frontend
         run: |
-          cd multicloud-auto-deploy/services/frontend_react
+          cd services/frontend_react
 
           API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
           echo "🔧 Building frontend with API_URL: $API_URL"
@@ -446,7 +475,7 @@ jobs:
           az storage blob upload-batch \
             --account-name $STORAGE_ACCOUNT \
             --account-key $STORAGE_KEY \
-            --source multicloud-auto-deploy/services/frontend_react/dist \
+            --source services/frontend_react/dist \
             --destination '$web' \
             --overwrite
 
