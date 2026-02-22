@@ -86,6 +86,30 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
+      - name: Sync Pulumi Config (custom domain + ACM cert)
+        run: |
+          cd infrastructure/pulumi/aws
+          # Pulumi.staging.yaml is gitignored — inject custom domain configs from
+          # GitHub Secrets so Pulumi includes staging.aws.ashnova.jp in Cognito
+          # callback URLs and adds the ACM alias to CloudFront on every run.
+          CUSTOM_DOMAIN="${{ secrets.AWS_CUSTOM_DOMAIN }}"
+          ACM_CERT_ARN="${{ secrets.AWS_ACM_CERTIFICATE_ARN }}"
+          if [ -n "$CUSTOM_DOMAIN" ]; then
+            echo "✅ Setting customDomain = $CUSTOM_DOMAIN"
+            pulumi config set multicloud-auto-deploy-aws:customDomain "$CUSTOM_DOMAIN"
+          else
+            echo "⚠️  AWS_CUSTOM_DOMAIN secret not set — skipping customDomain config"
+          fi
+          if [ -n "$ACM_CERT_ARN" ]; then
+            echo "✅ Setting acmCertificateArn"
+            pulumi config set multicloud-auto-deploy-aws:acmCertificateArn "$ACM_CERT_ARN"
+          else
+            echo "⚠️  AWS_ACM_CERTIFICATE_ARN secret not set — skipping acmCertificateArn config"
+          fi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
       - name: Remove stuck obsolete resources from Pulumi state
         run: |
           cd infrastructure/pulumi/aws
