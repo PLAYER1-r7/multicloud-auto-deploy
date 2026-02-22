@@ -95,7 +95,9 @@ class Settings(BaseSettings):
     presigned_url_expiry: int = 300
     cors_origins: str = "*"
     log_level: str = "INFO"
-
+    # 画像アップロード制限 (環境変数 MAX_IMAGES_PER_POST で上書き可)
+    max_images_per_post: int = 10
+    
     model_config = {
         "env_file": ".env",
         "case_sensitive": False,

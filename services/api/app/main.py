@@ -6,7 +6,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import logging
 
-from app.auth import UserInfo, get_current_user
+from app.config import settings
+from app.models import HealthResponse, ListPostsResponse, CreatePostBody
+from app.routes import posts, profile, uploads, limits
 from app.backends import get_backend
 from app.config import settings
 from app.models import CreatePostBody, HealthResponse, ListPostsResponse, UpdatePostBody
@@ -74,6 +76,7 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # ルーター登録
+app.include_router(limits.router)
 app.include_router(posts.router)
 app.include_router(uploads.router)
 app.include_router(profile.router)
