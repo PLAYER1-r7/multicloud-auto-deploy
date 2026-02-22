@@ -156,6 +156,17 @@ class AzureBackend(BackendBase):
             post_id = str(uuid.uuid4())
             now_str = datetime.now(timezone.utc).isoformat()
 
+            # プロフィールからnicknameを取得
+            nickname = None
+            try:
+                profile_item = self.profiles_container.read_item(
+                    item=user.user_id, partition_key=user.user_id
+                )
+                if profile_item:
+                    nickname = profile_item.get("nickname")
+            except Exception as e:
+                logger.warning(f"Failed to fetch nickname for {user.user_id}: {e}")
+
             # 画像キーをURLに変換
             image_urls = []
             if body.image_keys:
@@ -169,6 +180,7 @@ class AzureBackend(BackendBase):
                 "id": post_id,
                 "postId": post_id,
                 "userId": user.user_id,
+                "nickname": nickname,
                 "content": body.content,
                 "isMarkdown": body.is_markdown,
                 "imageUrls": image_urls,
@@ -183,6 +195,7 @@ class AzureBackend(BackendBase):
             return Post(
                 postId=post_id,
                 userId=user.user_id,
+                nickname=nickname,
                 content=body.content,
                 isMarkdown=body.is_markdown,
                 imageUrls=image_urls,

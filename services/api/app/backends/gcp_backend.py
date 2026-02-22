@@ -107,6 +107,15 @@ class GcpBackend(BackendBase):
             now = datetime.now(timezone.utc)
             now_str = now.isoformat()
 
+            # プロフィールからnicknameを取得
+            nickname = None
+            try:
+                profile_doc = self.db.collection(self.profiles_collection).document(user.user_id).get()
+                if profile_doc.exists:
+                    nickname = profile_doc.to_dict().get("nickname")
+            except Exception as e:
+                logger.warning(f"Failed to fetch nickname for {user.user_id}: {e}")
+
             # 画像キーをURLに変換
             image_urls = []
             if body.image_keys:
@@ -118,6 +127,7 @@ class GcpBackend(BackendBase):
             doc_data = {
                 "postId": post_id,
                 "userId": user.user_id,
+                "nickname": nickname,
                 "content": body.content,
                 "isMarkdown": body.is_markdown,
                 "imageUrls": image_urls,
@@ -132,6 +142,7 @@ class GcpBackend(BackendBase):
             return Post(
                 postId=post_id,
                 userId=user.user_id,
+                nickname=nickname,
                 content=body.content,
                 isMarkdown=body.is_markdown,
                 imageUrls=image_urls,
