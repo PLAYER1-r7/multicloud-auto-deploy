@@ -423,22 +423,6 @@ jobs:
             echo "✅ Deployment completed successfully!"
           fi
 
-      - name: Build Frontend
-        run: |
-          cd services/frontend_react
-
-          API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
-          echo "🔧 Building frontend with API_URL: $API_URL"
-
-          npm install
-          npm run build
-
-          # Verify the API URL was embedded
-          echo "🔍 Verifying built assets..."
-          grep -r "multicloud-auto-deploy-staging-func" dist/ || echo "⚠️ API URL not found in build - check VITE_API_URL"
-        env:
-          VITE_API_URL: ${{ steps.pulumi_outputs.outputs.api_url }}
-
       - name: Enable Static Website Hosting
         run: |
           STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
@@ -458,26 +442,6 @@ jobs:
             --static-website \
             --index-document index.html \
             --404-document index.html
-
-      - name: Deploy Frontend to Storage
-        run: |
-          # Use storage account from Pulumi output
-          STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
-          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
-
-          # Get storage account key
-          STORAGE_KEY=$(az storage account keys list \
-            --resource-group $RESOURCE_GROUP \
-            --account-name $STORAGE_ACCOUNT \
-            --query '[0].value' -o tsv)
-
-          # Upload frontend to blob storage
-          az storage blob upload-batch \
-            --account-name $STORAGE_ACCOUNT \
-            --account-key $STORAGE_KEY \
-            --source services/frontend_react/dist \
-            --destination '$web' \
-            --overwrite
 
       - name: Verify Deployment
         run: |
