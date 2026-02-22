@@ -157,6 +157,7 @@ jobs:
             --user-pool-id "$USER_POOL_ID" \
             --client-id "$CLIENT_ID" \
             --region ${{ env.AWS_REGION }} \
+            --supported-identity-providers "COGNITO" \
             --allowed-o-auth-flows "code" "implicit" \
             --allowed-o-auth-scopes "email" "openid" "profile" \
             --allowed-o-auth-flows-user-pool-client \
