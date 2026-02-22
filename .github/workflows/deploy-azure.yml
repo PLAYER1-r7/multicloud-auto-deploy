@@ -488,6 +488,57 @@ jobs:
             --index-document index.html \
             --404-document index.html
 
+          # Configure Blob Storage CORS to allow direct image uploads from the app origins.
+          # The frontend uploads images directly to $web/images container using SAS tokens,
+          # so Blob Storage must allow CORS from both the custom domain and FrontDoor hostname.
+          echo "🔒 Configuring Blob Storage CORS for image uploads..."
+          FRONTDOOR_HOSTNAME="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
+          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"
+
+          # Clear existing CORS rules and re-add them fresh
+          az storage cors clear \
+            --account-name $STORAGE_ACCOUNT \
+            --account-key $STORAGE_KEY \
+            --services b
+
+          # Add FrontDoor hostname rule
+          az storage cors add \
+            --account-name $STORAGE_ACCOUNT \
+            --account-key $STORAGE_KEY \
+            --services b \
+            --origins "https://${FRONTDOOR_HOSTNAME}" \
+            --methods PUT GET HEAD OPTIONS DELETE \
+            --allowed-headers "*" \
+            --exposed-headers "*" \
+            --max-age 3600
+
+          # Add custom domain rule if configured
+          if [ -n "$AZURE_CUSTOM_DOMAIN" ]; then
+            az storage cors add \
+              --account-name $STORAGE_ACCOUNT \
+              --account-key $STORAGE_KEY \
+              --services b \
+              --origins "https://${AZURE_CUSTOM_DOMAIN}" \
+              --methods PUT GET HEAD OPTIONS DELETE \
+              --allowed-headers "*" \
+              --exposed-headers "*" \
+              --max-age 3600
+            echo "✅ Blob Storage CORS: FrontDoor + custom domain (${AZURE_CUSTOM_DOMAIN})"
+          else
+            echo "✅ Blob Storage CORS: FrontDoor only (no custom domain set)"
+          fi
+
+          # Add localhost for local development
+          az storage cors add \
+            --account-name $STORAGE_ACCOUNT \
+            --account-key $STORAGE_KEY \
+            --services b \
+            --origins "http://localhost:5173" \
+            --methods PUT GET HEAD OPTIONS DELETE \
+            --allowed-headers "*" \
+            --exposed-headers "*" \
+            --max-age 3600
+
       - name: Build and Deploy Frontend
         run: |
           STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
