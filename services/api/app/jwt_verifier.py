@@ -179,6 +179,10 @@ class JWTVerifier:
                     "verify_iat": True,
                     "verify_exp": True,
                     "verify_iss": True,
+                    # id_token contains at_hash (hash of access_token).
+                    # We decode id_token standalone (no access_token companion),
+                    # so disable at_hash verification.
+                    "verify_at_hash": False,
                 },
             )
 
