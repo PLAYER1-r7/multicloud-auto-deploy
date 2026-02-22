@@ -319,6 +319,11 @@ jobs:
           # Get Front Door URL for CORS from Pulumi outputs
           FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
           CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
+          # Include custom domain if set
+          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"
+          if [ -n "$AZURE_CUSTOM_DOMAIN" ]; then
+            CORS_ORIGINS="https://${AZURE_CUSTOM_DOMAIN},${CORS_ORIGINS}"
+          fi
 
           echo "🔒 CORS Origins: $CORS_ORIGINS"
 
@@ -507,6 +512,21 @@ jobs:
             --source services/frontend_react/dist \
             --destination '$web/sns' \
             --overwrite
+
+          # Copy public SVG files to sns/assets/ as well (CSS references ./file.svg
+          # relative to /sns/assets/, so they must exist at /sns/assets/file.svg)
+          for svg_file in services/frontend_react/dist/*.svg; do
+            [ -f "$svg_file" ] || continue
+            svg_name=$(basename "$svg_file")
+            az storage blob upload \
+              --account-name $STORAGE_ACCOUNT \
+              --account-key $STORAGE_KEY \
+              --container-name '$web' \
+              --file "$svg_file" \
+              --name "sns/assets/${svg_name}" \
+              --content-type "image/svg+xml" \
+              --overwrite > /dev/null 2>&1 && echo "✅ Uploaded sns/assets/${svg_name}"
+          done
 
           echo "✅ Frontend uploaded to Azure Blob Storage"
           echo "🌐 Frontend URL: https://${FRONTDOOR_HOSTNAME}/sns/"
