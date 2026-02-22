@@ -22,12 +22,12 @@ and troubleshooting steps for known errors.
 
 ## Prerequisites
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| pandoc | 3.1.3 | Markdown → PDF conversion |
-| xelatex | TeX Live 2023 | LaTeX engine (Unicode/CJK support) |
-| Noto CJK fonts | system | Japanese text rendering |
-| tlmgr | TeX Live 2023 | Package manager for missing LaTeX packages |
+| Tool           | Version       | Purpose                                    |
+| -------------- | ------------- | ------------------------------------------ |
+| pandoc         | 3.1.3         | Markdown → PDF conversion                  |
+| xelatex        | TeX Live 2023 | LaTeX engine (Unicode/CJK support)         |
+| Noto CJK fonts | system        | Japanese text rendering                    |
+| tlmgr          | TeX Live 2023 | Package manager for missing LaTeX packages |
 
 Install Debian base packages (already present in the dev container):
 
@@ -66,11 +66,11 @@ tlmgr --usermode option repository \
 tlmgr --usermode install lm soul zapfding
 ```
 
-| Package | Provides | Reason |
-|---------|----------|--------|
-| `lm` | `lmodern.sty` | Latin Modern font support |
-| `soul` | `soul.sty` | Strikethrough / underline macros |
-| `zapfding` | `pzdr.tfm` | ZapfDingbats font metrics |
+| Package    | Provides      | Reason                           |
+| ---------- | ------------- | -------------------------------- |
+| `lm`       | `lmodern.sty` | Latin Modern font support        |
+| `soul`     | `soul.sty`    | Strikethrough / underline macros |
+| `zapfding` | `pzdr.tfm`    | ZapfDingbats font metrics        |
 
 ### Step 4 — Verify installation
 
@@ -84,10 +84,13 @@ kpsewhich pzdr.tfm      # → ~/texmf/fonts/tfm/public/zapfding/pzdr.tfm
 > The Debian-packaged TeX Live 2023 contains an older version of `expl3`.
 > Installing the CTAN versions of these packages creates a version mismatch that
 > breaks XeLaTeX with:
+>
 > ```
 > ! LaTeX3 Error: Mismatched LaTeX support files detected.
 > ```
+>
 > If you accidentally install them, remove them:
+>
 > ```bash
 > rm -rf ~/texmf/tex/latex/l3kernel \
 >         ~/texmf/tex/latex/l3backend \
@@ -155,22 +158,22 @@ generate-pdf-documentation.sh
 
 The PDF is assembled from the following parts in order:
 
-| Part | Source file | Description |
-|------|-------------|-------------|
-| Front matter | `README.md` | Project overview |
-| 01 | `docs/AI_AGENT_01_OVERVIEW.md` | System overview |
-| 02 | `docs/AI_AGENT_02_LAYOUT.md` | Repository layout |
-| 03 | `docs/AI_AGENT_03_ARCHITECTURE.md` | Architecture |
-| 04 | `docs/AI_AGENT_04_API.md` | API reference |
-| 05 | `docs/AI_AGENT_05_INFRA.md` | Infrastructure |
-| 06 | `docs/AI_AGENT_06_CICD.md` | CI/CD pipeline |
-| 07 | `docs/AI_AGENT_07_STATUS.md` | Current status |
-| 08 | `docs/AI_AGENT_08_RUNBOOKS.md` | Runbooks |
-| 09 | `docs/AI_AGENT_09_SECURITY.md` | Security |
-| 10 | `docs/AI_AGENT_10_TASKS.md` | Task backlog |
-| 11 | `docs/AI_AGENT_11_WORKSPACE_MIGRATION.md` | Workspace migration |
-| Services | `services/*/README.md` | Per-service READMEs |
-| End matter | `CONTRIBUTING.md`, `CHANGELOG.md` | Contribution guide, changelog |
+| Part         | Source file                               | Description                   |
+| ------------ | ----------------------------------------- | ----------------------------- |
+| Front matter | `README.md`                               | Project overview              |
+| 01           | `docs/AI_AGENT_01_OVERVIEW.md`            | System overview               |
+| 02           | `docs/AI_AGENT_02_LAYOUT.md`              | Repository layout             |
+| 03           | `docs/AI_AGENT_03_ARCHITECTURE.md`        | Architecture                  |
+| 04           | `docs/AI_AGENT_04_API.md`                 | API reference                 |
+| 05           | `docs/AI_AGENT_05_INFRA.md`               | Infrastructure                |
+| 06           | `docs/AI_AGENT_06_CICD.md`                | CI/CD pipeline                |
+| 07           | `docs/AI_AGENT_07_STATUS.md`              | Current status                |
+| 08           | `docs/AI_AGENT_08_RUNBOOKS.md`            | Runbooks                      |
+| 09           | `docs/AI_AGENT_09_SECURITY.md`            | Security                      |
+| 10           | `docs/AI_AGENT_10_TASKS.md`               | Task backlog                  |
+| 11           | `docs/AI_AGENT_11_WORKSPACE_MIGRATION.md` | Workspace migration           |
+| Services     | `services/*/README.md`                    | Per-service READMEs           |
+| End matter   | `CONTRIBUTING.md`, `CHANGELOG.md`         | Contribution guide, changelog |
 
 ---
 
@@ -178,7 +181,7 @@ The PDF is assembled from the following parts in order:
 
 ### `scripts/generate-pdf-documentation.sh`
 
-Orchestrates the entire pipeline.  Key pandoc invocation (lines ~482–499):
+Orchestrates the entire pipeline. Key pandoc invocation (lines ~482–499):
 
 ```bash
 pandoc "${INPUT_FILES[@]}" \
@@ -347,12 +350,12 @@ prevents it from being triggered, giving belt-and-suspenders protection.
 
 ## Known Limitations
 
-| Issue | Details |
-|-------|---------|
+| Issue                         | Details                                                                                                                             |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Mermaid diagrams not rendered | Architecture diagrams in `AI_AGENT_03_ARCHITECTURE.md` are skipped; `mermaid-filter` requires Node.js and `@mermaid-js/mermaid-cli` |
-| Special glyphs missing | `►` (U+25BA) and `⭐` (U+2B50) are not in the Noto CJK glyph set and appear as blank boxes |
-| Develop branch has no docs | `docs/AI_AGENT_*.md` files exist only on `main`; running from `develop` produces a near-empty PDF |
-| Table of contents depth | Report class generates Part / Chapter / Section levels; subsection numbering may differ from the Markdown source |
+| Special glyphs missing        | `►` (U+25BA) and `⭐` (U+2B50) are not in the Noto CJK glyph set and appear as blank boxes                                          |
+| Develop branch has no docs    | `docs/AI_AGENT_*.md` files exist only on `main`; running from `develop` produces a near-empty PDF                                   |
+| Table of contents depth       | Report class generates Part / Chapter / Section levels; subsection numbering may differ from the Markdown source                    |
 
 ---
 
@@ -365,6 +368,7 @@ prevents it from being triggered, giving belt-and-suspenders protection.
 ```
 
 **Solution A** — Install via tlmgr:
+
 ```bash
 tlmgr --usermode install lm
 mktexlsr ~/texmf
@@ -400,6 +404,7 @@ Do **not** install `ctex` via tlmgr — it triggers an `expl3` version conflict.
 conflicting with the versions shipped in Debian's `texlive-latex-extra`.
 
 **Solution:**
+
 ```bash
 rm -rf ~/texmf/tex/latex/l3kernel \
         ~/texmf/tex/latex/l3backend \
@@ -418,6 +423,7 @@ kpathsea: Running mktexmf pzdr
 ```
 
 **Solution A** — Install `zapfding`:
+
 ```bash
 tlmgr --usermode install zapfding
 mktexlsr ~/texmf
@@ -434,6 +440,7 @@ mktexlsr ~/texmf
 ```
 
 **Solution A** — Install `soul`:
+
 ```bash
 tlmgr --usermode install soul
 mktexlsr ~/texmf
@@ -475,6 +482,7 @@ Missing character: There is no → in font [...]
 files do not exist. The script silently skips missing files.
 
 **Solution:**
+
 ```bash
 git checkout main
 bash scripts/generate-pdf-documentation.sh
