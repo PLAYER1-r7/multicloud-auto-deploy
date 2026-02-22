@@ -37,21 +37,21 @@ export default function LoginPage() {
     setError("");
     try {
       // @ts-ignore — CDN URL dynamic import, no TypeScript type declarations available
-      const { initializeApp, getApps } =
-        (await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js")) as {
-          initializeApp: (config: object) => object;
-          getApps: () => object[];
-        };
-      // @ts-ignore
-      const { getAuth, signInWithPopup, GoogleAuthProvider } =
-        (await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js")) as {
-          getAuth: () => object;
-          signInWithPopup: (
-            auth: object,
-            provider: object,
-          ) => Promise<{ user: { getIdToken: () => Promise<string> } }>;
-          GoogleAuthProvider: new () => object;
-        };
+      const firebaseApp = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js");
+      const { initializeApp, getApps } = firebaseApp as {
+        initializeApp: (config: object) => object;
+        getApps: () => object[];
+      };
+      // @ts-ignore — CDN URL dynamic import
+      const firebaseAuth = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js");
+      const { getAuth, signInWithPopup, GoogleAuthProvider } = firebaseAuth as {
+        getAuth: () => object;
+        signInWithPopup: (
+          auth: object,
+          provider: object,
+        ) => Promise<{ user: { getIdToken: () => Promise<string> } }>;
+        GoogleAuthProvider: new () => object;
+      };
 
       if (!firebaseInitialized.current) {
         if (getApps().length === 0) initializeApp(FIREBASE_CONFIG);

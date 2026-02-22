@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import "./app.css";
+import "./App.css";
 import App from "./App.tsx";
 
 // basename from Vite's base config (e.g. /sns/ → /sns)
