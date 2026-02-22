@@ -449,73 +449,6 @@ api_gateway = aws.apigatewayv2.Api(
     tags=common_tags,
 )
 
-# ========================================
-# Lambda Function for frontend_web (Simple SNS)
-# Routes /sns/* → this Lambda via CloudFront ordered cache behavior
-# ========================================
-frontend_web_lambda = aws.lambda_.Function(
-    "frontend-web-function",
-    name=f"{project_name}-{stack}-frontend-web",
-    runtime="python3.12",
-    handler="handler.handler",
-    role=lambda_role.arn,
-    memory_size=256,
-    timeout=30,
-    architectures=["x86_64"],
-    code=pulumi.AssetArchive(
-        {"index.py": pulumi.StringAsset(placeholder_code)}),
-    # ignore_changes=["environment"]: deploy-aws.yml workflow sets Cognito env vars
-    # after CloudFront domain is known (Pulumi outputs). Pulumi must not overwrite.
-    opts=pulumi.ResourceOptions(
-        ignore_changes=["code", "source_code_hash", "layers", "environment"]),
-    environment={
-        "variables": pulumi.Output.all(api_gateway.api_endpoint).apply(
-            lambda args: {
-                "ENVIRONMENT": stack,
-                "AUTH_PROVIDER": "aws",
-                "AUTH_DISABLED": "false",
-                "STAGE_NAME": "sns",
-                "API_BASE_URL": args[0],
-            }
-        ),
-    },
-    tags=common_tags,
-)
-
-frontend_web_lambda_url = aws.lambda_.FunctionUrl(
-    "frontend-web-function-url",
-    function_name=frontend_web_lambda.name,
-    authorization_type="NONE",
-    cors={
-        "allow_origins": ["*"],
-        "allow_methods": ["*"],
-        "allow_headers": ["Content-Type", "Authorization", "Cookie", "X-Requested-With"],
-        "max_age": 3600,
-    },
-)
-
-# OAC (Origin Access Control) for Lambda Function URL
-# OACを使うとCloudFrontがSigV4署名付きリクエストを送信し、
-# cloudfront.amazonaws.com principalで認証される（匿名リクエスト不要）
-frontend_web_oac = aws.cloudfront.OriginAccessControl(
-    "frontend-web-oac",
-    name=f"{project_name}-{stack}-frontend-web-oac",
-    description="OAC for frontend_web Lambda Function URL",
-    origin_access_control_origin_type="lambda",
-    signing_behavior="always",
-    signing_protocol="sigv4",
-)
-
-# Permission for CloudFront to invoke frontend_web Lambda Function URL
-# OAC使用時: CloudFrontがSigV4署名でリクエストを送信 → この許可でマッチ
-aws.lambda_.Permission(
-    "frontend-web-cloudfront-invoke",
-    action="lambda:InvokeFunctionUrl",
-    function=frontend_web_lambda.name,
-    principal="cloudfront.amazonaws.com",
-    function_url_auth_type="NONE",
-)
-
 # API Gateway Integration with Lambda (backend api)
 integration = aws.apigatewayv2.Integration(
     "lambda-integration",
@@ -549,44 +482,6 @@ aws.lambda_.Permission(
     function=lambda_function.name,
     principal="apigateway.amazonaws.com",
     source_arn=api_gateway.execution_arn.apply(lambda arn: f"{arn}/*/*"),
-)
-
-# ========================================
-# API Gateway Integration for frontend_web Lambda (Simple SNS)
-# CloudFront /sns* → API Gateway → frontend_web Lambda
-# (Lambda Function URLを直接CloudFrontオリジンにすると認証問題が発生するため)
-# ========================================
-frontend_web_integration = aws.apigatewayv2.Integration(
-    "frontend-web-integration",
-    api_id=api_gateway.id,
-    integration_type="AWS_PROXY",
-    integration_uri=frontend_web_lambda.invoke_arn,
-    payload_format_version="2.0",
-)
-
-# Route: ANY /sns  (ルートパス)
-aws.apigatewayv2.Route(
-    "sns-root-route",
-    api_id=api_gateway.id,
-    route_key="ANY /sns",
-    target=frontend_web_integration.id.apply(lambda id: f"integrations/{id}"),
-)
-
-# Route: ANY /sns/{proxy+}  (配下すべて)
-aws.apigatewayv2.Route(
-    "sns-proxy-route",
-    api_id=api_gateway.id,
-    route_key="ANY /sns/{proxy+}",
-    target=frontend_web_integration.id.apply(lambda id: f"integrations/{id}"),
-)
-
-# Permission for API Gateway to invoke frontend_web Lambda
-aws.lambda_.Permission(
-    "frontend-web-apigw-invoke",
-    action="lambda:InvokeFunction",
-    function=frontend_web_lambda.name,
-    principal="apigateway.amazonaws.com",
-    source_arn=api_gateway.execution_arn.apply(lambda arn: f"{arn}/*"),
 )
 
 # ========================================
@@ -788,21 +683,6 @@ cloudfront_kwargs = {
                 origin_access_identity=cloudfront_oai.cloudfront_access_identity_path,
             ),
         ),
-        # frontend_web (Simple SNS) → API Gateway HTTP API origin
-        # CloudFront /sns* → API Gateway → frontend_web Lambda
-        # (Lambda Function URL直接接続は認証問題のためAPI Gateway経由に変更)
-        aws.cloudfront.DistributionOriginArgs(
-            origin_id="frontend-web",
-            domain_name=api_gateway.api_endpoint.apply(
-                lambda url: url.replace("https://", "").rstrip("/")
-            ),
-            custom_origin_config=aws.cloudfront.DistributionOriginCustomOriginConfigArgs(
-                http_port=80,
-                https_port=443,
-                origin_protocol_policy="https-only",
-                origin_ssl_protocols=["TLSv1.2"],
-            ),
-        ),
     ],
     "default_cache_behavior": aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
         target_origin_id=frontend_bucket.bucket_regional_domain_name,
@@ -914,7 +794,6 @@ monitoring_resources = monitoring.setup_monitoring(
 # ========================================
 pulumi.export("lambda_function_name", lambda_function.name)
 pulumi.export("lambda_function_arn", lambda_function.arn)
-pulumi.export("frontend_web_lambda_name", frontend_web_lambda.name)
 pulumi.export("lambda_function_url", lambda_url.function_url)
 pulumi.export("api_gateway_id", api_gateway.id)
 pulumi.export("api_gateway_endpoint", api_gateway.api_endpoint)
