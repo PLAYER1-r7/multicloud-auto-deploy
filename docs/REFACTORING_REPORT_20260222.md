@@ -66,13 +66,13 @@ spa_rewrite_rule = cdn.Rule(
 
 ### CI/CD Debug Loop (5 runs)
 
-| Run | Branch | Error | Fix Applied |
-|-----|--------|-------|-------------|
-| #198 | main | `ImportError: DeliveryRuleUrlRewriteActionArgs` | Changed to `UrlRewriteActionArgs` |
-| #199 | main | Azure API returned pending operation | Added `pulumi cancel` step |
-| #200 | main | "Stack has pending operation" | Added `pulumi stack export \| jq '.deployment.pending_operations = []' \| pulumi stack import --force` |
-| #201 | main | `"Match condition has more than 10 match values"` | Reduced Condition 3 from 14 to 10 values |
-| #202 | main | — | **SUCCESS** ✅ |
+| Run  | Branch | Error                                             | Fix Applied                                                                                            |
+| ---- | ------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| #198 | main   | `ImportError: DeliveryRuleUrlRewriteActionArgs`   | Changed to `UrlRewriteActionArgs`                                                                      |
+| #199 | main   | Azure API returned pending operation              | Added `pulumi cancel` step                                                                             |
+| #200 | main   | "Stack has pending operation"                     | Added `pulumi stack export \| jq '.deployment.pending_operations = []' \| pulumi stack import --force` |
+| #201 | main   | `"Match condition has more than 10 match values"` | Reduced Condition 3 from 14 to 10 values                                                               |
+| #202 | main   | —                                                 | **SUCCESS** ✅                                                                                         |
 
 ### Key Learnings
 
@@ -103,14 +103,14 @@ Removed all dead steps in commit `1ae65f5` — **168 lines deleted** across 3 wo
 
 ### After State
 
-| Workflow | Responsibility |
-|----------|----------------|
-| `deploy-aws.yml` | Pulumi infra + backend Lambda deploy only |
-| `deploy-azure.yml` | Pulumi infra + Function App deploy only |
-| `deploy-gcp.yml` | Pulumi infra + Cloud Function deploy only |
-| `deploy-frontend-web-aws.yml` | React SPA → S3 `/sns/` prefix |
-| `deploy-frontend-web-azure.yml` | React SPA → Azure Blob `/sns/` prefix |
-| `deploy-frontend-web-gcp.yml` | React SPA → GCS `/sns/` prefix |
+| Workflow                        | Responsibility                            |
+| ------------------------------- | ----------------------------------------- |
+| `deploy-aws.yml`                | Pulumi infra + backend Lambda deploy only |
+| `deploy-azure.yml`              | Pulumi infra + Function App deploy only   |
+| `deploy-gcp.yml`                | Pulumi infra + Cloud Function deploy only |
+| `deploy-frontend-web-aws.yml`   | React SPA → S3 `/sns/` prefix             |
+| `deploy-frontend-web-azure.yml` | React SPA → Azure Blob `/sns/` prefix     |
+| `deploy-frontend-web-gcp.yml`   | React SPA → GCS `/sns/` prefix            |
 
 ---
 
@@ -122,18 +122,18 @@ Removed all dead steps in commit `1ae65f5` — **168 lines deleted** across 3 wo
 `frontend_web` Lambda architecture. CloudFront `/sns*` now routes directly to S3 (React SPA)
 via CloudFront Function `spa-sns-rewrite-{stack}`, making the following resources obsolete:
 
-| Resource | Pulumi Name | Reason Obsolete |
-|----------|-------------|-----------------|
-| Lambda Function | `frontend-web-function` | SSR replaced by React SPA |
-| Lambda FunctionUrl | `frontend-web-function-url` | No longer referenced |
-| CloudFront OAC | `frontend-web-oac` | No Lambda target |
-| Lambda Permission | `frontend-web-cloudfront-invoke` | No Lambda |
-| API GW Integration | `frontend-web-integration` | Route removed |
-| API GW Route | `sns-root-route` (`ANY /sns`) | Route removed |
-| API GW Route | `sns-proxy-route` (`ANY /sns/{proxy+}`) | Route removed |
-| Lambda Permission | `frontend-web-apigw-invoke` | No Lambda |
-| CloudFront Origin | `frontend-web` (API GW endpoint) | No longer needed |
-| Pulumi Export | `frontend_web_lambda_name` | Resource removed |
+| Resource           | Pulumi Name                             | Reason Obsolete           |
+| ------------------ | --------------------------------------- | ------------------------- |
+| Lambda Function    | `frontend-web-function`                 | SSR replaced by React SPA |
+| Lambda FunctionUrl | `frontend-web-function-url`             | No longer referenced      |
+| CloudFront OAC     | `frontend-web-oac`                      | No Lambda target          |
+| Lambda Permission  | `frontend-web-cloudfront-invoke`        | No Lambda                 |
+| API GW Integration | `frontend-web-integration`              | Route removed             |
+| API GW Route       | `sns-root-route` (`ANY /sns`)           | Route removed             |
+| API GW Route       | `sns-proxy-route` (`ANY /sns/{proxy+}`) | Route removed             |
+| Lambda Permission  | `frontend-web-apigw-invoke`             | No Lambda                 |
+| CloudFront Origin  | `frontend-web` (API GW endpoint)        | No longer needed          |
+| Pulumi Export      | `frontend_web_lambda_name`              | Resource removed          |
 
 ### Solution
 
@@ -169,7 +169,7 @@ All three cloud Pulumi stacks (`import monitoring` at the top) failed immediatel
 
 ---
 
-### 4-3. GCP URLMap `Error 412: Invalid fingerprint` 
+### 4-3. GCP URLMap `Error 412: Invalid fingerprint`
 
 **Cause**: Pulumi state was out of sync with the actual GCP resource state. GCP requires the
 current resource fingerprint to be provided when updating a `URLMap`; a stale Pulumi state
@@ -187,6 +187,7 @@ causes a 412 mismatch.
 GCP from a previous run, yielding a 409 conflict.
 
 **Fix**: Two-part fix:
+
 1. Synced `infrastructure/pulumi/gcp/__main__.py` from `main` (adds `uploads_bucket` resource
    definition + `pulumi.export`) — commit `4fa611d`.
 2. Added a `pulumi import` step in `deploy-gcp.yml` to import the pre-existing bucket into
@@ -201,6 +202,7 @@ GCP from a previous run, yielding a 409 conflict.
 GCP refused the deletion because the old certificate was still attached to the HTTPS proxy.
 
 **Fix**: Two-part fix:
+
 1. Added `ignore_changes=["name", "managed"]` to `ManagedSslCertificate` resource options in
    `gcp/__main__.py` (commit `fb89b45`).
 2. Added a `pulumi import` step for `managed-ssl-cert` in `deploy-gcp.yml` (commit `30cad90`).
@@ -211,11 +213,11 @@ GCP refused the deletion because the old certificate was still attached to the H
 
 All three clouds successfully deployed after the above fixes:
 
-| Cloud | Run ID | Branch | Result |
-|-------|--------|--------|--------|
-| AWS | 22269437380 | develop | ✅ **success** |
+| Cloud | Run ID      | Branch  | Result         |
+| ----- | ----------- | ------- | -------------- |
+| AWS   | 22269437380 | develop | ✅ **success** |
 | Azure | 22269437373 | develop | ✅ **success** |
-| GCP | 22269943597 | develop | ✅ **success** |
+| GCP   | 22269943597 | develop | ✅ **success** |
 
 ---
 
@@ -223,27 +225,27 @@ All three clouds successfully deployed after the above fixes:
 
 ### `main` branch
 
-| Commit | Description | Impact |
-|--------|-------------|--------|
-| `48799f8` | feat(azure): replace AFD route with SPA URL Rewrite RuleSet | Azure SPA routing fixed |
-| `bb6f57c` | fix(azure): use `UrlRewriteActionArgs` | Python import error fixed |
-| `06e7d08` | fix(azure): use alphanumeric-only RuleSet name | AFD API rejection fixed |
-| `b0eb56a` | fix(ci): add `pulumi cancel` + state import step | Pending operations cleared |
-| `0f653fc` | fix(azure): reduce AFD Rule match_values to 10 | AFD 10-value limit obeyed |
-| `1ae65f5` | refactor(ci): remove dead frontend-web Lambda steps | 168 lines removed |
-| `5d2817f` | refactor(infra): remove dead `frontend_web_lambda` from AWS Pulumi | 121 lines removed |
+| Commit    | Description                                                        | Impact                     |
+| --------- | ------------------------------------------------------------------ | -------------------------- |
+| `48799f8` | feat(azure): replace AFD route with SPA URL Rewrite RuleSet        | Azure SPA routing fixed    |
+| `bb6f57c` | fix(azure): use `UrlRewriteActionArgs`                             | Python import error fixed  |
+| `06e7d08` | fix(azure): use alphanumeric-only RuleSet name                     | AFD API rejection fixed    |
+| `b0eb56a` | fix(ci): add `pulumi cancel` + state import step                   | Pending operations cleared |
+| `0f653fc` | fix(azure): reduce AFD Rule match_values to 10                     | AFD 10-value limit obeyed  |
+| `1ae65f5` | refactor(ci): remove dead frontend-web Lambda steps                | 168 lines removed          |
+| `5d2817f` | refactor(infra): remove dead `frontend_web_lambda` from AWS Pulumi | 121 lines removed          |
 
 ### `develop` branch (staging fixes)
 
-| Commit | Description |
-|--------|-------------|
-| `b222db2` | sync(staging): apply main refactoring — requirements.txt, workflows |
-| `7f4724d` | fix(staging): add monitoring.py for all 3 clouds |
-| `9bc6058` | fix(gcp): add `pulumi refresh` before up |
-| `ab16c77` | fix(gcp): remove uploads-bucket from Pulumi state (superseded) |
+| Commit    | Description                                                            |
+| --------- | ---------------------------------------------------------------------- |
+| `b222db2` | sync(staging): apply main refactoring — requirements.txt, workflows    |
+| `7f4724d` | fix(staging): add monitoring.py for all 3 clouds                       |
+| `9bc6058` | fix(gcp): add `pulumi refresh` before up                               |
+| `ab16c77` | fix(gcp): remove uploads-bucket from Pulumi state (superseded)         |
 | `4fa611d` | fix(gcp): sync `gcp/__main__.py` from main (uploads_bucket + Firebase) |
-| `30cad90` | fix(gcp): import uploads-bucket + ManagedSslCert to Pulumi state |
-| `fb89b45` | fix(gcp): `ignore_changes` on ManagedSslCertificate name+managed |
+| `30cad90` | fix(gcp): import uploads-bucket + ManagedSslCert to Pulumi state       |
+| `fb89b45` | fix(gcp): `ignore_changes` on ManagedSslCertificate name+managed       |
 
 ---
 
@@ -277,19 +279,19 @@ Browser
 
 ## 8. Files Changed
 
-| File | Change Type | Lines |
-|------|-------------|-------|
-| `infrastructure/pulumi/azure/__main__.py` | Added SpaRuleSet + URL Rewrite | +80 |
-| `infrastructure/pulumi/aws/__main__.py` | Removed dead Lambda resources | -121 |
-| `infrastructure/pulumi/gcp/__main__.py` | Added uploads_bucket, Firebase, ignore_changes | +264/-23 |
-| `infrastructure/pulumi/aws/monitoring.py` | Added (synced from main) | +358 |
-| `infrastructure/pulumi/azure/monitoring.py` | Added (synced from main) | +358 |
-| `infrastructure/pulumi/gcp/monitoring.py` | Added (synced from main) | +358 |
-| `infrastructure/pulumi/azure/requirements.txt` | Restored pulumi-azuread | +1 |
-| `.github/workflows/deploy-aws.yml` | Removed dead Lambda/S3 steps | -60 |
-| `.github/workflows/deploy-azure.yml` | Removed dead storage step, added pulumi cancel | -20/+15 |
-| `.github/workflows/deploy-gcp.yml` | Removed dead GCS steps, added refresh + import | -30/+35 |
+| File                                           | Change Type                                    | Lines    |
+| ---------------------------------------------- | ---------------------------------------------- | -------- |
+| `infrastructure/pulumi/azure/__main__.py`      | Added SpaRuleSet + URL Rewrite                 | +80      |
+| `infrastructure/pulumi/aws/__main__.py`        | Removed dead Lambda resources                  | -121     |
+| `infrastructure/pulumi/gcp/__main__.py`        | Added uploads_bucket, Firebase, ignore_changes | +264/-23 |
+| `infrastructure/pulumi/aws/monitoring.py`      | Added (synced from main)                       | +358     |
+| `infrastructure/pulumi/azure/monitoring.py`    | Added (synced from main)                       | +358     |
+| `infrastructure/pulumi/gcp/monitoring.py`      | Added (synced from main)                       | +358     |
+| `infrastructure/pulumi/azure/requirements.txt` | Restored pulumi-azuread                        | +1       |
+| `.github/workflows/deploy-aws.yml`             | Removed dead Lambda/S3 steps                   | -60      |
+| `.github/workflows/deploy-azure.yml`           | Removed dead storage step, added pulumi cancel | -20/+15  |
+| `.github/workflows/deploy-gcp.yml`             | Removed dead GCS steps, added refresh + import | -30/+35  |
 
 ---
 
-*Generated: 2026-02-22 | Branches: main (production), develop (staging)*
+_Generated: 2026-02-22 | Branches: main (production), develop (staging)_
