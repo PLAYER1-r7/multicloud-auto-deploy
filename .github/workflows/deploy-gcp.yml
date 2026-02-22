@@ -124,6 +124,7 @@ jobs:
           echo "cdn_ip_address=$(pulumi stack output cdn_ip_address)" >> $GITHUB_OUTPUT
           echo "uploads_bucket=$(pulumi stack output uploads_bucket)" >> $GITHUB_OUTPUT
           echo "compute_sa_email=$(pulumi stack output compute_sa_email)" >> $GITHUB_OUTPUT
+          echo "custom_domain=$(pulumi stack output custom_domain 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
 
       - name: Package Cloud Function
         run: |
@@ -147,7 +148,8 @@ jobs:
           find .deployment -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
           find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
           find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
-          find .deployment -type f -name "*.so" -delete 2>/dev/null || true
+          # Note: .so files are C extension binaries and should NOT be deleted
+          # find .deployment -type f -name "*.so" -delete 2>/dev/null || true
 
           # Remove test and documentation files
           find .deployment -type f -name "test_*.py" -delete 2>/dev/null || true
@@ -198,9 +200,14 @@ jobs:
           gsutil cp services/api/function-source.zip gs://$FUNCTION_BUCKET/function-source.zip
 
           # Get CDN IP from Pulumi outputs for CORS
-          # GCP Classic HTTP LB serves over HTTP (not HTTPS), so both schemes are included
+          # GCP Classic HTTP LB serves over both HTTP and HTTPS
           CDN_URL="${{ steps.pulumi_outputs.outputs.cdn_ip_address }}"
+          CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
           CORS_ORIGINS="http://${CDN_URL},https://${CDN_URL},http://localhost:5173"
+          # Add custom domain if configured (e.g., staging.gcp.ashnova.jp)
+          if [ -n "$CUSTOM_DOMAIN" ]; then
+            CORS_ORIGINS="${CORS_ORIGINS},https://${CUSTOM_DOMAIN},http://${CUSTOM_DOMAIN}"
+          fi
 
           echo "🔒 CORS Origins: $CORS_ORIGINS"
 
