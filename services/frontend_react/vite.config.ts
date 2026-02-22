@@ -4,8 +4,9 @@ import react from "@vitejs/plugin-react";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // VITE_BASE_PATH: set to /sns/ when deploying under /sns/ prefix
-  // Defaults to '/' for standalone dev
+  // VITE_BASE_PATH: must be set to /sns/ when building for AWS/Azure/GCP staging deployment
+  // e.g.  VITE_BASE_PATH=/sns/ npm run build
+  // Omit (defaults to '/') for local dev server only
   base: process.env.VITE_BASE_PATH || "/",
   server: {
     // dev server: proxy API paths to local backend
