@@ -62,12 +62,14 @@ export default function PostForm({ onCreated }: PostFormProps) {
         if (urls.length !== files.length)
           throw new Error("URL数が一致しません");
 
-        imageKeys = await Promise.all(
-          files.map(async (file, i) => {
-            await uploadsApi.uploadFile(urls[i].url, file);
-            return urls[i].key;
-          }),
-        );
+        imageKeys = (
+          await Promise.all(
+            files.map(async (file, i) => {
+              await uploadsApi.uploadFile(urls[i].url, file);
+              return urls[i].key ?? null;
+            }),
+          )
+        ).filter((k): k is string => typeof k === "string" && k.length > 0);
       }
 
       setStatus("投稿中...");

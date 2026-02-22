@@ -159,15 +159,23 @@ class JWTVerifier:
             issuer = self.get_issuer()
             audience = self.get_audience()
 
+            # Check if token has 'aud' claim before verifying it.
+            # Cognito access tokens may omit 'aud'; in that case relax audience verification.
+            try:
+                unverified_claims = jwt.get_unverified_claims(token)
+            except Exception:
+                unverified_claims = {}
+            has_aud = "aud" in unverified_claims
+
             claims = jwt.decode(
                 token,
                 key,
                 algorithms=["RS256"],
-                audience=audience,
+                audience=audience if has_aud else None,
                 issuer=issuer,
                 options={
                     "verify_signature": True,
-                    "verify_aud": True,
+                    "verify_aud": has_aud,
                     "verify_iat": True,
                     "verify_exp": True,
                     "verify_iss": True,
