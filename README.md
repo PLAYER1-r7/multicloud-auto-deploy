@@ -39,6 +39,8 @@
 > 🛠️ **Infrastructure as Code**: Pulumiで全CDNリソースを管理（詳細: [CDNセットアップガイド](docs/CDN_SETUP.md)）
 > 
 > 📋 詳細情報: [エンドポイント一覧](docs/ENDPOINTS.md)
+> 
+> 📝 **2026-02-22 Refactoring**: [Infra & CI/CD Refactoring Report](docs/REFACTORING_REPORT_20260222.md) — Azure AFD SPA fix, workflow cleanup, Pulumi dead code removal, staging validation
 
 ## 🚀 特徴
 
@@ -63,8 +65,9 @@ multicloud-auto-deploy/
 │   └── frontend_reflex/  # Reflex フロントエンド（実験的）
 ├── scripts/              # デプロイ・テストスクリプト
 ├── docs/                 # ドキュメント
-│   ├── CDN_SETUP.md     # 🆕 CDN設定ガイド
-│   └── ENDPOINTS.md     # エンドポイント一覧
+│   ├── CDN_SETUP.md                      # CDN設定ガイド
+│   ├── ENDPOINTS.md                      # エンドポイント一覧
+│   └── REFACTORING_REPORT_20260222.md    # 🆕 Infra & CI/CD refactoring report (2026-02-22)
 └── static-site/          # 静的サイト（環境選択画面）
 ```
 
