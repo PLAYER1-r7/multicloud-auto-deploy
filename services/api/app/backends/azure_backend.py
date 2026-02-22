@@ -74,6 +74,7 @@ class AzureBackend(BackendBase):
         return Post(
             postId=item.get("postId", item.get("id", "")),
             userId=item.get("userId", "unknown"),
+            nickname=item.get("nickname"),
             content=item.get("content", ""),
             isMarkdown=item.get("isMarkdown", False),
             imageUrls=item.get("imageUrls", []),

@@ -58,6 +58,7 @@ class GcpBackend(BackendBase):
         return Post(
             postId=data.get("postId", doc.id),
             userId=data.get("userId", "unknown"),
+            nickname=data.get("nickname"),
             content=data.get("content", ""),
             isMarkdown=data.get("isMarkdown", False),
             imageUrls=data.get("imageUrls", []),
