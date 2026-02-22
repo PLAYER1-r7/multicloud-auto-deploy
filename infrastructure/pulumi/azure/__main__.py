@@ -370,7 +370,84 @@ frontdoor_origin = azure.cdn.AFDOrigin(
     enabled_state="Enabled",
 )
 
-# Front Door Route (default - serves landing page and other paths from Blob Storage)
+# ========================================
+# Front Door: Rule Set for React SPA URL rewriting
+# /sns/<deep-link> → /sns/index.html (SPA client-side routing)
+#
+# Conditions (all AND'd):
+#   1. Path begins with /sns/
+#   2. Path does NOT begin with /sns/assets/  (preserve static bundles)
+#   3. Path does NOT end with known static file extensions
+# Action: URL Rewrite source=/sns/  destination=/sns/index.html
+# ========================================
+spa_rule_set = azure.cdn.RuleSet(
+    "spa-rule-set",
+    rule_set_name=f"{project_name}-{stack}-spa-rs",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+)
+
+spa_rewrite_rule = azure.cdn.Rule(
+    "spa-rewrite-rule",
+    rule_name="SpaRouting",
+    rule_set_name=spa_rule_set.name,
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    order=1,
+    conditions=[
+        # Condition 1: path begins with /sns/
+        azure.cdn.DeliveryRuleUrlPathConditionArgs(
+            name="UrlPath",
+            parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
+                type_name="DeliveryRuleUrlPathMatchConditionParameters",
+                operator="BeginsWith",
+                negate_condition=False,
+                match_values=["/sns/"],
+                transforms=["Lowercase"],
+            ),
+        ),
+        # Condition 2: NOT /sns/assets/ (Vite bundle output)
+        azure.cdn.DeliveryRuleUrlPathConditionArgs(
+            name="UrlPath",
+            parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
+                type_name="DeliveryRuleUrlPathMatchConditionParameters",
+                operator="BeginsWith",
+                negate_condition=True,
+                match_values=["/sns/assets/"],
+                transforms=["Lowercase"],
+            ),
+        ),
+        # Condition 3: NOT a static file (has no known extension)
+        azure.cdn.DeliveryRuleUrlPathConditionArgs(
+            name="UrlPath",
+            parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
+                type_name="DeliveryRuleUrlPathMatchConditionParameters",
+                operator="EndsWith",
+                negate_condition=True,
+                match_values=[
+                    ".html", ".js", ".css", ".png", ".svg",
+                    ".ico", ".json", ".woff", ".woff2", ".map",
+                    ".txt", ".webp", ".jpg", ".jpeg",
+                ],
+                transforms=["Lowercase"],
+            ),
+        ),
+    ],
+    actions=[
+        azure.cdn.DeliveryRuleUrlRewriteActionArgs(
+            name="UrlRewrite",
+            parameters=azure.cdn.UrlRewriteActionParametersArgs(
+                type_name="DeliveryRuleUrlRewriteActionParameters",
+                source_pattern="/sns/",
+                destination="/sns/index.html",
+                preserve_unmatched_path=False,
+            ),
+        ),
+    ],
+    opts=pulumi.ResourceOptions(depends_on=[spa_rule_set]),
+)
+
+# Front Door Route (/* → Blob Storage with SPA rule set attached)
 frontdoor_route = azure.cdn.Route(
     "frontdoor-route",
     route_name=f"{project_name}-{stack}-route",
@@ -385,65 +462,8 @@ frontdoor_route = azure.cdn.Route(
     forwarding_protocol="HttpsOnly",
     link_to_default_domain="Enabled",
     https_redirect="Enabled",
-    opts=pulumi.ResourceOptions(depends_on=[frontdoor_origin]),
-)
-
-# ========================================
-# Front Door: frontend_web (Simple SNS) origin + route for /sns/*
-# Routes /sns/* → Azure Functions multicloud-auto-deploy-{stack}-frontend-web
-# ========================================
-frontend_web_fd_origin_group = azure.cdn.AFDOriginGroup(
-    "frontdoor-frontend-web-origin-group",
-    origin_group_name=f"{project_name}-{stack}-frontend-web-origin-group",
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    load_balancing_settings=azure.cdn.LoadBalancingSettingsParametersArgs(
-        # Relaxed settings: only 1 out of 2 samples need to succeed to keep origin healthy
-        # Avoids Dynamic Consumption cold-start → origin marked unhealthy
-        sample_size=2,
-        successful_samples_required=1,
-        additional_latency_in_milliseconds=50,
-    ),
-    health_probe_settings=azure.cdn.HealthProbeParametersArgs(
-        probe_path="/sns/health",
-        probe_request_type="GET",
-        probe_protocol="Https",
-        # 30s interval: keeps Python Function App warm, refreshes AFD connection pool
-        # Prevents stale TCP connections from Dynamic Consumption instance recycling
-        probe_interval_in_seconds=30,
-    ),
-)
-
-frontend_web_fd_origin = azure.cdn.AFDOrigin(
-    "frontdoor-frontend-web-origin",
-    origin_name=f"{project_name}-{stack}-frontend-web-origin",
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    origin_group_name=frontend_web_fd_origin_group.name,
-    host_name=f"{project_name}-{stack}-frontend-web.azurewebsites.net",
-    origin_host_header=f"{project_name}-{stack}-frontend-web.azurewebsites.net",
-    http_port=80,
-    https_port=443,
-    priority=1,
-    weight=1000,
-    enabled_state="Enabled",
-)
-
-frontdoor_sns_route = azure.cdn.Route(
-    "frontdoor-sns-route",
-    route_name=f"{project_name}-{stack}-sns-route",
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    endpoint_name=frontdoor_endpoint.name,
-    origin_group=azure.cdn.ResourceReferenceArgs(
-        id=frontend_web_fd_origin_group.id,
-    ),
-    supported_protocols=["Http", "Https"],
-    patterns_to_match=["/sns", "/sns/*"],
-    forwarding_protocol="HttpsOnly",
-    link_to_default_domain="Enabled",
-    https_redirect="Enabled",
-    opts=pulumi.ResourceOptions(depends_on=[frontend_web_fd_origin]),
+    rule_sets=[azure.cdn.ResourceReferenceArgs(id=spa_rule_set.id)],
+    opts=pulumi.ResourceOptions(depends_on=[frontdoor_origin, spa_rewrite_rule]),
 )
 
 # ========================================

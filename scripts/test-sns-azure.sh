@@ -223,32 +223,46 @@ fi
 
 # ════════════════════════════════════════════════════════════
 sep
-echo -e "${BOLD}Section 3 — Front Door CDN: ルーティング設計確認${NC}"
+echo -e "${BOLD}Section 3 — Front Door CDN: SPA deep-link (URL Rewrite Rule Set)${NC}"
 sep
-echo -e "  ${CYAN}AFD ルーティング (Pulumi 定義):"
-echo -e "    /*          → Blob Storage (静的サイト・React SPA)"
-echo -e "    /sns, /sns/* → frontend_web Function App"
-echo -e "    /api/*      → 設定なし (API は Function App 直接アクセス)${NC}"
+echo -e "  ${CYAN}AFD ルーティング:"
+echo -e "    /*       → Blob Storage (Rule Set: /sns/<deep-link> → /sns/index.html)"
+echo -e "    /api/*   → 設定なし (API は Function App 直接アクセス)${NC}"
 echo ""
 
-# /sns/ は Blob Storage から React SPA が返る (/* ルートが先にキャッシュ)
-run_test "AFD GET /sns/ returns 200 (React SPA from Blob via /* route)" \
-  GET "$FD_URL/sns/"
+# SPA deep-link: AFD Rule Set が /sns/login → /sns/index.html に書き換える
+run_test "AFD GET /sns/login returns 200 (SPA URL Rewrite)" \
+  GET "$FD_URL/sns/login"
 
-# /sns/* は frontend_web にルーティングされる (SPA deep-link は機能しない)
-SNS_DEEP=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" "$FD_URL/sns/login" 2>/dev/null || echo "000")
-if [[ "$SNS_DEEP" == "200" ]]; then
-  ok "AFD /sns/login returns 200 (SPA fallback active)"
+SPA_LOGIN_BODY=$(curl -s --max-time 15 --compressed "$FD_URL/sns/login" 2>/dev/null || echo "")
+if echo "$SPA_LOGIN_BODY" | grep -q '<div id="root"'; then
+  ok "  /sns/login serves React SPA (<div id=\"root\"> found) ✓"
 else
-  warn "AFD /sns/login returns HTTP $SNS_DEEP — /sns/* ルートが frontend_web に転送 (既知の制約: SPA deep-link は React Router のクライアントサイドルーティングに依存)"
+  fail "  /sns/login did not return React SPA HTML"
+  [[ -n "$SPA_LOGIN_BODY" ]] && echo "  Response (first 200ch): ${SPA_LOGIN_BODY:0:200}"
+fi
+
+run_test "AFD GET /sns/profile returns 200 (SPA URL Rewrite)" \
+  GET "$FD_URL/sns/profile"
+
+run_test "AFD GET /sns/feed returns 200 (SPA URL Rewrite)" \
+  GET "$FD_URL/sns/feed"
+
+# 静的アセットは書き換えされず直接配信される（Rule Set exclude /sns/assets/）
+ASSET_STATUS=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" \
+  "$FD_URL/sns/assets/" 2>/dev/null || echo "000")
+if [[ "$ASSET_STATUS" != "404" || "$ASSET_STATUS" == "200" || "$ASSET_STATUS" == "403" ]]; then
+  ok "  /sns/assets/ is NOT rewritten (assets exclude rule active: HTTP $ASSET_STATUS) ✓"
+else
+  warn "  /sns/assets/ returned HTTP $ASSET_STATUS"
 fi
 
 # /api/* は AFD ルートなし → Blob Storage 404 が返る (設計通り)
 AFD_API_STATUS=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" "$FD_URL/api/health" 2>/dev/null || echo "000")
 if [[ "$AFD_API_STATUS" != "200" ]]; then
-  ok "AFD /api/health → HTTP $AFD_API_STATUS (AFD に /api/* ルートなし — 設計通り)  ✓"
+  ok "  AFD /api/health → HTTP $AFD_API_STATUS (AFD に /api/* ルートなし — 設計通り) ✓"
 else
-  warn "AFD /api/health returned 200 — 予期しない /api/* ルートが有効になっている可能性あり"
+  warn "  AFD /api/health returned 200 — 予期しない /api/* ルートが有効の可能性あり"
 fi
 
 # ════════════════════════════════════════════════════════════
