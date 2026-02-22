@@ -34,6 +34,10 @@ allowed_origins_list = allowed_origins.split(
 # Used for Cognito callback/logout URLs and frontend_web redirect URIs
 cf_domain = config.get("cloudFrontDomain") or ""
 
+# Custom domain (optional, e.g. staging.aws.ashnova.jp)
+# Used for Cognito callback/logout URLs alongside the CloudFront domain
+custom_domain = config.get("customDomain") or ""
+
 # Common tags
 common_tags = {
     "Project": project_name,
@@ -142,14 +146,24 @@ user_pool_client = aws.cognito.UserPoolClient(
     allowed_oauth_flows=["code", "implicit"],
     allowed_oauth_scopes=["openid", "email", "profile"],
     allowed_oauth_flows_user_pool_client=True,
-    callback_urls=[
-        "http://localhost:8080/callback",
-        "https://localhost:8080/callback",
-    ] + ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else []),
-    logout_urls=[
-        "http://localhost:8080/",
-        "https://localhost:8080/",
-    ] + ([f"https://{cf_domain}/sns/"] if cf_domain else []),
+    callback_urls=(
+        [
+            "http://localhost:5173/sns/auth/callback",
+            "http://localhost:8080/callback",
+            "https://localhost:8080/callback",
+        ]
+        + ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else [])
+        + ([f"https://{custom_domain}/sns/auth/callback"] if custom_domain else [])
+    ),
+    logout_urls=(
+        [
+            "http://localhost:5173/sns/",
+            "http://localhost:8080/",
+            "https://localhost:8080/",
+        ]
+        + ([f"https://{cf_domain}/sns/"] if cf_domain else [])
+        + ([f"https://{custom_domain}/sns/"] if custom_domain else [])
+    ),
     access_token_validity=1,
     id_token_validity=1,
     refresh_token_validity=30,
@@ -721,7 +735,7 @@ cloudfront_kwargs = {
 }
 
 # Custom domain configuration (optional)
-custom_domain = config.get("customDomain")  # e.g., aws.yourdomain.com
+# custom_domain is defined near the top of this file
 acm_certificate_arn = config.get(
     "acmCertificateArn"
 )  # ACM certificate ARN in us-east-1

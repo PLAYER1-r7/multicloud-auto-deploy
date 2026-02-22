@@ -22,6 +22,11 @@ location = azure_config.get("location") or "japaneast"
 stack = pulumi.get_stack()
 project_name = "multicloud-auto-deploy"
 
+# Frontend domain (Azure Front Door hostname) — set after first deploy:
+#   pulumi config set frontendDomain <afd_hostname>
+# Used for Azure AD app registration redirect URIs
+frontend_domain = config.get("frontendDomain") or ""
+
 # Common tags
 common_tags = {
     "Project": project_name,
@@ -243,12 +248,21 @@ app_registration = azuread.Application(
     sign_in_audience="AzureADMyOrg",
     # Web application configuration
     web=azuread.ApplicationWebArgs(
-        redirect_uris=[
-            # Add your frontend URLs here
-            f"https://{project_name}-{stack}-web.azurewebsites.net/callback",
-            "http://localhost:3000/callback",  # Local development
-            "https://localhost:3000/callback",
-        ],
+        redirect_uris=(
+            [
+                # Legacy / fallback
+                f"https://{project_name}-{stack}-web.azurewebsites.net/callback",
+                # Local development
+                "http://localhost:3000/callback",
+                "https://localhost:3000/callback",
+                "http://localhost:5173/sns/auth/callback",
+                "https://localhost:5173/sns/auth/callback",
+            ]
+            + (
+                [f"https://{frontend_domain}/sns/auth/callback"]
+                if frontend_domain else []
+            )
+        ),
         implicit_grant=azuread.ApplicationWebImplicitGrantArgs(
             access_token_issuance_enabled=True,
             id_token_issuance_enabled=True,

@@ -121,6 +121,26 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
+      - name: Sync Pulumi Config (frontendDomain)
+        run: |
+          cd infrastructure/pulumi/azure
+          # Set frontendDomain in Pulumi config so Azure AD app registration
+          # gets the correct redirect URI for the Front Door endpoint.
+          # On first deploy (no FD yet), this is a no-op and re-run will fix it.
+          FRONTDOOR=$(pulumi stack output frontdoor_hostname 2>/dev/null || echo "")
+          if [ -n "$FRONTDOOR" ] && [ "$FRONTDOOR" != "None" ]; then
+            echo "✅ Setting frontendDomain = $FRONTDOOR"
+            pulumi config set frontendDomain "$FRONTDOOR"
+          else
+            echo "ℹ️  No existing frontdoor_hostname in stack state — skipping frontendDomain config"
+          fi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ARM_CLIENT_ID: ${{ steps.azure_env.outputs.client_id }}
+          ARM_CLIENT_SECRET: ${{ steps.azure_env.outputs.client_secret }}
+          ARM_TENANT_ID: ${{ steps.azure_env.outputs.tenant_id }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.azure_env.outputs.subscription_id }}
+
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5
@@ -442,6 +462,51 @@ jobs:
             --static-website \
             --index-document index.html \
             --404-document index.html
+
+      - name: Build and Deploy Frontend
+        run: |
+          STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
+          FRONTDOOR_HOSTNAME="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
+          API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
+          AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
+          AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}"
+
+          echo "🏗️  Building React frontend for Azure..."
+          cd services/frontend_react
+
+          # Install dependencies
+          npm ci --prefer-offline
+
+          # Build with Azure-specific env vars
+          VITE_AUTH_PROVIDER=azure \
+          VITE_API_URL="${API_URL}" \
+          VITE_AZURE_TENANT_ID="${AZURE_TENANT_ID}" \
+          VITE_AZURE_CLIENT_ID="${AZURE_CLIENT_ID}" \
+          VITE_AZURE_REDIRECT_URI="https://${FRONTDOOR_HOSTNAME}/sns/auth/callback" \
+          VITE_AZURE_LOGOUT_URI="https://${FRONTDOOR_HOSTNAME}/sns/" \
+          VITE_BASE_PATH=/sns/ \
+          npm run build
+
+          echo "✅ Frontend build complete. Uploading to Azure Blob Storage..."
+          cd ../..
+
+          # Get storage account key
+          STORAGE_KEY=$(az storage account keys list \
+            --resource-group $RESOURCE_GROUP \
+            --account-name $STORAGE_ACCOUNT \
+            --query '[0].value' -o tsv)
+
+          # Upload built files to $web container (static website root)
+          az storage blob upload-batch \
+            --account-name $STORAGE_ACCOUNT \
+            --account-key $STORAGE_KEY \
+            --source services/frontend_react/dist \
+            --destination '$web' \
+            --overwrite
+
+          echo "✅ Frontend uploaded to Azure Blob Storage"
+          echo "🌐 Frontend URL: https://${FRONTDOOR_HOSTNAME}/sns/"
 
       - name: Verify Deployment
         run: |
