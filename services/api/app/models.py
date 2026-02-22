@@ -55,7 +55,7 @@ class CreatePostBody(BaseModel):
 
     content: str = Field(..., min_length=1, max_length=10000)
     is_markdown: bool = Field(False, alias="isMarkdown")
-    image_keys: Optional[list[str]] = Field(None, alias="imageKeys", max_length=16)
+    image_keys: Optional[list[str]] = Field(None, alias="imageKeys")  # 枚数制限はルートで settings.max_images_per_post により強制
     tags: Optional[list[str]] = Field(None, max_length=10)
 
     model_config = {"populate_by_name": True}
@@ -111,7 +111,7 @@ class ProfileUpdateRequest(BaseModel):
 class UploadUrlsRequest(BaseModel):
     """アップロードURL生成リクエスト"""
 
-    count: int = Field(..., ge=1, le=16)
+    count: int = Field(..., ge=1, le=100)  # 絶対上限 100、実際の制限は settings.max_images_per_post
     content_types: Optional[list[str]] = Field(
         None,
         alias="contentTypes",

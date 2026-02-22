@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { postsApi } from "../api/posts";
 import { uploadsApi } from "../api/uploads";
+import { fetchLimits } from "../api/config";
 import Alert from "./Alert";
 
 const ALLOWED_TYPES = new Set([
@@ -22,7 +23,16 @@ export default function PostForm({ onCreated }: PostFormProps) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [maxImages, setMaxImages] = useState(10); // バックエンドから取得するまでのデフォルト値
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetchLimits()
+      .then((limits) => setMaxImages(limits.maxImagesPerPost))
+      .catch(() => {
+        // 取得失敗時はデフォルト値 (10) をそのまま使用
+      });
+  }, []);
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files ?? []);
@@ -31,8 +41,8 @@ export default function PostForm({ onCreated }: PostFormProps) {
       setError("JPEG/PNG/HEIC/HEIF のみ対応しています");
       return;
     }
-    if (selected.length > 16) {
-      setError("画像は最大16枚までです");
+    if (selected.length > maxImages) {
+      setError(`画像は最大${maxImages}枚までです（選択: ${selected.length}枚）`);
       return;
     }
     setError("");
@@ -54,6 +64,9 @@ export default function PostForm({ onCreated }: PostFormProps) {
 
       if (files.length > 0) {
         setStatus("画像をアップロード中...");
+        if (files.length > maxImages) {
+          throw new Error(`画像は最大${maxImages}枚までです（選択: ${files.length}枚）`);
+        }
         const contentTypes = files.map((f) => f.type);
         const { urls } = await uploadsApi.getPresignedUrls(
           files.length,
@@ -151,7 +164,7 @@ export default function PostForm({ onCreated }: PostFormProps) {
 
         <div className="field">
           <label className="label" htmlFor="images">
-            画像 (JPEG/PNG/HEIC/HEIF, 最大16枚)
+            画像 (JPEG/PNG/HEIC/HEIF, 最大{maxImages}枚)
           </label>
           <input
             className="input"

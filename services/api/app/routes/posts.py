@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import UserInfo, require_user
 from app.backends import get_backend
+from app.config import settings
 from app.models import CreatePostBody, ListPostsResponse, Post
 
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -34,6 +35,12 @@ def create_post(
     user: UserInfo = Depends(require_user),
 ) -> dict:
     """投稿を作成"""
+    limit = settings.max_images_per_post
+    if body.image_keys and len(body.image_keys) > limit:
+        raise HTTPException(
+            status_code=400,
+            detail=f"画像は1投稿あたり{limit}枚までです（送信: {len(body.image_keys)}枚）",
+        )
     backend = get_backend()
     return backend.create_post(body, user)
 
