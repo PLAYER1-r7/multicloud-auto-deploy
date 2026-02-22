@@ -308,37 +308,6 @@ backend_bucket = gcp.compute.BackendBucket(
     "cdn-backend-bucket", **backend_bucket_kwargs
 )
 
-# ========================================
-# Serverless NEG + Backend Service for frontend_web (Simple SNS)
-# Routes /sns/* → Cloud Run multicloud-auto-deploy-{stack}-frontend-web
-# ========================================
-frontend_web_neg = gcp.compute.RegionNetworkEndpointGroup(
-    "frontend-web-neg",
-    name=f"{project_name}-{stack}-frontend-web-neg",
-    project=project,
-    region=region,
-    network_endpoint_type="SERVERLESS",
-    cloud_run=gcp.compute.RegionNetworkEndpointGroupCloudRunArgs(
-        service=f"{project_name}-{stack}-frontend-web",
-    ),
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
-)
-
-frontend_web_backend = gcp.compute.BackendService(
-    "frontend-web-backend",
-    name=f"{project_name}-{stack}-frontend-web-backend",
-    project=project,
-    protocol="HTTP",
-    load_balancing_scheme="EXTERNAL",
-    backends=[
-        gcp.compute.BackendServiceBackendArgs(
-            group=frontend_web_neg.id,
-        )
-    ],
-    opts=pulumi.ResourceOptions(
-        depends_on=enabled_services + [frontend_web_neg]),
-)
-
 # Managed SSL Certificate (for custom domain - optional)
 # Note: This requires a custom domain. For now, we'll use HTTP only.
 # To enable HTTPS with custom domain:
@@ -347,36 +316,15 @@ frontend_web_backend = gcp.compute.BackendService(
 # 3. Use TargetHttpsProxy instead of TargetHttpProxy
 
 # URL Map for Load Balancer
-# Routes:
-#   /sns, /sns/*  → frontend_web Cloud Run (Simple SNS, server-side Python app)
-#   /*            → backend_bucket (GCS static files - landing page etc.)
-# NOTE: Classic LB (EXTERNAL) does not support URL rewrites. The frontend_web
-# app is configured with STAGE_NAME=sns so it handles /sns/* paths natively.
+# All traffic → backend_bucket (GCS static files)
+# React SPA routing (/sns/*) is handled by the GCS bucket's not_found_page
+# (index.html fallback) and served as static files.
 url_map = gcp.compute.URLMap(
     "cdn-url-map",
     name=f"{project_name}-{stack}-cdn-urlmap",
     project=project,
     default_service=backend_bucket.self_link,
-    host_rules=[
-        gcp.compute.URLMapHostRuleArgs(
-            hosts=["*"],
-            path_matcher="main",
-        )
-    ],
-    path_matchers=[
-        gcp.compute.URLMapPathMatcherArgs(
-            name="main",
-            default_service=backend_bucket.self_link,
-            path_rules=[
-                gcp.compute.URLMapPathMatcherPathRuleArgs(
-                    paths=["/sns", "/sns/*"],
-                    service=frontend_web_backend.self_link,
-                )
-            ],
-        )
-    ],
-    opts=pulumi.ResourceOptions(
-        depends_on=enabled_services + [frontend_web_backend]),
+    opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
 
 # Target HTTPS Proxy with SSL (managed certificate)
