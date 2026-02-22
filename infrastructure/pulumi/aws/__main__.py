@@ -748,10 +748,36 @@ if stack == "production":
 
 # /sns* → S3 bucket (React SPA static files)
 # React SPA はビルド済み静的ファイルなので S3 オリジンを使用
-# CloudFront Function で /sns/ → /sns/index.html にリライト (SPA ルーティング対応)
-cf_function_name = f"spa-sns-rewrite-{stack}"
-caller_identity = aws.get_caller_identity()
-cf_function_arn = f"arn:aws:cloudfront::{caller_identity.account_id}:function/{cf_function_name}"
+# CloudFront Function で /sns または /sns/ → /sns/index.html にリライト (SPA ルーティング対応)
+#
+# NOTE: production 環境では 2026-02-21 に手動作成済み。
+#       staging 環境では初回 pulumi up --stack staging 時に自動作成される。
+#       既存関数を Pulumi 管理下に置く場合は:
+#         pulumi import aws:cloudfront/function:Function spa-sns-rewrite \
+#           spa-sns-rewrite-<stack>  --stack <stack>
+spa_cf_function = aws.cloudfront.Function(
+    "spa-sns-rewrite",
+    name=f"spa-sns-rewrite-{stack}",
+    runtime="cloudfront-js-2.0",
+    comment="SPA /sns routing — rewrite /sns and /sns/ to /sns/index.html",
+    publish=True,
+    code="""\
+function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+  if (uri === "/sns" || uri === "/sns/") {
+    request.uri = "/sns/index.html";
+  }
+  return request;
+}
+""",
+    opts=pulumi.ResourceOptions(
+        # 既に手動作成済みの場合、コードの差分による再作成を防ぐ
+        # (pulumi import でインポート後は ignore_changes を外してよい)
+        ignore_changes=["code"],
+    ),
+)
+
 cloudfront_kwargs["ordered_cache_behaviors"] = [
     aws.cloudfront.DistributionOrderedCacheBehaviorArgs(
         path_pattern="/sns*",
@@ -765,7 +791,7 @@ cloudfront_kwargs["ordered_cache_behaviors"] = [
         function_associations=[
             aws.cloudfront.DistributionOrderedCacheBehaviorFunctionAssociationArgs(
                 event_type="viewer-request",
-                function_arn=cf_function_arn,
+                function_arn=spa_cf_function.arn,
             )
         ],
     )

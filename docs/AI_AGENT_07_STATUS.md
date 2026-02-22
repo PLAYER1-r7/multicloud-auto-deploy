@@ -1,17 +1,21 @@
 # 07 — Environment Status
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-21 (All 3 clouds: React SPA migration complete + production integration tests 9/9 PASS + custom domain HTTPS fully operational)
+> Last verified: 2026-02-22 (Staging: React SPA + API all 3 clouds working, 21/23 integration tests PASS)
 
 ---
 
 ## Staging Environment Summary
 
-| Cloud     | Landing (`/`) | SNS App (`/sns/`) | API                                       |
-| --------- | ------------- | ----------------- | ----------------------------------------- |
-| **GCP**   | ✅            | ✅                | ✅ Cloud Run + Firebase Auth (2026-02-21) |
-| **AWS**   | ✅            | ✅                | ✅ Lambda (fully operational)             |
-| **Azure** | ✅            | ✅                | ✅ Azure Functions                        |
+| Cloud     | Landing (`/`) | SNS App (`/sns/`)       | SPA 深リンク (`/sns/feed`) | API `/posts`              |
+| --------- | ------------- | ----------------------- | -------------------------- | ------------------------- |
+| **AWS**   | ✅            | ✅ React SPA (Vite)     | ✅ CF Function 対応済み    | ✅ Lambda + DynamoDB      |
+| **Azure** | ✅            | ✅ React SPA (Vite)     | ✅ AFD SpaRuleSet 対応済み | ✅ Functions + Cosmos DB  |
+| **GCP**   | ✅            | ✅ React SPA (Vite)     | ❌ EXTERNAL LB 制限       | ✅ Cloud Run + Firestore  |
+
+> **GCP深リンク制限**: GCP 側は EXTERNAL LB スキームのため `customErrorResponsePolicy` 非対応。
+> `/sns/feed`, `/sns/profile` などの SPA ルートへの直接アクセスは 404 になる。
+> 修正するには LB を EXTERNAL_MANAGED へ移行する必要がある (要インフラ変更)。
 
 ---
 
@@ -45,7 +49,6 @@ API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 
 **Known limitations**:
 
-- Production stack shares staging resources (independent prod stack not yet deployed).
 - WAF rule set not tuned.
 
 ---
@@ -62,12 +65,18 @@ API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneas
 | Front Door      | `multicloud-auto-deploy-staging-fd` / endpoint: `mcad-staging-d45ihd` | ✅     |
 | Storage Account | `mcadwebd45ihd`                                                       | ✅     |
 | Function App    | `multicloud-auto-deploy-staging-func` (Python 3.12)                   | ✅     |
-| Cosmos DB       | `simple-sns-cosmos` (Serverless)                                      | ✅     |
+| Cosmos DB       | `mcad-cosmos-d45ihd` (Serverless)                                     | ✅     |
 | Resource Group  | `multicloud-auto-deploy-staging-rg`                                   | ✅     |
 
-**Unresolved issues**:
+**Verified working (2026-02-22)**:
 
-- End-to-end verification of `PUT /posts/{id}` is incomplete.
+- `GET /sns/` → React SPA (Vite) ✅
+- `GET /sns/feed` → SPA deep link via AFD SpaRuleSet ✅
+- `GET /posts` → Cosmos DB (`posts` container) ✅
+- Azure Functions bridge (`function_app.py`): パスプレフィックスバグ修正済み ✅
+
+**Known limitations**:
+
 - WAF not configured (Front Door Standard SKU).
 
 ---
@@ -90,33 +99,20 @@ Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7
 | Firestore                | `(default)` — collections: messages, posts                        | ✅     |
 | Backend Bucket           | `multicloud-auto-deploy-staging-cdn-backend`                      | ✅     |
 
-**Confirmed working (verified 2026-02-21)**:
+**Verified working (2026-02-22)**:
 
-- Firebase Google Sign-In → `/sns/auth/callback` → httponly Cookie session ✅
-- Post feed, create/edit/delete post ✅
-- Image upload: GCS presigned URLs (signed via IAM `signBlob` API), up to 16 files per post ✅
-- Uploaded images displayed in post feed ✅
-- Firebase ID token auto-refresh (`onIdTokenChanged`) ✅
-- Dark theme background SVGs (starfield, ring) rendered correctly ✅
-
-**Fixed issues (2026-02-21)**:
-
-- `GcpBackend` had unimplemented `like_post`/`unlike_post` abstract methods → `TypeError` → `/posts` returned 500
-  → Added stub implementations for `like_post`/`unlike_post` (commit `a9bc85e`)
-- `frontend-web` Cloud Run `API_BASE_URL` was unset → falling back to localhost:8000
-  → Set environment variable via `gcloud run services update`
-- Firebase Auth not implemented → Implemented the full Google Sign-In flow (commit `3813577`)
-- `x-ms-blob-type` header not registered in GCS CORS → Updated CORS + fixed uploads.js (commits `1cf53b7`, `b5b4de5`)
-- GCS presigned URL generation had `content_type` hardcoded as `"image/jpeg"` → Now uses `content_types[index]` correctly (commit `148b7b5`)
-- Firebase ID token expiry (401) → Auto-refresh via `onIdTokenChanged` (commit `8110d20`)
-- `GCP_SERVICE_ACCOUNT` env var missing in CI/CD → Added to `deploy-gcp.yml` (commit `27b10cc`)
-- CSS background SVGs used absolute path `/static/` → Changed to relative path `./` (commit `0ed0805`)
-- GCS uploads bucket was private → Granted `allUsers:objectViewer` + added IAMBinding to Pulumi definition (commit `0ed0805`)
+- `GET /sns/` → React SPA (Vite) ✅
+- `GET /posts` → Firestore (`posts` collection, 2026-02-22 実装) ✅
+- API Health `/health` → 200 ✅
+- GCP Firestore バックエンド (`gcp_backend.py`) 実装完了: post CRUD + profile + upload URLs ✅
+- Cloud Run `multicloud-auto-deploy-staging-api` → v2 イメージ (`linux/amd64`) デプロイ済み ✅
 
 **Remaining issues**:
 
-- HTTPS not configured for CDN (HTTP only). Requires `TargetHttpsProxy` + managed SSL certificate.
-- SPA deep links via CDN return HTTP 404 (Cloud Run URL works correctly in browsers).
+- HTTPS not configured for CDN (HTTP only, TLS未対応の EXTERNAL LB)。
+- **SPA deep links (`/sns/feed`, `/sns/profile`) → HTTP 404**: GCP EXTERNAL ロードバランサーは
+  `customErrorResponsePolicy` 非対応。EXTERNAL_MANAGED への移行が修正に必要。
+  → AWS/Azure では対応済み。GCP のみ深リンク直接アクセス不可。
 
 ---
 

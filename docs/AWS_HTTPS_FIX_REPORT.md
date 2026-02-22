@@ -22,9 +22,9 @@ Attackers might be trying to steal your information from www.aws.ashnova.jp.
 
 CloudFront distribution `E214XONKTXJEJD` was missing the **custom domain alias** and **ACM certificate** configuration.
 
-| Setting | Before (Broken State) | After (Fixed State) |
-|---|---|---|
-| `Aliases` | `Quantity: 0` (not set) | `["www.aws.ashnova.jp"]` |
+| Setting             | Before (Broken State)                                          | After (Fixed State)                                            |
+| ------------------- | -------------------------------------------------------------- | -------------------------------------------------------------- |
+| `Aliases`           | `Quantity: 0` (not set)                                        | `["www.aws.ashnova.jp"]`                                       |
 | `ViewerCertificate` | `CloudFrontDefaultCertificate: true` (only `*.cloudfront.net`) | ACM certificate `914b86b1` (dedicated to `www.aws.ashnova.jp`) |
 
 DNS had `www.aws.ashnova.jp → d1qob7569mn5nw.cloudfront.net` (CNAME) already configured,
@@ -147,8 +147,8 @@ curl -sI https://www.aws.ashnova.jp | head -5
 
 ## ACM Certificate Used
 
-| ARN | Domain | Expiry | Status |
-|---|---|---|---|
+| ARN                                                                                   | Domain               | Expiry     | Status |
+| ------------------------------------------------------------------------------------- | -------------------- | ---------- | ------ |
 | `arn:aws:acm:us-east-1:278280499340:certificate/914b86b1-4c10-4354-91cf-19c4460dcde5` | `www.aws.ashnova.jp` | 2027-03-12 | ISSUED |
 
 > **Note**: Multiple ACM certificates exist for `www.aws.ashnova.jp`, but `914b86b1` was selected as it has the latest expiry (2027-03-12).
@@ -173,10 +173,10 @@ Without setting these values, `pulumi up` will revert CloudFront to `CloudFrontD
 
 ## Timeline
 
-| Time (JST) | Action |
-|---|---|
-| ~2026-02-21 21:11 | Confirmed `NET::ERR_CERT_COMMON_NAME_INVALID` in browser |
-| ~2026-02-21 21:15 | Identified that CloudFront distribution alias and certificate were not configured |
-| ~2026-02-21 21:20 | Set alias + ACM certificate via `aws cloudfront update-distribution` |
+| Time (JST)        | Action                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| ~2026-02-21 21:11 | Confirmed `NET::ERR_CERT_COMMON_NAME_INVALID` in browser                                   |
+| ~2026-02-21 21:15 | Identified that CloudFront distribution alias and certificate were not configured          |
+| ~2026-02-21 21:20 | Set alias + ACM certificate via `aws cloudfront update-distribution`                       |
 | ~2026-02-21 21:20 | Confirmed `curl -I https://www.aws.ashnova.jp` → HTTP/2 200 (nearest edge already updated) |
-| ~2026-02-21 21:35 | Expected full propagation to all CloudFront edges (`Status: Deployed`) |
+| ~2026-02-21 21:35 | Expected full propagation to all CloudFront edges (`Status: Deployed`)                     |

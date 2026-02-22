@@ -16,6 +16,9 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   fonts-noto-cjk \
   librsvg2-bin \
   chromium \
+  bind9-dnsutils \
+  iproute2 \
+  iputils-ping \
   && apt-get autoremove -y && apt-get clean -y
 
 # Install Google Cloud SDK

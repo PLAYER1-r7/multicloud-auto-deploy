@@ -43,13 +43,10 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
     elif route_path == "HttpTrigger":
         route_path = ""
 
-    # FastAPIルーターのパス処理:
-    # - "/", "/health", "/docs", "/redoc" などはそのまま
-    # - "/messages/", "/uploads/" などは "/api/" プレフィックスを追加
-    if route_path and not route_path.startswith("api/"):
-        # ルートパスやヘルスチェック、ドキュメントはそのまま
-        if route_path not in ["", "health", "docs", "redoc", "openapi.json"]:
-            route_path = "api/" + route_path
+    # FastAPIルーターのパス:
+    # - "/posts", "/profile", "/uploads" など直接マッピング
+    # - "/api/messages/" などは "api/" から始まるのでそのまま
+    # ※ "api/" プレフィックスは追加しない (FastAPIルートは /posts, /uploads 等)
 
     path = "/" + route_path if route_path else "/"
 

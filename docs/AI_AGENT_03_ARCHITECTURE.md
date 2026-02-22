@@ -12,20 +12,19 @@ User
   ├─ [AWS]   CloudFront ──► S3 (React SPA: landing + SNS pages)  ← static
   │         API Gateway v2 ──► Lambda (Python 3.12) ──► DynamoDB
   │
-  ├─ [Azure] Front Door ─┬─ /sns/* ──► Azure Functions frontend-web (Python FastAPI)
-  │                       └─ /*     ──► Blob Storage $web (landing)
+  ├─ [Azure] Front Door ──► Blob Storage $web (React SPA: landing + SNS pages)  ← static
+  │                          ※ SPA RuleSet が /sns/ を /sns/index.html にリライト
   │         Azure Functions func ──► Cosmos DB (Serverless)
   │
-  └─ [GCP]   Cloud LB ─┬─ /sns/* ──► Cloud Run frontend-web (Python FastAPI + Jinja2)
-                        └─ /*     ──► GCS (landing)
+  └─ [GCP]   Cloud LB ──► GCS (React SPA: landing + SNS pages)  ← static
+                           ※ 404 fallback が SPA ルーティングを担う
              Cloud Run api ──► Firestore
 ```
 
-> ⚠️ **Frontend architecture inconsistency**: AWS uses a React SPA (static S3) for the SNS
-> pages, while Azure and GCP still serve the SNS app from a Python FastAPI server
-> (`services/frontend_web`). The original plan was Python-on-Lambda for both frontend and
-> backend, but Lambda cannot render HTML. AWS was migrated to React first;
-> Azure and GCP remain on the server-side Python implementation.
+> **Production**: AWS/Azure/GCP いずれも React SPA を静的ストレージから配信済み (2026-02-21)。
+>
+> **Staging** ⚠️: CDN ルーティングが未修正のため `/sns/*` が旧 Python SSR (`frontend_web`) を向いている。
+> `scripts/fix-staging-routing.sh` で修正可能。詳細は [AI_AGENT_07_STATUS.md](AI_AGENT_07_STATUS.md)。
 
 ---
 
@@ -95,67 +94,45 @@ React + S3 へ移行済み。Lambda 自体は削除されていない場合が�
 
 ## Azure Architecture Detail
 
-> ⚠️ **Not yet migrated to React**: frontend is served by Python FastAPI on Azure Functions.
-> See System Overview note above.
-
 ```
 Front Door (multicloud-auto-deploy-staging-fd)
   endpoint: mcad-staging-d45ihd
-  ├── /sns/*  → origin: Azure Functions frontend-web  (Python FastAPI, SNS pages)
-  │               multicloud-auto-deploy-staging-frontend-web-v2.azurewebsites.net
-  └── /*      → origin: Blob Storage $web  (landing pages only)
-                  mcadwebd45ihd.z11.web.core.windows.net
+  └── /*  → origin: Blob Storage $web  (React SPA: landing + SNS pages)
+              mcadwebd45ihd.z11.web.core.windows.net
+              ├─ SPA RuleSet が /sns/ → /sns/index.html にリライト
+              └─ /sns/assets/* は長期キャッシュ (immutable)
 
-Azure Functions frontend-web (FC1 FlexConsumption)  ← serves /sns/* pages
-  └── HTTP Trigger: /{*route}
-        ← FastAPI (custom ASGI bridge, no Mangum) + Jinja2 / API responses
-        ← STAGE_NAME=sns, API_BASE_URL=<func endpoint>
+⚠️ **Staging** のみ: AFD に旧 /sns/* → Azure Functions frontend-web ルートが残存。
+           `scripts/fix-staging-routing.sh` で削除必要。
 
-Azure Functions: multicloud-auto-deploy-staging-func (Flex Consumption)  ← backend API
-  └── HTTP Trigger: /{*route}  (function name: HttpTrigger)
-        │  ← FastAPI (Mangum-less, カスタム ASGI ブリッジ) にフォワード
-        └── Cosmos DB (Serverless)
-             ← DB: simple-sns  /  Container: items
-             ← 環境変数: COSMOS_DB_ENDPOINT / COSMOS_DB_KEY
-             ← COSMOS_DB_DATABASE (default: simple-sns)
-             ← COSMOS_DB_CONTAINER (default: items)
-        └── Azure Blob Storage: images コンテナー (画像アップロード)
-             ← AZURE_STORAGE_ACCOUNT_NAME / AZURE_STORAGE_ACCOUNT_KEY / AZURE_STORAGE_CONTAINER
+Azure Functions: multicloud-auto-deploy-{staging|production}-func  ← backend API
+  | HTTP Trigger: /{*route}
+  └── Cosmos DB (Serverless): simple-sns / items
+  └── Azure Blob Storage: images コンテナー
 ```
 
-**Resource Group**: `multicloud-auto-deploy-staging-rg` (japaneast)  
-**WAF**: Not configured (Standard SKU; can be added with Premium SKU)
+**Resource Group**: `multicloud-auto-deploy-staging-rg` (japaneast)
 
 ---
 
 ## GCP Architecture Detail
 
-> ⚠️ **Not yet migrated to React**: frontend is served by Python FastAPI on Cloud Run.
-> See System Overview note above.
-
 ```
 Global IP: 34.117.111.182
-  └── HTTP Forwarding Rule
+  └── HTTP/HTTPS Forwarding Rule
         └── URL Map
-              ├── /sns/* → Backend Service → Cloud Run: frontend-web  (Python FastAPI, SNS pages)
-              └── /*     → Backend Bucket  → GCS: ashnova-multicloud-auto-deploy-staging-frontend
-                                                    (landing pages only)
+              └── /* (default)  → Backend Bucket  → GCS: ashnova-multicloud-auto-deploy-{env}-frontend
+                                                        (React SPA: landing + SNS pages)
+                                                        (/sns/ などは GCS 404 fallback → index.html)
 
-Cloud Run: multicloud-auto-deploy-staging-frontend-web  (SNS Frontend — Python SSR)
-  URL: https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app
-  └── FastAPI + Jinja2 templates (Auth: Firebase Google Sign-In)
-  └── Proxies API requests to multicloud-auto-deploy-staging-api
+⚠️ **Staging** のみ: URL Map に旧 /sns/* → Cloud Run frontend-web の pathRule が残存。
+           `scripts/fix-staging-routing.sh` で削除必要。
 
-Cloud Run: multicloud-auto-deploy-staging-api  (Backend API)
+Cloud Run: multicloud-auto-deploy-{staging|production}-api  (Backend API)
   └── Firestore (default)
-       ← posts コレクション: 投稿データ  (GCP_POSTS_COLLECTION 、default: posts)
-       ← profiles コレクション: ユーザープロフィール  (GCP_PROFILES_COLLECTION、default: profiles)
-  └── GCS: ashnova-multicloud-auto-deploy-staging-uploads (presigned URL upload/image display)
-       ← GCP_STORAGE_BUCKET 環境変数で参照
+       ← posts / profiles コレクション
+  └── GCS: ashnova-multicloud-auto-deploy-{env}-uploads (presigned URL upload)
 ```
-
-**Note**: GCP uses a Classic External LB (`EXTERNAL` scheme).  
-URL Map path-based routing (`/sns/*` → Cloud Run) requires `EXTERNAL_MANAGED`; currently may fall back to GCS for all paths — needs verification.
 
 ---
 

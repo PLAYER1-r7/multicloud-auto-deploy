@@ -6,19 +6,110 @@
 
 ### Staging環境
 
-| クラウド | 種類 | 現在のエンドポイント | Distribution ID |
-|---------|------|---------------------|-----------------|
-| **AWS** | CloudFront | `d1tf3uumcm4bo1.cloudfront.net` | E1TBH4R432SZBZ |
-| **Azure** | Front Door | `mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net` | mcad-staging-d45ihd |
-| **GCP** | Cloud CDN | `34.117.111.182` (IP address) | - |
+| クラウド  | 種類       | オリジナルエンドポイント                               | カスタムドメイン              | Distribution ID     |
+| --------- | ---------- | ------------------------------------------------------ | ----------------------------- | ------------------- |
+| **AWS**   | CloudFront | `d1tf3uumcm4bo1.cloudfront.net`                        | `staging.aws.ashnova.jp` ✅   | E1TBH4R432SZBZ      |
+| **Azure** | Front Door | `mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net` | `staging.azure.ashnova.jp` ✅ | mcad-staging-d45ihd |
+| **GCP**   | Cloud CDN  | `34.117.111.182` (IP)                                  | `staging.gcp.ashnova.jp` ✅   | -                   |
+
+> **設定日**: 2026-02-22　　**設定者**: 手動 (DNS) + Pulumi (証明書/alias)
 
 ### Production環境
 
-| クラウド | 種類 | 現在のエンドポイント | Distribution ID |
-|---------|------|---------------------|-----------------|
-| **AWS** | CloudFront | `d1qob7569mn5nw.cloudfront.net` | E214XONKTXJEJD |
-| **Azure** | Front Door | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | mcad-production-diev0w |
-| **GCP** | Cloud CDN | `34.8.38.222` (IP address) | - |
+| クラウド  | 種類       | オリジナルエンドポイント                                  | カスタムドメイン | Distribution ID        |
+| --------- | ---------- | --------------------------------------------------------- | ---------------- | ---------------------- |
+| **AWS**   | CloudFront | `d1qob7569mn5nw.cloudfront.net`                           | (未設定)         | E214XONKTXJEJD         |
+| **Azure** | Front Door | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | (未設定)         | mcad-production-diev0w |
+| **GCP**   | Cloud CDN  | `34.8.38.222` (IP)                                        | (未設定)         | -                      |
+
+---
+
+## ✅ 実施済み設定 — Staging (2026-02-22)
+
+### 実施内容サマリー
+
+| クラウド  | 実施内容                                                                      | 結果        |
+| --------- | ----------------------------------------------------------------------------- | ----------- |
+| **AWS**   | ACM証明書発行 → DNS検証CNAME → Pulumi config設定 → `pulumi up`                | ✅ `200 OK` |
+| **Azure** | Front Doorカスタムドメイン登録 → DNS TXT検証 → ルート更新                     | ✅ `200 OK` |
+| **GCP**   | Pulumi config設定 → `pulumi up` → HTTPS Proxy証明書手動差替 → `pulumi import` | ✅ `200 OK` |
+
+### AWS — 設定値記録
+
+**ACM証明書 (us-east-1, CloudFront用)**:
+
+```
+ARN: arn:aws:acm:us-east-1:278280499340:certificate/9110a7f2-324c-4b45-9ffc-133c1e154c90
+```
+
+**追加済みDNSレコード**:
+| 種別 | 名前 | 値 |
+|------|------|----|
+| `CNAME` | `_a582939c3edf765df0da9fff64cc2ddb.staging.aws.ashnova.jp` | `_1996108ffa25cd66ebe500d3450b6907.jkddzztszm.acm-validations.aws.` |
+| `CNAME` | `staging.aws.ashnova.jp` | `d1tf3uumcm4bo1.cloudfront.net` |
+
+**Pulumi config (staging)**:
+
+```bash
+customDomain       = staging.aws.ashnova.jp
+acmCertificateArn  = arn:aws:acm:us-east-1:278280499340:certificate/9110a7f2-324c-4b45-9ffc-133c1e154c90
+allowedOrigins     = https://staging.aws.ashnova.jp,http://localhost:5173
+```
+
+### Azure — 設定値記録
+
+**Front Door カスタムドメインリソース**:
+
+```
+リソース名:  staging-azure-ashnova-jp
+プロファイル: multicloud-auto-deploy-staging-fd
+エンドポイント: mcad-staging-d45ihd
+証明書:      ManagedCertificate (自動発行・自動更新)
+```
+
+**追加済みDNSレコード**:
+| 種別 | 名前 | 値 |
+|------|------|----|
+| `TXT` | `_dnsauth.staging.azure.ashnova.jp` | `_27l3avslattqj20zpz8ii2cfveiwrg3` |
+| `CNAME` | `staging.azure.ashnova.jp` | `mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net` |
+
+**ルート更新コマンド（実施済み）**:
+
+```bash
+az afd route update \
+  --resource-group multicloud-auto-deploy-staging-rg \
+  --profile-name multicloud-auto-deploy-staging-fd \
+  --endpoint-name mcad-staging-d45ihd \
+  --route-name multicloud-auto-deploy-staging-route \
+  --custom-domains staging-azure-ashnova-jp \
+  --origin-group multicloud-auto-deploy-staging-origin-group \
+  --supported-protocols Https \
+  --forwarding-protocol HttpsOnly \
+  --https-redirect Enabled
+```
+
+### GCP — 設定値記録
+
+**追加済みDNSレコード**:
+| 種別 | 名前 | 値 |
+|------|------|----|
+| `A` | `staging.gcp.ashnova.jp` | `34.117.111.182` |
+
+**Pulumi config (staging)**:
+
+```bash
+customDomain   = staging.gcp.ashnova.jp
+allowedOrigins = https://staging.gcp.ashnova.jp,http://localhost:5173
+```
+
+**SSL証明書（運用中）**:
+
+```
+名前: multicloud-auto-deploy-staging-ssl-cert-v2
+ステータス: ACTIVE
+```
+
+> ⚠️ Pulumi state 注意: HTTPSプロキシ・Forwarding Ruleは `pulumi import` でstateに取り込み済み。次回 `pulumi up` は `31 unchanged` で安全に実行可能。`pulumi preview` で変更がないことを必ず確認すること。
 
 ---
 
@@ -41,6 +132,7 @@
 ## 1️⃣ AWS CloudFront カスタムドメイン設定
 
 ### 前提条件
+
 - ドメイン所有権の確認
 - AWS Route 53（推奨）または外部DNSプロバイダー
 
@@ -82,6 +174,7 @@ aws acm describe-certificate \
 ```
 
 **DNSプロバイダーで設定**:
+
 - レコードタイプ: `CNAME`
 - 名前: `_abc123.aws.yourdomain.com`
 - 値: `_xyz456.acm-validations.aws.`
@@ -121,6 +214,7 @@ pulumi up
 #### ステップ5: DNSにCNAMEレコードを追加
 
 **Pulumi環境（production/staging）のCloudFrontドメインを確認**:
+
 ```bash
 cd infrastructure/pulumi/aws
 pulumi stack select production  # または staging
@@ -129,6 +223,7 @@ echo "CloudFront Domain: $CLOUDFRONT_DOMAIN"
 ```
 
 **Route 53の場合**:
+
 ```bash
 # production環境の例
 aws route53 change-resource-record-sets \
@@ -147,9 +242,10 @@ aws route53 change-resource-record-sets \
 ```
 
 **外部DNSプロバイダーの場合**:
+
 - レコードタイプ: `CNAME`
 - 名前: `aws.yourdomain.com`
-- 値: 
+- 値:
   - Production: `d1qob7569mn5nw.cloudfront.net`
   - Staging: `d1tf3uumcm4bo1.cloudfront.net`
 
@@ -158,6 +254,7 @@ aws route53 change-resource-record-sets \
 ## 2️⃣ Azure Front Door カスタムドメイン設定
 
 ### 前提条件
+
 - ドメイン所有権の確認
 - Azure DNS（推奨）または外部DNSプロバイダー
 
@@ -166,6 +263,7 @@ aws route53 change-resource-record-sets \
 #### ステップ1: カスタムドメインの追加
 
 **環境のリソース情報を取得**:
+
 ```bash
 # Pulumi outputsから確認
 cd infrastructure/pulumi/azure
@@ -180,6 +278,7 @@ echo "Profile Name: $FRONTDOOR_PROFILE"
 ```
 
 **カスタムドメインを作成**:
+
 ```bash
 # Environment: production または staging
 ENVIRONMENT="production"
@@ -215,6 +314,7 @@ az afd custom-domain show \
 ```
 
 **DNSプロバイダーで設定**:
+
 - レコードタイプ: `TXT`
 - 名前: `_dnsauth.azure.yourdomain.com`
 - 値: `abc123def456` (validationToken)
@@ -242,6 +342,7 @@ az afd route create \
 #### ステップ4: DNSにCNAMEレコードを追加
 
 **Front Door Hostnameを確認**:
+
 ```bash
 cd infrastructure/pulumi/azure
 pulumi stack select production  # または staging
@@ -250,6 +351,7 @@ echo "Front Door Hostname: $FRONTDOOR_HOSTNAME"
 ```
 
 **Azure DNSの場合**:
+
 ```bash
 az network dns record-set cname set-record \
   --resource-group YOUR_DNS_RG \
@@ -259,9 +361,10 @@ az network dns record-set cname set-record \
 ```
 
 **外部DNSプロバイダーの場合**:
+
 - レコードタイプ: `CNAME`
 - 名前: `azure.yourdomain.com`
-- 値: 
+- 値:
   - Production: `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net`
   - Staging: `mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net`
 
@@ -281,6 +384,7 @@ az afd custom-domain show \
 ## 3️⃣ GCP Cloud CDN カスタムドメイン設定
 
 ### 前提条件
+
 - ドメイン所有権の確認
 - Google Cloud DNS（推奨）または外部DNSプロバイダー
 
@@ -318,6 +422,7 @@ pulumi up
 #### ステップ3: DNSにAレコードを追加
 
 **CDN IPアドレスを確認**:
+
 ```bash
 cd infrastructure/pulumi/gcp
 pulumi stack select production  # または staging
@@ -326,6 +431,7 @@ echo "CDN IP Address: $CDN_IP"
 ```
 
 **Google Cloud DNSの場合**:
+
 ```bash
 gcloud dns record-sets create gcp.yourdomain.com. \
   --zone=YOUR_ZONE_NAME \
@@ -335,9 +441,10 @@ gcloud dns record-sets create gcp.yourdomain.com. \
 ```
 
 **外部DNSプロバイダーの場合**:
+
 - レコードタイプ: `A`
 - 名前: `gcp.yourdomain.com`
-- 値: 
+- 値:
   - Production: `34.8.38.222`
   - Staging: `34.117.111.182`
 
@@ -353,6 +460,7 @@ gcloud compute ssl-certificates describe multicloud-auto-deploy-staging-ssl-cert
 ```
 
 **プロビジョニングに時間がかかる場合**:
+
 - DNSレコードが正しく設定されているか確認
 - DNS伝播を待つ（最大48時間、通常は数分～数時間）
 - `dig gcp.yourdomain.com` でDNS解決を確認
@@ -442,6 +550,7 @@ curl https://gcp.yourdomain.com/health
 **問題**: SSL証明書エラーが発生する
 
 **解決策**:
+
 1. 証明書のステータスを確認
 2. ドメインのaliasesが正しく設定されているか確認
 3. CloudFront/Front Door/Cloud CDNで証明書が関連付けられているか確認
@@ -451,6 +560,7 @@ curl https://gcp.yourdomain.com/health
 **問題**: ドメインが解決されない
 
 **解決策**:
+
 1. DNSレコードが正しく設定されているか確認
 2. DNS伝播を待つ（最大48時間）
 3. `dig @8.8.8.8 yourdomain.com` でGoogle DNSから確認
@@ -461,6 +571,7 @@ curl https://gcp.yourdomain.com/health
 **問題**: 証明書が長時間PROVISIONINGのまま
 
 **解決策**:
+
 1. DNSのAレコードが正しいIPアドレスを指しているか確認
 2. ロードバランサーが正常に動作しているか確認
 3. ドメインがグローバルに解決可能か確認（複数の場所から`dig`を実行）
@@ -470,6 +581,7 @@ curl https://gcp.yourdomain.com/health
 **問題**: カスタムドメイン検証が失敗する
 
 **解決策**:
+
 1. TXTレコード（`_dnsauth`）が正しく設定されているか確認
 2. validationTokenが正しいか確認
 3. DNSの伝播を待つ
@@ -479,11 +591,11 @@ curl https://gcp.yourdomain.com/health
 
 ## 📝 各クラウドのコスト
 
-| クラウド | 追加コスト |
-|---------|-----------|
-| **AWS** | ACM証明書: 無料<br>CloudFrontカスタムドメイン: 無料 |
+| クラウド  | 追加コスト                                                     |
+| --------- | -------------------------------------------------------------- |
+| **AWS**   | ACM証明書: 無料<br>CloudFrontカスタムドメイン: 無料            |
 | **Azure** | Front Door Managed Certificate: 無料<br>カスタムドメイン: 無料 |
-| **GCP** | Managed SSL Certificate: 無料<br>ロードバランサーは既存 |
+| **GCP**   | Managed SSL Certificate: 無料<br>ロードバランサーは既存        |
 
 ---
 

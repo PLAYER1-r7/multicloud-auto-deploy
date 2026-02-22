@@ -8,11 +8,11 @@ Steps for configuring custom domains when using different domains per cloud.
 
 > **All 3 cloud custom domains are operational.**
 
-| Cloud     | Custom Domain          | Target Endpoint                                           | Status                                            |
-| --------- | ---------------------- | --------------------------------------------------------- | ------------------------------------------------- |
-| **AWS**   | `www.aws.ashnova.jp`   | `d1qob7569mn5nw.cloudfront.net`                           | ✅ HTTPS active (directly fixed 2026-02-21)       |
-| **Azure** | `www.azure.ashnova.jp` | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | ✅ HTTPS active ⚠️ /sns/* needs investigation        |
-| **GCP**   | `www.gcp.ashnova.jp`   | `34.8.38.222` (A record)                                  | ✅ HTTPS active                                   |
+| Cloud     | Custom Domain          | Target Endpoint                                           | Status                                         |
+| --------- | ---------------------- | --------------------------------------------------------- | ---------------------------------------------- |
+| **AWS**   | `www.aws.ashnova.jp`   | `d1qob7569mn5nw.cloudfront.net`                           | ✅ HTTPS active (directly fixed 2026-02-21)    |
+| **Azure** | `www.azure.ashnova.jp` | `mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net` | ✅ HTTPS active ⚠️ /sns/\* needs investigation |
+| **GCP**   | `www.gcp.ashnova.jp`   | `34.8.38.222` (A record)                                  | ✅ HTTPS active                                |
 
 ### Verified Endpoints
 
@@ -74,11 +74,11 @@ curl https://www.gcp.ashnova.jp/health    # 200 {"status":"healthy"}
 
 ### Staging Environment
 
-| Cloud     | Type       | Current Endpoint                                        | Distribution ID     |
-| --------- | ---------- | ------------------------------------------------------- | ------------------- |
-| **AWS**   | CloudFront | `d1tf3uumcm4bo1.cloudfront.net`                         | E1TBH4R432SZBZ      |
+| Cloud     | Type       | Current Endpoint                                       | Distribution ID     |
+| --------- | ---------- | ------------------------------------------------------ | ------------------- |
+| **AWS**   | CloudFront | `d1tf3uumcm4bo1.cloudfront.net`                        | E1TBH4R432SZBZ      |
 | **Azure** | Front Door | `mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net` | mcad-staging-d45ihd |
-| **GCP**   | Cloud CDN  | `34.117.111.182` (IP address)                           | -                   |
+| **GCP**   | Cloud CDN  | `34.117.111.182` (IP address)                          | -                   |
 
 ### Production Environment
 
@@ -564,11 +564,11 @@ curl https://www.gcp.ashnova.jp/health
 
 ## 📝 Additional Costs per Cloud
 
-| Cloud     | Additional Cost                                                          |
-| --------- | ------------------------------------------------------------------------ |
-| **AWS**   | ACM certificate: Free<br>CloudFront custom domain: Free                  |
-| **Azure** | Front Door Managed Certificate: Free<br>Custom domain: Free              |
-| **GCP**   | Managed SSL Certificate: Free<br>Load balancer already exists            |
+| Cloud     | Additional Cost                                               |
+| --------- | ------------------------------------------------------------- |
+| **AWS**   | ACM certificate: Free<br>CloudFront custom domain: Free       |
+| **Azure** | Front Door Managed Certificate: Free<br>Custom domain: Free   |
+| **GCP**   | Managed SSL Certificate: Free<br>Load balancer already exists |
 
 ---
 

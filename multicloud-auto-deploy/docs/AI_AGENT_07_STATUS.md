@@ -1,25 +1,26 @@
 # 07 — Environment Status
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-21 (3クラウド全staging テスト実施済み — Azure AUTH_DISABLED修正)
+> Last verified: 2026-02-22 (3クラウド全staging カスタムドメイン設定完了)
 
 ---
 
 ## Staging Environment Summary
 
-| Cloud     | Landing (`/`) | SNS App (`/sns/`) | API                                       |
-| --------- | ------------- | ----------------- | ----------------------------------------- |
-| **GCP**   | ✅            | ✅                | ✅ Cloud Run + Firebase Auth (2026-02-21) |
-| **AWS**   | ✅            | ✅                | ✅ Lambda (fully operational)             |
-| **Azure** | ✅            | ✅                | ✅ Azure Functions                        |
+| Cloud     | Landing (`/`) | SNS App (`/sns/`) | API                                       | Custom Domain                 |
+| --------- | ------------- | ----------------- | ----------------------------------------- | ----------------------------- |
+| **GCP**   | ✅            | ✅                | ✅ Cloud Run + Firebase Auth (2026-02-21) | ✅ `staging.gcp.ashnova.jp`   |
+| **AWS**   | ✅            | ✅                | ✅ Lambda (fully operational)             | ✅ `staging.aws.ashnova.jp`   |
+| **Azure** | ✅            | ✅                | ✅ Azure Functions                        | ✅ `staging.azure.ashnova.jp` |
 
 ---
 
 ## AWS (ap-northeast-1)
 
 ```
-CDN URL  : https://d1tf3uumcm4bo1.cloudfront.net
-API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
+CDN URL     : https://d1tf3uumcm4bo1.cloudfront.net
+Custom URL  : https://staging.aws.ashnova.jp  (✅ 設定済 2026-02-22)
+API URL     : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 ```
 
 | Resource              | Name / ID                                                             | Status |
@@ -53,8 +54,9 @@ API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 ## Azure (japaneast)
 
 ```
-CDN URL  : https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net
-API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger
+CDN URL     : https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net
+Custom URL  : https://staging.azure.ashnova.jp  (✅ 設定済 2026-02-22)
+API URL     : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger
 ```
 
 | Resource        | Name                                                                  | Status |
@@ -88,9 +90,10 @@ API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneas
 ## GCP (asia-northeast1)
 
 ```
-CDN URL          : http://34.117.111.182
-API URL          : https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app
-Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app
+CDN URL (IP)    : http://34.117.111.182
+Custom URL      : https://staging.gcp.ashnova.jp  (✅ 設定済 2026-02-22)
+API URL         : https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app
+Frontend Web URL: https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app
 ```
 
 | Resource                 | Name / ID                                                         | Status |
@@ -128,25 +131,32 @@ Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7
 
 **Remaining issues**:
 
-- ⚠️ HTTPS: LB 443 ポートは存在するが SSL 証明書が `example.com` プレースホルダで `PROVISIONING_FAILED`。カスタムドメイン設定が前提条件 (#14 低優先に移動)。
+- ✅ ~~HTTPS: SSL証明書が `example.com` プレースホルダー~~ → `staging.gcp.ashnova.jp` で解決済み (2026-02-22)
 - ✅ SPA deep link: `frontend_web` catch-all route 追加済み (2026-02-21)。
+
+> ⚠️ **Pulumi state 注意**: HTTPSプロキシ・ Forwarding Ruleは `pulumi import` でstateに取り込み済み。次回 `pulumi up` 前に `pulumi preview` で変更がないことを確認してください。
 
 ---
 
 ## Quick Connectivity Check Commands
 
 ```bash
-# GCP
-curl -s http://34.117.111.182/ | head -3
+# GCP (カスタムドメイン)
+curl -sI https://staging.gcp.ashnova.jp/ | head -3
 curl -s https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app/health
 
-# AWS
-curl -I https://d1tf3uumcm4bo1.cloudfront.net/
+# AWS (カスタムドメイン)
+curl -sI https://staging.aws.ashnova.jp/ | head -3
 curl -s https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/health
 
-# Azure
-curl -I https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/
+# Azure (カスタムドメイン)
+curl -sI https://staging.azure.ashnova.jp/ | head -3
 curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger/health"
+
+# オリジナル URL (引き続き有効)
+curl -sI https://d1tf3uumcm4bo1.cloudfront.net/ | head -3
+curl -sI https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/ | head -3
+curl -s http://34.117.111.182/ | head -3
 ```
 
 ---

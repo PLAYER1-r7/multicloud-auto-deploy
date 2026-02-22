@@ -60,6 +60,10 @@
     8000,
     8080
   ],
+  "runArgs": [
+    "--dns=8.8.8.8",
+    "--dns=8.8.4.4"
+  ],
   "postCreateCommand": "bash .devcontainer/setup.sh",
   "remoteUser": "vscode",
   "mounts": [

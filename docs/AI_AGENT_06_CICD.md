@@ -9,20 +9,20 @@
 > ⚠️ Always edit the repo-root `.github/workflows/`.  
 > `multicloud-auto-deploy/.github/workflows/` is ignored by CI.
 
-| File                            | Trigger                    | Target                           | Environment          |
-| ------------------------------- | -------------------------- | -------------------------------- | -------------------- |
-| `deploy-aws.yml`                | push: develop/main, manual | Lambda + API                     | staging / production |
-| `deploy-azure.yml`              | push: develop/main, manual | Functions + API                  | staging / production |
-| `deploy-gcp.yml`                | push: develop/main, manual | Cloud Run (API)                  | staging / production |
-| `deploy-frontend-aws.yml`       | push: develop/main, manual | S3 `sns/`                        | staging / production |
-| `deploy-frontend-azure.yml`     | push: develop/main, manual | Blob `$web/sns/`                 | staging / production |
-| `deploy-frontend-gcp.yml`       | push: develop/main, manual | GCS `sns/`                       | staging / production |
-| `deploy-frontend-web-aws.yml`   | push: develop/main, manual | Lambda (frontend-web)            | staging / production |
-| `deploy-frontend-web-azure.yml` | push: develop/main, manual | Functions (frontend-web)         | staging / production |
-| `deploy-frontend-web-gcp.yml`   | push: develop/main, manual | Cloud Run (frontend-web, Docker) | staging / production |
-| `deploy-landing-aws.yml`        | push: develop/main, manual | S3 `/`                           | staging / production |
-| `deploy-landing-azure.yml`      | push: develop/main, manual | Blob `$web/`                     | staging / production |
-| `deploy-landing-gcp.yml`        | push: develop/main, manual | GCS `/`                          | staging / production |
+| File                            | Trigger                    | Target                        | Environment          |
+| ------------------------------- | -------------------------- | ----------------------------- | -------------------- |
+| `deploy-aws.yml`                | push: develop/main, manual | Lambda + API                  | staging / production |
+| `deploy-azure.yml`              | push: develop/main, manual | Functions + API               | staging / production |
+| `deploy-gcp.yml`                | push: develop/main, manual | Cloud Run (API)               | staging / production |
+| `deploy-frontend-web-aws.yml`   | push: develop/main, manual | S3 `sns/` + CloudFront        | staging / production |
+| `deploy-frontend-web-azure.yml` | push: develop/main, manual | Blob `$web/sns/` + AFD purge  | staging / production |
+| `deploy-frontend-web-gcp.yml`   | push: develop/main, manual | GCS `sns/` + CDN invalidation | staging / production |
+| `deploy-landing-aws.yml`        | push: develop/main, manual | S3 `/`                        | staging / production |
+| `deploy-landing-azure.yml`      | push: develop/main, manual | Blob `$web/`                  | staging / production |
+| `deploy-landing-gcp.yml`        | push: develop/main, manual | GCS `/`                       | staging / production |
+
+> **廃止済み** (2026-02-22 削除): `deploy-frontend-aws.yml` / `deploy-frontend-azure.yml` / `deploy-frontend-gcp.yml`  
+> → 環境ハードコードのため `deploy-frontend-web-*.yml` に統一。
 
 ---
 
@@ -41,8 +41,7 @@ main     →  production  ⚠️ goes live immediately
 | ---------------------------- | --------------------------------------- |
 | `services/api/**`            | deploy-{aws,azure,gcp}.yml              |
 | `infrastructure/pulumi/**`   | deploy-{aws,azure,gcp}.yml              |
-| `services/frontend_react/**` | deploy-frontend-{aws,azure,gcp}.yml     |
-| `services/frontend_web/**`   | deploy-frontend-web-{aws,azure,gcp}.yml |
+| `services/frontend_react/**` | deploy-frontend-web-{aws,azure,gcp}.yml |
 | `static-site/**`             | deploy-landing-{aws,azure,gcp}.yml      |
 
 ---
