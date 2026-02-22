@@ -1,22 +1,16 @@
 """AWS Backend Implementation with DynamoDB Single Table Design"""
 
-import logging
 import os
+import boto3
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Tuple
+from decimal import Decimal
+import logging
 
-import boto3
-
-from app.auth import UserInfo
 from app.backends.base import BackendBase
-from app.models import (
-    CreatePostBody,
-    Post,
-    ProfileResponse,
-    ProfileUpdateRequest,
-    UpdatePostBody,
-)
+from app.models import Post, CreatePostBody, ProfileResponse, ProfileUpdateRequest
+from app.auth import UserInfo
 
 logger = logging.getLogger(__name__)
 
@@ -33,48 +27,43 @@ class AwsBackend(BackendBase):
         self.bucket_name = os.environ.get("IMAGES_BUCKET_NAME", "")
 
         if not self.table_name:
-            raise ValueError(
-                "POSTS_TABLE_NAME environment variable is required")
+            raise ValueError("POSTS_TABLE_NAME environment variable is required")
 
         self.table = self.dynamodb.Table(self.table_name)
-        self.presigned_expiry = int(
-            os.environ.get("PRESIGNED_URL_EXPIRY", "3600"))
-
         logger.info(
             f"Initialized AwsBackend with table={self.table_name}, bucket={self.bucket_name}"
         )
 
-    def _key_to_url(self, key: str) -> str:
-        """S3キーをpresigned GETのURLに変換（有効期限1時間）"""
-        if not key or key.startswith("http"):
-            return key
-        if not self.bucket_name:
-            return key
-        try:
-            return self.s3_client.generate_presigned_url(
-                "get_object",
-                Params={"Bucket": self.bucket_name, "Key": key},
-                ExpiresIn=self.presigned_expiry,
-            )
-        except Exception as e:
-            logger.warning(f"Failed to generate presigned URL for {key}: {e}")
-            return key
+    def _key_to_presigned_url(self, key: str) -> str:
+        """S3キーを署名付きGET URLに変換 (1時間有効)"""
+        return self.s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self.bucket_name, "Key": key},
+            ExpiresIn=3600,
+        )
 
-    def _get_nickname(self, user_id: str) -> Optional[str]:
-        """DynamoDB PROFILESからニックネームを取得"""
-        try:
-            result = self.table.get_item(Key={"PK": "PROFILES", "SK": user_id})
-            return result.get("Item", {}).get("nickname")
-        except Exception:
-            return None
+    def _resolve_image_urls(self, keys: list) -> list[str]:
+        """キーリストを署名付きURLに変換 (既にURLの場合はそのまま返す)"""
+        if not self.bucket_name or not keys:
+            return []
+        result = []
+        for k in keys:
+            if k and isinstance(k, str):
+                if k.startswith("http"):
+                    result.append(k)
+                else:
+                    try:
+                        result.append(self._key_to_presigned_url(k))
+                    except Exception as e:
+                        logger.warning(f"Failed to generate presigned URL for {k}: {e}")
+        return result
 
     def list_posts(
         self,
         limit: int,
         next_token: Optional[str],
         tag: Optional[str],
-        user: Optional[UserInfo] = None,
-    ) -> tuple[list[Post], Optional[str]]:
+    ) -> Tuple[list[Post], Optional[str]]:
         """投稿一覧を取得 (DynamoDB Query)"""
         try:
             query_kwargs = {
@@ -85,8 +74,7 @@ class AwsBackend(BackendBase):
             }
 
             if next_token:
-                query_kwargs["ExclusiveStartKey"] = {
-                    "PK": "POSTS", "SK": next_token}
+                query_kwargs["ExclusiveStartKey"] = {"PK": "POSTS", "SK": next_token}
 
             # タグフィルター
             if tag:
@@ -97,11 +85,7 @@ class AwsBackend(BackendBase):
 
             posts = []
             for item in response.get("Items", []):
-                # S3キーをpresigned URLに変換
-                image_urls = [
-                    self._key_to_url(k)
-                    for k in item.get("imageUrls", [])
-                ]
+                raw_urls = item.get("imageKeys") or item.get("imageUrls") or []
                 posts.append(
                     Post(
                         postId=item["postId"],
@@ -111,7 +95,7 @@ class AwsBackend(BackendBase):
                         tags=item.get("tags", []),
                         createdAt=item["createdAt"],
                         updatedAt=item.get("updatedAt"),
-                        imageUrls=image_urls,
+                        imageUrls=self._resolve_image_urls(raw_urls),
                     )
                 )
 
@@ -132,41 +116,80 @@ class AwsBackend(BackendBase):
             post_id = str(uuid.uuid4())
             now = datetime.now(timezone.utc).isoformat()
 
-            # ニックネームをプロフィールから取得して投稿に保存（非正規化）
-            nickname = self._get_nickname(user.user_id)
+            # プロフィールからnicknameを取得
+            nickname = None
+            try:
+                profile_item = self.table.get_item(
+                    Key={"PK": "PROFILES", "SK": user.user_id}
+                ).get("Item")
+                if profile_item:
+                    nickname = profile_item.get("nickname")
+            except Exception as e:
+                logger.warning(f"Failed to fetch nickname for {user.user_id}: {e}")
 
             image_keys = body.image_keys if body.image_keys else []
-            item: dict = {
+
+            item = {
                 "PK": "POSTS",
                 "SK": now + "#" + post_id,  # タイムスタンプ + UUID
                 "postId": post_id,
                 "userId": user.user_id,
+                "nickname": nickname,
                 "content": body.content,
                 "tags": body.tags if body.tags else [],
                 "createdAt": now,
                 "updatedAt": now,
-                "imageUrls": image_keys,
+                "imageKeys": image_keys,  # 生のS3キーを保存
             }
-            if nickname is not None:
-                item["nickname"] = nickname
 
             self.table.put_item(Item=item)
 
-            # レスポンス用にS3キーをpresigned URLに変換
-            image_urls = [self._key_to_url(k) for k in image_keys]
+            presigned_urls = self._resolve_image_urls(image_keys)
 
             return {
-                "post_id": post_id,
-                "user_id": user.user_id,
+                "postId": post_id,
+                "userId": user.user_id,
                 "nickname": nickname,
                 "content": body.content,
                 "tags": item["tags"],
+                "createdAt": now,
+                "imageUrls": presigned_urls,
+                # snake_case aliases
+                "post_id": post_id,
+                "user_id": user.user_id,
                 "created_at": now,
-                "image_urls": image_urls,
+                "image_urls": presigned_urls,
             }
 
         except Exception as e:
             logger.error(f"Error creating post: {e}")
+            raise
+
+    def get_post(self, post_id: str):
+        """投稿を1件取得 (PostIdIndex で検索)"""
+        try:
+            response = self.table.query(
+                IndexName="PostIdIndex",
+                KeyConditionExpression="postId = :postId",
+                ExpressionAttributeValues={":postId": post_id},
+            )
+            items = response.get("Items", [])
+            if not items:
+                return None
+            item = items[0]
+            raw_urls = item.get("imageKeys") or item.get("imageUrls") or []
+            return Post(
+                postId=item["postId"],
+                userId=item["userId"],
+                nickname=item.get("nickname"),
+                content=item["content"],
+                tags=item.get("tags", []),
+                createdAt=item["createdAt"],
+                updatedAt=item.get("updatedAt"),
+                imageUrls=self._resolve_image_urls(raw_urls),
+            )
+        except Exception as e:
+            logger.error(f"Error getting post {post_id}: {e}")
             raise
 
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
@@ -186,8 +209,7 @@ class AwsBackend(BackendBase):
 
             # ユーザー権限チェック
             if item["userId"] != user.user_id and not user.is_admin:
-                raise PermissionError(
-                    "You do not have permission to delete this post")
+                raise PermissionError("You do not have permission to delete this post")
 
             # 削除
             self.table.delete_item(Key={"PK": "POSTS", "SK": item["SK"]})
@@ -198,103 +220,8 @@ class AwsBackend(BackendBase):
             logger.error(f"Error deleting post: {e}")
             raise
 
-    def get_post(self, post_id: str) -> dict:
-        """投稿を取得 (DynamoDB Query by postId)"""
-        try:
-            # postId から投稿を取得
-            response = self.table.query(
-                IndexName="PostIdIndex",
-                KeyConditionExpression="postId = :postId",
-                ExpressionAttributeValues={":postId": post_id},
-            )
-
-            if not response.get("Items"):
-                raise ValueError(f"Post not found: {post_id}")
-
-            item = response["Items"][0]
-
-            # S3キーをpresigned URLに変換
-            image_urls = [
-                self._key_to_url(k) for k in item.get("imageUrls", [])
-            ]
-
-            # レスポンス形式を統一
-            return {
-                "id": item["postId"],
-                "postId": item["postId"],
-                "post_id": item["postId"],
-                "userId": item.get("userId"),
-                "user_id": item.get("userId"),
-                "nickname": item.get("nickname"),
-                "content": item.get("content"),
-                "tags": item.get("tags", []),
-                "createdAt": item.get("createdAt"),
-                "created_at": item.get("createdAt"),
-                "updatedAt": item.get("updatedAt"),
-                "updated_at": item.get("updatedAt"),
-                "imageUrls": image_urls,
-                "image_urls": image_urls,
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting post: {e}")
-            raise
-
-    def update_post(self, post_id: str, body: UpdatePostBody, user: UserInfo) -> dict:
-        """投稿を更新 (DynamoDB UpdateItem)"""
-        try:
-            # まず postId から SK を取得
-            response = self.table.query(
-                IndexName="PostIdIndex",
-                KeyConditionExpression="postId = :postId",
-                ExpressionAttributeValues={":postId": post_id},
-            )
-
-            if not response.get("Items"):
-                raise ValueError(f"Post not found: {post_id}")
-
-            item = response["Items"][0]
-
-            # ユーザー権限チェック
-            if item["userId"] != user.user_id and not user.is_admin:
-                raise PermissionError(
-                    "You do not have permission to update this post")
-
-            # 更新
-            now = datetime.now(timezone.utc).isoformat()
-            update_expr = "SET updatedAt = :updatedAt"
-            expr_values = {":updatedAt": now}
-
-            if body.content is not None:
-                update_expr += ", content = :content"
-                expr_values[":content"] = body.content
-
-            if body.tags is not None:
-                update_expr += ", tags = :tags"
-                expr_values[":tags"] = body.tags
-
-            if body.image_keys is not None:
-                update_expr += ", imageUrls = :imageUrls"
-                expr_values[":imageUrls"] = body.image_keys
-
-            self.table.update_item(
-                Key={"PK": "POSTS", "SK": item["SK"]},
-                UpdateExpression=update_expr,
-                ExpressionAttributeValues=expr_values,
-            )
-
-            return {
-                "status": "updated",
-                "post_id": post_id,
-                "updated_at": now,
-            }
-
-        except Exception as e:
-            logger.error(f"Error updating post: {e}")
-            raise
-
     def get_profile(self, user_id: str) -> ProfileResponse:
-        """プロフィールを取得"""
+        """プロフィールを取得 (DynamoDB)"""
         try:
             result = self.table.get_item(
                 Key={"PK": "PROFILES", "SK": user_id}
@@ -324,7 +251,7 @@ class AwsBackend(BackendBase):
         user: UserInfo,
         body: ProfileUpdateRequest,
     ) -> ProfileResponse:
-        """プロフィールを更新"""
+        """プロフィールを更新 (DynamoDB)"""
         now = datetime.now(timezone.utc).isoformat()
 
         # 既存プロフィールを取得して created_at を保持し、未指定フィールドをマージ
@@ -368,13 +295,15 @@ class AwsBackend(BackendBase):
         )
 
     def generate_upload_urls(
-        self, count: int, user: UserInfo, content_types: Optional[list[str]] = None
+        self,
+        count: int,
+        user: UserInfo,
+        content_types: Optional[list[str]] = None,
     ) -> list[dict[str, str]]:
         """画像アップロード用の署名付きURLを生成"""
         if not self.bucket_name:
             raise ValueError("IMAGES_BUCKET_NAME not configured")
 
-        # MIME -> 拡張子マッピング
         ext_map = {
             "image/jpeg": "jpg",
             "image/jpg": "jpg",
@@ -387,8 +316,11 @@ class AwsBackend(BackendBase):
 
         urls = []
         for i in range(count):
-            ct = (content_types[i] if content_types and i <
-                  len(content_types) else None) or "image/jpeg"
+            ct = (
+                content_types[i]
+                if content_types and i < len(content_types)
+                else None
+            ) or "image/jpeg"
             ext = ext_map.get(ct, "jpg")
             image_id = str(uuid.uuid4())
             key = f"{user.user_id}/{image_id}.{ext}"
@@ -404,14 +336,11 @@ class AwsBackend(BackendBase):
                 ExpiresIn=3600,  # 1時間
             )
 
-            urls.append({"url": presigned_url, "key": key})
+            urls.append(
+                {
+                    "url": presigned_url,
+                    "key": key,
+                }
+            )
 
         return urls
-
-    def like_post(self, post_id: str, user: UserInfo) -> dict:
-        """いいね機能（未実装）"""
-        return {"post_id": post_id, "liked": True}
-
-    def unlike_post(self, post_id: str, user: UserInfo) -> dict:
-        """いいね取り消し機能（未実装）"""
-        return {"post_id": post_id, "liked": False}
