@@ -103,6 +103,16 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
+      - name: Refresh Pulumi state (sync with actual GCP resources)
+        run: |
+          cd infrastructure/pulumi/gcp
+          # Refresh Pulumi state to sync with actual GCP resource state.
+          # Prevents Error 412 "Invalid fingerprint" on URLMap updates.
+          pulumi refresh --yes --skip-preview 2>&1 | tail -5 || echo "⚠️ refresh had warnings (continuing)"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5
