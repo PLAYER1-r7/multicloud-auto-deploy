@@ -1,18 +1,15 @@
-from fastapi import FastAPI, Request
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi import Query, Depends
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import logging
 
 from app.config import settings
-from app.models import HealthResponse, ListPostsResponse, CreatePostBody
+from app.models import HealthResponse, ListPostsResponse, CreatePostBody, UpdatePostBody
 from app.routes import posts, profile, uploads, limits
 from app.backends import get_backend
-from app.config import settings
-from app.models import CreatePostBody, HealthResponse, ListPostsResponse, UpdatePostBody
-from app.routes import posts, profile, uploads
 
 # AWS Lambda Powertools (observability)
 try:
