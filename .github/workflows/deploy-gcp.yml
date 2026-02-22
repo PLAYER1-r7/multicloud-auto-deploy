@@ -100,6 +100,11 @@ jobs:
           pulumi state delete \
             "urn:pulumi:${STACK}::multicloud-auto-deploy-gcp::gcp:secretmanager/secretVersion:SecretVersion::app-secret-version" \
             --yes 2>/dev/null && echo "✅ Removed SecretVersion from state" || echo "✅ SecretVersion not in state (already clean)"
+          # Remove uploads-bucket from Pulumi state if it exists but is not in current code.
+          # Prevents "Error deleting bucket containing objects without force_destroy" errors.
+          pulumi state delete \
+            "urn:pulumi:${STACK}::multicloud-auto-deploy-gcp::gcp:storage/bucket:Bucket::uploads-bucket" \
+            --yes 2>/dev/null && echo "✅ Removed uploads-bucket from state" || echo "✅ uploads-bucket not in state (already clean)"
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
