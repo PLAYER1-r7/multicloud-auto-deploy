@@ -328,7 +328,7 @@ frontend_web_backend = gcp.compute.BackendService(
     name=f"{project_name}-{stack}-frontend-web-backend",
     project=project,
     protocol="HTTP",
-    load_balancing_scheme="EXTERNAL",
+    load_balancing_scheme="EXTERNAL_MANAGED",
     backends=[
         gcp.compute.BackendServiceBackendArgs(
             group=frontend_web_neg.id,
@@ -345,12 +345,15 @@ frontend_web_backend = gcp.compute.BackendService(
 # 2. Create a managed SSL certificate
 # 3. Use TargetHttpsProxy instead of TargetHttpProxy
 
-# URL Map for Load Balancer
+# URL Map for Load Balancer (EXTERNAL_MANAGED)
 # Routes:
-#   /sns, /sns/*  → frontend_web Cloud Run (Simple SNS, server-side Python app)
-#   /*            → backend_bucket (GCS static files - landing page etc.)
-# NOTE: Classic LB (EXTERNAL) does not support URL rewrites. The frontend_web
-# app is configured with STAGE_NAME=sns so it handles /sns/* paths natively.
+#   /        → backend_bucket (GCS: landing page)
+#   /index.html → backend_bucket (GCS)
+#   /*       → backend_bucket (GCS static files) with customErrorResponsePolicy:
+#              404 → /sns/index.html (React SPA) with HTTP 200 override
+# SPA deep links (/sns/feed, /sns/profile) are handled by customErrorResponsePolicy:
+# GCS returns 404 for unknown paths, LB rewrites to /sns/index.html with 200.
+# NOTE: EXTERNAL_MANAGED LB is required for customErrorResponsePolicy.
 url_map = gcp.compute.URLMap(
     "cdn-url-map",
     name=f"{project_name}-{stack}-cdn-urlmap",
@@ -366,16 +369,26 @@ url_map = gcp.compute.URLMap(
         gcp.compute.URLMapPathMatcherArgs(
             name="main",
             default_service=backend_bucket.self_link,
+            default_custom_error_response_policy=gcp.compute.URLMapPathMatcherDefaultCustomErrorResponsePolicyArgs(
+                error_service=backend_bucket.self_link,
+                error_response_rules=[
+                    gcp.compute.URLMapPathMatcherDefaultCustomErrorResponsePolicyErrorResponseRuleArgs(
+                        match_response_codes=["404"],
+                        path="/sns/index.html",
+                        override_response_code=200,
+                    )
+                ],
+            ),
             path_rules=[
                 gcp.compute.URLMapPathMatcherPathRuleArgs(
-                    paths=["/sns", "/sns/*"],
-                    service=frontend_web_backend.self_link,
+                    paths=["/", "/index.html"],
+                    service=backend_bucket.self_link,
                 )
             ],
         )
     ],
     opts=pulumi.ResourceOptions(
-        depends_on=enabled_services + [frontend_web_backend]),
+        depends_on=enabled_services),
 )
 
 # Target HTTPS Proxy with SSL (managed certificate)
@@ -426,7 +439,7 @@ https_forwarding_rule = gcp.compute.GlobalForwardingRule(
     ip_protocol="TCP",
     port_range="443",
     target=https_proxy.self_link,
-    load_balancing_scheme="EXTERNAL",
+    load_balancing_scheme="EXTERNAL_MANAGED",
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
 
@@ -439,7 +452,7 @@ forwarding_rule = gcp.compute.GlobalForwardingRule(
     ip_protocol="TCP",
     port_range="80",
     target=http_proxy.self_link,
-    load_balancing_scheme="EXTERNAL",
+    load_balancing_scheme="EXTERNAL_MANAGED",
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
 

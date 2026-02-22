@@ -1,21 +1,17 @@
 # 07 — Environment Status
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-22 (Staging: React SPA + API all 3 clouds working, 21/23 integration tests PASS)
+> Last verified: 2026-02-22 (Staging: React SPA + API all 3 clouds working, 18/18 integration tests PASS)
 
 ---
 
 ## Staging Environment Summary
 
-| Cloud     | Landing (`/`) | SNS App (`/sns/`)       | SPA 深リンク (`/sns/feed`) | API `/posts`              |
-| --------- | ------------- | ----------------------- | -------------------------- | ------------------------- |
-| **AWS**   | ✅            | ✅ React SPA (Vite)     | ✅ CF Function 対応済み    | ✅ Lambda + DynamoDB      |
-| **Azure** | ✅            | ✅ React SPA (Vite)     | ✅ AFD SpaRuleSet 対応済み | ✅ Functions + Cosmos DB  |
-| **GCP**   | ✅            | ✅ React SPA (Vite)     | ❌ EXTERNAL LB 制限       | ✅ Cloud Run + Firestore  |
-
-> **GCP深リンク制限**: GCP 側は EXTERNAL LB スキームのため `customErrorResponsePolicy` 非対応。
-> `/sns/feed`, `/sns/profile` などの SPA ルートへの直接アクセスは 404 になる。
-> 修正するには LB を EXTERNAL_MANAGED へ移行する必要がある (要インフラ変更)。
+| Cloud     | Landing (`/`) | SNS App (`/sns/`)   | SPA 深リンク (`/sns/feed`) | API `/posts`             |
+| --------- | ------------- | ------------------- | -------------------------- | ------------------------ |
+| **AWS**   | ✅            | ✅ React SPA (Vite) | ✅ CF Function 対応済み    | ✅ Lambda + DynamoDB     |
+| **Azure** | ✅            | ✅ React SPA (Vite) | ✅ AFD SpaRuleSet 対応済み | ✅ Functions + Cosmos DB |
+| **GCP**   | ✅            | ✅ React SPA (Vite) | ✅ EXTERNAL_MANAGED + customErrorResponsePolicy | ✅ Cloud Run + Firestore |
 
 ---
 
@@ -89,30 +85,33 @@ API URL          : https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.ru
 Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app
 ```
 
-| Resource                 | Name / ID                                                         | Status |
-| ------------------------ | ----------------------------------------------------------------- | ------ |
-| Global IP                | `34.117.111.182`                                                  | ✅     |
-| GCS Bucket (frontend)    | `ashnova-multicloud-auto-deploy-staging-frontend`                 | ✅     |
-| GCS Bucket (uploads)     | `ashnova-multicloud-auto-deploy-staging-uploads` (public read)    | ✅     |
-| Cloud Run (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12)                | ✅     |
-| Cloud Run (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (Docker, port 8080) | ✅     |
-| Firestore                | `(default)` — collections: messages, posts                        | ✅     |
-| Backend Bucket           | `multicloud-auto-deploy-staging-cdn-backend`                      | ✅     |
+| Resource                 | Name / ID                                                                       | Status |
+| ------------------------ | ------------------------------------------------------------------------------- | ------ |
+| Global IP                | `34.117.111.182` (static reserved: `multicloud-auto-deploy-staging-cdn-ip`)     | ✅     |
+| LB Forwarding Rule (HTTP)| `multicloud-auto-deploy-staging-cdn-lb` — **EXTERNAL_MANAGED**, port 80         | ✅     |
+| LB Forwarding Rule (HTTPS)| `multicloud-auto-deploy-staging-cdn-lb-https` — **EXTERNAL_MANAGED**, port 443 | ✅     |
+| URL Map                  | `multicloud-auto-deploy-staging-cdn-urlmap` — `customErrorResponsePolicy` 設定済 | ✅     |
+| SSL Certificate          | `multicloud-auto-deploy-staging-ssl-cert-v2` — ACTIVE (staging.gcp.ashnova.jp) | ✅     |
+| GCS Bucket (frontend)    | `ashnova-multicloud-auto-deploy-staging-frontend`                               | ✅     |
+| GCS Bucket (uploads)     | `ashnova-multicloud-auto-deploy-staging-uploads` (public read)                  | ✅     |
+| Cloud Run (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12)                              | ✅     |
+| Cloud Run (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (Docker, port 8080)               | ✅     |
+| Firestore                | `(default)` — collections: messages, posts                                      | ✅     |
+| Backend Bucket           | `multicloud-auto-deploy-staging-cdn-backend`                                    | ✅     |
 
 **Verified working (2026-02-22)**:
 
 - `GET /sns/` → React SPA (Vite) ✅
+- `GET /sns/feed`, `GET /sns/profile` → SPA deep link (EXTERNAL_MANAGED + customErrorResponsePolicy, 2026-02-22 対応) ✅
 - `GET /posts` → Firestore (`posts` collection, 2026-02-22 実装) ✅
 - API Health `/health` → 200 ✅
 - GCP Firestore バックエンド (`gcp_backend.py`) 実装完了: post CRUD + profile + upload URLs ✅
 - Cloud Run `multicloud-auto-deploy-staging-api` → v2 イメージ (`linux/amd64`) デプロイ済み ✅
+- LB を EXTERNAL → **EXTERNAL_MANAGED** へ移行済み (2026-02-22): CDN キャッシュ無効化で有効化 ✅
 
-**Remaining issues**:
+**Known limitations**:
 
-- HTTPS not configured for CDN (HTTP only, TLS未対応の EXTERNAL LB)。
-- **SPA deep links (`/sns/feed`, `/sns/profile`) → HTTP 404**: GCP EXTERNAL ロードバランサーは
-  `customErrorResponsePolicy` 非対応。EXTERNAL_MANAGED への移行が修正に必要。
-  → AWS/Azure では対応済み。GCP のみ深リンク直接アクセス不可。
+- `/sns` (trailing slash なし) → 301 → `/sns/` の GCS リダイレクトは正常動作。
 
 ---
 
