@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import Optional
 from fastapi import FastAPI, Request, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -10,6 +11,7 @@ from app.config import settings
 from app.models import HealthResponse, ListPostsResponse, CreatePostBody, UpdatePostBody
 from app.routes import posts, profile, uploads, limits
 from app.backends import get_backend
+from app.auth import UserInfo, get_current_user, require_user
 
 # AWS Lambda Powertools (observability)
 try:
