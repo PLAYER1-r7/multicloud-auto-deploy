@@ -327,18 +327,28 @@ jobs:
 
           echo "🔒 CORS Origins: $CORS_ORIGINS"
 
-          # Clear Azure Functions platform-level CORS (allowedOrigins).
-          # The platform CORS intercepts OPTIONS preflight requests BEFORE FastAPI
-          # and does NOT return Access-Control-Allow-Headers for 'authorization',
-          # causing CORS failures even when the origin is in the allowed list.
-          # With platform CORS empty, requests pass through to FastAPI CORSMiddleware
-          # which correctly returns all required preflight headers.
-          echo "🔧 Clearing platform-level CORS (delegating to FastAPI CORSMiddleware)..."
+          # Set Azure Functions platform-level CORS.
+          # In Flex Consumption, Kestrel intercepts OPTIONS preflight BEFORE Python/FastAPI.
+          # Platform CORS must include the allowed origins so Kestrel returns the required
+          # Access-Control-Allow-Origin and Access-Control-Allow-Headers response headers.
+          # NOTE: Kestrel returns CORS headers for origins that are explicitly listed here.
+          #       It only responds to 'authorization' preflight headers (GET/non-body requests)
+          #       and 'authorization+content-type' (POST requests with JSON body), which covers
+          #       all browser use cases.
+          echo "🔧 Setting platform-level CORS origins..."
+          # Build JSON array of allowed origins
+          ORIGINS_JSON="["
+          IFS=',' read -ra ORIGIN_ARRAY <<< "$CORS_ORIGINS"
+          for i in "${!ORIGIN_ARRAY[@]}"; do
+            if [ $i -gt 0 ]; then ORIGINS_JSON+=","; fi
+            ORIGINS_JSON+="\"${ORIGIN_ARRAY[$i]}\""
+          done
+          ORIGINS_JSON+="]"
           az rest \
             --method PUT \
             --url "https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}/config/web?api-version=2022-03-01" \
-            --body '{"properties":{"cors":{"allowedOrigins":[],"supportCredentials":false}}}' \
-            2>/dev/null || echo "⚠️  Could not clear platform CORS (non-fatal)"
+            --body "{\"properties\":{\"cors\":{\"allowedOrigins\":${ORIGINS_JSON},\"supportCredentials\":false}}}" \
+            2>/dev/null || echo "⚠️  Could not set platform CORS (non-fatal)"
 
           # Remove existing CORS settings (both uppercase and lowercase)
           echo "🔧 Removing existing CORS settings if present..."
