@@ -356,7 +356,7 @@ frontend_web_backend = gcp.compute.BackendService(
 # NOTE: EXTERNAL_MANAGED LB is required for customErrorResponsePolicy.
 url_map = gcp.compute.URLMap(
     "cdn-url-map",
-    name=f"{project_name}-{stack}-cdn-urlmap",
+    name=f"{project_name}-{stack}-cdn-urlmap-v2",
     project=project,
     default_service=backend_bucket.self_link,
     host_rules=[
@@ -414,7 +414,7 @@ managed_ssl_cert = gcp.compute.ManagedSslCertificate(
 
 https_proxy = gcp.compute.TargetHttpsProxy(
     "cdn-https-proxy",
-    name=f"{project_name}-{stack}-cdn-https-proxy",
+    name=f"{project_name}-{stack}-cdn-https-proxy-v2",
     project=project,
     url_map=url_map.self_link,
     ssl_certificates=[managed_ssl_cert.self_link],
@@ -424,7 +424,7 @@ https_proxy = gcp.compute.TargetHttpsProxy(
 # Target HTTP Proxy (for HTTP to HTTPS redirect)
 http_proxy = gcp.compute.TargetHttpProxy(
     "cdn-http-proxy",
-    name=f"{project_name}-{stack}-cdn-http-proxy",
+    name=f"{project_name}-{stack}-cdn-http-proxy-v2",
     project=project,
     url_map=url_map.self_link,
     opts=pulumi.ResourceOptions(depends_on=enabled_services),

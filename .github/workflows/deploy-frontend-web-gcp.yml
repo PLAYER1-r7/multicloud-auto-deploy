@@ -55,7 +55,12 @@ jobs:
           # GCS bucket follows predictable naming convention
           PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           echo "bucket=${PROJECT_ID}-multicloud-auto-deploy-${ENV}-frontend" >> $GITHUB_OUTPUT
-          echo "urlmap=multicloud-auto-deploy-${ENV}-cdn-urlmap"             >> $GITHUB_OUTPUT
+          # staging uses EXTERNAL_MANAGED LB (urlmap-v2); production uses classic LB (urlmap)
+          if [ "$ENV" = "staging" ]; then
+            echo "urlmap=multicloud-auto-deploy-${ENV}-cdn-urlmap-v2"        >> $GITHUB_OUTPUT
+          else
+            echo "urlmap=multicloud-auto-deploy-${ENV}-cdn-urlmap"           >> $GITHUB_OUTPUT
+          fi
           echo "📦 Deploying to: $ENV"
 
       - name: Authenticate to Google Cloud
