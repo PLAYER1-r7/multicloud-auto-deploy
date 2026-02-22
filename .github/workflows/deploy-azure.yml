@@ -183,13 +183,10 @@ jobs:
           FUNC_APP_NAME="multicloud-auto-deploy-${STACK_NAME}-func"
           echo "function_app_name=${FUNC_APP_NAME}" >> $GITHUB_OUTPUT
 
-          # Get storage account names dynamically from Azure (fallback if Pulumi outputs not available)
-          RG_NAME=$(pulumi stack output resource_group_name)
-          FUNC_STORAGE=$(az storage account list --resource-group $RG_NAME --query "[?contains(name, 'func')].name | [0]" -o tsv)
-          WEB_STORAGE=$(az storage account list --resource-group $RG_NAME --query "[?contains(name, 'web')].name | [0]" -o tsv)
-
-          echo "functions_storage_name=${FUNC_STORAGE}" >> $GITHUB_OUTPUT
-          echo "frontend_storage_name=${WEB_STORAGE}" >> $GITHUB_OUTPUT
+          # Get storage account names directly from Pulumi outputs
+          # (Azure CLI query "contains(name, 'web')" matches multiple accounts and may pick wrong one)
+          echo "frontend_storage_name=$(pulumi stack output frontend_storage_name)" >> $GITHUB_OUTPUT
+          echo "functions_storage_name=$(pulumi stack output functions_storage_name)" >> $GITHUB_OUTPUT
 
           # Get Function App URL
           FUNC_HOSTNAME=$(az functionapp config hostname list \
@@ -497,12 +494,14 @@ jobs:
             --account-name $STORAGE_ACCOUNT \
             --query '[0].value' -o tsv)
 
-          # Upload built files to $web container (static website root)
+          # Upload built files to $web/sns/ (Front Door SPA route: /sns/* → $web/sns/)
+          # VITE_BASE_PATH=/sns/ means index.html references /sns/assets/...
+          # but the actual output files are in dist/ (flat), so upload to $web/sns/
           az storage blob upload-batch \
             --account-name $STORAGE_ACCOUNT \
             --account-key $STORAGE_KEY \
             --source services/frontend_react/dist \
-            --destination '$web' \
+            --destination '$web/sns' \
             --overwrite
 
           echo "✅ Frontend uploaded to Azure Blob Storage"
