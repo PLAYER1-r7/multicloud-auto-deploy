@@ -100,13 +100,33 @@ jobs:
           pulumi state delete \
             "urn:pulumi:${STACK}::multicloud-auto-deploy-gcp::gcp:secretmanager/secretVersion:SecretVersion::app-secret-version" \
             --yes 2>/dev/null && echo "✅ Removed SecretVersion from state" || echo "✅ SecretVersion not in state (already clean)"
-          # Remove uploads-bucket from Pulumi state if it exists but is not in current code.
-          # Prevents "Error deleting bucket containing objects without force_destroy" errors.
-          pulumi state delete \
-            "urn:pulumi:${STACK}::multicloud-auto-deploy-gcp::gcp:storage/bucket:Bucket::uploads-bucket" \
-            --yes 2>/dev/null && echo "✅ Removed uploads-bucket from state" || echo "✅ uploads-bucket not in state (already clean)"
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Import existing GCP resources to Pulumi state
+        run: |
+          cd infrastructure/pulumi/gcp
+          STACK="${{ steps.set_stack.outputs.stack_name }}"
+          PROJECT="${{ secrets.GCP_PROJECT_ID }}"
+          PROJECT_NAME="multicloud-auto-deploy"
+
+          # Import uploads-bucket if it exists in GCP but not in Pulumi state.
+          # Prevents Error 409 "bucket already exists" on creation.
+          UPLOADS_BUCKET="${PROJECT}-${PROJECT_NAME}-${STACK}-uploads"
+          pulumi import "gcp:storage/bucket:Bucket" "uploads-bucket" "${UPLOADS_BUCKET}" \
+            --yes --skip-preview 2>&1 | tail -3 \
+            && echo "✅ Imported uploads-bucket" || echo "✅ uploads-bucket already in state or import skipped"
+
+          # Import ManagedSslCertificate if it exists in GCP but not in Pulumi state.
+          # Prevents Error 400 "ssl_certificate already in use" on replace.
+          SSL_CERT="${PROJECT_NAME}-${STACK}-ssl-cert"
+          pulumi import "gcp:compute/managedSslCertificate:ManagedSslCertificate" "managed-ssl-cert" \
+            "projects/${PROJECT}/global/sslCertificates/${SSL_CERT}" \
+            --yes --skip-preview 2>&1 | tail -3 \
+            && echo "✅ Imported managed-ssl-cert" || echo "✅ managed-ssl-cert already in state or import skipped"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Refresh Pulumi state (sync with actual GCP resources)
         run: |
