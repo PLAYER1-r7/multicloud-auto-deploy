@@ -468,8 +468,12 @@ jobs:
           API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
           AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
           AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}"
+          # Use custom domain if set, fall back to FrontDoor hostname
+          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"
+          AZURE_PUBLIC_HOST="${AZURE_CUSTOM_DOMAIN:-${FRONTDOOR_HOSTNAME}}"
 
           echo "🏗️  Building React frontend for Azure..."
+          echo "🌐 Using public host for redirect URIs: ${AZURE_PUBLIC_HOST}"
           cd services/frontend_react
 
           # Install dependencies
@@ -480,8 +484,8 @@ jobs:
           VITE_API_URL="${API_URL}" \
           VITE_AZURE_TENANT_ID="${AZURE_TENANT_ID}" \
           VITE_AZURE_CLIENT_ID="${AZURE_CLIENT_ID}" \
-          VITE_AZURE_REDIRECT_URI="https://${FRONTDOOR_HOSTNAME}/sns/auth/callback" \
-          VITE_AZURE_LOGOUT_URI="https://${FRONTDOOR_HOSTNAME}/sns/" \
+          VITE_AZURE_REDIRECT_URI="https://${AZURE_PUBLIC_HOST}/sns/auth/callback" \
+          VITE_AZURE_LOGOUT_URI="https://${AZURE_PUBLIC_HOST}/sns/" \
           VITE_BASE_PATH=/sns/ \
           npm run build
 

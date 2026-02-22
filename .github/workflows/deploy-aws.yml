@@ -94,6 +94,7 @@ jobs:
           # callback URLs and adds the ACM alias to CloudFront on every run.
           CUSTOM_DOMAIN="${{ secrets.AWS_CUSTOM_DOMAIN }}"
           ACM_CERT_ARN="${{ secrets.AWS_ACM_CERTIFICATE_ARN }}"
+          CF_DOMAIN="${{ secrets.AWS_CLOUDFRONT_DOMAIN }}"
           if [ -n "$CUSTOM_DOMAIN" ]; then
             echo "✅ Setting customDomain = $CUSTOM_DOMAIN"
             pulumi config set multicloud-auto-deploy-aws:customDomain "$CUSTOM_DOMAIN"
@@ -105,6 +106,12 @@ jobs:
             pulumi config set multicloud-auto-deploy-aws:acmCertificateArn "$ACM_CERT_ARN"
           else
             echo "⚠️  AWS_ACM_CERTIFICATE_ARN secret not set — skipping acmCertificateArn config"
+          fi
+          if [ -n "$CF_DOMAIN" ]; then
+            echo "✅ Setting cloudFrontDomain = $CF_DOMAIN"
+            pulumi config set multicloud-auto-deploy-aws:cloudFrontDomain "$CF_DOMAIN"
+          else
+            echo "⚠️  AWS_CLOUDFRONT_DOMAIN secret not set — skipping cloudFrontDomain config"
           fi
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
