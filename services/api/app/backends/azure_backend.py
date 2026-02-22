@@ -194,6 +194,24 @@ class AzureBackend(BackendBase):
             logger.error(f"Error creating post in Cosmos DB: {e}")
             raise
 
+    def get_post(self, post_id: str):
+        """Cosmos DBから投稿を1件取得"""
+        try:
+            item = self.posts_container.read_item(item=post_id, partition_key=post_id)
+        except Exception:
+            return None
+        from app.models import Post
+        return Post(
+            postId=item["id"],
+            userId=item["userId"],
+            nickname=item.get("nickname"),
+            content=item["content"],
+            tags=item.get("tags") or [],
+            createdAt=item["createdAt"],
+            updatedAt=item.get("updatedAt"),
+            imageUrls=item.get("imageUrls") or [],
+        )
+
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
         """Cosmos DBから投稿を削除"""
         try:

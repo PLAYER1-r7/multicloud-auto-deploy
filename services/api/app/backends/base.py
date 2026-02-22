@@ -60,6 +60,19 @@ class BackendBase(ABC):
         pass
     
     @abstractmethod
+    def get_post(self, post_id: str) -> Optional[Post]:
+        """
+        投稿を1件取得
+
+        Args:
+            post_id: 投稿ID
+
+        Returns:
+            投稿情報、存在しない場合は None
+        """
+        pass
+
+    @abstractmethod
     def get_profile(self, user_id: str) -> ProfileResponse:
         """
         プロフィールを取得

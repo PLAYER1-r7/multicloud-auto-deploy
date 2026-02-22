@@ -143,6 +143,28 @@ class GcpBackend(BackendBase):
             logger.error(f"Error creating post in Firestore: {e}")
             raise
 
+    def get_post(self, post_id: str):
+        """Firestoreから投稿を1件取得"""
+        try:
+            doc = self.db.collection(self.posts_collection).document(post_id).get()
+            if not doc.exists:
+                return None
+            item = doc.to_dict()
+            from app.models import Post
+            return Post(
+                postId=post_id,
+                userId=item["userId"],
+                nickname=item.get("nickname"),
+                content=item["content"],
+                tags=item.get("tags") or [],
+                createdAt=item["createdAt"],
+                updatedAt=item.get("updatedAt"),
+                imageUrls=item.get("imageUrls") or [],
+            )
+        except Exception as e:
+            logger.error(f"Error getting post {post_id}: {e}")
+            raise
+
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
         """Firestoreから投稿を削除"""
         try:

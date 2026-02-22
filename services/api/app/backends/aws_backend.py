@@ -165,6 +165,33 @@ class AwsBackend(BackendBase):
             logger.error(f"Error creating post: {e}")
             raise
 
+    def get_post(self, post_id: str):
+        """投稿を1件取得 (PostIdIndex で検索)"""
+        try:
+            response = self.table.query(
+                IndexName="PostIdIndex",
+                KeyConditionExpression="postId = :postId",
+                ExpressionAttributeValues={":postId": post_id},
+            )
+            items = response.get("Items", [])
+            if not items:
+                return None
+            item = items[0]
+            raw_urls = item.get("imageKeys") or item.get("imageUrls") or []
+            return Post(
+                postId=item["postId"],
+                userId=item["userId"],
+                nickname=item.get("nickname"),
+                content=item["content"],
+                tags=item.get("tags", []),
+                createdAt=item["createdAt"],
+                updatedAt=item.get("updatedAt"),
+                imageUrls=self._resolve_image_urls(raw_urls),
+            )
+        except Exception as e:
+            logger.error(f"Error getting post {post_id}: {e}")
+            raise
+
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
         """投稿を削除 (DynamoDB DeleteItem)"""
         try:

@@ -194,9 +194,30 @@ class LocalBackend(BackendBase):
             "createdAt": created_at.isoformat(),
         }
     
-    def delete_post(self, post_id: str, user: UserInfo) -> dict:
-        """投稿を削除"""
+    def get_post(self, post_id: str):
+        """投稿を1件取得"""
         with self._get_connection() as conn:
+            from sqlalchemy import text
+            result = conn.execute(
+                text("SELECT * FROM posts WHERE id = :post_id"),
+                {"post_id": post_id}
+            )
+            row = result.mappings().fetchone()
+            if not row:
+                return None
+            from app.models import Post
+            return Post(
+                postId=row["id"],
+                userId=row["user_id"],
+                nickname=row.get("nickname"),
+                content=row["content"],
+                tags=row.get("tags") or [],
+                createdAt=row["createdAt"],
+                updatedAt=row.get("updatedAt"),
+                imageUrls=row.get("imageUrls") or [],
+            )
+
+    def delete_post(self, post_id: str, user: UserInfo) -> dict:
             # 投稿の所有者確認
             check_query = text("SELECT user_id FROM posts WHERE id = :post_id")
             result = conn.execute(check_query, {"post_id": post_id})
