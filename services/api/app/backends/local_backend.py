@@ -273,16 +273,54 @@ class LocalBackend(BackendBase):
             "tags": body.tags,
             "createdAt": now,
         }
+    
+    def get_post(self, post_id: str):
+        """投稿を1件取得"""
+        with self._get_connection() as conn:
+            from sqlalchemy import text
+            result = conn.execute(
+                text("SELECT * FROM posts WHERE id = :post_id"),
+                {"post_id": post_id}
+            )
+            row = result.mappings().fetchone()
+            if not row:
+                return None
+            from app.models import Post
+            return Post(
+                postId=row["id"],
+                userId=row["user_id"],
+                nickname=row.get("nickname"),
+                content=row["content"],
+                tags=row.get("tags") or [],
+                createdAt=row["createdAt"],
+                updatedAt=row.get("updatedAt"),
+                imageUrls=row.get("imageUrls") or [],
+            )
 
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
-        """投稿を削除"""
-        item = self._get_post_item_by_id(post_id)
-        if item["userId"] != user.user_id and not user.is_admin:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only delete your own posts",
-            )
-        self.table.delete_item(Key={"PK": _POSTS_PK, "SK": item["SK"]})
+            # 投稿の所有者確認
+            check_query = text("SELECT user_id FROM posts WHERE id = :post_id")
+            result = conn.execute(check_query, {"post_id": post_id})
+            row = result.fetchone()
+            
+            if not row:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Post not found",
+                )
+            
+            owner_id = row[0]
+            if owner_id != user.user_id and not user.is_admin:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only delete your own posts",
+                )
+            
+            # 削除実行
+            delete_query = text("DELETE FROM posts WHERE id = :post_id")
+            conn.execute(delete_query, {"post_id": post_id})
+            conn.commit()
+        
         return {"message": "Post deleted successfully"}
 
     def get_post(self, post_id: str) -> dict:
