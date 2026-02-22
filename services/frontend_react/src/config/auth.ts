@@ -13,8 +13,25 @@ const PROVIDER = (import.meta.env.VITE_AUTH_PROVIDER as AuthProvider) || "none";
 /* ---- Cognito (AWS) ---- */
 const COGNITO_DOMAIN = import.meta.env.VITE_COGNITO_DOMAIN || "";
 const COGNITO_CLIENT_ID = import.meta.env.VITE_COGNITO_CLIENT_ID || "";
-const COGNITO_REDIRECT = import.meta.env.VITE_COGNITO_REDIRECT_URI || "";
-const COGNITO_LOGOUT = import.meta.env.VITE_COGNITO_LOGOUT_URI || "";
+// VITE_COGNITO_REDIRECT_URI / VITE_COGNITO_LOGOUT_URI はフォールバック用。
+// 実行時は window.location.origin を使い、アクセス元ドメイン（CloudFront or カスタムドメイン）
+// に合わせた redirect_uri を動的に生成する。
+const COGNITO_REDIRECT_FALLBACK = import.meta.env.VITE_COGNITO_REDIRECT_URI || "";
+const COGNITO_LOGOUT_FALLBACK  = import.meta.env.VITE_COGNITO_LOGOUT_URI || "";
+
+function cognitoRedirectUri(): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/sns/auth/callback`;
+  }
+  return COGNITO_REDIRECT_FALLBACK;
+}
+
+function cognitoLogoutUri(): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/sns/`;
+  }
+  return COGNITO_LOGOUT_FALLBACK;
+}
 
 /* ---- Azure AD ---- */
 const AZURE_TENANT = import.meta.env.VITE_AZURE_TENANT_ID || "";
@@ -35,12 +52,13 @@ const SCOPE = "openid+email+profile";
 /* ---- Derived URLs ---- */
 export function getLoginUrl(): string {
   if (PROVIDER === "aws" && COGNITO_DOMAIN && COGNITO_CLIENT_ID) {
+    const redirectUri = encodeURIComponent(cognitoRedirectUri());
     return (
       `https://${COGNITO_DOMAIN}/login` +
       `?client_id=${COGNITO_CLIENT_ID}` +
       `&response_type=token` +
       `&scope=${SCOPE}` +
-      `&redirect_uri=${COGNITO_REDIRECT}`
+      `&redirect_uri=${redirectUri}`
     );
   }
   if (PROVIDER === "azure" && AZURE_TENANT && AZURE_CLIENT) {
@@ -62,13 +80,13 @@ export function getLogoutUrl(postLogoutUri: string): string {
   if (
     PROVIDER === "aws" &&
     COGNITO_DOMAIN &&
-    COGNITO_CLIENT_ID &&
-    COGNITO_LOGOUT
+    COGNITO_CLIENT_ID
   ) {
+    const logoutUri = encodeURIComponent(cognitoLogoutUri());
     return (
       `https://${COGNITO_DOMAIN}/logout` +
       `?client_id=${COGNITO_CLIENT_ID}` +
-      `&logout_uri=${COGNITO_LOGOUT}`
+      `&logout_uri=${logoutUri}`
     );
   }
   if (PROVIDER === "azure" && AZURE_TENANT) {
