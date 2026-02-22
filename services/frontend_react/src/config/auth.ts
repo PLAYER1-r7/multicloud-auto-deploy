@@ -16,8 +16,9 @@ const COGNITO_CLIENT_ID = import.meta.env.VITE_COGNITO_CLIENT_ID || "";
 // VITE_COGNITO_REDIRECT_URI / VITE_COGNITO_LOGOUT_URI はフォールバック用。
 // 実行時は window.location.origin を使い、アクセス元ドメイン（CloudFront or カスタムドメイン）
 // に合わせた redirect_uri を動的に生成する。
-const COGNITO_REDIRECT_FALLBACK = import.meta.env.VITE_COGNITO_REDIRECT_URI || "";
-const COGNITO_LOGOUT_FALLBACK  = import.meta.env.VITE_COGNITO_LOGOUT_URI || "";
+const COGNITO_REDIRECT_FALLBACK =
+  import.meta.env.VITE_COGNITO_REDIRECT_URI || "";
+const COGNITO_LOGOUT_FALLBACK = import.meta.env.VITE_COGNITO_LOGOUT_URI || "";
 
 function cognitoRedirectUri(): string {
   if (typeof window !== "undefined") {
@@ -77,11 +78,7 @@ export function getLoginUrl(): string {
 }
 
 export function getLogoutUrl(postLogoutUri: string): string {
-  if (
-    PROVIDER === "aws" &&
-    COGNITO_DOMAIN &&
-    COGNITO_CLIENT_ID
-  ) {
+  if (PROVIDER === "aws" && COGNITO_DOMAIN && COGNITO_CLIENT_ID) {
     const logoutUri = encodeURIComponent(cognitoLogoutUri());
     return (
       `https://${COGNITO_DOMAIN}/logout` +

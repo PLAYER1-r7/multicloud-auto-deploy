@@ -55,7 +55,7 @@ class CreatePostBody(BaseModel):
 
     content: str = Field(..., min_length=1, max_length=10000)
     is_markdown: bool = Field(False, alias="isMarkdown")
-    image_keys: Optional[list[str]] = Field(None, alias="imageKeys", max_length=10)
+    image_keys: Optional[list[str]] = Field(None, alias="imageKeys", max_length=16)
     tags: Optional[list[str]] = Field(None, max_length=10)
 
     model_config = {"populate_by_name": True}
