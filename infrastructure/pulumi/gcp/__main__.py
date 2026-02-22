@@ -401,6 +401,9 @@ managed_ssl_cert = gcp.compute.ManagedSslCertificate(
         depends_on=enabled_services,
         # No delete_before_replace: Pulumi creates new cert first, updates the
         # HTTPS proxy, then deletes the old cert (avoids "in use" errors).
+        # ignore_changes on name/managed: prevents certificate replacement
+        # when ssl_domain_hash changes (old cert is "in use" and cannot be deleted).
+        ignore_changes=["name", "managed"],
     ),
 )
 
