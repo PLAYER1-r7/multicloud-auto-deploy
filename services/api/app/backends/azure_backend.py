@@ -312,7 +312,11 @@ class AzureBackend(BackendBase):
                 else None
             ) or "image/jpeg"
             ext = ext_map.get(ct, "jpg")
-            blob_name = f"images/{user.user_id}/{uuid.uuid4()}.{ext}"
+            # blob_name must NOT include the container name prefix.
+            # URL is built as: https://account.blob.core.windows.net/{container}/{blob_name}
+            # Container is already self.images_container (e.g. "images"), so
+            # prefixing blob_name with "images/" would produce /images/images/...
+            blob_name = f"{user.user_id}/{uuid.uuid4()}.{ext}"
             sas_token = generate_blob_sas(
                 account_name=account,
                 container_name=container,
