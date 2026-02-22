@@ -88,6 +88,8 @@ jobs:
           echo "cf_domain=$(pulumi stack output cloudfront_domain)"          >> $GITHUB_OUTPUT
           echo "cognito_domain=$(pulumi stack output cognito_domain)"        >> $GITHUB_OUTPUT
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)"  >> $GITHUB_OUTPUT
+          echo "user_pool_id=$(pulumi stack output cognito_user_pool_id)"    >> $GITHUB_OUTPUT
+          echo "custom_domain=$(pulumi stack output custom_domain 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           AWS_REGION: ${{ env.AWS_REGION }}
@@ -112,6 +114,7 @@ jobs:
           # Cognito hosted UI domain (e.g. simple-sns-production.auth.ap-northeast-1.amazoncognito.com)
           VITE_COGNITO_DOMAIN: ${{ steps.pulumi.outputs.cognito_domain }}.auth.${{ env.AWS_REGION }}.amazoncognito.com
           VITE_COGNITO_CLIENT_ID: ${{ steps.pulumi.outputs.cognito_client_id }}
+          # フォールバック用: window.location.origin で動的に上書きされるため CloudFront URL で良い
           VITE_COGNITO_REDIRECT_URI: https://${{ steps.pulumi.outputs.cf_domain }}/sns/auth/callback
           VITE_COGNITO_LOGOUT_URI: https://${{ steps.pulumi.outputs.cf_domain }}/sns/
         run: |
@@ -132,6 +135,36 @@ jobs:
             --content-type "text/html"
           echo "✅ Deployed to s3://${BUCKET}/sns/"
 
+      - name: Update Cognito Callback URLs
+        run: |
+          CF_DOMAIN="${{ steps.pulumi.outputs.cf_domain }}"
+          CUSTOM_DOMAIN="${{ steps.pulumi.outputs.custom_domain }}"
+          USER_POOL_ID="${{ steps.pulumi.outputs.user_pool_id }}"
+          CLIENT_ID="${{ steps.pulumi.outputs.cognito_client_id }}"
+
+          # ベース URL リスト (常に含める)
+          CALLBACK_URLS="http://localhost:8080/callback https://localhost:8080/callback http://localhost:5173/sns/auth/callback https://${CF_DOMAIN}/sns/auth/callback"
+          LOGOUT_URLS="http://localhost:8080/ https://localhost:8080/ http://localhost:5173/sns/ https://${CF_DOMAIN}/sns/"
+
+          # カスタムドメインが設定されている場合は追加
+          if [[ -n "$CUSTOM_DOMAIN" ]]; then
+            CALLBACK_URLS="$CALLBACK_URLS https://${CUSTOM_DOMAIN}/sns/auth/callback"
+            LOGOUT_URLS="$LOGOUT_URLS https://${CUSTOM_DOMAIN}/sns/"
+            echo "🌐 Custom domain callback URLs added: https://${CUSTOM_DOMAIN}/sns/auth/callback"
+          fi
+
+          aws cognito-idp update-user-pool-client \
+            --user-pool-id "$USER_POOL_ID" \
+            --client-id "$CLIENT_ID" \
+            --region ${{ env.AWS_REGION }} \
+            --allowed-o-auth-flows "code" "implicit" \
+            --allowed-o-auth-scopes "email" "openid" "profile" \
+            --allowed-o-auth-flows-user-pool-client \
+            --callback-urls $CALLBACK_URLS \
+            --logout-urls $LOGOUT_URLS \
+            --no-cli-pager
+          echo "✅ Cognito callback URLs updated"
+
       - name: Invalidate CloudFront Cache
         run: |
           CF_ID="${{ steps.pulumi.outputs.cf_id }}"
@@ -144,5 +177,8 @@ jobs:
       - name: Deployment Summary
         run: |
           echo "✅ Deployed to: https://${{ steps.pulumi.outputs.cf_domain }}/sns/"
+          if [[ -n "${{ steps.pulumi.outputs.custom_domain }}" ]]; then
+            echo "   Custom Domain: https://${{ steps.pulumi.outputs.custom_domain }}/sns/"
+          fi
           echo "   API URL   : ${{ steps.pulumi.outputs.api_url }}"
           echo "   S3 Bucket : ${{ steps.pulumi.outputs.bucket }}/sns/"
