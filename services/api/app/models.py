@@ -61,6 +61,17 @@ class CreatePostBody(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class UpdatePostBody(BaseModel):
+    """投稿更新リクエスト（全フィールドオプション）"""
+
+    content: Optional[str] = Field(None, min_length=1, max_length=10000)
+    is_markdown: Optional[bool] = Field(None, alias="isMarkdown")
+    image_keys: Optional[list[str]] = Field(None, alias="imageKeys")
+    tags: Optional[list[str]] = Field(None, max_length=10)
+
+    model_config = {"populate_by_name": True}
+
+
 class ListPostsResponse(BaseModel):
     """投稿一覧レスポンス"""
 
