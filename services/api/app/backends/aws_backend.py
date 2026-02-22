@@ -34,6 +34,30 @@ class AwsBackend(BackendBase):
             f"Initialized AwsBackend with table={self.table_name}, bucket={self.bucket_name}"
         )
 
+    def _key_to_presigned_url(self, key: str) -> str:
+        """S3キーを署名付きGET URLに変換 (1時間有効)"""
+        return self.s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self.bucket_name, "Key": key},
+            ExpiresIn=3600,
+        )
+
+    def _resolve_image_urls(self, keys: list) -> list[str]:
+        """キーリストを署名付きURLに変換 (既にURLの場合はそのまま返す)"""
+        if not self.bucket_name or not keys:
+            return []
+        result = []
+        for k in keys:
+            if k and isinstance(k, str):
+                if k.startswith("http"):
+                    result.append(k)
+                else:
+                    try:
+                        result.append(self._key_to_presigned_url(k))
+                    except Exception as e:
+                        logger.warning(f"Failed to generate presigned URL for {k}: {e}")
+        return result
+
     def list_posts(
         self,
         limit: int,
@@ -61,15 +85,17 @@ class AwsBackend(BackendBase):
 
             posts = []
             for item in response.get("Items", []):
+                raw_urls = item.get("imageKeys") or item.get("imageUrls") or []
                 posts.append(
                     Post(
                         postId=item["postId"],
                         userId=item["userId"],
+                        nickname=item.get("nickname"),
                         content=item["content"],
                         tags=item.get("tags", []),
                         createdAt=item["createdAt"],
                         updatedAt=item.get("updatedAt"),
-                        imageUrls=item.get("imageUrls", []),
+                        imageUrls=self._resolve_image_urls(raw_urls),
                     )
                 )
 
@@ -90,27 +116,49 @@ class AwsBackend(BackendBase):
             post_id = str(uuid.uuid4())
             now = datetime.now(timezone.utc).isoformat()
 
+            # プロフィールからnicknameを取得
+            nickname = None
+            try:
+                profile_item = self.table.get_item(
+                    Key={"PK": "PROFILES", "SK": user.user_id}
+                ).get("Item")
+                if profile_item:
+                    nickname = profile_item.get("nickname")
+            except Exception as e:
+                logger.warning(f"Failed to fetch nickname for {user.user_id}: {e}")
+
+            image_keys = body.image_keys if body.image_keys else []
+
             item = {
                 "PK": "POSTS",
                 "SK": now + "#" + post_id,  # タイムスタンプ + UUID
                 "postId": post_id,
                 "userId": user.user_id,
+                "nickname": nickname,
                 "content": body.content,
                 "tags": body.tags if body.tags else [],
                 "createdAt": now,
                 "updatedAt": now,
-                "imageUrls": body.image_keys if body.image_keys else [],
+                "imageKeys": image_keys,  # 生のS3キーを保存
             }
 
             self.table.put_item(Item=item)
 
+            presigned_urls = self._resolve_image_urls(image_keys)
+
             return {
-                "post_id": post_id,
-                "user_id": user.user_id,
+                "postId": post_id,
+                "userId": user.user_id,
+                "nickname": nickname,
                 "content": body.content,
                 "tags": item["tags"],
+                "createdAt": now,
+                "imageUrls": presigned_urls,
+                # snake_case aliases
+                "post_id": post_id,
+                "user_id": user.user_id,
                 "created_at": now,
-                "image_urls": item["imageUrls"],
+                "image_urls": presigned_urls,
             }
 
         except Exception as e:
