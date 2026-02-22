@@ -85,6 +85,11 @@ jobs:
           VITE_BASE_PATH: /sns/
           # GCP_API_ENDPOINT secret: e.g. https://multicloud-auto-deploy-staging-api-xxxx-an.a.run.app
           VITE_API_URL: ${{ secrets.GCP_API_ENDPOINT }}
+          VITE_AUTH_PROVIDER: firebase
+          VITE_FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
         run: |
           npm run build
           echo "✅ Build complete ($(du -sh dist | cut -f1))"
