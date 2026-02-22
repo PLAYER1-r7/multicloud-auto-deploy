@@ -243,9 +243,17 @@ jobs:
           rm -rf .deployment
           mkdir -p .deployment
 
-          # Install dependencies to deployment directory (Azure-specific only)
-          echo "Installing Azure-specific dependencies..."
-          pip install --target .deployment --no-cache-dir -r requirements-azure.txt
+          # Install dependencies using Docker with the EXACT same platform/Python as Azure Functions
+          # Azure Functions Flex Consumption uses Python 3.11 on linux/amd64.
+          # The GitHub Actions runner may be a different arch (e.g., arm64), so using the runner's
+          # native pip would produce wrong .so binaries (e.g., cpython-312-aarch64 instead of
+          # cpython-311-x86_64). Docker ensures correct platform + Python version.
+          echo "Installing Azure-specific dependencies (linux/amd64 python:3.11)..."
+          docker run --rm --platform linux/amd64 \
+            -v "$(pwd):/work" \
+            python:3.11-slim \
+            pip install --target /work/.deployment --no-cache-dir -q \
+              -r /work/requirements-azure.txt
 
           # Aggressive cleanup of unnecessary files
           echo "Cleaning up unnecessary files..."
@@ -255,7 +263,8 @@ jobs:
           find .deployment -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
           find .deployment -type f -name "*.pyc" -delete 2>/dev/null || true
           find .deployment -type f -name "*.pyo" -delete 2>/dev/null || true
-          find .deployment -type f -name "*.so" -delete 2>/dev/null || true
+          # NOTE: *.so files must NOT be deleted — pydantic_core and other C extensions
+          # ship as compiled .so shared libraries and are required at runtime.
 
           # Remove test and documentation files
           find .deployment -type f -name "test_*.py" -delete 2>/dev/null || true
@@ -271,6 +280,14 @@ jobs:
 
           # Clean up app __pycache__
           find .deployment/app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+          # Verify correct .so architecture
+          SO_FILE=$(find .deployment -name '_pydantic_core*.so' | head -1)
+          if [ -n "$SO_FILE" ]; then
+            echo "✅ pydantic_core: $(basename $SO_FILE)"
+          else
+            echo "⚠️  pydantic_core .so not found — package may be missing"
+          fi
 
           # Create ZIP package with maximum compression
           cd .deployment
