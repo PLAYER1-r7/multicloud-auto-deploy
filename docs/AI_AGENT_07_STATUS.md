@@ -1,7 +1,7 @@
 # 07 — Environment Status
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-22 (Staging: React SPA + API all 3 clouds working, 18/18 integration tests PASS)
+> Last verified: 2026-02-22 (Staging: Simple SNS React SPA + API all 3 clouds working; GCP deep links fixed via EXTERNAL_MANAGED + customErrorResponsePolicy)
 
 ---
 
@@ -90,7 +90,9 @@ Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7
 | Global IP                | `34.117.111.182` (static reserved: `multicloud-auto-deploy-staging-cdn-ip`)     | ✅     |
 | LB Forwarding Rule (HTTP)| `multicloud-auto-deploy-staging-cdn-lb` — **EXTERNAL_MANAGED**, port 80         | ✅     |
 | LB Forwarding Rule (HTTPS)| `multicloud-auto-deploy-staging-cdn-lb-https` — **EXTERNAL_MANAGED**, port 443 | ✅     |
-| URL Map                  | `multicloud-auto-deploy-staging-cdn-urlmap` — `customErrorResponsePolicy` 設定済 | ✅     |
+| URL Map                  | `multicloud-auto-deploy-staging-cdn-urlmap-v2` — `customErrorResponsePolicy` 設定済 (EXTERNAL_MANAGED) | ✅     |
+| HTTP Proxy               | `multicloud-auto-deploy-staging-cdn-http-proxy-v2`                              | ✅     |
+| HTTPS Proxy              | `multicloud-auto-deploy-staging-cdn-https-proxy-v2`                             | ✅     |
 | SSL Certificate          | `multicloud-auto-deploy-staging-ssl-cert-v2` — ACTIVE (staging.gcp.ashnova.jp) | ✅     |
 | GCS Bucket (frontend)    | `ashnova-multicloud-auto-deploy-staging-frontend`                               | ✅     |
 | GCS Bucket (uploads)     | `ashnova-multicloud-auto-deploy-staging-uploads` (public read)                  | ✅     |
@@ -101,13 +103,13 @@ Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7
 
 **Verified working (2026-02-22)**:
 
-- `GET /sns/` → React SPA (Vite) ✅
-- `GET /sns/feed`, `GET /sns/profile` → SPA deep link (EXTERNAL_MANAGED + customErrorResponsePolicy, 2026-02-22 対応) ✅
+- `GET /sns/` → **Simple SNS** React SPA (title: "Simple SNS", dark mode, auth) ✅
+- `GET /sns/feed`, `GET /sns/profile` → SPA deep link HTTP 200 (EXTERNAL_MANAGED + customErrorResponsePolicy) ✅
+- LB migrated EXTERNAL → **EXTERNAL_MANAGED** (v2 urlmap/proxies): Pulumi state updated ✅
 - `GET /posts` → Firestore (`posts` collection, 2026-02-22 実装) ✅
 - API Health `/health` → 200 ✅
 - GCP Firestore バックエンド (`gcp_backend.py`) 実装完了: post CRUD + profile + upload URLs ✅
 - Cloud Run `multicloud-auto-deploy-staging-api` → v2 イメージ (`linux/amd64`) デプロイ済み ✅
-- LB を EXTERNAL → **EXTERNAL_MANAGED** へ移行済み (2026-02-22): CDN キャッシュ無効化で有効化 ✅
 
 **Known limitations**:
 
@@ -222,6 +224,19 @@ GCP API CRUD:     ✅  POST→GET(20 msgs)→DELETE 200
 GCP React SPA:    ✅  HTTP 200  vite.svg, /sns/assets/index-eZZwVqtD.js
 
 Result: 9/9 passed 🎉
+```
+
+#### Simple SNS + GCP Deep Links Test Results (2026-02-22)
+
+```
+AWS:   /sns/ → 200 ✅  /sns/feed → 200 ✅  /sns/profile → 200 ✅  title="Simple SNS" ✅
+Azure: /sns/ → 200 ✅  /sns/feed → 200 ✅  /sns/profile → 200 ✅  title="Simple SNS" ✅
+GCP:   /sns/ → 200 ✅  /sns/feed → 200 ✅  /sns/profile → 200 ✅  title="Simple SNS" ✅
+       HTTPS /sns/feed → 200 ✅  (EXTERNAL_MANAGED + customErrorResponsePolicy)
+
+API:   GCP /posts?limit=5&tag=test → 500 ❌ (known bug: tag filter)
+       All clouds: GET /posts/{nonexistent} → 405 ❌ (known bug: routing)
+       All other API tests: PASS ✅
 ```
 
 ---
