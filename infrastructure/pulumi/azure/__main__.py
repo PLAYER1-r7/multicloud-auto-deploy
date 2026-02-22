@@ -418,6 +418,7 @@ spa_rewrite_rule = azure.cdn.Rule(
             ),
         ),
         # Condition 3: NOT a static file (has no known extension)
+        # Azure AFD limits match_values to 10 per condition
         azure.cdn.DeliveryRuleUrlPathConditionArgs(
             name="UrlPath",
             parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
@@ -427,7 +428,6 @@ spa_rewrite_rule = azure.cdn.Rule(
                 match_values=[
                     ".html", ".js", ".css", ".png", ".svg",
                     ".ico", ".json", ".woff", ".woff2", ".map",
-                    ".txt", ".webp", ".jpg", ".jpeg",
                 ],
                 transforms=["Lowercase"],
             ),
