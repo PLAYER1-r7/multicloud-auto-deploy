@@ -30,6 +30,7 @@
 | AWS Production SNS Fix (2026-02-21)   | [AWS_PRODUCTION_SNS_FIX_REPORT.md](AWS_PRODUCTION_SNS_FIX_REPORT.md) | Fixed `localhost:8000` fallback — empty API_BASE_URL caused by unset GitHub Secret in prod |
 | Azure Simple-SNS Fix (2026-02-21)     | [AZURE_SNS_FIX_REPORT.md](AZURE_SNS_FIX_REPORT.md)                   | Investigation and fix for intermittent AFD /sns/\* 502 errors                              |
 | AWS Production HTTPS Fix (2026-02-21) | [AWS_HTTPS_FIX_REPORT.md](AWS_HTTPS_FIX_REPORT.md)                   | Fixed ERR_CERT_COMMON_NAME_INVALID caused by missing CloudFront alias / ACM certificate    |
+| AWS Simple-SNS Fix (2026-02-22)       | [AWS_SNS_FIX_REPORT_20260222.md](AWS_SNS_FIX_REPORT_20260222.md)     | Fixed 12 bugs: auth/JWT, profile, images, nickname, presigned URLs, MIME, VITE_BASE_PATH  |
 
 ---
 
@@ -93,4 +94,34 @@ Q: I don't know what to work on next
    the secret is absent (e.g., production environment). The CI/CD workflows
    (`deploy-aws.yml`, `deploy-frontend-web-aws.yml`) now read all values directly from
    `pulumi stack output`. Do not revert this pattern.
-   Details: [AWS_PRODUCTION_SNS_FIX_REPORT.md](AWS_PRODUCTION_SNS_FIX_REPORT.md)
+8. **AWS staging frontend MUST be built with `VITE_BASE_PATH=/sns/`**
+   The site is deployed under `/sns/` on CloudFront. Building with the default `base: "/"` causes
+   all JS/CSS assets to reference `/assets/...` which 404s, and CloudFront serves `index.html` with
+   `Content-Type: text/html` — resulting in a MIME type error that breaks the entire app.
+
+   ```bash
+   cd services/frontend_react
+   set -a && source .env.aws.staging && set +a
+   VITE_BASE_PATH=/sns/ npm run build
+   ```
+
+   The CloudFront custom error pages must also point to `/sns/index.html` (not `/index.html`).
+   Details: [AWS_SNS_FIX_REPORT_20260222.md](AWS_SNS_FIX_REPORT_20260222.md#bug-11)
+
+9. **S3 images bucket is private — always return presigned GET URLs, never raw S3 keys**
+   `multicloud-auto-deploy-staging-images` has all public access blocked. `aws_backend.py` must
+   call `_resolve_image_urls()` to convert stored S3 keys (`imageKeys`) to presigned GET URLs
+   (1-hour expiry) before returning them to the frontend. Storing `imageUrls` directly breaks
+   after 1 hour and cannot be regenerated.
+   Details: [AWS_SNS_FIX_REPORT_20260222.md](AWS_SNS_FIX_REPORT_20260222.md#bug-7)
+
+10. **Cognito id_token standalone: set `verify_at_hash: False`**
+    When the client sends only the `id_token` (not the companion `access_token`), the JWT library
+    cannot verify `at_hash`. The verifier in `jwt_verifier.py` must be called with
+    `verify_at_hash: False`. Reverting this setting will break all authenticated API calls.
+    Details: [AWS_SNS_FIX_REPORT_20260222.md](AWS_SNS_FIX_REPORT_20260222.md#bug-5)
+
+11. **AI Agent file operations: avoid creating many files simultaneously**
+    Creating or editing a large number of files in a single tool invocation batch may cause
+    network errors or timeouts. Work incrementally — a few files at a time —
+    and verify each step before proceeding.

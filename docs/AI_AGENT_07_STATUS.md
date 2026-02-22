@@ -1,7 +1,7 @@
 # 07 — Environment Status
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-21 (All 3 clouds: React SPA migration complete + production integration tests 9/9 PASS + custom domain HTTPS fully operational)
+> Last verified: 2026-02-22 (AWS staging: all 12 bugs fixed and deployed — see [AWS_SNS_FIX_REPORT_20260222.md](AWS_SNS_FIX_REPORT_20260222.md))
 
 ---
 
@@ -34,19 +34,35 @@ API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 | Cognito               | Pool `ap-northeast-1_AoDxOvCib` / Client `1k41lqkds4oah55ns8iod30dv2` | ✅     |
 | WAF                   | WebACL attached to CloudFront                                         | ✅     |
 
-**Confirmed working (verified 2026-02-20)**:
+**Confirmed working (verified 2026-02-22)**:
 
 - Cognito login → `/sns/auth/callback` → session cookie set ✅
-- Post feed, create/edit/delete post ✅
+- Post feed, create post with up to 10 images ✅
+- Images display correctly (S3 presigned GET URLs, 1-hour expiry) ✅
+- `GET /posts/{post_id}` individual post view ✅
 - Profile page (nickname, avatar, bio) ✅
-- Image upload: S3 presigned URLs, up to 16 files per post ✅
+- Nickname stored and displayed in post list ✅
+- Image upload: S3 presigned URLs, limit enforced server-side via `MAX_IMAGES_PER_POST` ✅
+- `GET /limits` endpoint (no auth) returns `{"maxImagesPerPost": 10}` ✅
 - Logout → Cognito-hosted logout → redirect back to `/sns/` ✅
 - CI/CD pipeline: env vars set correctly on every push ✅
+- Frontend bundle built with `VITE_BASE_PATH=/sns/` — asset paths correct ✅
+- CloudFront custom error pages: `/sns/index.html` (403+404) ✅
+
+**Current frontend bundle**: `index-BNBGmVGx.js` (uploaded 2026-02-22)
+
+**Build command for AWS staging**:
+```bash
+cd services/frontend_react
+set -a && source .env.aws.staging && set +a
+VITE_BASE_PATH=/sns/ npm run build
+```
 
 **Known limitations**:
 
 - Production stack shares staging resources (independent prod stack not yet deployed).
 - WAF rule set not tuned.
+- `DELETE /posts` may fail on SNS Unsubscribe call (not tested in this session).
 
 ---
 

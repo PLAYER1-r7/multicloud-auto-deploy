@@ -1,7 +1,7 @@
 # 10 — Remaining Tasks
 
 > Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last updated: 2026-02-21  
+> Last updated: 2026-02-22  
 > **AI Agent Note**: Update this file when a task is resolved.
 
 ---
@@ -10,7 +10,7 @@
 
 ```
 Infrastructure (Pulumi):    ✅ All 3 clouds staging+production deployed
-AWS API:                    ✅ Operational
+AWS API:                    ✅ Fully operational (12 bugs fixed 2026-02-22, see AWS_SNS_FIX_REPORT_20260222.md)
 GCP API (staging):          ✅ CRUD verified
 GCP API (production):       ✅ CRUD verified
 GCP Firebase Auth:          ✅ Google Sign-In + image upload/display verified (2026-02-21)
@@ -33,7 +33,7 @@ Integration tests:          ⚠️ Not yet run (blockers resolved)
 | 0   | **Resolve Azure AFD intermittent 502 errors**  | AFD returns 502 immediately on ~50% of `/sns/*` requests. Likely caused by stale TCP connections on Dynamic Consumption plan. | [AZURE_SNS_FIX_REPORT.md](AZURE_SNS_FIX_REPORT.md#issue-2) |
 | 1   | **Run integration tests (≥80% pass)**      | All backend blockers resolved. Run full suite on AWS/GCP/Azure and confirm.                           | [INTEGRATION_TESTS_GUIDE.md](INTEGRATION_TESTS_GUIDE.md)                           |
 | 2   | **Verify Azure `PUT /posts` endpoint**     | End-to-end PUT routing on Azure has not been confirmed. Test and fix.                                 | —                                                                                  |
-| 3   | **Confirm DynamoDB `PostIdIndex` GSI**     | GSI presence not confirmed. `GET /posts/{id}` may return 500.                                         | [RB-09](AI_AGENT_08_RUNBOOKS.md#rb-09-verify--create-the-dynamodb-postidindex-gsi) |
+| 3   | **~~Confirm DynamoDB `PostIdIndex` GSI~~** ✅ | GSI confirmed. `GET /posts/{id}` implemented and working (2026-02-22). | [RB-09](AI_AGENT_08_RUNBOOKS.md#rb-09-verify--create-the-dynamodb-postidindex-gsi) |
 | 4   | **Fix `SNS:Unsubscribe` permission error** | `DELETE /posts` fails on SNS Unsubscribe call. Add `sns:Unsubscribe` to IAM or redesign the flow.     | —                                                                                  |
 | 5   | **GCP HTTPS**                              | GCP frontend is HTTP only. Requires `TargetHttpsProxy` + Managed SSL certificate.                     | [09_SECURITY](AI_AGENT_09_SECURITY.md)                                             |
 | 6   | **Enable Azure WAF**                       | WAF policy not applied to Front Door Standard SKU.                                                    | [09_SECURITY](AI_AGENT_09_SECURITY.md)                                             |
