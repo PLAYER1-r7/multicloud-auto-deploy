@@ -382,7 +382,7 @@ frontdoor_origin = azure.cdn.AFDOrigin(
 # ========================================
 spa_rule_set = azure.cdn.RuleSet(
     "spa-rule-set",
-    rule_set_name=f"{project_name}-{stack}-spa-rs",
+    rule_set_name="SpaRuleSet",
     profile_name=frontdoor_profile.name,
     resource_group_name=resource_group.name,
 )
