@@ -267,18 +267,34 @@ class AzureBackend(BackendBase):
             logger.error(f"Error updating profile {user.user_id}: {e}")
             raise
 
-    def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
+    def generate_upload_urls(
+        self,
+        count: int,
+        user: UserInfo,
+        content_types: Optional[list[str]] = None,
+    ) -> list[dict[str, str]]:
         """Azure Blob Storage の SAS URLを生成"""
         if not _blob_available:
             raise ImportError("azure-storage-blob is required")
 
+        ext_map = {
+            "image/jpeg": "jpg", "image/jpg": "jpg",
+            "image/png": "png", "image/gif": "gif",
+            "image/webp": "webp", "image/heic": "heic", "image/heif": "heif",
+        }
         urls = []
         account = self.storage_account
         key = self.storage_key
         container = self.images_container
 
-        for _ in range(count):
-            blob_name = f"images/{user.user_id}/{uuid.uuid4()}.jpg"
+        for i in range(count):
+            ct = (
+                content_types[i]
+                if content_types and i < len(content_types)
+                else None
+            ) or "image/jpeg"
+            ext = ext_map.get(ct, "jpg")
+            blob_name = f"images/{user.user_id}/{uuid.uuid4()}.{ext}"
             sas_token = generate_blob_sas(
                 account_name=account,
                 container_name=container,
@@ -286,11 +302,11 @@ class AzureBackend(BackendBase):
                 account_key=key,
                 permission=BlobSasPermissions(write=True, create=True),
                 expiry=datetime.now(timezone.utc) + timedelta(seconds=settings.presigned_url_expiry),
-                content_type="image/jpeg",
+                content_type=ct,
             )
             upload_url = (
                 f"https://{account}.blob.core.windows.net/{container}/{blob_name}?{sas_token}"
             )
-            urls.append({"uploadUrl": upload_url, "key": blob_name})
+            urls.append({"url": upload_url, "key": blob_name})
 
         return urls

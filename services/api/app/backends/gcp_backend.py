@@ -233,22 +233,38 @@ class GcpBackend(BackendBase):
             logger.error(f"Error updating profile {user.user_id} in Firestore: {e}")
             raise
 
-    def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
+    def generate_upload_urls(
+        self,
+        count: int,
+        user: UserInfo,
+        content_types: Optional[list[str]] = None,
+    ) -> list[dict[str, str]]:
         """Cloud Storage の署名付きURLを生成"""
+        ext_map = {
+            "image/jpeg": "jpg", "image/jpg": "jpg",
+            "image/png": "png", "image/gif": "gif",
+            "image/webp": "webp", "image/heic": "heic", "image/heif": "heif",
+        }
         try:
             bucket = self.storage_client.bucket(self.bucket_name)
             urls = []
 
-            for _ in range(count):
-                key = f"images/{user.user_id}/{uuid.uuid4()}.jpg"
+            for i in range(count):
+                ct = (
+                    content_types[i]
+                    if content_types and i < len(content_types)
+                    else None
+                ) or "image/jpeg"
+                ext = ext_map.get(ct, "jpg")
+                key = f"images/{user.user_id}/{uuid.uuid4()}.{ext}"
                 blob = bucket.blob(key)
                 upload_url = blob.generate_signed_url(
                     version="v4",
                     expiration=timedelta(seconds=settings.presigned_url_expiry),
                     method="PUT",
-                    content_type="image/jpeg",
+                    content_type=ct,
                 )
-                urls.append({"uploadUrl": upload_url, "key": key})
+                urls.append({"url": upload_url, "key": key})
 
             return urls
 

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
+from typing import Optional, Tuple  # noqa: F401
 from app.models import Post, CreatePostBody, ProfileResponse, ProfileUpdateRequest
 from app.auth import UserInfo
 
@@ -91,15 +91,21 @@ class BackendBase(ABC):
         pass
     
     @abstractmethod
-    def generate_upload_urls(self, count: int, user: UserInfo) -> list[dict[str, str]]:
+    def generate_upload_urls(
+        self,
+        count: int,
+        user: UserInfo,
+        content_types: Optional[list[str]] = None,
+    ) -> list[dict[str, str]]:
         """
         画像アップロード用の署名付きURLを生成
         
         Args:
             count: URL数
             user: ユーザー情報
+            content_types: 各ファイルのContent-Type
             
         Returns:
-            [{"uploadUrl": "...", "key": "..."}, ...]
+            [{"url": "...", "key": "..."}, ...]
         """
         pass

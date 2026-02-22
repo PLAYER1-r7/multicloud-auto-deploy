@@ -111,7 +111,14 @@ class ProfileUpdateRequest(BaseModel):
 class UploadUrlsRequest(BaseModel):
     """アップロードURL生成リクエスト"""
 
-    count: int = Field(..., ge=1, le=10)
+    count: int = Field(..., ge=1, le=16)
+    content_types: Optional[list[str]] = Field(
+        None,
+        alias="contentTypes",
+        description="各ファイルのContent-Type (image/jpeg, image/png 等)",
+    )
+
+    model_config = {"populate_by_name": True}
 
 
 class UploadUrlsResponse(BaseModel):
