@@ -1,0 +1,22 @@
+{
+    "CorsConfiguration": {
+        "AllowCredentials": false,
+        "AllowHeaders": [
+            "x-requested-with",
+            "authorization",
+            "content-type"
+        ],
+        "AllowMethods": [
+            "POST",
+            "PUT",
+            "OPTIONS",
+            "GET",
+            "DELETE"
+        ],
+        "AllowOrigins": [
+            "*"
+        ],
+        "MaxAge": 3600
+    },
+    "ApiEndpoint": "https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com"
+}

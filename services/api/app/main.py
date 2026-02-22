@@ -1,15 +1,10 @@
-"""
-Multi-cloud Simple SNS API (v1.2.4)
-CORS-hardened version for production deployment - AWS Lambda Layer permissions fix
-"""
-
-import logging
-from contextlib import asynccontextmanager
-from typing import Optional
-
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi import Query, Depends
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+import logging
 
 from app.auth import UserInfo, get_current_user
 from app.backends import get_backend
@@ -82,6 +77,24 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.include_router(posts.router)
 app.include_router(uploads.router)
 app.include_router(profile.router)
+
+
+# ========================================
+# バリデーションエラー詳細ログ (422デバッグ用)
+# ========================================
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """422バリデーションエラー時にリクエストボディをログに記録"""
+    try:
+        body = await request.body()
+        body_str = body.decode("utf-8", errors="replace") if body else "(empty)"
+    except Exception:
+        body_str = "(could not read body)"
+    logger.error(
+        f"422 ValidationError on {request.method} {request.url.path}: "
+        f"errors={exc.errors()} body={body_str[:500]}"
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 # ========================================
