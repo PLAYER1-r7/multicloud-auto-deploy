@@ -24,13 +24,14 @@
 
 ### Fix Reports
 
-| Report                                | File                                                                 | Summary                                                                                    |
-| ------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| AWS Simple-SNS Fix (2026-02-20)       | [AWS_SNS_FIX_REPORT.md](AWS_SNS_FIX_REPORT.md)                       | Fixed Lambda env vars / CI/CD race condition / logout 404                                  |
-| AWS Production SNS Fix (2026-02-21)   | [AWS_PRODUCTION_SNS_FIX_REPORT.md](AWS_PRODUCTION_SNS_FIX_REPORT.md) | Fixed `localhost:8000` fallback — empty API_BASE_URL caused by unset GitHub Secret in prod |
-| Azure Simple-SNS Fix (2026-02-21)     | [AZURE_SNS_FIX_REPORT.md](AZURE_SNS_FIX_REPORT.md)                   | Investigation and fix for intermittent AFD /sns/\* 502 errors                              |
-| AWS Production HTTPS Fix (2026-02-21) | [AWS_HTTPS_FIX_REPORT.md](AWS_HTTPS_FIX_REPORT.md)                   | Fixed ERR_CERT_COMMON_NAME_INVALID caused by missing CloudFront alias / ACM certificate    |
-| AWS Simple-SNS Fix (2026-02-22)       | [AWS_SNS_FIX_REPORT_20260222.md](AWS_SNS_FIX_REPORT_20260222.md)     | Fixed 12 bugs: auth/JWT, profile, images, nickname, presigned URLs, MIME, VITE_BASE_PATH  |
+| Report                                | File                                                                 | Summary                                                                                              |
+| ------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| AWS Simple-SNS Fix (2026-02-20)       | [AWS_SNS_FIX_REPORT.md](AWS_SNS_FIX_REPORT.md)                       | Fixed Lambda env vars / CI/CD race condition / logout 404                                            |
+| AWS Production SNS Fix (2026-02-21)   | [AWS_PRODUCTION_SNS_FIX_REPORT.md](AWS_PRODUCTION_SNS_FIX_REPORT.md) | Fixed `localhost:8000` fallback — empty API_BASE_URL caused by unset GitHub Secret in prod           |
+| Azure Simple-SNS Fix (2026-02-21)     | [AZURE_SNS_FIX_REPORT.md](AZURE_SNS_FIX_REPORT.md)                   | Investigation and fix for intermittent AFD /sns/\* 502 errors                                        |
+| AWS Production HTTPS Fix (2026-02-21) | [AWS_HTTPS_FIX_REPORT.md](AWS_HTTPS_FIX_REPORT.md)                   | Fixed ERR_CERT_COMMON_NAME_INVALID caused by missing CloudFront alias / ACM certificate              |
+| AWS Simple-SNS Fix (2026-02-22)       | [AWS_SNS_FIX_REPORT_20260222.md](AWS_SNS_FIX_REPORT_20260222.md)     | Fixed 12 bugs: auth/JWT, profile, images, nickname, presigned URLs, MIME, VITE_BASE_PATH             |
+| GCP Simple-SNS Fix (2026-02-23)       | [GCP_SNS_FIX_REPORT_20260223.md](GCP_SNS_FIX_REPORT_20260223.md)     | Fixed 6 bugs: CORS origins, Firebase domain, /limits 404, COOP header, signed URLs, IndentationError |
 
 ---
 
@@ -125,3 +126,42 @@ Q: I don't know what to work on next
     Creating or editing a large number of files in a single tool invocation batch may cause
     network errors or timeouts. Work incrementally — a few files at a time —
     and verify each step before proceeding.
+
+12. **GCP Cloud Function rebuild always requires `--platform linux/amd64` Docker build**
+    The dev container runs on aarch64. GCP Cloud Functions runs on x86_64. Always build Python
+    packages with `docker run --rm --platform linux/amd64 python:3.12-slim` before packaging.
+    Using natively installed packages (aarch64) will cause import errors at runtime (`.so` mismatch).
+    Details: [GCP_SNS_FIX_REPORT_20260223.md](GCP_SNS_FIX_REPORT_20260223.md#bug-g3)
+
+13. **GCP Cloud Build requires `main.py` to exist in the zip source**
+    Even when `--entry-point` specifies another function name (e.g. `handler`), Cloud Build
+    fails with `missing main.py` if the file is absent. Always copy `function.py` as `main.py`:
+
+    ```bash
+    cp services/api/function.py /tmp/deploy_gcp/.deployment/main.py
+    ```
+
+    Details: [GCP_SNS_FIX_REPORT_20260223.md](GCP_SNS_FIX_REPORT_20260223.md#bug-g3)
+
+14. **GCP Cloud Functions: `generate_signed_url()` requires `service_account_email` + `access_token`**
+    Cloud Functions / Cloud Run uses Compute Engine credentials (access token only, no private key).
+    Calling `blob.generate_signed_url()` without extra args raises `AttributeError: you need a private key`.
+    Fix: pass `service_account_email=settings.gcp_service_account` and `access_token=credentials.token`
+    to trigger the IAM `signBlob` API path. The SA also needs `roles/iam.serviceAccountTokenCreator`
+    (already in Pulumi as `compute-sa-token-creator`).
+    The SA email is set via env var `GCP_SERVICE_ACCOUNT` on the Cloud Run service.
+    Details: [GCP_SNS_FIX_REPORT_20260223.md](GCP_SNS_FIX_REPORT_20260223.md#bug-g5)
+
+15. **GCP Firebase authorized domains must be updated via Identity Toolkit API (not Firebase CLI)**
+    When a new custom domain is added, `staging.gcp.ashnova.jp` must be registered in Firebase Auth.
+    Use the Identity Toolkit Admin v2 PATCH endpoint. The header `x-goog-user-project: PROJECT_ID`
+    is required — omitting it returns `403 PERMISSION_DENIED` even with a valid admin token.
+    This step is automated in `deploy-gcp.yml` (`Update Firebase Authorized Domains`).
+    Details: [GCP_SNS_FIX_REPORT_20260223.md](GCP_SNS_FIX_REPORT_20260223.md#bug-g2)
+
+16. **GCP CDN must send `Cross-Origin-Opener-Policy: same-origin-allow-popups` for Firebase popup login**
+    Without this header, `signInWithPopup` cannot call `popup.closed` and repeatedly emits COOP warnings.
+    The header is set as a CDN backend bucket custom response header (in Pulumi and via gcloud).
+    After changing it, invalidate CDN cache: `gcloud compute url-maps invalidate-cdn-cache ... --path "/*"`.
+    Note: one COOP warning per popup open is unavoidable (from Google's own OAuth page). Login still works.
+    Details: [GCP_SNS_FIX_REPORT_20260223.md](GCP_SNS_FIX_REPORT_20260223.md#bug-g4)
