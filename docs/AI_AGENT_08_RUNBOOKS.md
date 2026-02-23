@@ -9,7 +9,7 @@
 
 ```bash
 # 1. Package app code only (ZIP)
-cd /workspaces/ashnova/multicloud-auto-deploy/services/api
+cd /workspaces/multicloud-auto-deploy/services/api
 rm -rf .build && mkdir -p .build/package
 cp -r app .build/package/
 cp index.py .build/package/
@@ -47,7 +47,7 @@ aws logs tail /aws/lambda/multicloud-auto-deploy-staging-api \
 ## [RB-03] Manually deploy the React frontend (AWS)
 
 ```bash
-cd /workspaces/ashnova/multicloud-auto-deploy/services/frontend_react
+cd /workspaces/multicloud-auto-deploy/services/frontend_react
 npm ci
 
 # Build with API URL; base="/sns/" is already fixed in vite.config.ts
@@ -69,7 +69,7 @@ aws cloudfront create-invalidation \
 
 ```bash
 # Upload static-site/ to bucket root
-aws s3 sync /workspaces/ashnova/multicloud-auto-deploy/static-site/ \
+aws s3 sync /workspaces/multicloud-auto-deploy/static-site/ \
   s3://multicloud-auto-deploy-staging-frontend/ \
   --delete --region ap-northeast-1
 
@@ -83,7 +83,7 @@ aws cloudfront create-invalidation \
 ## [RB-05] Manually deploy Azure Functions
 
 ```bash
-cd /workspaces/ashnova/multicloud-auto-deploy/services/api
+cd /workspaces/multicloud-auto-deploy/services/api
 
 # Create deployment package
 pip install -r requirements-azure.txt -t .deploy-azure/
@@ -105,7 +105,7 @@ az functionapp deployment source config-zip \
 ## [RB-06] Manually deploy GCP Cloud Run
 
 ```bash
-cd /workspaces/ashnova/multicloud-auto-deploy/services/api
+cd /workspaces/multicloud-auto-deploy/services/api
 
 # Zip source for Cloud Run build
 zip -r gcp-cloudrun-source.zip app/ function.py requirements.txt requirements-gcp.txt Dockerfile
@@ -126,18 +126,18 @@ gcloud run deploy multicloud-auto-deploy-staging-api \
 
 ```bash
 # AWS
-cd /workspaces/ashnova/multicloud-auto-deploy/infrastructure/pulumi/aws
+cd /workspaces/multicloud-auto-deploy/infrastructure/pulumi/aws
 pulumi login
 pulumi stack select staging
 pulumi up --yes
 
 # Azure
-cd /workspaces/ashnova/multicloud-auto-deploy/infrastructure/pulumi/azure
+cd /workspaces/multicloud-auto-deploy/infrastructure/pulumi/azure
 pulumi stack select staging
 pulumi up --yes
 
 # GCP
-cd /workspaces/ashnova/multicloud-auto-deploy/infrastructure/pulumi/gcp
+cd /workspaces/multicloud-auto-deploy/infrastructure/pulumi/gcp
 pulumi stack select staging
 pulumi up --yes
 ```
@@ -189,7 +189,7 @@ aws dynamodb update-table \
 Use this when you need to deploy a quick code fix to the API Lambda without waiting for CI.
 
 ```bash
-cd /workspaces/ashnova/multicloud-auto-deploy/services/api
+cd /workspaces/multicloud-auto-deploy/services/api
 
 # 1. Update .build/package with latest source
 cp -r app index.py .build/package/
@@ -246,7 +246,7 @@ TOKEN=$(aws cognito-idp initiate-auth \
 > Run from inside the Dev Container.
 
 ```bash
-cd /workspaces/ashnova/multicloud-auto-deploy
+cd /workspaces/multicloud-auto-deploy
 
 # Start infrastructure
 docker compose up -d

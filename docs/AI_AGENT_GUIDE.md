@@ -70,7 +70,7 @@ Q: How do I set up for the first time?
 Q: I want to modify code
   → services/api/**        : see 04_API + 08_RUNBOOKS (RB-01 for Lambda, RB-07 for GCP)
   → infrastructure/**      : see 05_INFRA
-  → .github/workflows/     : see 06_CICD  ⚠️ edit at /workspaces/ashnova/.github/workflows/
+  → .github/workflows/     : see 06_CICD  ⚠️ edit at `.github/workflows/` (repo root = this workspace)
   → static-site/**         : see 03_ARCHITECTURE (Static Site section)
   → services/frontend_react: see 03_ARCHITECTURE + Rule 7 (VITE_BASE_PATH)
 
@@ -97,22 +97,22 @@ Q: CI/CD is failing
 Full details are in [AI_AGENT_00_CRITICAL_RULES.md](AI_AGENT_00_CRITICAL_RULES.md).
 This table is a one-line reminder for each rule.
 
-| Rule | Topic            | Summary                                                                                  |
-| ---- | ---------------- | ---------------------------------------------------------------------------------------- |
-| 0    | Language         | All docs, code, and commits must be written in English                                   |
-| 1    | File operations  | Edit a few files at a time — large batches risk network timeout / silent corruption      |
-| 2    | ARM vs x86       | Dev container is aarch64; always use `--platform linux/amd64` Docker for deploy builds   |
-| 3    | .github location | Workflows live at `/workspaces/ashnova/.github/workflows/` — not visible here            |
-| 4    | main branch      | Push to `main` = immediate production deployment                                         |
-| 5    | AUTH_DISABLED    | Must always be `false` — was accidentally `true` in a past incident                      |
-| 6    | Env vars source  | Lambda/Cloud Run env vars from `pulumi stack output`, never from GitHub Secrets          |
-| 7    | Vite base path   | AWS frontend must be built with `VITE_BASE_PATH=/sns/`                                   |
-| 8    | S3 images        | Images bucket is private — always return presigned GET URLs, never raw S3 keys           |
-| 9    | CloudFront cert  | Set `customDomain` + `acmCertificateArn` in Pulumi config before `pulumi up` on prod-AWS |
-| 10   | Cognito JWT      | Call `jwt_verifier.py` with `verify_at_hash=False` when only `id_token` is sent          |
-| 11   | GCP main.py      | Always include `main.py` (copy of `function.py`) in the GCP deployment ZIP               |
-| 12   | GCP signed URLs  | Pass `service_account_email` + `access_token` to `generate_signed_url()`                 |
-| 13   | Firebase domains | Register new domains via Identity Toolkit API with `x-goog-user-project` header          |
+| Rule | Topic           | Summary                                                                                  |
+| ---- | --------------- | ---------------------------------------------------------------------------------------- |
+| 0    | Language        | All docs, code, and commits must be written in English                                   |
+| 1    | File operations | Edit a few files at a time — large batches risk network timeout / silent corruption      |
+| 2    | ARM vs x86      | Dev container is aarch64; always use `--platform linux/amd64` Docker for deploy builds   |
+| 3    | main branch     | Push to `main` = immediate production deployment                                         |
+| 4    | AUTH_DISABLED   | Must always be `false` — was accidentally `true` in a past incident                      |
+| 5    | Env vars source | Lambda/Cloud Run env vars from `pulumi stack output`, never from GitHub Secrets          |
+| 6    | Vite base path  | AWS frontend must be built with `VITE_BASE_PATH=/sns/`                                   |
+| 7    | S3 images       | Images bucket is private — always return presigned GET URLs, never raw S3 keys           |
+| 8    | CloudFront cert | Set `customDomain` + `acmCertificateArn` in Pulumi config before `pulumi up` on prod-AWS |
+| 9    | Cognito JWT     | Call `jwt_verifier.py` with `verify_at_hash=False` when only `id_token` is sent          |
+| 10   | GCP main.py     | Always include `main.py` (copy of `function.py`) in the GCP deployment ZIP               |
+| 11   | GCP signed URLs | Pass `service_account_email` + `access_token` to `generate_signed_url()`                 |
+| 12   | Firebase domains | Register new domains via Identity Toolkit API with `x-goog-user-project` header         |
+| 13   | GCP COOP header | CDN must send `Cross-Origin-Opener-Policy: same-origin-allow-popups`                     |
 | 14   | GCP COOP header  | CDN must send `Cross-Origin-Opener-Policy: same-origin-allow-popups`                     |
 
 ### Project Quick-Facts

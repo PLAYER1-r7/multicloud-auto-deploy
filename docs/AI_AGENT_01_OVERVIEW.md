@@ -161,7 +161,7 @@ docker run --platform linux/amd64 -v "$(pwd):/workspace" python:3.12-slim bash -
 
 ```bash
 # Run inside Dev Container
-cd /workspaces/ashnova/multicloud-auto-deploy
+cd /workspaces/multicloud-auto-deploy
 docker compose up -d          # API (uvicorn) + DynamoDB Local + MinIO + frontend_web
 curl http://localhost:8000/health   # Verify API
 open http://localhost:3000/sns/     # Open SNS app

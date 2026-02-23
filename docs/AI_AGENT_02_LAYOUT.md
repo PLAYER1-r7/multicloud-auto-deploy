@@ -9,7 +9,7 @@
 ```
 multicloud-auto-deploy/
 │
-├── .github/  ← lives in ashnova/ (git root). Not visible when multicloud-auto-deploy/ is opened, but CI works correctly
+├── .github/                              ← ★ GitHub Actions workflows (workspace root = repo root)
 │   └── workflows/                    ← ★ REAL workflows — CI reads ONLY these
 │       ├── deploy-aws.yml
 │       ├── deploy-azure.yml
@@ -123,24 +123,21 @@ multicloud-auto-deploy/
 | Change AWS infrastructure   | `infrastructure/pulumi/aws/__main__.py`              |
 | Change Azure infrastructure | `infrastructure/pulumi/azure/__main__.py`            |
 | Change GCP infrastructure   | `infrastructure/pulumi/gcp/__main__.py`              |
-| Edit a CI/CD workflow       | `.github/workflows/*.yml` (repo root only)           |
+| Edit a CI/CD workflow       | `.github/workflows/*.yml` (workspace root)           |
 | Edit frontend UI            | `services/frontend_react/src/`                       |
 | Edit landing pages          | `static-site/` (multicloud-auto-deploy/static-site/) |
 
 ---
 
-## ⚠️ Location of `.github/workflows/`
+## ⚠️ `.github/workflows/` Is at the Workspace Root
 
-When `multicloud-auto-deploy/` is opened in VS Code, the `.github/` folder is **not visible** in the tree.  
-Workflows exist only in the git repository root at `ashnova/.github/workflows/` (the copy inside mcad was deleted on 2026-02-21).
+The workflow files are in `.github/workflows/` at the root of this workspace.
+Edit them directly here — no need to navigate elsewhere.
 
 ```bash
-# To edit workflows, navigate to the git repository root
-cd /workspaces/ashnova
+# Edit workflows directly from the workspace root
 code .github/workflows/deploy-aws.yml
 ```
-
-See [11 — Workspace Migration](AI_AGENT_11_WORKSPACE_MIGRATION.md) for details.
 
 ---
 

@@ -8,7 +8,7 @@
 
 ## After Reading This Document
 
-Once you have read all 15 rules below, continue in this order:
+Once you have read all 14 rules below, continue in this order:
 
 ```
 1. AI_AGENT_01_OVERVIEW.md   ← what the project is, live endpoints, tech stack (5 min read)
@@ -80,31 +80,7 @@ deployment artifacts.
 
 ---
 
-## Rule 3 — `.github/workflows/` Lives in the `ashnova/` Repo Root, Not Here
-
-The GitHub Actions workflow files that CI actually reads are in:
-
-```
-/workspaces/ashnova/.github/workflows/
-```
-
-When VS Code is opened with `multicloud-auto-deploy/` as the workspace root, there is **no
-visible `.github/` folder** — but CI still runs. The `multicloud-auto-deploy/.github/`
-subdirectory was deleted on 2026-02-21 to eliminate the duplicate.
-
-**To edit any CI/CD workflow:**
-
-```bash
-cd /workspaces/ashnova
-# then edit .github/workflows/<name>.yml
-```
-
-Editing files inside `multicloud-auto-deploy/.github/` (if it ever reappears) has **zero
-effect** on CI.
-
----
-
-## Rule 4 — `main` Branch = Immediate Production Deployment
+## Rule 3 — `main` Branch = Immediate Production Deployment
 
 ```
 develop  →  staging
@@ -116,7 +92,7 @@ Always work on `develop` (or a feature branch), confirm staging is green, then m
 
 ---
 
-## Rule 5 — `AUTH_DISABLED` Must Always Be `false` in Staging and Production
+## Rule 4 — `AUTH_DISABLED` Must Always Be `false` in Staging and Production
 
 The environment variable `AUTH_DISABLED` must be `false` at all times. It was accidentally set
 to `true` in a past incident, silently allowing unauthenticated access to all API endpoints.
@@ -126,7 +102,7 @@ treat it as a critical bug and fix it immediately.
 
 ---
 
-## Rule 6 — Lambda / Cloud Run Env Vars Must Come from Pulumi Outputs, Not GitHub Secrets
+## Rule 5 — Lambda / Cloud Run Env Vars Must Come from Pulumi Outputs, Not GitHub Secrets
 
 A past bug caused silently empty `API_GATEWAY_ENDPOINT` values because the corresponding
 GitHub Secret did not exist in the production environment.
@@ -146,7 +122,7 @@ string, and the Lambda/Function starts up using a hardcoded fallback (often `loc
 
 ---
 
-## Rule 7 — AWS Staging Frontend Must Be Built with `VITE_BASE_PATH=/sns/`
+## Rule 6 — AWS Staging Frontend Must Be Built with `VITE_BASE_PATH=/sns/`
 
 The SNS React app is deployed to `s3://bucket/sns/`. Building without `VITE_BASE_PATH=/sns/`
 causes all JS/CSS assets to reference `/assets/...`, resulting in 404s. CloudFront then serves
@@ -163,7 +139,7 @@ CloudFront custom error pages must also point to `/sns/index.html`, not `/index.
 
 ---
 
-## Rule 8 — S3 Images Bucket Is Private: Always Return Presigned GET URLs
+## Rule 7 — S3 Images Bucket Is Private: Always Return Presigned GET URLs
 
 `multicloud-auto-deploy-staging-images` has all public access blocked. The backend
 must call `_resolve_image_urls()` before returning posts to the frontend. This converts stored
@@ -174,7 +150,7 @@ links after one hour.
 
 ---
 
-## Rule 9 — AWS Production CloudFront: Set Pulumi Config Before Any `pulumi up`
+## Rule 8 — AWS Production CloudFront: Set Pulumi Config Before Any `pulumi up`
 
 Without the following config, `pulumi up --stack production` will revert CloudFront to the
 default certificate, causing `NET::ERR_CERT_COMMON_NAME_INVALID` for all HTTPS visitors.
@@ -192,7 +168,7 @@ AWS stack.
 
 ---
 
-## Rule 10 — Cognito `id_token` Verification: Set `verify_at_hash: False`
+## Rule 9 — Cognito `id_token` Verification: Set `verify_at_hash: False`
 
 When the frontend sends only the `id_token` (without the companion `access_token`), the JWT
 library cannot compute or verify `at_hash`. The call to `jwt_verifier.py` must pass
@@ -202,7 +178,7 @@ See: `services/api/app/jwt_verifier.py`
 
 ---
 
-## Rule 11 — GCP: Always Copy `function.py` as `main.py` in the Deployment ZIP
+## Rule 10 — GCP: Always Copy `function.py` as `main.py` in the Deployment ZIP
 
 Cloud Build fails with `missing main.py` even when `--entry-point` names a different function.
 The fix is to include `main.py` in the deployment source:
@@ -216,7 +192,7 @@ Build to reject the source and the function will not be updated.
 
 ---
 
-## Rule 12 — GCP: `generate_signed_url()` Requires `service_account_email` + `access_token`
+## Rule 11 — GCP: `generate_signed_url()` Requires `service_account_email` + `access_token`
 
 Cloud Run and Cloud Functions use Compute Engine credentials (access token only — no private
 key). Calling `blob.generate_signed_url()` without the extra arguments raises:
@@ -241,7 +217,7 @@ service. The SA must also have `roles/iam.serviceAccountTokenCreator`.
 
 ---
 
-## Rule 13 — GCP: Firebase Authorized Domains Must Be Registered via Identity Toolkit API
+## Rule 12 — GCP: Firebase Authorized Domains Must Be Registered via Identity Toolkit API
 
 When a new Cloud Run URL or custom domain is added, it must be explicitly registered in
 Firebase Auth. Use the Identity Toolkit Admin v2 `PATCH` endpoint with the header
@@ -253,7 +229,7 @@ Do not remove or skip it.
 
 ---
 
-## Rule 14 — GCP: CDN Must Send `Cross-Origin-Opener-Policy: same-origin-allow-popups`
+## Rule 13 — GCP: CDN Must Send `Cross-Origin-Opener-Policy: same-origin-allow-popups`
 
 Without this response header, Firebase `signInWithPopup` cannot check `popup.closed`, causing
 repeated COOP warnings and potentially breaking the login flow in strict browser environments.
