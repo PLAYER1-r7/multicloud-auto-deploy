@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 try:
     from google.cloud import firestore, storage
+    import google.auth
+    import google.auth.transport.requests
+    from google.auth import iam as google_auth_iam
+    from google.oauth2 import service_account as google_service_account
     _gcp_available = True
 except ImportError:
     _gcp_available = False
@@ -40,6 +44,27 @@ class GcpBackend(BackendBase):
             f"posts={self.posts_collection}, profiles={self.profiles_collection}, "
             f"bucket={self.bucket_name}"
         )
+
+    def _get_signing_storage_client(self) -> "storage.Client":
+        """IAM署名を使ったストレージクライアントを返す。
+
+        Cloud Functions / Cloud Run 上では Compute Engine 認証情報しか持たず
+        private key がないため blob.generate_signed_url() が失敗する。
+        IAM Service Account Credentials API 経由で署名する signing_credentials を
+        代わりに使うことで、サービスアカウントキーなしで署名付きURLを生成できる。
+        """
+        credentials, project_id = google.auth.default()
+        auth_request = google.auth.transport.requests.Request()
+        credentials.refresh(auth_request)
+        sa_email = credentials.service_account_email
+        signer = google_auth_iam.Signer(auth_request, credentials, sa_email)
+        signing_credentials = google_service_account.Credentials(
+            signer=signer,
+            service_account_email=sa_email,
+            token_uri="https://oauth2.googleapis.com/token",
+            scopes=["https://www.googleapis.com/auth/devstorage.full_control"],
+        )
+        return storage.Client(credentials=signing_credentials, project=project_id)
 
     def _doc_to_post(self, doc) -> Post:
         """FirestoreドキュメントをPostモデルに変換"""
@@ -280,7 +305,8 @@ class GcpBackend(BackendBase):
             "image/webp": "webp", "image/heic": "heic", "image/heif": "heif",
         }
         try:
-            bucket = self.storage_client.bucket(self.bucket_name)
+            # generate_signed_url は private key が必要なため、IAM 署名クライアントを使用
+            bucket = self._get_signing_storage_client().bucket(self.bucket_name)
             urls = []
 
             for i in range(count):
