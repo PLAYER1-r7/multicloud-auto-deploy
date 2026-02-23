@@ -10,6 +10,7 @@
 
 | Section                      | File                                                                     | Status |
 | ---------------------------- | ------------------------------------------------------------------------ | ------ |
+| **00 — Critical Rules (read first)** | [AI_AGENT_00_CRITICAL.md](AI_AGENT_00_CRITICAL.md)             | ✅     |
 | 01 — Project Overview        | [AI_AGENT_01_OVERVIEW.md](AI_AGENT_01_OVERVIEW.md)                       | ✅     |
 | 02 — Repository Layout       | [AI_AGENT_02_LAYOUT.md](AI_AGENT_02_LAYOUT.md)                           | ✅     |
 | 03 — Architecture            | [AI_AGENT_03_ARCHITECTURE.md](AI_AGENT_03_ARCHITECTURE.md)               | ✅     |
