@@ -146,23 +146,15 @@ jobs:
             -o /tmp/fb_config.json
 
           # Build updated domains list (add custom domain if not already present)
-          python3 -c "
-import json, sys
-with open('/tmp/fb_config.json') as f:
-    data = json.load(f)
-if 'error' in data:
-    print('Error fetching config:', data['error']['message'])
-    sys.exit(1)
-domains = data.get('authorizedDomains', [])
-custom = '$CUSTOM_DOMAIN'
-if custom not in domains:
-    domains.append(custom)
-    print(f'Adding {custom} to authorized domains')
-else:
-    print(f'{custom} already registered')
-with open('/tmp/fb_patch.json', 'w') as f:
-    json.dump({'authorizedDomains': domains}, f)
-"
+          CURRENT_DOMAINS=$(jq -r '.authorizedDomains // [] | @json' /tmp/fb_config.json 2>/dev/null || echo "[]")
+          if echo "$CURRENT_DOMAINS" | grep -q "\"$CUSTOM_DOMAIN\""; then
+            echo "✅ $CUSTOM_DOMAIN already in Firebase authorized domains"
+            NEW_DOMAINS="$CURRENT_DOMAINS"
+          else
+            NEW_DOMAINS=$(echo "$CURRENT_DOMAINS" | jq --arg d "$CUSTOM_DOMAIN" '. + [$d]')
+            echo "➕ Adding $CUSTOM_DOMAIN to authorized domains"
+          fi
+          jq -n --argjson domains "$NEW_DOMAINS" '{"authorizedDomains": $domains}' > /tmp/fb_patch.json
 
           # Apply patch
           TOKEN=$(gcloud auth print-access-token)
@@ -173,17 +165,12 @@ with open('/tmp/fb_patch.json', 'w') as f:
             "https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config?updateMask=authorizedDomains" \
             -d @/tmp/fb_patch.json -o /tmp/fb_result.json
 
-          python3 -c "
-import json, sys
-with open('/tmp/fb_result.json') as f:
-    d = json.load(f)
-if 'error' in d:
-    print('❌ Error:', d['error']['message'])
-    sys.exit(1)
-print('✅ Firebase authorized domains updated:')
-for domain in d.get('authorizedDomains', []):
-    print(f'  - {domain}')
-"
+          if jq -e '.error' /tmp/fb_result.json > /dev/null 2>&1; then
+            echo "❌ Error: $(jq -r '.error.message' /tmp/fb_result.json)"
+            exit 1
+          fi
+          echo "✅ Firebase authorized domains updated:"
+          jq -r '.authorizedDomains[] | "  - " + .' /tmp/fb_result.json
 
       - name: Package Cloud Function
         run: |
