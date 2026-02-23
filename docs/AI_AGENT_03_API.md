@@ -6,20 +6,22 @@
 
 ## API Endpoints
 
-| Method     | Path                     | Auth | Description                                    |
-| ---------- | ------------------------ | ---- | ---------------------------------------------- |
-| GET        | `/`                      | ❌   | Root — cloud info                              |
-| GET        | `/health`                | ❌   | Health check                                   |
-| GET        | `/docs`                  | ❌   | Swagger UI                                     |
-| GET        | `/redoc`                 | ❌   | ReDoc                                          |
-| **GET**    | `/posts`                 | ❌   | List posts (pagination + tag filter supported) |
-| **GET**    | `/posts/{post_id}`       | ❌   | Get single post                                |
-| **POST**   | `/posts`                 | ✅   | Create post                                    |
-| **PUT**    | `/posts/{post_id}`       | ✅   | Update post (owner or admin)                   |
-| **DELETE** | `/posts/{post_id}`       | ✅   | Delete post (owner or admin)                   |
-| GET        | `/profile/{user_id}`     | ❌   | Get profile                                    |
-| PUT        | `/profile/{user_id}`     | ✅   | Update profile                                 |
-| POST       | `/uploads/presigned-url` | ✅   | Issue a presigned URL for image upload         |
+| Method     | Path                      | Auth | Description                                     |
+| ---------- | ------------------------- | ---- | ----------------------------------------------- |
+| GET        | `/`                       | ❌   | Root — cloud info                               |
+| GET        | `/health`                 | ❌   | Health check                                    |
+| GET        | `/limits`                 | ❌   | Upload/post limits (`maxImagesPerPost`)         |
+| GET        | `/docs`                   | ❌   | Swagger UI                                      |
+| GET        | `/redoc`                  | ❌   | ReDoc                                           |
+| **GET**    | `/posts`                  | ❌   | List posts (pagination + tag filter supported)  |
+| **GET**    | `/posts/{post_id}`        | ❌   | Get single post                                 |
+| **POST**   | `/posts`                  | ✅   | Create post                                     |
+| **PUT**    | `/posts/{post_id}`        | ✅   | Update post (owner or admin)                    |
+| **DELETE** | `/posts/{post_id}`        | ✅   | Delete post (owner or admin)                    |
+| GET        | `/profile/{user_id}`      | ❌   | Get profile                                     |
+| PUT        | `/profile/{user_id}`      | ✅   | Update profile                                  |
+| POST       | `/uploads/presigned-url`  | ✅   | Issue a presigned URL for image upload (single) |
+| POST       | `/uploads/presigned-urls` | ✅   | Issue presigned URLs for batch upload           |
 
 ---
 
@@ -31,10 +33,19 @@
 {
   "content": "string (1-10000)",
   "isMarkdown": false,
-  "imageKeys": ["key1", "key2"],
+  "imageKeys": ["key1", "key2"], // max 16 (server-enforced via MAX_IMAGES_PER_POST)
   "tags": ["tag1", "tag2"]
 }
 ```
+
+### GET /limits — Response
+
+```json
+{ "maxImagesPerPost": 16 }
+```
+
+The frontend fetches this on mount. `MAX_IMAGES_PER_POST` is an env var on the backend (default: 16).
+This is the canonical source — **do not hardcode** upload limits in the frontend.
 
 ### GET /posts — Response
 
@@ -76,6 +87,34 @@
 | `limit`     | int (1-50) | 20      | Number of items to return |
 | `nextToken` | string     | null    | Pagination token          |
 | `tag`       | string     | null    | Tag filter                |
+
+> **GCP note**: `generate_signed_url()` requires `service_account_email` + `access_token`
+> (IAM `signBlob` API path) because Compute Engine credentials do not include a private key.
+> See Rule 11 in `AI_AGENT_00_CRITICAL_RULES.md`.
+
+### POST /uploads/presigned-urls — Request Body
+
+```json
+{
+  "count": 3, // number of files (ge=1, le=100; actual limit via /limits)
+  "contentTypes": ["image/jpeg", "image/png", "image/webp"] // one per file
+}
+```
+
+### POST /uploads/presigned-urls — Response
+
+```json
+{
+  "urls": [
+    { "uploadUrl": "https://...signed-url...", "key": "uploads/uuid.jpg" },
+    ...
+  ]
+}
+```
+
+> **GCP note**: `generate_signed_url()` requires `service_account_email` + `access_token`
+> (IAM `signBlob` API path) because Compute Engine credentials do not include a private key.
+> See Rule 11 in `AI_AGENT_00_CRITICAL_RULES.md`.
 
 ---
 

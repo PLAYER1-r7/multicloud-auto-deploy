@@ -43,14 +43,21 @@ class AwsBackend(BackendBase):
         )
 
     def _resolve_image_urls(self, keys: list) -> list[str]:
-        """キーリストを署名付きURLに変換 (既にURLの場合はそのまま返す)"""
+        """キーリストを署名付きURLに変換 (既にURLの場合はそのまま返す)
+
+        セキュリティ: http:// URL は Mixed Content 警告の原因になるためスキップする。
+        https:// URL のみそのまま返し、S3キーはプリサイン済み HTTPS URL に変換する。
+        """
         if not self.bucket_name or not keys:
             return []
         result = []
         for k in keys:
             if k and isinstance(k, str):
-                if k.startswith("http"):
+                if k.startswith("https://"):
                     result.append(k)
+                elif k.startswith("http://"):
+                    # HTTP URL は Mixed Content 警告を引き起こすためスキップ
+                    logger.warning(f"Skipping insecure HTTP image URL (mixed content): {k[:80]}")
                 else:
                     try:
                         result.append(self._key_to_presigned_url(k))

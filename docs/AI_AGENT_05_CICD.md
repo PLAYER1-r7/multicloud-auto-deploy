@@ -154,13 +154,23 @@ gh run watch <run-id>
 
 ## Past CI Bugs Fixed (watch for recurrence)
 
-| Bug                                        | Symptom                                         | Fix                                                           |
-| ------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------- |
-| Workflow file duplication                  | Editing subdirectory only → not reflected in CI | Edit root `.github/workflows/`                                |
-| `deploy-landing-gcp.yml` auth method       | `workload_identity_provider` (secret not set)   | Changed to `credentials_json: ${{ secrets.GCP_CREDENTIALS }}` |
-| `deploy-landing-aws.yml` auth method       | `role-to-assume` (secret not set)               | Changed to `aws-access-key-id` + `aws-secret-access-key`      |
-| Frontend overwrote landing page            | `dist/` synced to bucket root                   | Changed to sync `dist/` under `sns/` prefix                   |
-| AWS/Azure staging had `AUTH_DISABLED=true` | Auth remained disabled on deployment            | Removed conditional; always set `AUTH_DISABLED=false`         |
+| Bug                                           | Symptom                                                                | Fix                                                                                                   |
+| --------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Workflow file duplication                     | Editing subdirectory only → not reflected in CI                        | Edit root `.github/workflows/`                                                                        |
+| `deploy-landing-gcp.yml` auth method          | `workload_identity_provider` (secret not set)                          | Changed to `credentials_json: ${{ secrets.GCP_CREDENTIALS }}`                                         |
+| `deploy-landing-aws.yml` auth method          | `role-to-assume` (secret not set)                                      | Changed to `aws-access-key-id` + `aws-secret-access-key`                                              |
+| Frontend overwrote landing page               | `dist/` synced to bucket root                                          | Changed to sync `dist/` under `sns/` prefix                                                           |
+| AWS/Azure staging had `AUTH_DISABLED=true`    | Auth remained disabled on deployment                                   | Removed conditional; always set `AUTH_DISABLED=false`                                                 |
+| GCP URLMap `Error 412: Invalid fingerprint`   | Pulumi state out of sync with GCP resource                             | Added `pulumi refresh --yes --skip-preview` before `pulumi up` in `deploy-gcp.yml`                    |
+| GCP Cloud Build `missing main.py`             | Cloud Build rejects source even when `--entry-point` is specified      | Copy `services/api/function.py` as `main.py` inside the deployment ZIP                                |
+| Azure `ModuleNotFoundError: pulumi_azuread`   | `pulumi-azuread` accidentally deleted from `requirements.txt`          | Restore `pulumi-azuread>=6.0.0,<7.0.0` in `infrastructure/pulumi/azure/requirements.txt`              |
+| Azure `ModuleNotFoundError: monitoring`       | `monitoring.py` existed in `main` but not in `develop`                 | Add `infrastructure/pulumi/{aws,azure,gcp}/monitoring.py` to `develop`                                |
+| Azure FC1: wrong `az functionapp create`      | `--consumption-plan-location` creates Y1 Dynamic → stale TCP 502 AFD   | Use `--flexconsumption-location` to create FC1 FlexConsumption                                        |
+| GCP `Error 409: uploads-bucket exists`        | Pulumi tried to create a bucket that already existed in GCP            | Add `pulumi import` step for the pre-existing bucket before `pulumi up`                               |
+| GCP `ManagedSslCertificate Error 400: in use` | SSL cert name hash changed between branches; GCP refused deletion      | Add `ignore_changes=["name", "managed"]` to cert resource + `pulumi import` step                      |
+| Firebase Auth: new domain not authorized      | `signInWithPopup` fails — domain not in Firebase authorized domains    | `deploy-gcp.yml` runs `Update Firebase Authorized Domains` step after Pulumi outputs are read         |
+| Azure dead CI steps (SSR Lambda)              | Old `frontend_web` Lambda/S3 steps ran after React SPA migration       | Removed 168 dead lines from `deploy-aws.yml`, `deploy-azure.yml`, `deploy-gcp.yml` (commit `1ae65f5`) |
+| AWS `ResourceConflictException` race          | `update-function-code` issued while Pulumi's config update in progress | Add `aws lambda wait function-updated` before AND after code/config updates                           |
 
 ---
 
@@ -171,12 +181,12 @@ gh run watch <run-id>
 
 ### Component List and Initial Versions
 
-| Component           | Initial Version | Reason                                                             |
-| ------------------- | --------------- | ------------------------------------------------------------------ |
-| `aws-static-site`   | `1.0.0`         | Stable and operational                                             |
-| `azure-static-site` | `0.9.0`         | Intermittent AFD `/sns/*` 502 not yet resolved                     |
-| `gcp-static-site`   | `1.0.0`         | Stable and operational (HTTPS not configured is a remaining issue) |
-| `simple-sns`        | `1.0.0`         | React SNS app, deployed to all three clouds                        |
+| Component           | Initial Version | Reason                                                |
+| ------------------- | --------------- | ----------------------------------------------------- |
+| `aws-static-site`   | `1.0.0`         | Stable and operational                                |
+| `azure-static-site` | `1.0.0`         | AFD 502 resolved (FC1 FlexConsumption, 2026-02-25)    |
+| `gcp-static-site`   | `1.0.0`         | Stable and operational (staging HTTPS not configured) |
+| `simple-sns`        | `1.0.0`         | React SNS app, deployed to all three clouds           |
 
 ### Version Increment Rules
 

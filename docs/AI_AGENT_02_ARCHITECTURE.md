@@ -12,20 +12,24 @@ User
   ├─ [AWS]   CloudFront ──► S3 (React SPA: landing + SNS pages)  ← static
   │         API Gateway v2 ──► Lambda (Python 3.12) ──► DynamoDB
   │
-  ├─ [Azure] Front Door ─┬─ /sns/* ──► Azure Functions frontend-web (Python FastAPI)
-  │                       └─ /*     ──► Blob Storage $web (landing)
+  ├─ [Azure] Front Door ─┬─ /sns/* ──► Blob Storage $web/sns/  (React SPA ← static)
+  │                       └─ /*     ──► Blob Storage $web (landing ← static)
   │         Azure Functions func ──► Cosmos DB (Serverless)
   │
-  └─ [GCP]   Cloud LB ─┬─ /sns/* ──► Cloud Run frontend-web (Python FastAPI + Jinja2)
-                        └─ /*     ──► GCS (landing)
+  └─ [GCP]   Cloud CDN ─┬─ /sns/* ──► GCS bucket /sns/  (React SPA ← static)
+                        └─ /*     ──► GCS (landing ← static)
              Cloud Run api ──► Firestore
 ```
 
-> ⚠️ **Frontend architecture inconsistency**: AWS uses a React SPA (static S3) for the SNS
-> pages, while Azure and GCP still serve the SNS app from a Python FastAPI server
-> (`services/frontend_web`). The original plan was Python-on-Lambda for both frontend and
-> backend, but Lambda cannot render HTML. AWS was migrated to React first;
-> Azure and GCP remain on the server-side Python implementation.
+> **Frontend architecture**: All 3 clouds now serve the SNS app as a **static React SPA**
+> deployed to object storage (S3 / Blob Storage / GCS) and served via CDN. The Python
+> `services/frontend_web` SSR service is **superseded** and no longer in the CDN path.
+> React SPA workflows: `deploy-frontend-web-{aws,azure,gcp}.yml`
+> SPA routing (rewrite `/sns/*` → `/sns/index.html`):
+>
+> - AWS: CloudFront Function `spa-sns-rewrite-{stack}`
+> - Azure: AFD RuleSet `SpaRuleSet` + URL Rewrite action
+> - GCP: CDN backend bucket serves GCS; `/sns/*` path rule removed from URL map (falls through to GCS)
 
 ---
 
@@ -47,12 +51,16 @@ bucket-root/
 
 **CI deploy destinations**:
 
-| Content       | AWS                            | Azure                                   | GCP                               |
-| ------------- | ------------------------------ | --------------------------------------- | --------------------------------- |
-| Landing pages | `s3://bucket/`                 | `$web/`                                 | `gs://bucket/`                    |
-| SNS pages     | `s3://bucket/sns/` (React SPA) | Azure Functions `frontend-web` (Python) | Cloud Run `frontend-web` (Python) |
+| Content       | AWS                            | Azure                   | GCP                            |
+| ------------- | ------------------------------ | ----------------------- | ------------------------------ |
+| Landing pages | `s3://bucket/`                 | `$web/`                 | `gs://bucket/`                 |
+| SNS pages     | `s3://bucket/sns/` (React SPA) | `$web/sns/` (React SPA) | `gs://bucket/sns/` (React SPA) |
 
-> Azure と GCP の SNS ページは静的ファイルではなく Python サーバーが動的に生成する。
+All 3 clouds now serve the SNS app as a static React SPA. CDN handles SPA routing:
+
+- **AWS**: CloudFront Function rewrites `/sns` and `/sns/` → `/sns/index.html`
+- **Azure**: AFD `SpaRuleSet` URL Rewrite rewrites `/sns/*` (non-asset) → `/sns/index.html`
+- **GCP**: GCS serves `sns/index.html` as default; deep links require CDN-level handling (SPA routing partially handled by browser history API)
 
 ---
 
@@ -60,8 +68,9 @@ bucket-root/
 
 ```
 CloudFront (E1TBH4R432SZBZ / staging, E214XONKTXJEJD / production)
-  ├── /sns/* → API Gateway → Lambda: frontend-web  (SNS API: auth, posts, etc.)
-  └── /*     → S3: multicloud-auto-deploy-{env}-frontend/  (React SPA + landing)
+  ├── /sns/* → S3: multicloud-auto-deploy-{env}-frontend/sns/  (React SPA)
+  │            CloudFront Function `spa-sns-rewrite-{stack}` rewrites /sns → /sns/index.html
+  └── /*     → S3: multicloud-auto-deploy-{env}-frontend/  (landing pages)
 
 S3: multicloud-auto-deploy-{env}-frontend
   ├── index.html        ← React SPA entrypoint (Vite build)
@@ -77,7 +86,9 @@ API Gateway v2 HTTP (z42qmqdqac / staging)
                   └── S3: multicloud-auto-deploy-{env}-images (画像アップロード)
                        ← IMAGES_BUCKET_NAME 環境変数で参照
 
-Lambda: multicloud-auto-deploy-{env}-frontend-web  [legacy — Python SSR, superseded by S3/React]
+Lambda: multicloud-auto-deploy-{env}-frontend-web  [REMOVED — Python SSR superseded by React SPA]
+  Dead code removed 2026-02-22. CloudFront `/sns/*` now routes directly to S3.
+  See: REFACTORING_REPORT_20260222.md § 3
 ```
 
 **Note**: `frontend-web` Lambda は当初 Python で SNS 画面を SSR するために作られたが、
@@ -95,21 +106,20 @@ React + S3 へ移行済み。Lambda 自体は削除されていない場合が�
 
 ## Azure Architecture Detail
 
-> ⚠️ **Not yet migrated to React**: frontend is served by Python FastAPI on Azure Functions.
-> See System Overview note above.
+> ✅ **Migrated to React SPA**: SNS pages are now served from Blob Storage (static files).
+> The Python `frontend_web` Azure Function is superseded by `deploy-frontend-web-azure.yml`.
 
 ```
 Front Door (multicloud-auto-deploy-staging-fd)
   endpoint: mcad-staging-d45ihd
-  ├── /sns/*  → origin: Azure Functions frontend-web  (Python FastAPI, SNS pages)
-  │               multicloud-auto-deploy-staging-frontend-web-v2.azurewebsites.net
+  ├── /sns/*  → origin: Blob Storage $web/sns/  (React SPA — static HTML/JS/CSS)
+  │               SpaRuleSet rewrites /sns/* → /sns/index.html (SPA routing)
   └── /*      → origin: Blob Storage $web  (landing pages only)
                   mcadwebd45ihd.z11.web.core.windows.net
 
-Azure Functions frontend-web (FC1 FlexConsumption)  ← serves /sns/* pages
-  └── HTTP Trigger: /{*route}
-        ← FastAPI (custom ASGI bridge, no Mangum) + Jinja2 / API responses
-        ← STAGE_NAME=sns, API_BASE_URL=<func endpoint>
+Azure Functions frontend-web (FC1 FlexConsumption)  [LEGACY — no longer in CDN path]
+  └── Still deployed; superseded by React SPA in Blob Storage
+     Production: multicloud-auto-deploy-production-frontend-web-v2 (alwaysReady http=1)
 
 Azure Functions: multicloud-auto-deploy-staging-func (Flex Consumption)  ← backend API
   └── HTTP Trigger: /{*route}  (function name: HttpTrigger)
@@ -130,21 +140,21 @@ Azure Functions: multicloud-auto-deploy-staging-func (Flex Consumption)  ← bac
 
 ## GCP Architecture Detail
 
-> ⚠️ **Not yet migrated to React**: frontend is served by Python FastAPI on Cloud Run.
-> See System Overview note above.
+> ✅ **Migrated to React SPA**: SNS pages are now served from GCS (static files) via Cloud CDN.
+> The `/sns/*` path rule pointing to Cloud Run `frontend-web` has been removed from the URL map.
 
 ```
 Global IP: 34.117.111.182
   └── HTTP Forwarding Rule
         └── URL Map
-              ├── /sns/* → Backend Service → Cloud Run: frontend-web  (Python FastAPI, SNS pages)
-              └── /*     → Backend Bucket  → GCS: ashnova-multicloud-auto-deploy-staging-frontend
-                                                    (landing pages only)
+              └── /* (default) → Backend Bucket → GCS: ashnova-multicloud-auto-deploy-staging-frontend
+                               (React SPA at /sns/ + landing at /)
+              Note: /sns/* path rule removed (2026-02-22) — falls through to GCS default
 
-Cloud Run: multicloud-auto-deploy-staging-frontend-web  (SNS Frontend — Python SSR)
-  URL: https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app
-  └── FastAPI + Jinja2 templates (Auth: Firebase Google Sign-In)
-  └── Proxies API requests to multicloud-auto-deploy-staging-api
+Cloud Run: multicloud-auto-deploy-staging-frontend-web  [LEGACY — no longer in CDN path]
+  URL: https://multicloud-auto-deploy-staging-frontend-web-899621454670.asia-northeast1.run.app
+  └── Still deployed but CDN does NOT route requests here anymore
+  CDN custom response header: Cross-Origin-Opener-Policy: same-origin-allow-popups
 
 Cloud Run: multicloud-auto-deploy-staging-api  (Backend API)
   └── Firestore (default)

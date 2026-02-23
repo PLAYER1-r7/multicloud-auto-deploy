@@ -244,12 +244,92 @@ gcloud compute url-maps invalidate-cdn-cache <URL_MAP_NAME> \
 
 ---
 
+## Rule 14 — Azure Functions: CORS Must Be Configured at the Platform Level, Not in Python Code
+
+Azure Functions (Flex Consumption) runs **Kestrel (.NET HTTP server) in front of the Python
+runtime**. Kestrel intercepts all `OPTIONS` preflight requests before they reach the Python
+code. Setting `Access-Control-Allow-Origin` in FastAPI CORS middleware has **no effect** —
+Kestrel returns the response before the middleware is reached.
+
+**Always configure CORS via Azure CLI or Portal:**
+
+```bash
+# Function App CORS (controls API calls from browsers)
+az functionapp cors add \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$FUNCTION_APP_NAME" \
+  --allowed-origins "https://your.domain.com"
+
+# Remove wildcard first if present (wildcards suppress individual origins)
+az functionapp cors remove \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$FUNCTION_APP_NAME" \
+  --allowed-origins '*'
+```
+
+**Azure Blob Storage CORS is completely independent** from Function App CORS.
+Image uploads go directly to Blob Storage via SAS URL (bypassing Function App).
+Blob Storage CORS must be set separately:
+
+```bash
+az storage cors add \
+  --account-name "$STORAGE_ACCOUNT" \
+  --services b \
+  --methods GET POST PUT DELETE OPTIONS \
+  --origins "https://your.domain.com" \
+  --allowed-headers "*" \
+  --exposed-headers "*" \
+  --max-age 3600
+```
+
+Also: `SCM_DO_BUILD_DURING_DEPLOYMENT` is **not supported** on Flex Consumption — it triggers
+`InvalidAppSettingsException`. Always build packages locally with Docker before deploying.
+
+---
+
+## Rule 15 — Azure Functions: `host.json` Must Set `routePrefix: ""`
+
+Azure Functions defaults to `routePrefix: "api"`, which prefixes all HTTP triggers with
+`/api/`. The frontend calls paths like `/posts`, `/health` without the `/api/` prefix.
+Without this fix, every API endpoint returns 404.
+
+**Required `host.json` content:**
+
+```json
+{
+  "version": "2.0",
+  "extensions": {
+    "http": {
+      "routePrefix": ""
+    }
+  },
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.*, 5.0.0)"
+  }
+}
+```
+
+Also: Azure AD `post_logout_redirect_uri` must be explicitly registered in the app's
+`redirect_uris`. Only registering the `/sns/auth/callback` callback URL is insufficient —
+the logout return URL (e.g. `/sns/`) must also be added:
+
+```bash
+az ad app update \
+  --id "$AD_APP_ID" \
+  --web-redirect-uris \
+    "https://your.domain.com/sns/auth/callback" \
+    "https://your.domain.com/sns/"
+```
+
+---
+
 ## Quick Reference: Where to Find What
 
 | Topic                      | File                                                       |
 | -------------------------- | ---------------------------------------------------------- |
-| Live endpoint URLs         | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)         |
-| Repository directory tree  | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)             |
+| Live endpoint URLs         | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)           |
+| Repository directory tree  | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)           |
 | System architecture        | [AI_AGENT_02_ARCHITECTURE.md](AI_AGENT_02_ARCHITECTURE.md) |
 | API routes & data model    | [AI_AGENT_03_API.md](AI_AGENT_03_API.md)                   |
 | Pulumi / IaC               | [AI_AGENT_04_INFRA.md](AI_AGENT_04_INFRA.md)               |

@@ -310,6 +310,49 @@ GCP_API_URL=https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.ap
   ```
 - See [AI_AGENT_06_CICD.md](AI_AGENT_06_CICD.md) for deployment details.
 
+### Chrome で「保護されていない通信」警告が表示される
+
+**症状**: `https://staging.aws.ashnova.jp/` にアクセスすると Chrome のアドレスバーに「保護されていない通信」と表示される。
+
+**調査チェックリスト** (サーバーサイドが正常かどうか確認する):
+
+```bash
+# 1. CSP ヘッダーが配信されているか確認
+curl -sI https://staging.aws.ashnova.jp/ | grep -i content-security
+# 期待値: content-security-policy: upgrade-insecure-requests
+
+# 2. HSTS が設定されているか確認
+curl -sI https://staging.aws.ashnova.jp/ | grep -i strict-transport
+# 期待値: strict-transport-security: max-age=31536000; includeSubDomains
+
+# 3. HTTP→HTTPS リダイレクトが機能しているか確認
+curl -sI http://staging.aws.ashnova.jp/ | grep -iE "http/|location"
+# 期待値: HTTP/1.1 301  +  Location: https://staging.aws.ashnova.jp/
+
+# 4. S3 HTTP 直接アクセスが遮断されているか確認 (403 が正常)
+curl -sI http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com/
+# 期待値: HTTP/1.1 403 Forbidden
+```
+
+**原因の切り分け**:
+
+| DevTools > Security タブの表示 | 原因 | 対処 |
+| ------------------------------- | ---- | ---- |
+| `chrome-exte...` が Secure origins に表示されている | Chrome 拡張機能が証明書エラーのあるリソースを注入している | 拡張機能を1つずつオフにして特定 |
+| "You have recently allowed content with certificate errors" | 過去にブラウザがこのサイトで証明書エラーを「許可」した記録が残っている | 下記の「ブラウザキャッシュクリア手順」参照 |
+| Mixed Content の `http://` URLが表示される | サーバーサイドに http:// リソースが残っている | JS バンドル・API レスポンス・DBを調査 |
+
+**ブラウザキャッシュのクリア手順** ("recently allowed certificate errors" の場合):
+
+1. `chrome://settings/content/siteDetails?site=https%3A%2F%2Fstaging.aws.ashnova.jp` を開く
+2. 「権限をリセット」と「データを消去」を実行
+3. **ブラウザを完全に再起動** (タブを閉じるだけでは不十分 — メモリキャッシュが残る)
+4. `https://staging.aws.ashnova.jp/` に再アクセス
+
+> **重要**: サイトデータを消去しただけでは解消しない場合がある。Chrome はこの許可状態をメモリにキャッシュするため、ブラウザ再起動が必要。
+
+**シークレットモードで警告が消える場合**: サーバーサイドは正常。ブラウザの状態 (拡張機能またはキャッシュ) が原因。
+
 ### GCP CDN returns the old React SPA after a redeploy
 
 GCS objects are served via Cloud CDN with cache TTL. Force invalidation:

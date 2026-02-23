@@ -43,20 +43,20 @@ pulumi destroy --stack staging
 
 ### Resources created
 
-| Pulumi logical name          | AWS resource                   | Name pattern                                     |
-| ---------------------------- | ------------------------------ | ------------------------------------------------ |
-| `lambda-role`                | IAM Role                       | `{project}-{stack}-lambda-role`                  |
-| `app-secret`                 | Secrets Manager Secret         | —                                                |
-| `dynamodb-table`             | DynamoDB Table                 | `simple-sns-messages`                            |
-| `lambda-function`            | Lambda Function                | `{project}-{stack}-api`                          |
-| `api-gateway`                | API Gateway v2                 | —                                                |
-| `frontend-bucket`            | S3 Bucket                      | `{project}-{stack}-frontend`                     |
-| `landing-bucket`             | S3 Bucket                      | `{project}-{stack}-landing`                      |
-| `cloudfront-distribution`    | CloudFront (PriceClass_200)    | —                                                |
-| `security-headers-policy`    | CloudFront ResponseHeadersPolicy | `{project}-{stack}-security-headers`           |
-| `cognito-user-pool`          | Cognito User Pool              | —                                                |
-| `sns-topic`                  | SNS Topic (alerts)             | —                                                |
-| CloudWatch Alarms (multi)    | CloudWatch                     | —                                                |
+| Pulumi logical name       | AWS resource                     | Name pattern                         |
+| ------------------------- | -------------------------------- | ------------------------------------ |
+| `lambda-role`             | IAM Role                         | `{project}-{stack}-lambda-role`      |
+| `app-secret`              | Secrets Manager Secret           | —                                    |
+| `dynamodb-table`          | DynamoDB Table                   | `simple-sns-messages`                |
+| `lambda-function`         | Lambda Function                  | `{project}-{stack}-api`              |
+| `api-gateway`             | API Gateway v2                   | —                                    |
+| `frontend-bucket`         | S3 Bucket                        | `{project}-{stack}-frontend`         |
+| `landing-bucket`          | S3 Bucket                        | `{project}-{stack}-landing`          |
+| `cloudfront-distribution` | CloudFront (PriceClass_200)      | —                                    |
+| `security-headers-policy` | CloudFront ResponseHeadersPolicy | `{project}-{stack}-security-headers` |
+| `cognito-user-pool`       | Cognito User Pool                | —                                    |
+| `sns-topic`               | SNS Topic (alerts)               | —                                    |
+| CloudWatch Alarms (multi) | CloudWatch                       | —                                    |
 
 ### Key config keys
 
@@ -67,6 +67,19 @@ pulumi config set alarmEmail your@email.com
 pulumi config set staticSiteDomain "aws.example.com"        # custom domain (optional)
 pulumi config set staticSiteAcmCertificateArn "arn:..."    # ACM certificate (optional)
 ```
+
+> ⚠️ **CRITICAL for production stack**: Always set `customDomain` and `acmCertificateArn`
+> before running `pulumi up --stack production`. If absent, CloudFront will revert to
+> `CloudFrontDefaultCertificate: true`, breaking HTTPS for all visitors.
+>
+> ```bash
+> pulumi config set customDomain www.aws.ashnova.jp --stack production
+> pulumi config set acmCertificateArn \
+>   arn:aws:acm:us-east-1:278280499340:certificate/914b86b1-4c10-4354-91cf-19c4460dcde5 \
+>   --stack production
+> ```
+>
+> The ACM certificate must be in `us-east-1` (required for CloudFront). Current cert expires 2027-03-12.
 
 ### Key outputs
 
@@ -98,7 +111,13 @@ pulumi stack output cognito_client_id
 | `cosmos-account`       | Cosmos DB Account    | —                        |
 | `frontdoor-profile`    | Front Door Profile   | `{project}-{stack}-fd`   |
 | `azure-ad-app`         | Azure AD Application | —                        |
+| `spa-rule-set`         | AFD RuleSet          | `SpaRuleSet`             |
+| `spa-rewrite-rule`     | AFD Rule             | `SpaIndexHtmlRewrite`    |
 | Action Groups + Alerts | Azure Monitor        | —                        |
+
+> **SPA routing**: `SpaRuleSet` rewrites all non-static `/sns/*` requests to `/sns/index.html`
+> so React client-side routing works on direct URL access and page refresh.
+> RuleSet name must be **alphanumeric only** (no hyphens). Max 10 match_values per condition.
 
 ### Key config keys
 
@@ -158,16 +177,30 @@ pulumi stack output cdn_ip_address
 pulumi stack output frontend_bucket_name
 ```
 
----
+> **GCP-specific notes**:
+>
+> - `uploads-bucket` (`ashnova-{project}-{stack}-uploads`) has `allUsers:objectViewer` — public.
+>   Do NOT grant public read on the `frontend-bucket`.
+> - `ManagedSslCertificate` uses `ignore_changes=["name", "managed"]` to prevent Pulumi from
+>   attempting to replace the cert when the name hash changes (GCP returns 400 if the cert is
+>   still attached to the HTTPS proxy).
+> - If `pulumi up` fails with `Error 412: Invalid fingerprint` on URLMap, add a
+>   `pulumi refresh --yes --skip-preview` step before `pulumi up`.
+> - Firebase authorized domains must be updated via Identity Toolkit Admin v2 API (requires
+>   `x-goog-user-project` header). This is automated in `deploy-gcp.yml`.
 
-## Pulumi State Troubleshooting
-
-### GCS resource conflict (Error 409)
+### GCS resource conflict (Error 409 / Error 412)
 
 ```bash
-# Cause: local state reset by GitHub Actions causes re-creation of existing resources
-# Fix: use Pulumi Cloud remote state (current configuration)
-pulumi login  # log in to Pulumi Cloud
+# Error 409: bucket already exists (state out of sync)
+# Fix: import existing bucket into Pulumi state before pulumi up
+pulumi import gcp:storage/bucket:Bucket uploads-bucket \
+  ashnova-multicloud-auto-deploy-staging-uploads --stack staging
+
+# Error 412: Invalid fingerprint on URLMap (Pulumi state stale)
+# Fix: add pulumi refresh before pulumi up
+pulumi refresh --yes --skip-preview --stack staging
+pulumi up --yes --stack staging
 ```
 
 ### Azure CLI authentication error
@@ -179,6 +212,31 @@ export AZURE_CLIENT_SECRET=$(echo $AZURE_CREDENTIALS | jq -r '.clientSecret')
 export AZURE_SUBSCRIPTION_ID=$(echo $AZURE_CREDENTIALS | jq -r '.subscriptionId')
 export AZURE_TENANT_ID=$(echo $AZURE_CREDENTIALS | jq -r '.tenantId')
 ```
+
+### Azure Pulumi pending operations
+
+```bash
+# Error: "Stack has pending operation"
+pulumi stack export | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); d['deployment']['pending_operations']=[]; print(json.dumps(d))" | \
+  pulumi stack import --force
+```
+
+---
+
+## Lambda Layer Configuration
+
+Two options (see `LAMBDA_LAYER_OPTIMIZATION.md` for full details):
+
+**Option A — Klayers (default, recommended)**:
+No build required. Uses public community-managed Lambda Layers. Enable in Pulumi config:
+
+```bash
+pulumi config set use_klayers true
+```
+
+**Option B — Custom Layer** (full control, specific versions):
+Build with `./scripts/build-lambda-layer.sh` (excludes boto3 / Azure / GCP SDKs from the ZIP).
 
 ---
 

@@ -279,6 +279,165 @@ API_BASE_URL=http://localhost:8000
 
 ---
 
+## [RB-13] Rebuild and Hotfix-Deploy GCP Cloud Function (linux/amd64)
+
+The dev container is `aarch64`; Cloud Functions runs `linux/amd64`. Always use Docker.
+
+```bash
+# 1. Build linux/amd64 packages
+mkdir -p /tmp/deploy_gcp/.deployment
+docker run --rm --platform linux/amd64 \
+  -v /tmp/deploy_gcp:/out \
+  python:3.12-slim \
+  bash -c "pip install --no-cache-dir --target /out/.deployment \
+           -r /workspaces/multicloud-auto-deploy/services/api/requirements-gcp.txt -q"
+
+# 2. Copy application code
+cp -r /workspaces/multicloud-auto-deploy/services/api/app /tmp/deploy_gcp/.deployment/
+# Cloud Build requires main.py even when --entry-point is specified
+cp /workspaces/multicloud-auto-deploy/services/api/function.py /tmp/deploy_gcp/.deployment/main.py
+cp /workspaces/multicloud-auto-deploy/services/api/function.py /tmp/deploy_gcp/.deployment/function.py
+
+# 3. Create ZIP (exclude __pycache__)
+cd /tmp/deploy_gcp/.deployment
+find . -name "__pycache__" -path "*/app/*" -exec rm -rf {} + 2>/dev/null || true
+zip -r9q /tmp/deploy_gcp/function-source.zip .
+cd /workspaces/multicloud-auto-deploy
+
+# 4. Upload to GCS (clear stale tracker files first if resuming)
+rm -f ~/.config/gcloud/surface_data/storage/tracker_files/*
+gcloud storage cp /tmp/deploy_gcp/function-source.zip \
+  gs://ashnova-multicloud-auto-deploy-staging-function-source/function-source.zip
+
+# 5. Deploy
+gcloud functions deploy multicloud-auto-deploy-staging-api \
+  --gen2 --region=asia-northeast1 --runtime=python312 \
+  --source=gs://ashnova-multicloud-auto-deploy-staging-function-source/function-source.zip \
+  --entry-point=handler --project=ashnova --quiet
+```
+
+**Key rules**:
+
+- `main.py` MUST exist in the ZIP — Cloud Build rejects source without it even when `--entry-point` names another function.
+- Always verify syntax before packaging: `python3 -m py_compile services/api/app/backends/local_backend.py && echo OK`
+- `gcloud run services update --update-env-vars` cannot be used for URL values (`:` causes parse errors). Use `--env-vars-file` instead.
+
+---
+
+## [RB-14] Fix Azure Front Door 502 (Dynamic Consumption → FC1 FlexConsumption)
+
+Dynamic Consumption (Y1) Function Apps are periodically recycled. AFD Standard cannot
+detect the TCP disconnect, leaving stale connections in its pool that return 502 instantly.
+The fix is to migrate to **FC1 FlexConsumption** with a fixed single instance.
+
+```bash
+RG="multicloud-auto-deploy-production-rg"
+FD="multicloud-auto-deploy-production-fd"
+EP="mcad-production-diev0w"
+OG="multicloud-auto-deploy-production-frontend-web-origin-group"
+ORIGIN="multicloud-auto-deploy-production-frontend-web-origin"
+
+# 1. Create FC1 FlexConsumption Function App
+az functionapp create \
+  --name multicloud-auto-deploy-production-frontend-web-v2 \
+  --resource-group "$RG" \
+  --flexconsumption-location japaneast \
+  --runtime python --runtime-version 3.12 \
+  --storage-account mcadfuncdiev0w
+
+# 2. Fix instance count to 1 (no recycling)
+az functionapp scale config set \
+  --name multicloud-auto-deploy-production-frontend-web-v2 \
+  --resource-group "$RG" \
+  --maximum-instance-count 1
+az functionapp scale config always-ready set \
+  --name multicloud-auto-deploy-production-frontend-web-v2 \
+  --resource-group "$RG" \
+  --settings "http=1"
+
+# 3. Deploy x86_64 ZIP (build with Docker --platform linux/amd64 first)
+az functionapp deployment source config-zip \
+  --name multicloud-auto-deploy-production-frontend-web-v2 \
+  --resource-group "$RG" \
+  --src services/frontend_web/frontend-web-prod.zip
+
+# 4. Update AFD origin to point to new Function App
+az afd origin update \
+  --resource-group "$RG" \
+  --profile-name "$FD" \
+  --origin-group-name "$OG" \
+  --origin-name "$ORIGIN" \
+  --host-name multicloud-auto-deploy-production-frontend-web-v2.azurewebsites.net \
+  --origin-host-header multicloud-auto-deploy-production-frontend-web-v2.azurewebsites.net
+
+# 5. Stop old Y1 app (wait ~5 min for AFD edge propagation)
+az functionapp stop \
+  --name multicloud-auto-deploy-production-frontend-web \
+  --resource-group "$RG"
+```
+
+**Critical notes**:
+
+- `--consumption-plan-location` creates Y1 Dynamic (wrong). Always use `--flexconsumption-location` for FC1.
+- `az functionapp update --plan` does NOT support Linux→Linux plan migration; create a new app instead.
+- AFD origin updates take up to 5 minutes for full edge propagation.
+- `SCM_DO_BUILD_DURING_DEPLOYMENT` causes `InvalidAppSettingsException` on Flex Consumption — never set it.
+
+---
+
+## [RB-15] Fix AWS CloudFront HTTPS Certificate Error (ERR_CERT_COMMON_NAME_INVALID)
+
+If `pulumi up --stack production` was run without `customDomain` / `acmCertificateArn` set,
+CloudFront reverts to `CloudFrontDefaultCertificate: true`, breaking HTTPS for the custom domain.
+
+```bash
+# 1. Retrieve current distribution config and ETag
+aws cloudfront get-distribution-config --id E214XONKTXJEJD > /tmp/cf-config.json
+# Note the ETag from the response (e.g. E13V1IB3VIYZZH)
+
+# 2. Patch the JSON (Python one-liner)
+python3 - <<'EOF'
+import json
+with open('/tmp/cf-config.json') as f:
+    data = json.load(f)
+cfg = data['DistributionConfig']
+cfg['Aliases'] = {'Quantity': 1, 'Items': ['www.aws.ashnova.jp']}
+cfg['ViewerCertificate'] = {
+    'ACMCertificateArn': 'arn:aws:acm:us-east-1:278280499340:certificate/914b86b1-4c10-4354-91cf-19c4460dcde5',
+    'SSLSupportMethod': 'sni-only',
+    'MinimumProtocolVersion': 'TLSv1.2_2021',
+    'CertificateSource': 'acm'
+}
+with open('/tmp/cf-config-updated.json', 'w') as f:
+    json.dump(cfg, f, indent=2)
+print('Done')
+EOF
+
+# 3. Apply update (replace <ETAG> with value from step 1)
+aws cloudfront update-distribution \
+  --id E214XONKTXJEJD \
+  --distribution-config file:///tmp/cf-config-updated.json \
+  --if-match <ETAG>
+
+# 4. Wait for propagation and verify
+aws cloudfront wait distribution-deployed --id E214XONKTXJEJD
+curl -sI https://www.aws.ashnova.jp | head -3
+```
+
+**Prevention** — always set these before `pulumi up --stack production`:
+
+```bash
+cd infrastructure/pulumi/aws
+pulumi config set customDomain www.aws.ashnova.jp --stack production
+pulumi config set acmCertificateArn \
+  arn:aws:acm:us-east-1:278280499340:certificate/914b86b1-4c10-4354-91cf-19c4460dcde5 \
+  --stack production
+```
+
+**ACM certificate** (production): ARN `914b86b1` — domain `www.aws.ashnova.jp`, expires 2027-03-12.
+
+---
+
 ## Next Section
 
 → [08 — Security](AI_AGENT_08_SECURITY.md)

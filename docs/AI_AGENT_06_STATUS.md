@@ -24,8 +24,8 @@ API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 
 | Resource              | Name / ID                                                             | Status |
 | --------------------- | --------------------------------------------------------------------- | ------ |
-| CloudFront            | `E1TBH4R432SZBZ` (PriceClass_200: NA/EU/JP/KR/IN)                    | ✅     |
-| CloudFront RHP        | `multicloud-auto-deploy-staging-security-headers` (HSTS + 4 headers) | ✅     |
+| CloudFront            | `E1TBH4R432SZBZ` (PriceClass_200: NA/EU/JP/KR/IN)                     | ✅     |
+| CloudFront RHP        | `multicloud-auto-deploy-staging-security-headers` (HSTS + CSP + 4 headers) | ✅     |
 | S3 (frontend)         | `multicloud-auto-deploy-staging-frontend`                             | ✅     |
 | S3 (images)           | `multicloud-auto-deploy-staging-images` (CORS: \*)                    | ✅     |
 | Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, 512MB)             | ✅     |
@@ -49,10 +49,15 @@ API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 - CI/CD pipeline: env vars set correctly on every push ✅
 - Frontend bundle built with `VITE_BASE_PATH=/sns/` — asset paths correct ✅
 - CloudFront custom error pages: `/sns/index.html` (403+404) ✅
-- CloudFront Response Headers Policy: HSTS/X-Content-Type-Options/X-Frame-Options/Referrer-Policy/XSS-Protection ✅ (2026-02-23)
+- CloudFront Response Headers Policy: HSTS/CSP(`upgrade-insecure-requests`)/X-Content-Type-Options/X-Frame-Options/Referrer-Policy/XSS-Protection ✅ (2026-02-23)
 - CloudFront PriceClass_200: 日本・韓国・インドのエッジを使用 ✅ (旧: PriceClass_100 = 米国/欧州のみ)
+- OAuth フロー PKCE (S256) 実装: `response_type=code` + code_verifier/challenge ✅ (2026-02-23)
+- Cognito `implicit` フロー削除: `allowed_oauth_flows=["code"]` のみ ✅ (2026-02-23)
+- S3 パブリックアクセス完全遮断: `BlockPublicAcls/IgnorePublicAcls/BlockPublicPolicy/RestrictPublicBuckets=True` ✅ (2026-02-23)
+- S3 バケットポリシー OAI 専用: `Principal:*` 削除 ✅ (2026-02-23)
+- Lambda `_resolve_image_urls`: `http://` URL をスキップして Mixed Content を防止 ✅ (2026-02-23)
 
-**Current frontend bundle**: `index-BNBGmVGx.js` (uploaded 2026-02-22)
+**Current frontend bundle**: `index-B0gzRu__.js` (uploaded 2026-02-23, PKCE対応)
 
 **Build command for AWS staging**:
 

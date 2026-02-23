@@ -22,28 +22,35 @@ CI/CD pipelines.
 
 ### AWS (ap-northeast-1)
 
-| Purpose           | URL                                                                                      |
-| ----------------- | ---------------------------------------------------------------------------------------- |
-| CDN (CloudFront)  | `https://d1tf3uumcm4bo1.cloudfront.net`                                                  |
-| API (API Gateway) | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com`                            |
-| Custom domain     | `https://www.aws.ashnova.jp`                                                             |
+| Purpose           | URL                                                           |
+| ----------------- | ------------------------------------------------------------- |
+| CDN (CloudFront)  | `https://d1tf3uumcm4bo1.cloudfront.net`                       |
+| API (API Gateway) | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com` |
+| Custom domain     | `https://www.aws.ashnova.jp`                                  |
 
 ### Azure (japaneast)
 
-| Purpose          | URL                                                                                                           |
-| ---------------- | ------------------------------------------------------------------------------------------------------------- |
-| CDN (Front Door) | `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net`                                                |
-| API (Functions)  | `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger` |
-| Custom domain    | `https://www.azure.ashnova.jp`                                                                                |
+| Purpose          | URL                                                                                           |
+| ---------------- | --------------------------------------------------------------------------------------------- |
+| CDN (Front Door) | `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net`                                |
+| API (Functions)  | `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net` |
+| Custom domain    | `https://www.azure.ashnova.jp`                                                                |
+
+> **Note**: The Azure API URL is the Function App base URL **without** any path suffix.
+> The function uses a wildcard route `{*route}` so all API paths (e.g. `/health`, `/posts`)
+> are served directly at the base URL. The `/api/HttpTrigger` path is **not** used.
 
 ### GCP (asia-northeast1)
 
-| Purpose                  | URL                                                                          |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| CDN (Cloud CDN)          | `http://34.117.111.182`                                                      |
-| API (Cloud Run)          | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`         |
-| Web Frontend (Cloud Run) | `https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app`|
-| Custom domain            | `https://www.gcp.ashnova.jp`                                                 |
+| Purpose                  | URL                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| CDN (Cloud CDN)          | `http://34.117.111.182`                                                                                 |
+| API (Cloud Run)          | `https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app`                       |
+| Web Frontend (Cloud Run) | `https://multicloud-auto-deploy-staging-frontend-web-899621454670.asia-northeast1.run.app` (legacy SSR) |
+| Custom domain            | `https://www.gcp.ashnova.jp`                                                                            |
+
+> **Note**: The Cloud Run `frontend-web` service still exists but CDN routes `/sns/*` to the
+> GCS bucket (React SPA) — not to Cloud Run. The Cloud Run URL is legacy.
 
 ---
 
@@ -51,9 +58,11 @@ CI/CD pipelines.
 
 ```
 Frontend (SNS pages)
-  AWS:   React 18.2 / Vite 7.3 / TypeScript / Tailwind CSS  ← static SPA in S3
-  Azure: Python FastAPI + custom ASGI bridge (services/frontend_web)  ← not yet React
-  GCP:   Python FastAPI + Jinja2 templates  (services/frontend_web)  ← not yet React
+  AWS:   React 18.2 / Vite 7.3 / TypeScript / Tailwind CSS  ← static SPA in S3 (staging + production)
+  Azure: React 18.2 / Vite / TypeScript  ← static SPA in Blob Storage $web/sns/ (production)
+         (services/frontend_web Python SSR is superseded; CI now deploys React SPA via deploy-frontend-web-azure.yml)
+  GCP:   React 18.2 / Vite / TypeScript  ← static SPA in GCS sns/ prefix (staging + production)
+         (Cloud Run frontend-web still exists but CDN routes to GCS bucket, not Cloud Run)
 
 Backend API
   FastAPI 1.0 / Python 3.12 / Pydantic v2
@@ -173,20 +182,20 @@ multicloud-auto-deploy/               ← workspace root = git repo root
 
 ## Quick File Reference
 
-| What you want to do         | File(s) to edit                                  |
-| --------------------------- | ------------------------------------------------ |
-| Add an API endpoint         | `services/api/app/routes/*.py`                   |
-| Change DB logic (AWS)       | `services/api/app/backends/aws_backend.py`       |
-| Change DB logic (Azure)     | `services/api/app/backends/azure_backend.py`     |
-| Change DB logic (GCP)       | `services/api/app/backends/gcp_backend.py`       |
-| Add an environment variable | `services/api/app/config.py` + `Pulumi.*.yaml`   |
-| Change AWS infrastructure   | `infrastructure/pulumi/aws/__main__.py`          |
-| Change Azure infrastructure | `infrastructure/pulumi/azure/__main__.py`        |
-| Change GCP infrastructure   | `infrastructure/pulumi/gcp/__main__.py`          |
-| Edit a CI/CD workflow       | `.github/workflows/*.yml` (workspace root)       |
-| Edit React frontend UI      | `services/frontend_react/src/`                   |
-| Edit Python frontend        | `services/frontend_web/`                         |
-| Edit landing pages          | `static-site/`                                   |
+| What you want to do         | File(s) to edit                                |
+| --------------------------- | ---------------------------------------------- |
+| Add an API endpoint         | `services/api/app/routes/*.py`                 |
+| Change DB logic (AWS)       | `services/api/app/backends/aws_backend.py`     |
+| Change DB logic (Azure)     | `services/api/app/backends/azure_backend.py`   |
+| Change DB logic (GCP)       | `services/api/app/backends/gcp_backend.py`     |
+| Add an environment variable | `services/api/app/config.py` + `Pulumi.*.yaml` |
+| Change AWS infrastructure   | `infrastructure/pulumi/aws/__main__.py`        |
+| Change Azure infrastructure | `infrastructure/pulumi/azure/__main__.py`      |
+| Change GCP infrastructure   | `infrastructure/pulumi/gcp/__main__.py`        |
+| Edit a CI/CD workflow       | `.github/workflows/*.yml` (workspace root)     |
+| Edit React frontend UI      | `services/frontend_react/src/`                 |
+| Edit Python frontend        | `services/frontend_web/`                       |
+| Edit landing pages          | `static-site/`                                 |
 
 ---
 
@@ -199,15 +208,15 @@ multicloud-auto-deploy/               ← workspace root = git repo root
 
 ### Dev Container
 
-| Component     | Detail                                            |
-| ------------- | ------------------------------------------------- |
-| Base image    | `mcr.microsoft.com/devcontainers/base:ubuntu`     |
-| Python        | 3.12                                              |
-| Node.js       | 22                                                |
-| Docker        | Docker-in-Docker v2                               |
-| Cloud CLIs    | AWS CLI, Azure CLI, Google Cloud SDK, GitHub CLI  |
-| IaC           | Pulumi CLI                                        |
-| Ports exposed | 3000 (frontend dev), 8000 (API)                   |
+| Component     | Detail                                           |
+| ------------- | ------------------------------------------------ |
+| Base image    | `mcr.microsoft.com/devcontainers/base:ubuntu`    |
+| Python        | 3.12                                             |
+| Node.js       | 22                                               |
+| Docker        | Docker-in-Docker v2                              |
+| Cloud CLIs    | AWS CLI, Azure CLI, Google Cloud SDK, GitHub CLI |
+| IaC           | Pulumi CLI                                       |
+| Ports exposed | 3000 (frontend dev), 8000 (API)                  |
 
 ### ARM Build Warning
 

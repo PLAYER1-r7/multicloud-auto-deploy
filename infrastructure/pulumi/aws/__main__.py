@@ -143,7 +143,7 @@ user_pool_client = aws.cognito.UserPoolClient(
     "user-pool-client",
     name=f"{project_name}-{stack}-web-client",
     user_pool_id=user_pool.id,
-    allowed_oauth_flows=["code", "implicit"],
+    allowed_oauth_flows=["code"],
     allowed_oauth_scopes=["openid", "email", "profile"],
     allowed_oauth_flows_user_pool_client=True,
     callback_urls=(
@@ -511,37 +511,14 @@ frontend_bucket = aws.s3.Bucket(
     tags=common_tags,
 )
 
-# Disable block public access FIRST (before adding public policy)
+# Block all public access — CloudFront OAI 経由のみアクセス許可
 frontend_public_access = aws.s3.BucketPublicAccessBlock(
     "frontend-public-access",
     bucket=frontend_bucket.id,
-    block_public_acls=False,
-    block_public_policy=False,
-    ignore_public_acls=False,
-    restrict_public_buckets=False,
-)
-
-# Make bucket public for static website hosting (after disabling public access block)
-frontend_bucket_policy = aws.s3.BucketPolicy(
-    "frontend-bucket-policy",
-    bucket=frontend_bucket.id,
-    policy=frontend_bucket.arn.apply(
-        lambda arn: json.dumps(
-            {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "PublicReadGetObject",
-                        "Effect": "Allow",
-                        "Principal": "*",
-                        "Action": "s3:GetObject",
-                        "Resource": f"{arn}/*",
-                    }
-                ],
-            }
-        )
-    ),
-    opts=pulumi.ResourceOptions(depends_on=[frontend_public_access]),
+    block_public_acls=True,
+    block_public_policy=True,
+    ignore_public_acls=True,
+    restrict_public_buckets=True,
 )
 
 # Configure bucket for website hosting
@@ -565,7 +542,7 @@ cloudfront_oai = aws.cloudfront.OriginAccessIdentity(
     comment=f"{project_name}-{stack} CloudFront OAI",
 )
 
-# Update S3 bucket policy to allow CloudFront OAI access
+# S3 バケットポリシー: CloudFront OAI 経由のみ許可（パブリック直接アクセス禁止）
 cloudfront_bucket_policy = aws.s3.BucketPolicy(
     "cloudfront-bucket-policy",
     bucket=frontend_bucket.id,
@@ -574,13 +551,6 @@ cloudfront_bucket_policy = aws.s3.BucketPolicy(
             {
                 "Version": "2012-10-17",
                 "Statement": [
-                    {
-                        "Sid": "PublicReadGetObject",
-                        "Effect": "Allow",
-                        "Principal": "*",
-                        "Action": "s3:GetObject",
-                        "Resource": f"{args[0]}/*",
-                    },
                     {
                         "Sid": "CloudFrontOAIAccess",
                         "Effect": "Allow",
@@ -683,18 +653,25 @@ if stack == "production":
 
 # ========================================
 # CloudFront Response Headers Policy (セキュリティヘッダー)
-# HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy を付与
-# 「保護されていない通信」警告 (HSTS 未設定) の解消
+# HSTS, CSP(upgrade-insecure-requests), X-Content-Type-Options,
+# X-Frame-Options, Referrer-Policy, XSS を付与
+# 「保護されていない通信」警告の解消
 # ========================================
 cloudfront_response_headers_policy = aws.cloudfront.ResponseHeadersPolicy(
     "security-headers-policy",
     name=f"{project_name}-{stack}-security-headers",
-    comment="Security headers: HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, XSS",
+    comment="Security headers: HSTS, CSP upgrade-insecure-requests, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, XSS",
     security_headers_config=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigArgs(
         strict_transport_security=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigStrictTransportSecurityArgs(
             access_control_max_age_sec=31536000,  # 1年
             include_subdomains=True,
             preload=False,  # HSTS preload list 登録は手動で行うため False
+            override=True,
+        ),
+        # upgrade-insecure-requests: ブラウザが自動的に HTTP → HTTPS にアップグレード
+        # 「保護されていない通信」(mixed content) 警告を抑制する
+        content_security_policy=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigContentSecurityPolicyArgs(
+            content_security_policy="upgrade-insecure-requests",
             override=True,
         ),
         content_type_options=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigContentTypeOptionsArgs(
