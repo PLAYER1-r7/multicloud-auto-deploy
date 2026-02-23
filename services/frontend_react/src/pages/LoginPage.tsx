@@ -42,16 +42,21 @@ export default function LoginPage() {
     setStatus("Googleに接続中...");
     setError("");
     try {
-      // @ts-ignore
-      const firebaseApp =
-        await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"); // eslint-disable-line
+      // Use Function constructor to bypass TypeScript's module resolution for CDN URLs
+      // (firebase is loaded dynamically only when GCP/Firebase auth is required)
+      const dynamicImport = new Function("url", "return import(url)") as (
+        url: string,
+      ) => Promise<Record<string, unknown>>;
+      const firebaseApp = await dynamicImport(
+        "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+      );
       const { initializeApp, getApps } = firebaseApp as {
         initializeApp: (config: object) => object;
         getApps: () => object[];
       };
-      // @ts-ignore
-      const firebaseAuth =
-        await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"); // eslint-disable-line
+      const firebaseAuth = await dynamicImport(
+        "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
+      );
       const { getAuth, signInWithPopup, GoogleAuthProvider } = firebaseAuth as {
         getAuth: () => object;
         signInWithPopup: (
