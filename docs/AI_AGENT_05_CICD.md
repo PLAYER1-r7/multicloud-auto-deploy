@@ -1,6 +1,6 @@
-# 06 — CI/CD Pipelines
+# 05 — CI/CD Pipelines
 
-> Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> Part II — Architecture & Design | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
 
 ---
 
@@ -252,4 +252,4 @@ git push
 
 ## Next Section
 
-→ [07 — Environment Status](AI_AGENT_07_STATUS.md)
+→ [06 — Environment Status](AI_AGENT_06_STATUS.md)

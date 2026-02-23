@@ -11,21 +11,21 @@
 Once you have read all 14 rules below, continue in this order:
 
 ```
-1. AI_AGENT_01_OVERVIEW.md   ← what the project is, live endpoints, tech stack (5 min read)
-2. AI_AGENT_02_LAYOUT.md     ← directory tree, where each file lives (5 min read)
-3. AI_AGENT_03_ARCHITECTURE.md ← system topology, storage path layout (5 min read)
-4. AI_AGENT_07_STATUS.md     ← current health of all 3 cloud environments
-5. AI_AGENT_10_TASKS.md      ← prioritised backlog — what to work on next
+1. AI_AGENT_01_CONTEXT.md   ← what the project is, live endpoints, tech stack (5 min read)
+2. AI_AGENT_01_CONTEXT.md     ← directory tree, where each file lives (5 min read)
+3. AI_AGENT_02_ARCHITECTURE.md ← system topology, storage path layout (5 min read)
+4. AI_AGENT_06_STATUS.md     ← current health of all 3 cloud environments
+5. AI_AGENT_09_TASKS.md      ← prioritised backlog — what to work on next
 ```
 
 Read these only when the task requires it:
 
 ```
-AI_AGENT_04_API.md      ← endpoint spec, request/response schema, data model
-AI_AGENT_05_INFRA.md    ← Pulumi stacks, resource names, config keys, stack outputs
-AI_AGENT_06_CICD.md     ← GitHub Actions workflows, required secrets, trigger conditions
-AI_AGENT_08_RUNBOOKS.md ← step-by-step: deploy Lambda, deploy React, GCP Cloud Run, etc.
-AI_AGENT_09_SECURITY.md ← auth config per cloud, known security gaps
+AI_AGENT_03_API.md      ← endpoint spec, request/response schema, data model
+AI_AGENT_04_INFRA.md    ← Pulumi stacks, resource names, config keys, stack outputs
+AI_AGENT_05_CICD.md     ← GitHub Actions workflows, required secrets, trigger conditions
+AI_AGENT_07_RUNBOOKS.md ← step-by-step: deploy Lambda, deploy React, GCP Cloud Run, etc.
+AI_AGENT_08_SECURITY.md ← auth config per cloud, known security gaps
 ```
 
 ---
@@ -248,14 +248,14 @@ gcloud compute url-maps invalidate-cdn-cache <URL_MAP_NAME> \
 
 | Topic                      | File                                                       |
 | -------------------------- | ---------------------------------------------------------- |
-| Live endpoint URLs         | [AI_AGENT_01_OVERVIEW.md](AI_AGENT_01_OVERVIEW.md)         |
-| Repository directory tree  | [AI_AGENT_02_LAYOUT.md](AI_AGENT_02_LAYOUT.md)             |
-| System architecture        | [AI_AGENT_03_ARCHITECTURE.md](AI_AGENT_03_ARCHITECTURE.md) |
-| API routes & data model    | [AI_AGENT_04_API.md](AI_AGENT_04_API.md)                   |
-| Pulumi / IaC               | [AI_AGENT_05_INFRA.md](AI_AGENT_05_INFRA.md)               |
-| CI/CD pipelines            | [AI_AGENT_06_CICD.md](AI_AGENT_06_CICD.md)                 |
-| Current environment health | [AI_AGENT_07_STATUS.md](AI_AGENT_07_STATUS.md)             |
-| Step-by-step runbooks      | [AI_AGENT_08_RUNBOOKS.md](AI_AGENT_08_RUNBOOKS.md)         |
-| Security configuration     | [AI_AGENT_09_SECURITY.md](AI_AGENT_09_SECURITY.md)         |
-| Remaining tasks / backlog  | [AI_AGENT_10_TASKS.md](AI_AGENT_10_TASKS.md)               |
+| Live endpoint URLs         | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)         |
+| Repository directory tree  | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)             |
+| System architecture        | [AI_AGENT_02_ARCHITECTURE.md](AI_AGENT_02_ARCHITECTURE.md) |
+| API routes & data model    | [AI_AGENT_03_API.md](AI_AGENT_03_API.md)                   |
+| Pulumi / IaC               | [AI_AGENT_04_INFRA.md](AI_AGENT_04_INFRA.md)               |
+| CI/CD pipelines            | [AI_AGENT_05_CICD.md](AI_AGENT_05_CICD.md)                 |
+| Current environment health | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)             |
+| Step-by-step runbooks      | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)         |
+| Security configuration     | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)         |
+| Remaining tasks / backlog  | [AI_AGENT_09_TASKS.md](AI_AGENT_09_TASKS.md)               |
 | Everything — entry point   | [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)                     |

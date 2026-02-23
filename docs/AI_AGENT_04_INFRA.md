@@ -1,6 +1,6 @@
-# 05 — Infrastructure (Pulumi)
+# 04 — Infrastructure (Pulumi)
 
-> Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> Part II — Architecture & Design | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
 
 ---
 
@@ -211,4 +211,4 @@ aws lambda update-function-code \
 
 ## Next Section
 
-→ [06 — CI/CD Pipelines](AI_AGENT_06_CICD.md)
+→ [05 — CI/CD Pipelines](AI_AGENT_05_CICD.md)

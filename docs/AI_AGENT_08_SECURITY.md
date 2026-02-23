@@ -1,6 +1,6 @@
-# 09 — Security
+# 08 — Security
 
-> Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
 
 ---
 
@@ -179,4 +179,4 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 ## Next Section
 
-→ [10 — Remaining Tasks](AI_AGENT_10_TASKS.md)
+→ [09 — Remaining Tasks](AI_AGENT_09_TASKS.md)

@@ -1,6 +1,6 @@
-# 07 — Environment Status
+# 06 — Environment Status
 
-> Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
+> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
 > Last verified: 2026-02-22 (AWS staging: all 12 bugs fixed and deployed — see [AWS_SNS_FIX_REPORT_20260222.md](AWS_SNS_FIX_REPORT_20260222.md))
 
 ---
@@ -369,4 +369,4 @@ gcloud functions delete mcad-staging-api \
 
 ## Next Section
 
-→ [08 — Runbooks](AI_AGENT_08_RUNBOOKS.md)
+→ [07 — Runbooks](AI_AGENT_07_RUNBOOKS.md)

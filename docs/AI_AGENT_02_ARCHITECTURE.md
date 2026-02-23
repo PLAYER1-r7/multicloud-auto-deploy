@@ -1,6 +1,6 @@
-# 03 — Architecture
+# 02 — Architecture
 
-> Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> Part II — Architecture & Design | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
 
 ---
 
@@ -225,4 +225,4 @@ Staging: `AUTH_DISABLED=false` (was accidentally set to `true` in the past — n
 
 ## Next Section
 
-→ [04 — API & Data Model](AI_AGENT_04_API.md)
+→ [03 — API & Data Model](AI_AGENT_03_API.md)

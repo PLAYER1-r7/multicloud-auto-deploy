@@ -1,6 +1,6 @@
-# 08 — Runbooks
+# 07 — Runbooks
 
-> Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
+> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
 > Step-by-step procedures for common tasks and incident response
 
 ---
@@ -281,4 +281,4 @@ API_BASE_URL=http://localhost:8000
 
 ## Next Section
 
-→ [09 — Security](AI_AGENT_09_SECURITY.md)
+→ [08 — Security](AI_AGENT_08_SECURITY.md)

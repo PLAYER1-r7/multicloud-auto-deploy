@@ -1,6 +1,6 @@
-# 04 — API & Data Model
+# 03 — API & Data Model
 
-> Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> Part II — Architecture & Design | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
 
 ---
 
@@ -183,4 +183,4 @@ pytest tests/test_api_endpoints.py -v
 
 ## Next Section
 
-→ [05 — Infrastructure (Pulumi)](AI_AGENT_05_INFRA.md)
+→ [04 — Infrastructure (Pulumi)](AI_AGENT_04_INFRA.md)
