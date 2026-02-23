@@ -1,7 +1,7 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-23 (セキュリティヘッダー追加・コールドスタート解消 — [AWS](#aws-ap-northeast-1), [GCP](#gcp-asia-northeast1), [Azure](#azure-japaneast))
+> Last verified: 2026-02-23 (Production動作確認セッション — ランディングページ全クラウド ✅ / Azure Function App デプロイ問題あり ⚠️)
 
 ---
 
@@ -178,6 +178,16 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 > Frontend is served as **React SPA** (Vite build) from object storage via CDN — `frontend_web` (Python SSR) is no longer used in production.
 > Full migration report: [REACT_SPA_MIGRATION_REPORT.md](REACT_SPA_MIGRATION_REPORT.md)
 
+### Production Status Summary (2026-02-23)
+
+| Cloud     | CDN Landing (`/`)                   | SNS App (`/sns/`) | API                          |
+| --------- | ----------------------------------- | ----------------- | ---------------------------- |
+| **AWS**   | ✅ HTTP 200, 4449 bytes (Ashnova)   | ✅ React SPA      | ✅ `{"status":"ok","provider":"aws"}` |
+| **Azure** | ✅ HTTP 200, 4412 bytes (Ashnova)   | ✅ React SPA      | ❌ 関数登録0件（要調査）           |
+| **GCP**   | ✅ HTTP 200, 4449 bytes (Ashnova)   | ✅ React SPA      | ✅ `{"status":"ok","provider":"gcp"}` |
+
+**Landing page test (2026-02-23)**: `test-landing-pages.sh --env production` → **37/37 PASS (100%)** ✅
+
 ### Production Endpoints
 
 | Cloud     | CDN / Endpoint                                            | API Endpoint                                                                                     | Distribution ID        |
@@ -237,7 +247,90 @@ gcloud compute target-https-proxies update multicloud-auto-deploy-production-cdn
   --ssl-certificates=multicloud-auto-deploy-production-ssl-cert-3ee2c3ce
 ```
 
-#### All-Cloud Test Results (final check 2026-02-21)
+---
+
+### ⚠️ Production Issues (2026-02-23) — Carry Over to Next Session
+
+#### 1. Azure Function App — 0 registered functions (API 404)
+
+**症状**: `https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net/api/HttpTrigger/health` → HTTP 404
+
+**確認事項**:
+- Host状態: Running ✅ (`v4.1046.100`, uptime: 805719ms)
+- Admin `/admin/functions` → `[]` (0件) ❌ → 関数コードが読み込まれていない
+- `AzureWebJobsStorage` → `AccountName=mcadfuncdiev0w` ✅ (修正済み)
+- `DEPLOYMENT_STORAGE_CONNECTION_STRING` → `AccountName=mcadfuncdiev0w` ✅ (修正済み)
+
+**根本原因 (推定)**:
+- 過去に非存在ストレージ `multicloudautodeploa148` が設定されていた
+- Kudu RemoteBuild モードでは validation check として blob upload を試みる → NXDOMAIN で失敗
+- デプロイが繰り返し失敗したため、wwwroot に有効なコードが存在しない
+- Deploy Function App ステップで `az webapp restart` 後も古いコード（または無コード）状態が継続
+
+**修正済み内容**:
+- `deploy-azure.yml` へ "Storage fix before zip deploy" ステップを追加 (v1.17.6)
+  - `az storage account show-connection-string` で `mcadfuncdiev0w` の接続文字列を取得
+  - zip deploy 前に `AzureWebJobsStorage` と `DEPLOYMENT_STORAGE_CONNECTION_STRING` を更新
+- 最新デプロイ (run 22310372431) では "Deploy Function App" が ✅ 成功
+- しかし "Verify Deployment" (health check 180秒) が ❌ タイムアウト → 関数がロードされていない
+
+**次セッションで調査すること**:
+1. `--remote-build false` オプションで zip deploy する（Kudu validation skip）
+2. または Flex Consumption の Blob storage package deployment を確認:
+   - `WEBSITE_RUN_FROM_PACKAGE=1` + zip を blob にアップロードする方式に切り替え
+3. Kudu `/api/vfs/site/wwwroot/` で wwwroot のファイル一覧を確認
+4. `az webapp log tail` で起動ログを確認
+
+**確認コマンド**:
+```bash
+# Function App の実際のファイル状態確認
+TOKEN=$(az account get-access-token --resource "https://management.azure.com/" --query accessToken -o tsv)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.scm.japaneast-01.azurewebsites.net/api/vfs/" \
+  | python3 -c "import json,sys; [print(f['name']) for f in json.load(sys.stdin)]"
+
+# Host errors 確認
+MASTER_KEY=$(az rest --method POST \
+  --url "https://management.azure.com/subscriptions/29031d24-d41a-4f97-8362-46b40129a7e8/resourceGroups/multicloud-auto-deploy-production-rg/providers/Microsoft.Web/sites/multicloud-auto-deploy-production-func/host/default/listkeys?api-version=2022-03-01" \
+  --query masterKey -o tsv)
+curl -s -H "x-functions-key: $MASTER_KEY" \
+  "https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net/admin/host/status"
+
+# リモートビルドなしで再デプロイ
+cd services/api && ls function-app.zip  # ZIPが存在することを確認
+az functionapp deployment source config-zip \
+  --resource-group multicloud-auto-deploy-production-rg \
+  --name multicloud-auto-deploy-production-func \
+  --src function-app.zip \
+  --timeout 600
+```
+
+#### 2. GCP Pulumi state drift (非ブロッキング)
+
+**症状**: `pulumi up` が `ManagedSslCertificate` Error 400 (in use) + `URLMap` Error 412 (invalid fingerprint) で失敗
+
+**影響**: GCP production は完全に動作中 ✅。CI/CD の GCP deploy ワークフローが失敗するだけ
+
+**解決方法**:
+```bash
+cd infrastructure/pulumi/gcp
+pulumi stack select production
+pulumi refresh --yes  # Pulumiの状態をGCPの実際の状態に同期
+pulumi up --yes       # 差分を適用
+```
+
+#### 3. develop ブランチが main から遅延
+
+**現状**: `develop` は v1.17.1、`main` は v1.17.6
+
+**解決方法**:
+```bash
+git checkout develop
+git merge main --no-ff -m "chore: sync develop with main (v1.17.6)"
+git push origin develop
+```
+
+---
 
 ```
 test-cloud-env.sh production → PASS: 14, FAIL: 0, WARN: 3 (all POST 401 = expected auth guard)
