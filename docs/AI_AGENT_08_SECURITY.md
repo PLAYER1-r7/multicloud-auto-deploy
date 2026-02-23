@@ -6,18 +6,18 @@
 
 ## Current Security Configuration Status
 
-| Feature                   | AWS              | Azure        | GCP               | Notes                                                |
-| ------------------------- | ---------------- | ------------ | ----------------- | ---------------------------------------------------- |
-| HTTPS enforced            | ✅               | ✅           | ❌                | GCP: HTTP only (needs fixing)                        |
-| WAF                       | ❌               | ❌           | ✅ Cloud Armor    | Not configured on AWS / Azure                        |
-| Rate limiting             | ❌               | ❌           | ✅ 100req/min/IP  |                                                      |
-| SQLi / XSS protection     | ❌               | ❌           | ✅                |                                                      |
-| Data encryption (at rest) | ✅ SSE-S3        | ✅ Azure SSE | ✅ Google-managed |                                                      |
-| Versioning                | ✅               | ✅           | ✅                |                                                      |
-| Access logs               | ✅               | ❌           | ✅                |                                                      |
-| Security headers          | ✅ CloudFront RP | ❌           | ❌                | HSTS, CSP, X-Frame-Options                           |
-| Soft delete / retention   | ❌               | ✅ 7 days    | ❌                |                                                      |
-| CORS config               | ✅               | ✅           | ✅                | `allowedOrigins` is currently `*` (needs tightening) |
+| Feature                   | AWS                      | Azure        | GCP               | Notes                                                        |
+| ------------------------- | ------------------------ | ------------ | ----------------- | ------------------------------------------------------------ |
+| HTTPS enforced            | ✅                       | ✅           | ❌                | GCP: HTTP only (needs fixing)                                |
+| WAF                       | ✅ WebACL (CloudFront)   | ❌           | ✅ Cloud Armor    | Azure: not configured                                        |
+| Rate limiting             | ❌                       | ❌           | ✅ 100req/min/IP  |                                                              |
+| SQLi / XSS protection     | ❌                       | ❌           | ✅                |                                                              |
+| Data encryption (at rest) | ✅ SSE-S3                | ✅ Azure SSE | ✅ Google-managed |                                                              |
+| Versioning                | ✅                       | ✅           | ✅                |                                                              |
+| Access logs               | ✅                       | ❌           | ✅                |                                                              |
+| Security headers          | ✅ CloudFront RHP        | ❌           | ❌                | HSTS/X-Frame-Options/X-Content-Type/Referrer/XSS (2026-02-23) |
+| Soft delete / retention   | ❌                       | ✅ 7 days    | ❌                |                                                              |
+| CORS config               | ✅                       | ✅           | ✅                | `allowedOrigins` は現在 `*` (要絞り込み)                    |
 
 ---
 
@@ -147,7 +147,8 @@ Token refresh:
 ## Unresolved Security Issues (by priority)
 
 1. **GCP HTTPS** (high priority)  
-   Requires adding `TargetHttpsProxy` + Google Managed SSL Certificate.
+   Requires adding `TargetHttpsProxy` + Google Managed SSL Certificate.  
+   ※ カスタムドメイン (`www.gcp.ashnova.jp`) は HTTPS 済み (production のみ)
 
 2. **Azure WAF** (high priority)  
    Upgrade Front Door to Premium SKU, or configure WAF Policy compatible with Standard SKU.
@@ -164,15 +165,23 @@ Token refresh:
 
 ---
 
-## Security Headers (configured on AWS CloudFront)
+## Security Headers (AWS CloudFront — 確認済み 2026-02-23)
+
+> Pulumi リソース: `aws.cloudfront.ResponseHeadersPolicy` (`multicloud-auto-deploy-{stack}-security-headers`)
+> `default_cache_behavior` + `/sns*` ordered_cache_behavior 両方に適用。
 
 ```
 Strict-Transport-Security: max-age=31536000; includeSubDomains
 X-Content-Type-Options: nosniff
-X-Frame-Options: DENY
+X-Frame-Options: SAMEORIGIN
 X-XSS-Protection: 1; mode=block
-Content-Security-Policy: default-src 'self'; ...
 Referrer-Policy: strict-origin-when-cross-origin
+```
+
+**検証コマンド**:
+
+```bash
+curl -sI https://d1tf3uumcm4bo1.cloudfront.net/ | grep -i 'strict-transport\|x-content\|x-frame\|referrer\|x-xss'
 ```
 
 ---

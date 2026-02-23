@@ -43,19 +43,20 @@ pulumi destroy --stack staging
 
 ### Resources created
 
-| Pulumi logical name       | AWS resource           | Name pattern                    |
-| ------------------------- | ---------------------- | ------------------------------- |
-| `lambda-role`             | IAM Role               | `{project}-{stack}-lambda-role` |
-| `app-secret`              | Secrets Manager Secret | —                               |
-| `dynamodb-table`          | DynamoDB Table         | `simple-sns-messages`           |
-| `lambda-function`         | Lambda Function        | `{project}-{stack}-api`         |
-| `api-gateway`             | API Gateway v2         | —                               |
-| `frontend-bucket`         | S3 Bucket              | `{project}-{stack}-frontend`    |
-| `landing-bucket`          | S3 Bucket              | `{project}-{stack}-landing`     |
-| `cloudfront-distribution` | CloudFront             | —                               |
-| `cognito-user-pool`       | Cognito User Pool      | —                               |
-| `sns-topic`               | SNS Topic (alerts)     | —                               |
-| CloudWatch Alarms (multi) | CloudWatch             | —                               |
+| Pulumi logical name          | AWS resource                   | Name pattern                                     |
+| ---------------------------- | ------------------------------ | ------------------------------------------------ |
+| `lambda-role`                | IAM Role                       | `{project}-{stack}-lambda-role`                  |
+| `app-secret`                 | Secrets Manager Secret         | —                                                |
+| `dynamodb-table`             | DynamoDB Table                 | `simple-sns-messages`                            |
+| `lambda-function`            | Lambda Function                | `{project}-{stack}-api`                          |
+| `api-gateway`                | API Gateway v2                 | —                                                |
+| `frontend-bucket`            | S3 Bucket                      | `{project}-{stack}-frontend`                     |
+| `landing-bucket`             | S3 Bucket                      | `{project}-{stack}-landing`                      |
+| `cloudfront-distribution`    | CloudFront (PriceClass_200)    | —                                                |
+| `security-headers-policy`    | CloudFront ResponseHeadersPolicy | `{project}-{stack}-security-headers`           |
+| `cognito-user-pool`          | Cognito User Pool              | —                                                |
+| `sns-topic`                  | SNS Topic (alerts)             | —                                                |
+| CloudWatch Alarms (multi)    | CloudWatch                     | —                                                |
 
 ### Key config keys
 
