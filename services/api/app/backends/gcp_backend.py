@@ -37,6 +37,16 @@ class GcpBackend(BackendBase):
         self.profiles_collection = settings.gcp_profiles_collection
         self.bucket_name = settings.gcp_storage_bucket or f"{project_id}-uploads"
 
+        # GCS 署名付きURL用: 認証情報をキャッシュ（毎リクエストのメタデータサーバー呼び出し回避）
+        # generate_upload_urls で credentials.valid をチェックし、期限切れ時のみ refresh する
+        try:
+            self._gcs_credentials, _ = google.auth.default()
+            self._gcs_auth_request = google.auth.transport.requests.Request()
+        except Exception as e:
+            logger.warning(f"Could not pre-fetch GCS credentials at init: {e}")
+            self._gcs_credentials = None
+            self._gcs_auth_request = None
+
         logger.info(
             f"GcpBackend initialized: project={project_id}, "
             f"posts={self.posts_collection}, profiles={self.profiles_collection}, "
@@ -285,9 +295,20 @@ class GcpBackend(BackendBase):
             # Cloud Functions / Cloud Run は Compute Engine 認証情報(トークンのみ)を持つ。
             # generate_signed_url には秘密鍵が必要なため、service_account_email と
             # access_token を渡し、IAM signBlob API 経由で署名する方式を使用する。
-            credentials, _ = google.auth.default()
-            auth_request = google.auth.transport.requests.Request()
-            credentials.refresh(auth_request)
+            # 認証情報は __init__ でキャッシュ済み。トークン期限切れ時のみ refresh する。
+            credentials = self._gcs_credentials
+            auth_request = self._gcs_auth_request
+            if credentials is None or auth_request is None:
+                # フォールバック: 初期化失敗時
+                credentials, _ = google.auth.default()
+                auth_request = google.auth.transport.requests.Request()
+                self._gcs_credentials = credentials
+                self._gcs_auth_request = auth_request
+
+            # token が未取得または期限切れの場合のみ refresh（1時間に1回程度）
+            if not getattr(credentials, "valid", True):
+                credentials.refresh(auth_request)
+
             access_token = credentials.token
             # settings.gcp_service_account は環境変数 GCP_SERVICE_ACCOUNT から設定
             sa_email = settings.gcp_service_account

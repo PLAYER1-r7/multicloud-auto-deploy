@@ -299,6 +299,7 @@ for domain in d.get('authorizedDomains', []):
             --entry-point=handler \
             --trigger-http \
             --allow-unauthenticated \
+            --min-instances=1 \
             --max-instances=10 \
             --memory=512MB \
             --timeout=60s \

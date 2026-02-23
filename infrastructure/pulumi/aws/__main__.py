@@ -681,14 +681,50 @@ if stack == "production":
         ),
     )
 
+# ========================================
+# CloudFront Response Headers Policy (セキュリティヘッダー)
+# HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy を付与
+# 「保護されていない通信」警告 (HSTS 未設定) の解消
+# ========================================
+cloudfront_response_headers_policy = aws.cloudfront.ResponseHeadersPolicy(
+    "security-headers-policy",
+    name=f"{project_name}-{stack}-security-headers",
+    comment="Security headers: HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, XSS",
+    security_headers_config=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigArgs(
+        strict_transport_security=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigStrictTransportSecurityArgs(
+            access_control_max_age_sec=31536000,  # 1年
+            include_subdomains=True,
+            preload=False,  # HSTS preload list 登録は手動で行うため False
+            override=True,
+        ),
+        content_type_options=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigContentTypeOptionsArgs(
+            override=True,
+        ),
+        frame_options=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigFrameOptionsArgs(
+            frame_option="SAMEORIGIN",
+            override=True,
+        ),
+        referrer_policy=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigReferrerPolicyArgs(
+            referrer_policy="strict-origin-when-cross-origin",
+            override=True,
+        ),
+        xss_protection=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigXssProtectionArgs(
+            mode_block=True,
+            override=True,
+            protection=True,
+        ),
+    ),
+)
+
 # CloudFront Distribution with conditional WAF
-# Use PriceClass_100 for staging (North America + Europe) to reduce cost
+# PriceClass_200: 北米 + 欧州 + 日本 + 韓国 + インド (日本ユーザーの遅延解消)
+# PriceClass_100 (北米+欧州のみ) は日本からのアクセスが米国エッジ経由になり遅延が大きい
 cloudfront_kwargs = {
     "enabled": True,
     "is_ipv6_enabled": True,
     "comment": f"{project_name}-{stack} Frontend Distribution",
     "default_root_object": "index.html",
-    "price_class": "PriceClass_100" if stack == "staging" else "PriceClass_All",
+    "price_class": "PriceClass_200" if stack == "staging" else "PriceClass_All",
     "origins": [
         aws.cloudfront.DistributionOriginArgs(
             origin_id=frontend_bucket.bucket_regional_domain_name,
@@ -710,6 +746,7 @@ cloudfront_kwargs = {
                 forward="none",
             ),
         ),
+        response_headers_policy_id=cloudfront_response_headers_policy.id,
         min_ttl=0,
         default_ttl=3600,  # 1 hour
         max_ttl=86400,  # 24 hours
@@ -776,6 +813,7 @@ cloudfront_kwargs["ordered_cache_behaviors"] = [
         compress=True,
         # Managed CachingOptimized policy (静的ファイル向けキャッシュ)
         cache_policy_id="658327ea-f89d-4fab-a63d-7e88639e58f6",
+        response_headers_policy_id=cloudfront_response_headers_policy.id,
         function_associations=[
             aws.cloudfront.DistributionOrderedCacheBehaviorFunctionAssociationArgs(
                 event_type="viewer-request",
