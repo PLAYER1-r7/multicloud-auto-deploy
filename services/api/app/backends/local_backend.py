@@ -298,6 +298,9 @@ class LocalBackend(BackendBase):
             )
 
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
+        """投稿を削除"""
+        with self._get_connection() as conn:
+            from sqlalchemy import text
             # 投稿の所有者確認
             check_query = text("SELECT user_id FROM posts WHERE id = :post_id")
             result = conn.execute(check_query, {"post_id": post_id})
