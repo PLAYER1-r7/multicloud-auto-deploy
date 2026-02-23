@@ -175,14 +175,20 @@ test_landing_page() {
   fi
 
   # ── Test 6: No localhost references ──────────────────────
-  # Filter out JavaScript inline comments that explain env detection
-  local sanitized
-  sanitized=$(echo "$body" | grep -v '//' | grep -v '<!--')
-  if echo "$sanitized" | grep -qi 'localhost'; then
-    fail "Page exposes 'localhost' in rendered HTML (env var injection issue?)"
-    [[ "$VERBOSE" == true ]] && grep -n 'localhost' <<< "$body" | head -5
+  # Detect env-var injection issues: localhost appearing in actual URLs/endpoints
+  # (href, src, fetch, BASE_URL, API_URL, etc.) rather than in JS env-detection code
+  # e.g. "hostname === 'localhost'" is normal JS code — NOT an injection issue
+  local lh_in_url lh_count
+  # Match localhost in URL contexts only (href, src, fetch, base_url, api patterns)
+  lh_in_url=$(echo "$body" | grep -ioE \
+    '(href|src|fetch\(|BASE_URL|API_URL|endpoint)[[:space:]]*[=:][[:space:]]*["'"'"'][^"'"'"']*localhost[^"'"'"']*["'"'"']' \
+    | wc -l || true)
+  lh_count=${lh_in_url// /}
+  if [[ "$lh_count" -gt 0 ]]; then
+    fail "Page exposes 'localhost' in URL/endpoint context (env var injection issue?)"
+    [[ "$VERBOSE" == true ]] && grep -in 'localhost' <<< "$body" | head -5
   else
-    ok "No 'localhost' in page content (env vars injected correctly)"
+    ok "No 'localhost' in URL/endpoint context (env vars injected correctly)"
   fi
 
   # ── Test 7: HTTPS transport ──────────────────────────────
