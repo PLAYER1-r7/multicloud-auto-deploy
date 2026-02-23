@@ -518,6 +518,14 @@ jobs:
             echo "✅ Deployment completed successfully!"
           fi
 
+          # Configure always-ready instances to prevent FlexConsumption cold starts
+          echo "🔥 Configuring always-ready instances (cold start prevention)..."
+          az functionapp scale config always-ready set \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --settings http=1 \
+            2>/dev/null && echo "✅ always-ready http=1 configured" || echo "⚠️  Could not set always-ready (non-fatal)"
+
       - name: Enable Static Website Hosting
         run: |
           STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
