@@ -234,6 +234,8 @@ jobs:
 
           az ad app update --id "$AD_APP_ID" --web-redirect-uris "${URIS[@]}"
           echo "✅ Azure AD redirect URIs updated"
+
+      - name: Build and Package Azure Function
         run: |
           cd services/api
 
