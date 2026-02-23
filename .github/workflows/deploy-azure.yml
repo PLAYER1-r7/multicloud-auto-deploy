@@ -459,6 +459,29 @@ jobs:
           AUTH_DISABLED_VALUE="false"
 
           echo "⚙️  Setting environment variables (ENVIRONMENT=$DEPLOY_ENV, AUTH_DISABLED=$AUTH_DISABLED_VALUE)..."
+
+          # Fix storage settings: ensure AzureWebJobsStorage points to the correct storage account.
+          # The Function App was originally misconfigured with a non-existent storage account.
+          # Fetch the connection string from the Pulumi-managed functions storage account.
+          FUNCTIONS_STORAGE_NAME="${{ steps.pulumi_outputs.outputs.functions_storage_name }}"
+          STORAGE_CONN=$(az storage account show-connection-string \
+            --name "$FUNCTIONS_STORAGE_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query connectionString -o tsv 2>/dev/null || echo "")
+
+          if [ -n "$STORAGE_CONN" ]; then
+            echo "✅ Retrieved storage connection string for $FUNCTIONS_STORAGE_NAME — fixing AzureWebJobsStorage"
+            az functionapp config appsettings set \
+              --name $FUNCTION_APP \
+              --resource-group $RESOURCE_GROUP \
+              --settings \
+                AzureWebJobsStorage="$STORAGE_CONN" \
+                DEPLOYMENT_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
+              > /dev/null
+          else
+            echo "⚠️  Could not retrieve storage connection string for $FUNCTIONS_STORAGE_NAME (using existing setting)"
+          fi
+
           az functionapp config appsettings set \
             --name $FUNCTION_APP \
             --resource-group $RESOURCE_GROUP \
