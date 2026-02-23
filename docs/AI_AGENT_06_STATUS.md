@@ -1,7 +1,7 @@
-# 07 — Environment Status
+# 06 — Environment Status
 
-> Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-21 (All 3 clouds: React SPA migration complete + production integration tests 9/9 PASS + custom domain HTTPS fully operational)
+> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
+> Last verified: 2026-02-23 (セキュリティヘッダー追加・コールドスタート解消 — [AWS](#aws-ap-northeast-1), [GCP](#gcp-asia-northeast1), [Azure](#azure-japaneast))
 
 ---
 
@@ -24,7 +24,8 @@ API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 
 | Resource              | Name / ID                                                             | Status |
 | --------------------- | --------------------------------------------------------------------- | ------ |
-| CloudFront            | `E1TBH4R432SZBZ`                                                      | ✅     |
+| CloudFront            | `E1TBH4R432SZBZ` (PriceClass_200: NA/EU/JP/KR/IN)                     | ✅     |
+| CloudFront RHP        | `multicloud-auto-deploy-staging-security-headers` (HSTS + CSP + 4 headers) | ✅     |
 | S3 (frontend)         | `multicloud-auto-deploy-staging-frontend`                             | ✅     |
 | S3 (images)           | `multicloud-auto-deploy-staging-images` (CORS: \*)                    | ✅     |
 | Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, 512MB)             | ✅     |
@@ -34,19 +35,43 @@ API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 | Cognito               | Pool `ap-northeast-1_AoDxOvCib` / Client `1k41lqkds4oah55ns8iod30dv2` | ✅     |
 | WAF                   | WebACL attached to CloudFront                                         | ✅     |
 
-**Confirmed working (verified 2026-02-20)**:
+**Confirmed working (verified 2026-02-22)**:
 
 - Cognito login → `/sns/auth/callback` → session cookie set ✅
-- Post feed, create/edit/delete post ✅
+- Post feed, create post with up to 10 images ✅
+- Images display correctly (S3 presigned GET URLs, 1-hour expiry) ✅
+- `GET /posts/{post_id}` individual post view ✅
 - Profile page (nickname, avatar, bio) ✅
-- Image upload: S3 presigned URLs, up to 16 files per post ✅
+- Nickname stored and displayed in post list ✅
+- Image upload: S3 presigned URLs, limit enforced server-side via `MAX_IMAGES_PER_POST` ✅
+- `GET /limits` endpoint (no auth) returns `{"maxImagesPerPost": 10}` ✅
 - Logout → Cognito-hosted logout → redirect back to `/sns/` ✅
 - CI/CD pipeline: env vars set correctly on every push ✅
+- Frontend bundle built with `VITE_BASE_PATH=/sns/` — asset paths correct ✅
+- CloudFront custom error pages: `/sns/index.html` (403+404) ✅
+- CloudFront Response Headers Policy: HSTS/CSP(`upgrade-insecure-requests`)/X-Content-Type-Options/X-Frame-Options/Referrer-Policy/XSS-Protection ✅ (2026-02-23)
+- CloudFront PriceClass_200: 日本・韓国・インドのエッジを使用 ✅ (旧: PriceClass_100 = 米国/欧州のみ)
+- OAuth フロー PKCE (S256) 実装: `response_type=code` + code_verifier/challenge ✅ (2026-02-23)
+- Cognito `implicit` フロー削除: `allowed_oauth_flows=["code"]` のみ ✅ (2026-02-23)
+- S3 パブリックアクセス完全遮断: `BlockPublicAcls/IgnorePublicAcls/BlockPublicPolicy/RestrictPublicBuckets=True` ✅ (2026-02-23)
+- S3 バケットポリシー OAI 専用: `Principal:*` 削除 ✅ (2026-02-23)
+- Lambda `_resolve_image_urls`: `http://` URL をスキップして Mixed Content を防止 ✅ (2026-02-23)
+
+**Current frontend bundle**: `index-B0gzRu__.js` (uploaded 2026-02-23, PKCE対応)
+
+**Build command for AWS staging**:
+
+```bash
+cd services/frontend_react
+set -a && source .env.aws.staging && set +a
+VITE_BASE_PATH=/sns/ npm run build
+```
 
 **Known limitations**:
 
 - Production stack shares staging resources (independent prod stack not yet deployed).
 - WAF rule set not tuned.
+- `DELETE /posts` may fail on SNS Unsubscribe call (not tested in this session).
 
 ---
 
@@ -54,16 +79,20 @@ API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 
 ```
 CDN URL  : https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net
-API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger
+API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
 ```
 
 | Resource        | Name                                                                  | Status |
 | --------------- | --------------------------------------------------------------------- | ------ |
 | Front Door      | `multicloud-auto-deploy-staging-fd` / endpoint: `mcad-staging-d45ihd` | ✅     |
 | Storage Account | `mcadwebd45ihd`                                                       | ✅     |
-| Function App    | `multicloud-auto-deploy-staging-func` (Python 3.12)                   | ✅     |
+| Function App    | `multicloud-auto-deploy-staging-func` (Python 3.12, always-ready=1)   | ✅     |
 | Cosmos DB       | `simple-sns-cosmos` (Serverless)                                      | ✅     |
 | Resource Group  | `multicloud-auto-deploy-staging-rg`                                   | ✅     |
+
+**Configured (2026-02-23)**:
+
+- FlexConsumption always-ready instances: `http=1` → コールドスタート解消 ✅
 
 **Unresolved issues**:
 
@@ -76,8 +105,8 @@ API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneas
 
 ```
 CDN URL          : http://34.117.111.182
-API URL          : https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app
-Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7a-an.a.run.app
+API URL          : https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app
+Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-899621454670.asia-northeast1.run.app
 ```
 
 | Resource                 | Name / ID                                                         | Status |
@@ -85,7 +114,7 @@ Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7
 | Global IP                | `34.117.111.182`                                                  | ✅     |
 | GCS Bucket (frontend)    | `ashnova-multicloud-auto-deploy-staging-frontend`                 | ✅     |
 | GCS Bucket (uploads)     | `ashnova-multicloud-auto-deploy-staging-uploads` (public read)    | ✅     |
-| Cloud Run (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12)                | ✅     |
+| Cloud Run (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, **min=1**)     | ✅     |
 | Cloud Run (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (Docker, port 8080) | ✅     |
 | Firestore                | `(default)` — collections: messages, posts                        | ✅     |
 | Backend Bucket           | `multicloud-auto-deploy-staging-cdn-backend`                      | ✅     |
@@ -113,6 +142,11 @@ Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7
 - CSS background SVGs used absolute path `/static/` → Changed to relative path `./` (commit `0ed0805`)
 - GCS uploads bucket was private → Granted `allUsers:objectViewer` + added IAMBinding to Pulumi definition (commit `0ed0805`)
 
+**Configured (2026-02-23)**:
+
+- Cloud Run `--min-instances=1` → コールドスタート（最大5秒）解消 ✅
+- `gcp_backend.py`: `google.auth.default()` を `__init__()` でキャッシュ → リクエストごとのメタデータサーバー呼び出し排除 ✅
+
 **Remaining issues**:
 
 - HTTPS not configured for CDN (HTTP only). Requires `TargetHttpsProxy` + managed SSL certificate.
@@ -125,7 +159,7 @@ Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-son5b3ml7
 ```bash
 # GCP
 curl -s http://34.117.111.182/ | head -3
-curl -s https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app/health
+curl -s https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app/health
 
 # AWS
 curl -I https://d1tf3uumcm4bo1.cloudfront.net/
@@ -133,7 +167,7 @@ curl -s https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/health
 
 # Azure
 curl -I https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/
-curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger/health"
+curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/health"
 ```
 
 ---
@@ -352,4 +386,4 @@ gcloud functions delete mcad-staging-api \
 
 ## Next Section
 
-→ [08 — Runbooks](AI_AGENT_08_RUNBOOKS.md)
+→ [07 — Runbooks](AI_AGENT_07_RUNBOOKS.md)

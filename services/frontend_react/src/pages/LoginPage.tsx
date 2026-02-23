@@ -22,12 +22,18 @@ export default function LoginPage() {
   }, [isLoggedIn, navigate]);
 
   // ----- AWS Cognito / Azure AD: simple redirect -----
-  const handleRedirectLogin = () => {
-    const url = getLoginUrl();
-    if (url) {
-      window.location.href = url;
-    } else {
-      setError("認証設定が不完全です。管理者に連絡してください。");
+  const handleRedirectLogin = async () => {
+    try {
+      const url = await getLoginUrl();
+      if (url) {
+        window.location.href = url;
+      } else {
+        setError("認証設定が不完全です。管理者に連絡してください。");
+      }
+    } catch (e: unknown) {
+      setError(
+        (e as { message?: string }).message ?? "ログイン準備に失敗しました",
+      );
     }
   };
 
@@ -36,14 +42,16 @@ export default function LoginPage() {
     setStatus("Googleに接続中...");
     setError("");
     try {
-      // @ts-ignore — CDN URL dynamic import, no TypeScript type declarations available
-      const firebaseApp = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js");
+      // @ts-ignore
+      const firebaseApp =
+        await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"); // eslint-disable-line
       const { initializeApp, getApps } = firebaseApp as {
         initializeApp: (config: object) => object;
         getApps: () => object[];
       };
-      // @ts-ignore — CDN URL dynamic import
-      const firebaseAuth = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js");
+      // @ts-ignore
+      const firebaseAuth =
+        await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"); // eslint-disable-line
       const { getAuth, signInWithPopup, GoogleAuthProvider } = firebaseAuth as {
         getAuth: () => object;
         signInWithPopup: (

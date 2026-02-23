@@ -1,240 +1,353 @@
-#!/bin/bash
-# ========================================
-# Script Name: test-e2e.sh
-# Description: Multi-Cloud E2E Test Suite
-# Author: PLAYER1-r7
-# Created: 2026-02-14
-# Last Modified: 2026-02-15
-# Version: 1.0.0
-# ========================================
+#!/usr/bin/env bash
+# ================================================================
+# test-e2e.sh — Multi-Cloud End-to-End Test Suite (v2)
+# ================================================================
 #
-# Usage: ./scripts/test-e2e.sh
+# Runs a lightweight E2E health + CRUD smoke test against all
+# three cloud staging environments and prints a consolidated
+# pass/fail table.
 #
-# Description:
-#   Comprehensive end-to-end testing for all cloud environments.
-#   Tests health checks and full CRUD operations across AWS, GCP, and Azure.
+# Public endpoints are tested without a token.
+# Authenticated endpoints (POST/PUT/DELETE) require tokens.
 #
-# Test Coverage:
-#   - Total: 18 tests (3 clouds × 6 tests each)
-#   - AWS: Lambda + API Gateway + DynamoDB
-#   - GCP: Cloud Run + Firestore
-#   - Azure: Functions Flex Consumption + Cosmos DB
+# Usage:
+#   # Public endpoints only:
+#   ./scripts/test-e2e.sh
 #
-# Test Operations:
-#   1. Health Check
-#   2. Create Message
-#   3. List Messages
-#   4. Get Message by ID
-#   5. Update Message
-#   6. Delete Message
+#   # Full authenticated run:
+#   ./scripts/test-e2e.sh \
+#     --aws-token   <cognito-access-token> \
+#     --azure-token <azure-ad-id-token> \
+#     --gcp-token   <firebase-id-token>
 #
-# Prerequisites:
-#   - curl command available
-#   - jq command available
-#   - Active deployments on all three clouds
+#   # URL overrides:
+#   AWS_API_URL=https://... ./scripts/test-e2e.sh
 #
-# Exit Codes:
-#   0 - All tests passed
-#   1 - One or more tests failed
+# How to get tokens:
+#   AWS (Cognito):
+#     aws cognito-idp initiate-auth \
+#       --auth-flow USER_PASSWORD_AUTH \
+#       --client-id 1k41lqkds4oah55ns8iod30dv2 \
+#       --auth-parameters USERNAME=user@example.com,PASSWORD=pw \
+#       --region ap-northeast-1 \
+#       --query 'AuthenticationResult.AccessToken' --output text
+#   GCP (Firebase):
+#     gcloud auth print-identity-token
+#   Azure (Azure AD):
+#     Copy id_token from browser DevTools Application > Local Storage
 #
-# ========================================
+# Exit codes:
+#   0 — All tests passed
+#   1 — One or more tests failed
+#   2 — Missing required dependency
+# ================================================================
 
-set -e
+set -euo pipefail
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+RED='\033[0;31m'; GREEN='\033[0;32m'
+YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'
+BOLD='\033[1m'; NC='\033[0m'
 
-# Environment URLs
-declare -A APIS=(
-    ["AWS"]="https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com"
-    ["GCP"]="https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app"
-    ["Azure"]="https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger"
+AWS_API_URL="${AWS_API_URL:-}"
+AZURE_API_URL="${AZURE_API_URL:-}"
+GCP_API_URL="${GCP_API_URL:-}"
+AWS_TOKEN=""
+AZURE_TOKEN=""
+GCP_TOKEN=""
+VERBOSE=false
+_ENV_=staging
+_READ_ONLY_=false
+_WRITE_=false
+READ_ONLY=false
+
+command -v curl >/dev/null 2>&1 || { echo -e "${RED}ERROR${NC}: curl required" >&2; exit 2; }
+command -v jq   >/dev/null 2>&1 || { echo -e "${RED}ERROR${NC}: jq required"   >&2; exit 2; }
+
+usage() {
+  cat <<EOF
+Usage: $0 [OPTIONS]
+  -e, --env   <env>       Target environment: staging|production  (default: staging)
+                          --env production uses custom domain URLs and implies --read-only
+  -r, --read-only         Skip all write tests (POST/PUT/DELETE/presigned-urls)
+      --write             Allow write tests even when --env production is set
+  --aws-token   <token>   Cognito access token
+  --azure-token <token>   Azure AD ID token
+  --gcp-token   <token>   Firebase ID token
+  -v, --verbose           Print response bodies on failure
+  -h, --help              Show this help
+
+Examples:
+  # Staging (default):
+  $0 --aws-token eyJ...
+  # Production - read-only smoke test:
+  $0 --env production
+  # Production - full test with writes:
+  $0 --env production --write --aws-token eyJ... --gcp-token \$(gcloud auth print-identity-token)
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -e|--env)
+      case "$2" in
+        production|prod) _ENV_=production; _READ_ONLY_=true ;;
+        staging|stag)    _ENV_=staging ;;
+        *) echo -e "${RED}Unknown env: $2${NC}"; exit 1 ;;
+      esac
+      shift 2 ;;
+    -r|--read-only) _READ_ONLY_=true; shift ;;
+    --write)        _WRITE_=true;     shift ;;
+    --aws-token)   AWS_TOKEN="$2";   shift 2 ;;
+    --azure-token) AZURE_TOKEN="$2"; shift 2 ;;
+    --gcp-token)   GCP_TOKEN="$2";   shift 2 ;;
+    -v|--verbose)  VERBOSE=true;     shift   ;;
+    -h|--help)     usage; exit 0 ;;
+    *) echo -e "${RED}Unknown option: $1${NC}"; usage; exit 1 ;;
+  esac
+done
+
+# Resolve read-only flag
+READ_ONLY=$_READ_ONLY_
+[[ $_WRITE_ == true ]] && READ_ONLY=false
+
+# Resolve URLs based on environment
+if [[ $_ENV_ == production ]]; then
+  AWS_API_URL="${AWS_API_URL:-https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com}"
+  AZURE_API_URL="${AZURE_API_URL:-https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net/api}"
+  GCP_API_URL="${GCP_API_URL:-https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app}"
+else
+  AWS_API_URL="${AWS_API_URL:-https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com}"
+  AZURE_API_URL="${AZURE_API_URL:-https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net}"
+  GCP_API_URL="${GCP_API_URL:-https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app}"
+fi
+
+declare -A RESULTS
+PASS=0; FAIL=0; SKIP=0
+
+rec_pass() { RESULTS["$1:$2"]="pass"; PASS=$((PASS + 1)); }
+rec_fail() { RESULTS["$1:$2"]="fail"; FAIL=$((FAIL + 1)); }
+rec_skip() { RESULTS["$1:$2"]="skip"; SKIP=$((SKIP + 1)); }
+
+HTTP_STATUS=0
+HTTP_BODY=""
+
+http_req() {
+  local method="$1" url="$2" token="${3:-}" data="${4:-}"
+  local tmpfile
+  tmpfile=$(mktemp /tmp/e2e_body_XXXXXX)
+  local curl_args=(-s -o "$tmpfile" -w "%{http_code}" -X "$method" --max-time 25 --compressed)
+  [[ -n "$token" ]] && curl_args+=(-H "Authorization: Bearer $token")
+  [[ -n "$data"  ]] && curl_args+=(-H "Content-Type: application/json" -d "$data")
+  curl_args+=("$url")
+  HTTP_STATUS=$(curl "${curl_args[@]}" 2>/dev/null || echo "000")
+  HTTP_BODY=$(cat "$tmpfile" 2>/dev/null || echo "")
+  rm -f "$tmpfile"
+}
+
+test_cloud_suite() {
+  local cloud="$1" api_base="$2" token="${3:-}"
+  local cloud_up
+  cloud_up=$(echo "$cloud" | tr '[:lower:]' '[:upper:]')
+
+  echo ""
+  echo -e "${BOLD}${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${BOLD}  Cloud: ${CYAN}$cloud_up${NC}  │  ${api_base}${NC}"
+  echo -e "${BOLD}${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+  local created_ids=()
+
+  # 1. Health check
+  echo -e "\n  ${BLUE}[1]${NC} Health check"
+  http_req GET "$api_base/health"
+  if [[ "$HTTP_STATUS" == "200" ]]; then
+    local st provider
+    st=$(echo "$HTTP_BODY"       | jq -r '.status   // ""'       2>/dev/null)
+    provider=$(echo "$HTTP_BODY" | jq -r '.provider // "unknown"' 2>/dev/null)
+    if [[ "$st" == "ok" ]]; then
+      echo -e "  ${GREEN}[PASS]${NC}  GET /health → 200  (provider=$provider)"; rec_pass "$cloud" "GET /health"
+    else
+      echo -e "  ${RED}[FAIL]${NC}  GET /health → status='$st' (expected 'ok')"; rec_fail "$cloud" "GET /health"
+    fi
+  else
+    echo -e "  ${RED}[FAIL]${NC}  GET /health → $HTTP_STATUS"; rec_fail "$cloud" "GET /health"
+    [[ "$VERBOSE" == true ]] && echo "$HTTP_BODY" | head -c 300
+  fi
+
+  # 2. List posts (public)
+  echo -e "\n  ${BLUE}[2]${NC} List posts (public)"
+  http_req GET "$api_base/posts"
+  if [[ "$HTTP_STATUS" == "200" ]] && echo "$HTTP_BODY" | jq -e '.items' >/dev/null 2>&1; then
+    local count
+    count=$(echo "$HTTP_BODY" | jq '.items | length' 2>/dev/null || echo "?")
+    echo -e "  ${GREEN}[PASS]${NC}  GET /posts → 200  (items=$count)"; rec_pass "$cloud" "GET /posts"
+  else
+    echo -e "  ${RED}[FAIL]${NC}  GET /posts → $HTTP_STATUS or missing .items"; rec_fail "$cloud" "GET /posts"
+    [[ "$VERBOSE" == true ]] && echo "$HTTP_BODY" | head -c 300
+  fi
+
+  # 3. Auth guard
+  echo -e "\n  ${BLUE}[3]${NC} Auth guard (unauthenticated POST)"
+  http_req POST "$api_base/posts" "" '{"content":"auth guard test"}'
+  if [[ "$HTTP_STATUS" == "401" || "$HTTP_STATUS" == "403" ]]; then
+    echo -e "  ${GREEN}[PASS]${NC}  POST /posts (no token) → $HTTP_STATUS"; rec_pass "$cloud" "auth guard"
+  else
+    echo -e "  ${RED}[FAIL]${NC}  POST /posts (no token) → $HTTP_STATUS (expected 401/403)"; rec_fail "$cloud" "auth guard"
+  fi
+
+  # 4-6. Authenticated CRUD
+  if [[ $READ_ONLY == true ]]; then
+    echo -e "\n  ${CYAN}[SKIP]${NC}  Read-only mode: skipping write tests (POST/PUT/DELETE/presigned-urls)"
+    for lbl in "POST /posts" "GET /posts/:id" "PUT /posts/:id" "DELETE /posts/:id" "presigned-urls"; do
+      rec_skip "$cloud" "$lbl"
+    done
+    return
+  fi
+
+  if [[ -z "$token" ]]; then
+    echo -e "\n  ${CYAN}[SKIP]${NC}  Sections 4-6: no token provided"
+    for lbl in "POST /posts" "GET /posts/:id" "PUT /posts/:id" "DELETE /posts/:id" "presigned-urls"; do
+      rec_skip "$cloud" "$lbl"
+    done
+    return
+  fi
+
+  # 4. Create post
+  echo -e "\n  ${BLUE}[4]${NC} CRUD (authenticated)"
+  local ts
+  ts=$(date +%s)
+  http_req POST "$api_base/posts" "$token" \
+    "{\"content\":\"[E2E] $cloud_up smoke test $ts\",\"isMarkdown\":false}"
+  if [[ "$HTTP_STATUS" == "201" ]]; then
+    local pid
+    pid=$(echo "$HTTP_BODY" | jq -r '.postId // .post_id // ""' 2>/dev/null)
+    if [[ -n "$pid" && "$pid" != "null" ]]; then
+      echo -e "  ${GREEN}[PASS]${NC}  POST /posts → 201  (postId=$pid)"; rec_pass "$cloud" "POST /posts"
+      created_ids+=("$pid")
+    else
+      echo -e "  ${RED}[FAIL]${NC}  POST /posts → 201 but no postId"; rec_fail "$cloud" "POST /posts"
+      pid=""
+    fi
+  else
+    echo -e "  ${RED}[FAIL]${NC}  POST /posts → $HTTP_STATUS (expected 201)"; rec_fail "$cloud" "POST /posts"
+    [[ "$VERBOSE" == true ]] && echo "$HTTP_BODY" | head -c 300
+    for lbl in "GET /posts/:id" "PUT /posts/:id" "DELETE /posts/:id" "presigned-urls"; do rec_skip "$cloud" "$lbl"; done
+    return
+  fi
+
+  # 5. Get by ID
+  http_req GET "$api_base/posts/$pid" "$token"
+  if [[ "$HTTP_STATUS" == "200" ]]; then
+    echo -e "  ${GREEN}[PASS]${NC}  GET /posts/$pid → 200"; rec_pass "$cloud" "GET /posts/:id"
+  else
+    echo -e "  ${RED}[FAIL]${NC}  GET /posts/$pid → $HTTP_STATUS"; rec_fail "$cloud" "GET /posts/:id"
+  fi
+
+  # 6. Update
+  http_req PUT "$api_base/posts/$pid" "$token" \
+    "{\"content\":\"[E2E] $cloud_up updated $ts\"}"
+  if [[ "$HTTP_STATUS" == "200" ]]; then
+    echo -e "  ${GREEN}[PASS]${NC}  PUT /posts/$pid → 200"; rec_pass "$cloud" "PUT /posts/:id"
+  else
+    echo -e "  ${RED}[FAIL]${NC}  PUT /posts/$pid → $HTTP_STATUS"; rec_fail "$cloud" "PUT /posts/:id"
+  fi
+
+  # 7. Presigned URL
+  echo -e "\n  ${BLUE}[5]${NC} Presigned URL"
+  http_req POST "$api_base/uploads/presigned-urls" "$token" \
+    '{"count":1,"contentTypes":["image/jpeg"]}'
+  if [[ "$HTTP_STATUS" == "200" ]] && echo "$HTTP_BODY" | jq -e '.urls[0].url' >/dev/null 2>&1; then
+    echo -e "  ${GREEN}[PASS]${NC}  POST /uploads/presigned-urls → 200"; rec_pass "$cloud" "presigned-urls"
+  else
+    echo -e "  ${RED}[FAIL]${NC}  POST /uploads/presigned-urls → $HTTP_STATUS"; rec_fail "$cloud" "presigned-urls"
+    [[ "$VERBOSE" == true ]] && echo "$HTTP_BODY" | head -c 300
+  fi
+
+  # 8. Delete
+  echo -e "\n  ${BLUE}[6]${NC} Cleanup"
+  for del_id in "${created_ids[@]}"; do
+    http_req DELETE "$api_base/posts/$del_id" "$token"
+    if [[ "$HTTP_STATUS" == "200" || "$HTTP_STATUS" == "204" ]]; then
+      echo -e "  ${GREEN}[PASS]${NC}  DELETE /posts/$del_id → $HTTP_STATUS"; rec_pass "$cloud" "DELETE /posts/:id"
+    else
+      echo -e "  ${RED}[FAIL]${NC}  DELETE /posts/$del_id → $HTTP_STATUS"; rec_fail "$cloud" "DELETE /posts/:id"
+    fi
+  done
+}
+
+# ── Run all clouds ────────────────────────────────────────────
+
+echo ""
+echo -e "${BOLD}╔══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BOLD}║         Multi-Cloud E2E Test Suite  (v2)                    ║${NC}"
+echo -e "${BOLD}║         $(date '+%Y-%m-%d %H:%M:%S')                                 ║${NC}"
+echo -e "${BOLD}╚══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "  AWS   API: ${CYAN}$AWS_API_URL${NC}"
+echo -e "  Azure API: ${CYAN}$AZURE_API_URL${NC}"
+echo -e "  GCP   API: ${CYAN}$GCP_API_URL${NC}"
+
+test_cloud_suite "aws"   "$AWS_API_URL"   "$AWS_TOKEN"
+test_cloud_suite "azure" "$AZURE_API_URL" "$AZURE_TOKEN"
+test_cloud_suite "gcp"   "$GCP_API_URL"   "$GCP_TOKEN"
+
+# ── Summary table ─────────────────────────────────────────────
+
+echo ""
+echo -e "${BOLD}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}  Summary Table${NC}"
+echo -e "${BOLD}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+
+LABELS=(
+  "GET /health"
+  "GET /posts"
+  "auth guard"
+  "POST /posts"
+  "GET /posts/:id"
+  "PUT /posts/:id"
+  "DELETE /posts/:id"
+  "presigned-urls"
 )
 
-# Test counters
-TOTAL_TESTS=0
-PASSED_TESTS=0
-FAILED_TESTS=0
+printf "  %-22s  %-8s  %-8s  %-8s\n" "Test" "AWS" "Azure" "GCP"
+echo "  ─────────────────────────────────────────────────────────"
+for label in "${LABELS[@]}"; do
+  printf "  %-22s" "$label"
+  for cloud in aws azure gcp; do
+    result="${RESULTS[$cloud:$label]:-skip}"
+    case "$result" in
+      pass) printf "  ${GREEN}%-8s${NC}" "PASS" ;;
+      fail) printf "  ${RED}%-8s${NC}"   "FAIL" ;;
+      skip) printf "  ${CYAN}%-8s${NC}"  "SKIP" ;;
+    esac
+  done
+  echo ""
+done
 
-# Function to print test result
-print_result() {
-    local status=$1
-    local message=$2
-    
-    TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    
-    if [ "$status" = "PASS" ]; then
-        echo -e "${GREEN}✓${NC} $message"
-        PASSED_TESTS=$((PASSED_TESTS + 1))
-    else
-        echo -e "${RED}✗${NC} $message"
-        FAILED_TESTS=$((FAILED_TESTS + 1))
-    fi
-}
+echo ""
+echo -e "${BOLD}═══════════════════════════════════════════════════════════════${NC}"
+printf "  ${GREEN}Passed${NC} : %d\n" "$PASS"
+printf "  ${RED}Failed${NC} : %d\n" "$FAIL"
+printf "  ${CYAN}Skipped${NC}: %d\n" "$SKIP"
+TOTAL=$((PASS + FAIL))
+if [[ $TOTAL -gt 0 ]]; then
+  RATE=$(awk "BEGIN {printf \"%.0f\", ($PASS/$TOTAL)*100}")
+  printf "  Pass rate: %s%%\n" "$RATE"
+fi
+echo ""
 
-# Function to test health endpoint
-test_health() {
-    local env=$1
-    local api_url=$2
-    
-    echo -e "\n${BLUE}Testing Health Endpoint${NC}"
-    
-    response=$(curl -sf "${api_url}/health" 2>&1)
-    if [ $? -eq 0 ]; then
-        status=$(echo "$response" | jq -r '.status' 2>/dev/null)
-        if [ "$status" = "ok" ]; then
-            print_result "PASS" "Health check returned 'ok'"
-        else
-            print_result "FAIL" "Health check returned unexpected status: $status"
-        fi
-    else
-        print_result "FAIL" "Health check failed: $response"
-    fi
-}
-
-# Function to test CRUD operations
-test_crud() {
-    local env=$1
-    local api_url=$2
-    local message_id=""
-    
-    # All environments use /api/messages/ path
-    local api_path="/api/messages/"
-    
-    echo -e "\n${BLUE}Testing CRUD Operations${NC}"
-    
-    # CREATE (POST)
-    echo -e "${YELLOW}→${NC} Creating message..."
-    create_response=$(curl -sf -X POST "${api_url}${api_path}" \
-        -H "Content-Type: application/json" \
-        -d '{"content":"E2E Test Message from '"$env"'","author":"E2E Test User"}' 2>&1)
-    
-    if [ $? -eq 0 ]; then
-        message_id=$(echo "$create_response" | jq -r '.id' 2>/dev/null)
-        if [ -n "$message_id" ] && [ "$message_id" != "null" ]; then
-            print_result "PASS" "Create message (ID: ${message_id:0:8}...)"
-        else
-            print_result "FAIL" "Create message returned invalid ID"
-            return
-        fi
-    else
-        print_result "FAIL" "Create message failed: $create_response"
-        return
-    fi
-    
-    # Small delay to ensure consistency
-    sleep 1
-    
-    # READ ALL (GET)
-    echo -e "${YELLOW}→${NC} Fetching all messages..."
-    list_response=$(curl -sf "${api_url}${api_path}" 2>&1)
-    
-    if [ $? -eq 0 ]; then
-        # Check if response has 'messages' array
-        messages=$(echo "$list_response" | jq -r '.messages' 2>/dev/null)
-        if [ "$messages" != "null" ]; then
-            count=$(echo "$messages" | jq '. | length' 2>/dev/null)
-            if [ -n "$count" ] && [ "$count" -ge 0 ]; then
-                print_result "PASS" "List messages (found $count)"
-            else
-                print_result "FAIL" "List messages returned invalid response"
-            fi
-        else
-            print_result "FAIL" "List messages missing 'messages' field"
-        fi
-    else
-        print_result "FAIL" "List messages failed: $list_response"
-    fi
-    
-    # READ ONE (GET by ID)
-    echo -e "${YELLOW}→${NC} Fetching specific message..."
-    get_response=$(curl -sf "${api_url}${api_path}${message_id}" 2>&1)
-    
-    if [ $? -eq 0 ]; then
-        content=$(echo "$get_response" | jq -r '.content' 2>/dev/null)
-        if [ -n "$content" ] && [ "$content" != "null" ]; then
-            print_result "PASS" "Get message by ID"
-        else
-            print_result "FAIL" "Get message returned invalid content"
-        fi
-    else
-        print_result "FAIL" "Get message failed: $get_response"
-    fi
-    
-    # UPDATE (PUT)
-    echo -e "${YELLOW}→${NC} Updating message..."
-    update_response=$(curl -sf -X PUT "${api_url}${api_path}${message_id}" \
-        -H "Content-Type: application/json" \
-        -d '{"content":"Updated E2E Test Message from '"$env"'","author":"Updated E2E Test User"}' 2>&1)
-    
-    if [ $? -eq 0 ]; then
-        updated_content=$(echo "$update_response" | jq -r '.content' 2>/dev/null)
-        if echo "$updated_content" | grep -q "Updated"; then
-            print_result "PASS" "Update message"
-        else
-            print_result "FAIL" "Update message did not reflect changes"
-        fi
-    else
-        print_result "FAIL" "Update message failed: $update_response"
-    fi
-    
-    # DELETE
-    echo -e "${YELLOW}→${NC} Deleting message..."
-    # Delete returns 204 No Content, use -w for status code
-    delete_status=$(curl -sf -w "%{http_code}" -o /dev/null -X DELETE "${api_url}${api_path}${message_id}" 2>&1)
-    
-    if [ "$delete_status" = "204" ] || [ "$delete_status" = "200" ]; then
-        # Small delay before verification
-        sleep 1
-        # Verify deletion - should return 404
-        verify_status=$(curl -s -o /dev/null -w "%{http_code}" "${api_url}${api_path}${message_id}" 2>&1)
-        if [ "$verify_status" = "404" ]; then
-            print_result "PASS" "Delete message"
-        else
-            print_result "FAIL" "Delete message - record still exists (status: $verify_status)"
-        fi
-    else
-        print_result "FAIL" "Delete message failed (status: $delete_status)"
-    fi
-}
-
-# Main execution
-main() {
-    echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
-    echo -e "${BLUE}        Multi-Cloud E2E Test Suite${NC}"
-    echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
-    
-    for env in AWS GCP Azure; do
-        api_url="${APIS[$env]}"
-        
-        echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -e "${GREEN}  Testing: $env${NC}"
-        echo -e "${GREEN}  API URL: $api_url${NC}"
-        echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        
-        test_health "$env" "$api_url"
-        test_crud "$env" "$api_url"
-    done
-    
-    # Summary
-    echo -e "\n${BLUE}═══════════════════════════════════════════════════════${NC}"
-    echo -e "${BLUE}        Test Summary${NC}"
-    echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
-    echo -e "Total Tests:  $TOTAL_TESTS"
-    echo -e "${GREEN}Passed:       $PASSED_TESTS${NC}"
-    
-    if [ $FAILED_TESTS -gt 0 ]; then
-        echo -e "${RED}Failed:       $FAILED_TESTS${NC}"
-        exit 1
-    else
-        echo -e "${GREEN}All tests passed! ✓${NC}"
-        exit 0
-    fi
-}
-
-# Run main function
-main
+if [[ $FAIL -eq 0 ]]; then
+  echo -e "${GREEN}${BOLD}  ✅ All executed tests passed!${NC}"
+  exit 0
+else
+  echo -e "${RED}${BOLD}  ❌ $FAIL test(s) failed.${NC}"
+  if [[ -z "$AWS_TOKEN" && -z "$AZURE_TOKEN" && -z "$GCP_TOKEN" ]]; then
+    echo ""
+    echo -e "  ${YELLOW}TIP:${NC} Re-run with auth tokens to test CRUD:"
+    echo "    $0 \\"
+    echo "      --aws-token   \"\$(aws cognito-idp initiate-auth --auth-flow USER_PASSWORD_AUTH --client-id 1k41lqkds4oah55ns8iod30dv2 --auth-parameters USERNAME=YOU@example.com,PASSWORD=PW --region ap-northeast-1 --query AuthenticationResult.AccessToken --output text)\" \\"
+    echo "      --gcp-token   \"\$(gcloud auth print-identity-token)\" \\"
+    echo "      --azure-token \"<paste id_token from browser DevTools>\""
+  fi
+  exit 1
+fi

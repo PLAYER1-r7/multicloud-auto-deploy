@@ -297,6 +297,11 @@ backend_bucket_kwargs = {
         negative_caching=True,
         serve_while_stale=86400,
     ),
+    # Allow popup window (Firebase signInWithPopup) to check window.closed
+    # without being blocked by Cross-Origin-Opener-Policy on the OAuth page.
+    "custom_response_headers": [
+        "Cross-Origin-Opener-Policy: same-origin-allow-popups",
+    ],
     "opts": pulumi.ResourceOptions(depends_on=enabled_services),
 }
 

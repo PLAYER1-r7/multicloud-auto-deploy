@@ -1,8 +1,16 @@
 import azure.functions as func
 import logging
+import traceback
 from urllib.parse import urlparse
 
-from app.main import app as fastapi_app
+# Safe import: インポート失敗時も関数を登録し、503でエラー内容を返す
+_IMPORT_ERROR: str | None = None
+fastapi_app = None
+try:
+    from app.main import app as fastapi_app
+except Exception as _e:
+    _IMPORT_ERROR = traceback.format_exc()
+    logging.error(f"Failed to import FastAPI app: {_IMPORT_ERROR}")
 
 # -------------------------------------------------------------------
 # Azure Functions Flex Consumption は同一インスタンスで複数リクエストを処理する。
@@ -22,6 +30,15 @@ app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 async def main(req: func.HttpRequest) -> func.HttpResponse:
     """Azure Functions HTTP trigger that forwards to FastAPI"""
     logging.debug(f"HTTP trigger: {req.method} {req.url}")
+
+    # インポート失敗時は503でエラー内容を返す
+    if fastapi_app is None:
+        import json
+        return func.HttpResponse(
+            body=json.dumps({"error": "Service unavailable", "detail": _IMPORT_ERROR}),
+            status_code=503,
+            headers={"Content-Type": "application/json"},
+        )
 
     # CORS Preflight (OPTIONS) リクエストを直接処理
     if req.method == "OPTIONS":

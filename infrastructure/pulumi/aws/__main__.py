@@ -34,6 +34,10 @@ allowed_origins_list = allowed_origins.split(
 # Used for Cognito callback/logout URLs and frontend_web redirect URIs
 cf_domain = config.get("cloudFrontDomain") or ""
 
+# Custom domain (optional, e.g. staging.aws.ashnova.jp)
+# Used for Cognito callback/logout URLs alongside the CloudFront domain
+custom_domain = config.get("customDomain") or ""
+
 # Common tags
 common_tags = {
     "Project": project_name,
@@ -139,17 +143,27 @@ user_pool_client = aws.cognito.UserPoolClient(
     "user-pool-client",
     name=f"{project_name}-{stack}-web-client",
     user_pool_id=user_pool.id,
-    allowed_oauth_flows=["code", "implicit"],
+    allowed_oauth_flows=["code"],
     allowed_oauth_scopes=["openid", "email", "profile"],
     allowed_oauth_flows_user_pool_client=True,
-    callback_urls=[
-        "http://localhost:8080/callback",
-        "https://localhost:8080/callback",
-    ] + ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else []),
-    logout_urls=[
-        "http://localhost:8080/",
-        "https://localhost:8080/",
-    ] + ([f"https://{cf_domain}/sns/"] if cf_domain else []),
+    callback_urls=(
+        [
+            "http://localhost:5173/sns/auth/callback",
+            "http://localhost:8080/callback",
+            "https://localhost:8080/callback",
+        ]
+        + ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else [])
+        + ([f"https://{custom_domain}/sns/auth/callback"] if custom_domain else [])
+    ),
+    logout_urls=(
+        [
+            "http://localhost:5173/sns/",
+            "http://localhost:8080/",
+            "https://localhost:8080/",
+        ]
+        + ([f"https://{cf_domain}/sns/"] if cf_domain else [])
+        + ([f"https://{custom_domain}/sns/"] if custom_domain else [])
+    ),
     access_token_validity=1,
     id_token_validity=1,
     refresh_token_validity=30,
@@ -497,37 +511,14 @@ frontend_bucket = aws.s3.Bucket(
     tags=common_tags,
 )
 
-# Disable block public access FIRST (before adding public policy)
+# Block all public access — CloudFront OAI 経由のみアクセス許可
 frontend_public_access = aws.s3.BucketPublicAccessBlock(
     "frontend-public-access",
     bucket=frontend_bucket.id,
-    block_public_acls=False,
-    block_public_policy=False,
-    ignore_public_acls=False,
-    restrict_public_buckets=False,
-)
-
-# Make bucket public for static website hosting (after disabling public access block)
-frontend_bucket_policy = aws.s3.BucketPolicy(
-    "frontend-bucket-policy",
-    bucket=frontend_bucket.id,
-    policy=frontend_bucket.arn.apply(
-        lambda arn: json.dumps(
-            {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "PublicReadGetObject",
-                        "Effect": "Allow",
-                        "Principal": "*",
-                        "Action": "s3:GetObject",
-                        "Resource": f"{arn}/*",
-                    }
-                ],
-            }
-        )
-    ),
-    opts=pulumi.ResourceOptions(depends_on=[frontend_public_access]),
+    block_public_acls=True,
+    block_public_policy=True,
+    ignore_public_acls=True,
+    restrict_public_buckets=True,
 )
 
 # Configure bucket for website hosting
@@ -551,7 +542,7 @@ cloudfront_oai = aws.cloudfront.OriginAccessIdentity(
     comment=f"{project_name}-{stack} CloudFront OAI",
 )
 
-# Update S3 bucket policy to allow CloudFront OAI access
+# S3 バケットポリシー: CloudFront OAI 経由のみ許可（パブリック直接アクセス禁止）
 cloudfront_bucket_policy = aws.s3.BucketPolicy(
     "cloudfront-bucket-policy",
     bucket=frontend_bucket.id,
@@ -560,13 +551,6 @@ cloudfront_bucket_policy = aws.s3.BucketPolicy(
             {
                 "Version": "2012-10-17",
                 "Statement": [
-                    {
-                        "Sid": "PublicReadGetObject",
-                        "Effect": "Allow",
-                        "Principal": "*",
-                        "Action": "s3:GetObject",
-                        "Resource": f"{args[0]}/*",
-                    },
                     {
                         "Sid": "CloudFrontOAIAccess",
                         "Effect": "Allow",
@@ -667,14 +651,57 @@ if stack == "production":
         ),
     )
 
+# ========================================
+# CloudFront Response Headers Policy (セキュリティヘッダー)
+# HSTS, CSP(upgrade-insecure-requests), X-Content-Type-Options,
+# X-Frame-Options, Referrer-Policy, XSS を付与
+# 「保護されていない通信」警告の解消
+# ========================================
+cloudfront_response_headers_policy = aws.cloudfront.ResponseHeadersPolicy(
+    "security-headers-policy",
+    name=f"{project_name}-{stack}-security-headers",
+    comment="Security headers: HSTS, CSP upgrade-insecure-requests, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, XSS",
+    security_headers_config=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigArgs(
+        strict_transport_security=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigStrictTransportSecurityArgs(
+            access_control_max_age_sec=31536000,  # 1年
+            include_subdomains=True,
+            preload=False,  # HSTS preload list 登録は手動で行うため False
+            override=True,
+        ),
+        # upgrade-insecure-requests: ブラウザが自動的に HTTP → HTTPS にアップグレード
+        # 「保護されていない通信」(mixed content) 警告を抑制する
+        content_security_policy=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigContentSecurityPolicyArgs(
+            content_security_policy="upgrade-insecure-requests",
+            override=True,
+        ),
+        content_type_options=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigContentTypeOptionsArgs(
+            override=True,
+        ),
+        frame_options=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigFrameOptionsArgs(
+            frame_option="SAMEORIGIN",
+            override=True,
+        ),
+        referrer_policy=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigReferrerPolicyArgs(
+            referrer_policy="strict-origin-when-cross-origin",
+            override=True,
+        ),
+        xss_protection=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigXssProtectionArgs(
+            mode_block=True,
+            override=True,
+            protection=True,
+        ),
+    ),
+)
+
 # CloudFront Distribution with conditional WAF
-# Use PriceClass_100 for staging (North America + Europe) to reduce cost
+# PriceClass_200: 北米 + 欧州 + 日本 + 韓国 + インド (日本ユーザーの遅延解消)
+# PriceClass_100 (北米+欧州のみ) は日本からのアクセスが米国エッジ経由になり遅延が大きい
 cloudfront_kwargs = {
     "enabled": True,
     "is_ipv6_enabled": True,
     "comment": f"{project_name}-{stack} Frontend Distribution",
     "default_root_object": "index.html",
-    "price_class": "PriceClass_100" if stack == "staging" else "PriceClass_All",
+    "price_class": "PriceClass_200" if stack == "staging" else "PriceClass_All",
     "origins": [
         aws.cloudfront.DistributionOriginArgs(
             origin_id=frontend_bucket.bucket_regional_domain_name,
@@ -696,6 +723,7 @@ cloudfront_kwargs = {
                 forward="none",
             ),
         ),
+        response_headers_policy_id=cloudfront_response_headers_policy.id,
         min_ttl=0,
         default_ttl=3600,  # 1 hour
         max_ttl=86400,  # 24 hours
@@ -721,7 +749,7 @@ cloudfront_kwargs = {
 }
 
 # Custom domain configuration (optional)
-custom_domain = config.get("customDomain")  # e.g., aws.yourdomain.com
+# custom_domain is defined near the top of this file
 acm_certificate_arn = config.get(
     "acmCertificateArn"
 )  # ACM certificate ARN in us-east-1
@@ -762,6 +790,7 @@ cloudfront_kwargs["ordered_cache_behaviors"] = [
         compress=True,
         # Managed CachingOptimized policy (静的ファイル向けキャッシュ)
         cache_policy_id="658327ea-f89d-4fab-a63d-7e88639e58f6",
+        response_headers_policy_id=cloudfront_response_headers_policy.id,
         function_associations=[
             aws.cloudfront.DistributionOrderedCacheBehaviorFunctionAssociationArgs(
                 event_type="viewer-request",

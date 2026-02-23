@@ -64,6 +64,7 @@ build/
 
 # Local archive / backup
 archive/
+!docs/archive/
 lambda.zip
 lambda_placeholder.zip
 

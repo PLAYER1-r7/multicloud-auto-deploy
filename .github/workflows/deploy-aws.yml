@@ -86,6 +86,37 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
+      - name: Sync Pulumi Config (custom domain + ACM cert)
+        run: |
+          cd infrastructure/pulumi/aws
+          # Pulumi.staging.yaml is gitignored — inject custom domain configs from
+          # GitHub Secrets so Pulumi includes staging.aws.ashnova.jp in Cognito
+          # callback URLs and adds the ACM alias to CloudFront on every run.
+          CUSTOM_DOMAIN="${{ secrets.AWS_CUSTOM_DOMAIN }}"
+          ACM_CERT_ARN="${{ secrets.AWS_ACM_CERTIFICATE_ARN }}"
+          CF_DOMAIN="${{ secrets.AWS_CLOUDFRONT_DOMAIN }}"
+          if [ -n "$CUSTOM_DOMAIN" ]; then
+            echo "✅ Setting customDomain = $CUSTOM_DOMAIN"
+            pulumi config set multicloud-auto-deploy-aws:customDomain "$CUSTOM_DOMAIN"
+          else
+            echo "⚠️  AWS_CUSTOM_DOMAIN secret not set — skipping customDomain config"
+          fi
+          if [ -n "$ACM_CERT_ARN" ]; then
+            echo "✅ Setting acmCertificateArn"
+            pulumi config set multicloud-auto-deploy-aws:acmCertificateArn "$ACM_CERT_ARN"
+          else
+            echo "⚠️  AWS_ACM_CERTIFICATE_ARN secret not set — skipping acmCertificateArn config"
+          fi
+          if [ -n "$CF_DOMAIN" ]; then
+            echo "✅ Setting cloudFrontDomain = $CF_DOMAIN"
+            pulumi config set multicloud-auto-deploy-aws:cloudFrontDomain "$CF_DOMAIN"
+          else
+            echo "⚠️  AWS_CLOUDFRONT_DOMAIN secret not set — skipping cloudFrontDomain config"
+          fi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
       - name: Remove stuck obsolete resources from Pulumi state
         run: |
           cd infrastructure/pulumi/aws
@@ -132,6 +163,54 @@ jobs:
           echo "posts_table_name=$(pulumi stack output posts_table_name)" >> $GITHUB_OUTPUT
           echo "images_bucket_name=$(pulumi stack output images_bucket_name)" >> $GITHUB_OUTPUT
           echo "secret_name=$(pulumi stack output secret_name)" >> $GITHUB_OUTPUT
+
+      - name: Build and Deploy Frontend
+        run: |
+          FRONTEND_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
+          CLOUDFRONT_ID="${{ steps.pulumi_outputs.outputs.cloudfront_distribution_id }}"
+          COGNITO_DOMAIN="${{ steps.pulumi_outputs.outputs.cognito_domain }}"
+          COGNITO_CLIENT_ID="${{ steps.pulumi_outputs.outputs.cognito_client_id }}"
+          API_URL="${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}"
+          CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
+          CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
+
+          # Determine the public URL (prefer custom domain if set)
+          if [[ -n "$CUSTOM_DOMAIN" ]]; then
+            PUBLIC_ORIGIN="https://${CUSTOM_DOMAIN}"
+          else
+            PUBLIC_ORIGIN="https://${CLOUDFRONT_DOMAIN}"
+          fi
+
+          echo "🏗️  Building React frontend for AWS (Cognito auth)..."
+          cd services/frontend_react
+
+          npm ci --prefer-offline
+
+          VITE_AUTH_PROVIDER=aws \
+          VITE_API_URL="${API_URL}" \
+          VITE_COGNITO_DOMAIN="${COGNITO_DOMAIN}.auth.${{ env.AWS_REGION }}.amazoncognito.com" \
+          VITE_COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID}" \
+          VITE_COGNITO_REDIRECT_URI="${PUBLIC_ORIGIN}/sns/auth/callback" \
+          VITE_COGNITO_LOGOUT_URI="${PUBLIC_ORIGIN}/sns/" \
+          VITE_BASE_PATH=/sns/ \
+          npm run build
+
+          echo "✅ Frontend build complete. Uploading to S3..."
+          cd ../..
+
+          # Upload to S3 at sns/ prefix (CloudFront /sns* path pattern points here)
+          aws s3 sync services/frontend_react/dist/ "s3://${FRONTEND_BUCKET}/sns/" \
+            --delete \
+            --region ${{ env.AWS_REGION }}
+
+          # Invalidate CloudFront cache for sns/ paths
+          aws cloudfront create-invalidation \
+            --distribution-id $CLOUDFRONT_ID \
+            --paths "/sns/*" \
+            --region us-east-1
+
+          echo "✅ Frontend deployed to S3 and CloudFront cache invalidated"
+          echo "🌐 Frontend URL: ${PUBLIC_ORIGIN}/sns/"
 
       - name: Build Lambda Layer
         id: build_layer

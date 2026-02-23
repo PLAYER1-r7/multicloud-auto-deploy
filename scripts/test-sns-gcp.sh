@@ -44,8 +44,12 @@
 set -euo pipefail
 
 # ── defaults ────────────────────────────────────────────────
-CDN_URL="${CDN_URL:-https://www.gcp.ashnova.jp}"
-API_URL="${API_URL:-https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app}"
+# (URLs resolved after arg parsing; see "resolve URLs" section below)
+_ENV_=staging
+_READ_ONLY_=false
+_WRITE_=false
+_CDN_URL_EXPLICIT=false
+_API_URL_EXPLICIT=false
 TOKEN=""
 VERBOSE=false
 SKIP_CLEANUP=false
@@ -73,8 +77,8 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Options:
-  -c, --cdn   <url>    Cloud CDN (LB) base URL  (default: $CDN_URL)
-  -a, --api   <url>    Cloud Run API base URL   (default: $API_URL)
+  -c, --cdn   <url>    Cloud CDN (LB) base URL  (default: https://www.gcp.ashnova.jp)
+  -a, --api   <url>    Cloud Run API base URL   (default: https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app)
   -t, --token <token>  Firebase ID token (required for auth tests)
   -v, --verbose        Print full response bodies
   -s, --skip-cleanup   Do not delete posts created during the test run
@@ -89,8 +93,17 @@ EOF
 # ── arg parsing ─────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case $1 in
-    -c|--cdn)   CDN_URL="$2";  shift 2 ;;
-    -a|--api)   API_URL="$2";  shift 2 ;;
+    -c|--cdn)   CDN_URL="$2";  _CDN_URL_EXPLICIT=true; shift 2 ;;
+    -a|--api)   API_URL="$2";  _API_URL_EXPLICIT=true; shift 2 ;;
+    -e|--env)
+      case "$2" in
+        production|prod) _ENV_=production; _READ_ONLY_=true ;;
+        staging|stag)    _ENV_=staging ;;
+        *) die "Unknown env: '$2'. Use staging or production." ;;
+      esac
+      shift 2 ;;
+    -r|--read-only)    _READ_ONLY_=true;  SKIP_CLEANUP=true; shift ;;
+    --write)           _WRITE_=true;      shift ;;
     -t|--token) TOKEN="$2";    shift 2 ;;
     -v|--verbose) VERBOSE=true; shift ;;
     -s|--skip-cleanup) SKIP_CLEANUP=true; shift ;;
@@ -98,6 +111,19 @@ while [[ $# -gt 0 ]]; do
     *) echo -e "${RED}Unknown option: $1${NC}"; usage; exit 1 ;;
   esac
 done
+
+# ── resolve URLs and read-only flag ─────────────────────────
+READ_ONLY=$_READ_ONLY_
+[[ $_WRITE_ == true ]] && READ_ONLY=false
+
+if [[ $_ENV_ == production ]]; then
+  [[ $_CDN_URL_EXPLICIT == false ]] && CDN_URL="${CDN_URL:-https://www.gcp.ashnova.jp}"
+  [[ $_API_URL_EXPLICIT == false ]] && API_URL="${API_URL:-https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app}"
+else
+  CDN_URL="${CDN_URL:-https://www.gcp.ashnova.jp}"
+  API_URL="${API_URL:-https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app}"
+fi
+[[ $READ_ONLY == true ]] && SKIP_CLEANUP=true
 
 CDN_URL="${CDN_URL%/}"
 API_URL="${API_URL%/}"
@@ -141,11 +167,13 @@ run_test() {
   LAST_BODY=$(cat /tmp/gcp_sns_test_body 2>/dev/null || echo "")
 
   if [[ "$status" == "$expect" ]]; then
-    ok "$label  [HTTP $status]"
+    echo -e "${GREEN}[PASS]${NC}  $label  [HTTP $status]"
+    PASS=$((PASS + 1))
     [[ "$VERBOSE" == true ]] && echo "$LAST_BODY" | jq . 2>/dev/null || true
     return 0
   else
-    fail "$label  [expected HTTP $expect, got HTTP $status]"
+    echo -e "${RED}[FAIL]${NC}  $label  [expected HTTP $expect, got HTTP $status]"
+    FAIL=$((FAIL + 1))
     [[ -n "$LAST_BODY" ]] && echo "  Response: $(echo "$LAST_BODY" | head -c 300)"
     return 1
   fi
@@ -254,7 +282,14 @@ sep
 echo -e "${BOLD}Section 4 — Authenticated endpoints${NC}"
 sep
 
-if [[ -z "$TOKEN" ]]; then
+if [[ $READ_ONLY == true ]]; then
+  warn "Read-only mode: skipping Sections 4-7 (write tests)."
+  warn "Re-run with --write to enable: $0 --env production --write --token <token>"
+  skip "Section 4 - Authenticated endpoints"
+  skip "Section 5 - Image upload / GCS presigned URLs"
+  skip "Section 6 - Post with imageKeys validation"
+  skip "Section 7 - Cleanup"
+elif [[ -z "$TOKEN" ]]; then
   warn "No --token provided; skipping Sections 4, 5, 6."
   warn "Re-run with: $0 --token \"\$(gcloud auth print-identity-token)\""
   SKIP=$((SKIP + 8))
