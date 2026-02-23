@@ -195,9 +195,9 @@ run_cloud() {
   CLOUD_DURATION[$cloud]=$(( t1 - t0 ))
 
   # Parse pass/fail/skip counts from output
-  CLOUD_PASS[$cloud]=$(grep -c '^\[PASS\]\|[✅] \|^.*\[PASS\]' "$outfile" 2>/dev/null || echo 0)
-  CLOUD_FAIL[$cloud]=$(grep -c '^\[FAIL\]\|[❌] \|^.*\[FAIL\]' "$outfile" 2>/dev/null || echo 0)
-  CLOUD_SKIP[$cloud]=$(grep -c '^\[SKIP\]\|^.*\[SKIP\]' "$outfile" 2>/dev/null || echo 0)
+  CLOUD_PASS[$cloud]=$(grep -c '^\[PASS\]\|[✅] \|^.*\[PASS\]' "$outfile" 2>/dev/null; true)
+  CLOUD_FAIL[$cloud]=$(grep -c '^\[FAIL\]\|[❌] \|^.*\[FAIL\]' "$outfile" 2>/dev/null; true)
+  CLOUD_SKIP[$cloud]=$(grep -c '^\[SKIP\]\|^.*\[SKIP\]' "$outfile" 2>/dev/null; true)
 
   # Extract summary line counts from the "Results" section for accuracy
   local p f s

@@ -77,8 +77,8 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Options:
-  -c, --cdn   <url>    Cloud CDN (LB) base URL  (default: $CDN_URL)
-  -a, --api   <url>    Cloud Run API base URL   (default: $API_URL)
+  -c, --cdn   <url>    Cloud CDN (LB) base URL  (default: https://www.gcp.ashnova.jp)
+  -a, --api   <url>    Cloud Run API base URL   (default: https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app)
   -t, --token <token>  Firebase ID token (required for auth tests)
   -v, --verbose        Print full response bodies
   -s, --skip-cleanup   Do not delete posts created during the test run
@@ -93,8 +93,17 @@ EOF
 # ── arg parsing ─────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case $1 in
-    -c|--cdn)   CDN_URL="$2";  shift 2 ;;
-    -a|--api)   API_URL="$2";  shift 2 ;;
+    -c|--cdn)   CDN_URL="$2";  _CDN_URL_EXPLICIT=true; shift 2 ;;
+    -a|--api)   API_URL="$2";  _API_URL_EXPLICIT=true; shift 2 ;;
+    -e|--env)
+      case "$2" in
+        production|prod) _ENV_=production; _READ_ONLY_=true ;;
+        staging|stag)    _ENV_=staging ;;
+        *) die "Unknown env: '$2'. Use staging or production." ;;
+      esac
+      shift 2 ;;
+    -r|--read-only)    _READ_ONLY_=true;  SKIP_CLEANUP=true; shift ;;
+    --write)           _WRITE_=true;      shift ;;
     -t|--token) TOKEN="$2";    shift 2 ;;
     -v|--verbose) VERBOSE=true; shift ;;
     -s|--skip-cleanup) SKIP_CLEANUP=true; shift ;;
@@ -102,6 +111,19 @@ while [[ $# -gt 0 ]]; do
     *) echo -e "${RED}Unknown option: $1${NC}"; usage; exit 1 ;;
   esac
 done
+
+# ── resolve URLs and read-only flag ─────────────────────────
+READ_ONLY=$_READ_ONLY_
+[[ $_WRITE_ == true ]] && READ_ONLY=false
+
+if [[ $_ENV_ == production ]]; then
+  [[ $_CDN_URL_EXPLICIT == false ]] && CDN_URL="${CDN_URL:-https://www.gcp.ashnova.jp}"
+  [[ $_API_URL_EXPLICIT == false ]] && API_URL="${API_URL:-https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app}"
+else
+  CDN_URL="${CDN_URL:-https://www.gcp.ashnova.jp}"
+  API_URL="${API_URL:-https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app}"
+fi
+[[ $READ_ONLY == true ]] && SKIP_CLEANUP=true
 
 CDN_URL="${CDN_URL%/}"
 API_URL="${API_URL%/}"
