@@ -44,8 +44,12 @@
 set -euo pipefail
 
 # ── defaults ────────────────────────────────────────────────
-CDN_URL="${CDN_URL:-https://www.gcp.ashnova.jp}"
-API_URL="${API_URL:-https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app}"
+# (URLs resolved after arg parsing; see "resolve URLs" section below)
+_ENV_=staging
+_READ_ONLY_=false
+_WRITE_=false
+_CDN_URL_EXPLICIT=false
+_API_URL_EXPLICIT=false
 TOKEN=""
 VERBOSE=false
 SKIP_CLEANUP=false
@@ -256,7 +260,14 @@ sep
 echo -e "${BOLD}Section 4 — Authenticated endpoints${NC}"
 sep
 
-if [[ -z "$TOKEN" ]]; then
+if [[ $READ_ONLY == true ]]; then
+  warn "Read-only mode: skipping Sections 4-7 (write tests)."
+  warn "Re-run with --write to enable: $0 --env production --write --token <token>"
+  skip "Section 4 - Authenticated endpoints"
+  skip "Section 5 - Image upload / GCS presigned URLs"
+  skip "Section 6 - Post with imageKeys validation"
+  skip "Section 7 - Cleanup"
+elif [[ -z "$TOKEN" ]]; then
   warn "No --token provided; skipping Sections 4, 5, 6."
   warn "Re-run with: $0 --token \"\$(gcloud auth print-identity-token)\""
   SKIP=$((SKIP + 8))

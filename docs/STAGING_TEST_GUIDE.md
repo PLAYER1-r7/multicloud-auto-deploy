@@ -8,24 +8,24 @@
 ## Overview
 
 This guide describes how to test the **landing page** and **SNS application** across all
-three cloud staging environments.  The test suite covers:
+three cloud staging environments. The test suite covers:
 
-| Layer           | What is tested                                                |
-| --------------- | ------------------------------------------------------------- |
-| Landing page    | CDN delivery, HTML content, HTTPS, cache headers             |
-| SNS frontend    | React SPA served from CDN (`/sns/`), env-var injection       |
-| SNS API         | Public endpoints (health, list posts), auth guard, full CRUD |
-| Image upload    | Presigned URL generation (S3 / Blob Storage / GCS)           |
+| Layer        | What is tested                                               |
+| ------------ | ------------------------------------------------------------ |
+| Landing page | CDN delivery, HTML content, HTTPS, cache headers             |
+| SNS frontend | React SPA served from CDN (`/sns/`), env-var injection       |
+| SNS API      | Public endpoints (health, list posts), auth guard, full CRUD |
+| Image upload | Presigned URL generation (S3 / Blob Storage / GCS)           |
 
 ---
 
 ## Staging Endpoints (2026-02-23)
 
-| Cloud     | CDN URL                                                                | API URL                                                                                                           |
-| --------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| **AWS**   | `https://d1tf3uumcm4bo1.cloudfront.net`                                | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com`                                                     |
-| **Azure** | `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net`        | `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net`     |
-| **GCP**   | `https://www.gcp.ashnova.jp`                                           | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`                                             |
+| Cloud     | CDN URL                                                        | API URL                                                                                       |
+| --------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| **AWS**   | `https://d1tf3uumcm4bo1.cloudfront.net`                        | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com`                                 |
+| **Azure** | `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net` | `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net` |
+| **GCP**   | `https://www.gcp.ashnova.jp`                                   | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`                          |
 
 > **Note**: The Azure API URL (`AZURE_API_URL`) is the Function App base URL **without** the
 > `/api/HttpTrigger` path. The function uses a wildcard route `{*route}` so all API paths
@@ -35,14 +35,14 @@ three cloud staging environments.  The test suite covers:
 
 ## Test Scripts
 
-| Script                      | Purpose                                          |
-| --------------------------- | ------------------------------------------------ |
-| `scripts/test-staging-all.sh`  | **⭐ Recommended**: orchestrates all 3 clouds    |
-| `scripts/test-landing-pages.sh` | Landing page (`/`) tests only                  |
-| `scripts/test-e2e.sh`          | Lightweight multi-cloud smoke test (v2)          |
-| `scripts/test-sns-aws.sh`      | Full AWS-only test suite (authenticated)         |
-| `scripts/test-sns-azure.sh`    | Full Azure-only test suite (authenticated)       |
-| `scripts/test-sns-gcp.sh`      | Full GCP-only test suite (authenticated)         |
+| Script                          | Purpose                                       |
+| ------------------------------- | --------------------------------------------- |
+| `scripts/test-staging-all.sh`   | **⭐ Recommended**: orchestrates all 3 clouds |
+| `scripts/test-landing-pages.sh` | Landing page (`/`) tests only                 |
+| `scripts/test-e2e.sh`           | Lightweight multi-cloud smoke test (v2)       |
+| `scripts/test-sns-aws.sh`       | Full AWS-only test suite (authenticated)      |
+| `scripts/test-sns-azure.sh`     | Full Azure-only test suite (authenticated)    |
+| `scripts/test-sns-gcp.sh`       | Full GCP-only test suite (authenticated)      |
 
 ---
 
@@ -57,6 +57,7 @@ These checks verify connectivity and public endpoints without any login.
 ```
 
 This checks:
+
 - CDN landing page (`/`) returns HTTP 200
 - SNS app (`/sns/`) returns HTTP 200
 - API `/health` returns HTTP 200 with `{"status": "ok"}`
@@ -68,6 +69,7 @@ This checks:
 ```
 
 Tests per cloud (11 checks each):
+
 - HTTP 200 + response time < 8s
 - Content-Type: text/html
 - Brand name "Ashnova" present
@@ -87,6 +89,7 @@ Tests per cloud (11 checks each):
 ```
 
 Public tests per cloud:
+
 - `GET /health` → 200, `.status == "ok"`
 - `GET /posts` → 200, `.items` array present
 - `POST /posts` without token → 401 (auth guard)
@@ -187,39 +190,39 @@ AZURE_TOKEN="<paste id_token here>"
 
 ### `test-sns-aws.sh` (8 sections)
 
-| Section | Tests |
-| ------- | ----- |
-| 1 | CloudFront returns `/`, `/sns/` with HTML (Content-Type check) |
-| 2 | API `/health` → 200, `.status == "ok"` |
-| 3 | Auth guard: POST without token → 401 |
-| 4 | Authenticated: GET profile, POST/GET/PUT post |
-| 5 | Presigned URLs: count=2 returned, URL starts with `https://...s3` |
-| 6 | Image key validation: 16 keys → 201; 17 keys → 422 |
-| 7 | Cleanup: DELETE all created posts |
-| 8 | React SPA env-var sanity: no `localhost` in bundle |
+| Section | Tests                                                             |
+| ------- | ----------------------------------------------------------------- |
+| 1       | CloudFront returns `/`, `/sns/` with HTML (Content-Type check)    |
+| 2       | API `/health` → 200, `.status == "ok"`                            |
+| 3       | Auth guard: POST without token → 401                              |
+| 4       | Authenticated: GET profile, POST/GET/PUT post                     |
+| 5       | Presigned URLs: count=2 returned, URL starts with `https://...s3` |
+| 6       | Image key validation: 16 keys → 201; 17 keys → 422                |
+| 7       | Cleanup: DELETE all created posts                                 |
+| 8       | React SPA env-var sanity: no `localhost` in bundle                |
 
 ### `test-sns-azure.sh` (6 sections)
 
-| Section | Tests |
-| ------- | ----- |
-| 1 | Front Door returns `/sns/` with React SPA HTML |
-| 2 | Function App `/health` → 200, `/posts` → 200 with `.items` |
-| 3 | AFD SPA deep-link URL Rewrite: `/sns/login`, `/sns/profile`, `/sns/feed` → 200 |
-| 4 | Auth guard: POST without token → 401 |
-| 5 | Authenticated: GET/POST/PUT/DELETE posts, presigned URL |
-| 6 | Cleanup |
+| Section | Tests                                                                          |
+| ------- | ------------------------------------------------------------------------------ |
+| 1       | Front Door returns `/sns/` with React SPA HTML                                 |
+| 2       | Function App `/health` → 200, `/posts` → 200 with `.items`                     |
+| 3       | AFD SPA deep-link URL Rewrite: `/sns/login`, `/sns/profile`, `/sns/feed` → 200 |
+| 4       | Auth guard: POST without token → 401                                           |
+| 5       | Authenticated: GET/POST/PUT/DELETE posts, presigned URL                        |
+| 6       | Cleanup                                                                        |
 
 ### `test-sns-gcp.sh` (7 sections)
 
-| Section | Tests |
-| ------- | ----- |
-| 1 | Cloud CDN returns `/sns/` with React SPA HTML (no SSR artifacts) |
-| 2 | Cloud Run `/health` → 200, `/posts` → 200 with `.items` |
-| 3 | Auth guard: POST/presigned-urls/profile without token → 401 |
-| 4 | Authenticated: GET profile, POST/GET/PUT post |
-| 5 | GCS presigned URLs: count=2, URL starts with `https://storage.googleapis.com` |
-| 6 | Image key validation: 16 → 201; 17 → 422 |
-| 7 | Cleanup |
+| Section | Tests                                                                         |
+| ------- | ----------------------------------------------------------------------------- |
+| 1       | Cloud CDN returns `/sns/` with React SPA HTML (no SSR artifacts)              |
+| 2       | Cloud Run `/health` → 200, `/posts` → 200 with `.items`                       |
+| 3       | Auth guard: POST/presigned-urls/profile without token → 401                   |
+| 4       | Authenticated: GET profile, POST/GET/PUT post                                 |
+| 5       | GCS presigned URLs: count=2, URL starts with `https://storage.googleapis.com` |
+| 6       | Image key validation: 16 → 201; 17 → 422                                      |
+| 7       | Cleanup                                                                       |
 
 ### `test-landing-pages.sh` (11 checks per cloud)
 
@@ -227,7 +230,7 @@ See [Quick Start](#option-b-landing-page-deep-test) section above.
 
 ### `test-e2e.sh` (v2)
 
-Lightweight smoke test with a consolidated table output.  Covers 8 test points per cloud.
+Lightweight smoke test with a consolidated table output. Covers 8 test points per cloud.
 
 ---
 
@@ -235,14 +238,14 @@ Lightweight smoke test with a consolidated table output.  Covers 8 test points p
 
 All scripts support URL overrides via environment variables:
 
-| Variable       | Default                                                                                  | Used by             |
-| -------------- | ---------------------------------------------------------------------------------------- | ------------------- |
-| `AWS_CF_URL`   | `https://d1tf3uumcm4bo1.cloudfront.net`                                                  | test-staging-all, test-landing-pages |
-| `AWS_API_URL`  | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com`                            | test-staging-all, test-e2e |
-| `AZURE_FD_URL` | `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net`                          | test-staging-all, test-landing-pages |
-| `AZURE_API_URL`| `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net` | test-staging-all, test-e2e |
-| `GCP_CDN_URL`  | `https://www.gcp.ashnova.jp`                                                             | test-staging-all, test-landing-pages |
-| `GCP_API_URL`  | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`                    | test-staging-all, test-e2e |
+| Variable        | Default                                                                                       | Used by                              |
+| --------------- | --------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `AWS_CF_URL`    | `https://d1tf3uumcm4bo1.cloudfront.net`                                                       | test-staging-all, test-landing-pages |
+| `AWS_API_URL`   | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com`                                 | test-staging-all, test-e2e           |
+| `AZURE_FD_URL`  | `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net`                                | test-staging-all, test-landing-pages |
+| `AZURE_API_URL` | `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net` | test-staging-all, test-e2e           |
+| `GCP_CDN_URL`   | `https://www.gcp.ashnova.jp`                                                                  | test-staging-all, test-landing-pages |
+| `GCP_API_URL`   | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`                          | test-staging-all, test-e2e           |
 
 Example — test production URLs instead of staging:
 
@@ -261,6 +264,7 @@ GCP_API_URL=https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.ap
 ### `GET /health` fails (HTTP 000 / timeout)
 
 1. Check if the Cloud Run / Lambda / Function App is stopped:
+
    ```bash
    # GCP
    gcloud run services describe multicloud-auto-deploy-staging-api \
@@ -278,6 +282,7 @@ GCP_API_URL=https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.ap
      --resource-group multicloud-auto-deploy-staging-rg \
      --query state
    ```
+
 2. See [AI_AGENT_08_RUNBOOKS.md](AI_AGENT_08_RUNBOOKS.md) for redeploy procedures.
 
 ### `POST /posts` returns 401 even with a valid token
@@ -307,16 +312,19 @@ GCP_API_URL=https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.ap
 
 ### GCP CDN returns the old React SPA after a redeploy
 
-GCS objects are served via Cloud CDN with cache TTL.  Force invalidation:
+GCS objects are served via Cloud CDN with cache TTL. Force invalidation:
+
 ```bash
 gcloud compute url-maps invalidate-cdn-cache multicloud-auto-deploy-staging-lb \
   --path "/*" --project=ashnova --async
 ```
+
 See [GCP_SNS_FIX_REPORT_20260223.md](GCP_SNS_FIX_REPORT_20260223.md) (issue G3).
 
 ### Azure `/sns/deep-link` returns 404
 
-The Front Door Rule Set rewrites `/sns/*` → `/sns/index.html`.  If this fails:
+The Front Door Rule Set rewrites `/sns/*` → `/sns/index.html`. If this fails:
+
 1. Open Azure Portal → Front Door → Rule Sets → check the rewrite rule.
 2. Verify the Rule Set is associated with the route.
 
@@ -334,9 +342,9 @@ The test scripts can be wired into GitHub Actions as a post-deploy verification 
 - name: Run full staging tests (authenticated)
   if: secrets.AWS_TEST_TOKEN != ''
   env:
-    AWS_TOKEN:   ${{ secrets.AWS_TEST_TOKEN }}
+    AWS_TOKEN: ${{ secrets.AWS_TEST_TOKEN }}
     AZURE_TOKEN: ${{ secrets.AZURE_TEST_TOKEN }}
-    GCP_TOKEN:   ${{ secrets.GCP_TEST_TOKEN }}
+    GCP_TOKEN: ${{ secrets.GCP_TEST_TOKEN }}
   run: |
     ./scripts/test-staging-all.sh \
       --aws-token   "$AWS_TOKEN" \
@@ -348,11 +356,11 @@ The test scripts can be wired into GitHub Actions as a post-deploy verification 
 
 ## Related Documents
 
-| Document                               | Description                                     |
-| -------------------------------------- | ----------------------------------------------- |
-| [AI_AGENT_07_STATUS.md](AI_AGENT_07_STATUS.md)       | Current health of all 3 environments           |
-| [AI_AGENT_04_API.md](AI_AGENT_04_API.md)             | API endpoint spec and request/response schema  |
-| [AI_AGENT_08_RUNBOOKS.md](AI_AGENT_08_RUNBOOKS.md)   | Step-by-step deploy / redeploy procedures      |
-| [GCP_SNS_FIX_REPORT_20260223.md](GCP_SNS_FIX_REPORT_20260223.md) | GCP bug fixes (G1–G6)   |
-| [AWS_SNS_FIX_REPORT_20260222.md](AWS_SNS_FIX_REPORT_20260222.md) | AWS fixes (12 bugs)     |
-| [AZURE_SNS_FIX_REPORT.md](AZURE_SNS_FIX_REPORT.md)  | Azure fixes                                     |
+| Document                                                         | Description                                   |
+| ---------------------------------------------------------------- | --------------------------------------------- |
+| [AI_AGENT_07_STATUS.md](AI_AGENT_07_STATUS.md)                   | Current health of all 3 environments          |
+| [AI_AGENT_04_API.md](AI_AGENT_04_API.md)                         | API endpoint spec and request/response schema |
+| [AI_AGENT_08_RUNBOOKS.md](AI_AGENT_08_RUNBOOKS.md)               | Step-by-step deploy / redeploy procedures     |
+| [GCP_SNS_FIX_REPORT_20260223.md](GCP_SNS_FIX_REPORT_20260223.md) | GCP bug fixes (G1–G6)                         |
+| [AWS_SNS_FIX_REPORT_20260222.md](AWS_SNS_FIX_REPORT_20260222.md) | AWS fixes (12 bugs)                           |
+| [AZURE_SNS_FIX_REPORT.md](AZURE_SNS_FIX_REPORT.md)               | Azure fixes                                   |

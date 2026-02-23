@@ -49,11 +49,13 @@ YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'
 BOLD='\033[1m'; NC='\033[0m'
 
 # ── defaults ─────────────────────────────────────────────────
-AWS_CF_URL="${AWS_CF_URL:-https://d1tf3uumcm4bo1.cloudfront.net}"
-AZURE_FD_URL="${AZURE_FD_URL:-https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net}"
-GCP_CDN_URL="${GCP_CDN_URL:-https://www.gcp.ashnova.jp}"
+# (URLs resolved after arg parsing; see "resolve URLs" section below)
+AWS_CF_URL="${AWS_CF_URL:-}"
+AZURE_FD_URL="${AZURE_FD_URL:-}"
+GCP_CDN_URL="${GCP_CDN_URL:-}"
 TARGET_CLOUD=""
 VERBOSE=false
+ENV=staging
 
 # ── dependency check ─────────────────────────────────────────
 command -v curl >/dev/null 2>&1 || { echo -e "${RED}ERROR: curl is required${NC}" >&2; exit 2; }
@@ -65,25 +67,48 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Options:
-  --cloud <aws|azure|gcp>   Test a single cloud only (default: all)
-  -v, --verbose             Print extra debug output
-  -h, --help                Show this help
+  -e, --env <env>         Target environment: staging|production  (default: staging)
+                          staging:    uses CloudFront/AzureFD/GCP staging CDN URLs
+                          production: uses www.aws.ashnova.jp / www.azure.ashnova.jp / www.gcp.ashnova.jp
+  --cloud <aws|azure|gcp> Test a single cloud only (default: all)
+  -v, --verbose           Print extra debug output
+  -h, --help              Show this help
 
-Environment variables:
-  AWS_CF_URL    (default: https://d1tf3uumcm4bo1.cloudfront.net)
-  AZURE_FD_URL  (default: https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net)
-  GCP_CDN_URL   (default: https://www.gcp.ashnova.jp)
+Environment variables (explicit URL overrides; take precedence over --env):
+  AWS_CF_URL    staging default:    https://d1tf3uumcm4bo1.cloudfront.net
+                production default: https://www.aws.ashnova.jp
+  AZURE_FD_URL  staging default:    https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net
+                production default: https://www.azure.ashnova.jp
+  GCP_CDN_URL   (same for both envs: https://www.gcp.ashnova.jp)
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case $1 in
+    -e|--env)
+      case "$2" in
+        production|prod) ENV=production ;;
+        staging|stag)    ENV=staging ;;
+        *) echo -e "${RED}Unknown env: $2${NC}"; exit 1 ;;
+      esac
+      shift 2 ;;
     --cloud)   TARGET_CLOUD="$2"; shift 2 ;;
     -v|--verbose) VERBOSE=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo -e "${RED}Unknown option: $1${NC}"; usage; exit 1 ;;
   esac
 done
+
+# ── resolve URLs based on environment ───────────────────────
+if [[ $ENV == production ]]; then
+  : "${AWS_CF_URL:=https://www.aws.ashnova.jp}"
+  : "${AZURE_FD_URL:=https://www.azure.ashnova.jp}"
+  : "${GCP_CDN_URL:=https://www.gcp.ashnova.jp}"
+else
+  : "${AWS_CF_URL:=https://d1tf3uumcm4bo1.cloudfront.net}"
+  : "${AZURE_FD_URL:=https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net}"
+  : "${GCP_CDN_URL:=https://www.gcp.ashnova.jp}"
+fi
 
 # ── counters ─────────────────────────────────────────────────
 PASS=0; FAIL=0; SKIP=0
@@ -202,8 +227,12 @@ test_landing_page() {
       fail "HTTPS downgraded to HTTP: $final_url"
     fi
   else
-    warn "URL uses HTTP (GCP staging CDN) — HTTPS not enforced on this endpoint"
-    SKIP=$((SKIP + 1))
+    if [[ $ENV == production ]]; then
+      fail "URL uses HTTP on production — HTTPS is required on production endpoints"
+    else
+      warn "URL uses HTTP (staging CDN without HTTPS) — HTTPS not enforced on this endpoint"
+      SKIP=$((SKIP + 1))
+    fi
   fi
 
   # ── Test 8: Cache-Control header ─────────────────────────
@@ -235,7 +264,7 @@ test_landing_page() {
 
   # ── Test 11: /sns/ path link reachable ───────────────────
   local sns_status
-  sns_status=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 20 "$url/sns/" 2>/dev/null || echo "000")
+  sns_status=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 20 "$url/sns/" 2>/dev/null || true)
   if [[ "$sns_status" == "200" ]]; then
     ok "/sns/ path is reachable  [HTTP $sns_status]"
   else
@@ -251,10 +280,11 @@ test_landing_page() {
 
 echo ""
 echo -e "${BOLD}============================================================${NC}"
-echo -e "${BOLD}  Landing Page Test Suite — All 3 Clouds${NC}"
+echo -e "${BOLD}  Landing Page Test Suite — $(echo $ENV | tr '[:lower:]' '[:upper:]') — All 3 Clouds${NC}"
 echo -e "${BOLD}  $(date '+%Y-%m-%d %H:%M:%S')${NC}"
 echo -e "${BOLD}============================================================${NC}"
 echo ""
+echo -e "  Env      : ${CYAN}$ENV${NC}"
 echo -e "  AWS  CDN : ${CYAN}$AWS_CF_URL${NC}"
 echo -e "  Azure CDN: ${CYAN}$AZURE_FD_URL${NC}"
 echo -e "  GCP  CDN : ${CYAN}$GCP_CDN_URL${NC}"
@@ -286,7 +316,7 @@ if [[ -z "$TARGET_CLOUD" ]]; then
     local_url="${cloud_pair##*|}"
     body_tmp=$(curl -s -L --max-time 15 --compressed "$local_url/" 2>/dev/null || echo "")
     SIZES[$local_cloud]=${#body_tmp}
-    status=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 15 "$local_url/" 2>/dev/null || echo "000")
+    status=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 15 "$local_url/" 2>/dev/null || true)
     CODES[$local_cloud]=$status
   done
 

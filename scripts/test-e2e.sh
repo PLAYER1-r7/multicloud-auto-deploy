@@ -48,13 +48,17 @@ RED='\033[0;31m'; GREEN='\033[0;32m'
 YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'
 BOLD='\033[1m'; NC='\033[0m'
 
-AWS_API_URL="${AWS_API_URL:-https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com}"
-AZURE_API_URL="${AZURE_API_URL:-https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net}"
-GCP_API_URL="${GCP_API_URL:-https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app}"
+AWS_API_URL="${AWS_API_URL:-}"
+AZURE_API_URL="${AZURE_API_URL:-}"
+GCP_API_URL="${GCP_API_URL:-}"
 AWS_TOKEN=""
 AZURE_TOKEN=""
 GCP_TOKEN=""
 VERBOSE=false
+_ENV_=staging
+_READ_ONLY_=false
+_WRITE_=false
+READ_ONLY=false
 
 command -v curl >/dev/null 2>&1 || { echo -e "${RED}ERROR${NC}: curl required" >&2; exit 2; }
 command -v jq   >/dev/null 2>&1 || { echo -e "${RED}ERROR${NC}: jq required"   >&2; exit 2; }
@@ -62,16 +66,37 @@ command -v jq   >/dev/null 2>&1 || { echo -e "${RED}ERROR${NC}: jq required"   >
 usage() {
   cat <<EOF
 Usage: $0 [OPTIONS]
-  --aws-token   <token>  Cognito access token
-  --azure-token <token>  Azure AD ID token
-  --gcp-token   <token>  Firebase ID token
-  -v, --verbose          Print response bodies on failure
-  -h, --help             Show this help
+  -e, --env   <env>       Target environment: staging|production  (default: staging)
+                          --env production uses custom domain URLs and implies --read-only
+  -r, --read-only         Skip all write tests (POST/PUT/DELETE/presigned-urls)
+      --write             Allow write tests even when --env production is set
+  --aws-token   <token>   Cognito access token
+  --azure-token <token>   Azure AD ID token
+  --gcp-token   <token>   Firebase ID token
+  -v, --verbose           Print response bodies on failure
+  -h, --help              Show this help
+
+Examples:
+  # Staging (default):
+  $0 --aws-token eyJ...
+  # Production - read-only smoke test:
+  $0 --env production
+  # Production - full test with writes:
+  $0 --env production --write --aws-token eyJ... --gcp-token \$(gcloud auth print-identity-token)
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case $1 in
+    -e|--env)
+      case "$2" in
+        production|prod) _ENV_=production; _READ_ONLY_=true ;;
+        staging|stag)    _ENV_=staging ;;
+        *) echo -e "${RED}Unknown env: $2${NC}"; exit 1 ;;
+      esac
+      shift 2 ;;
+    -r|--read-only) _READ_ONLY_=true; shift ;;
+    --write)        _WRITE_=true;     shift ;;
     --aws-token)   AWS_TOKEN="$2";   shift 2 ;;
     --azure-token) AZURE_TOKEN="$2"; shift 2 ;;
     --gcp-token)   GCP_TOKEN="$2";   shift 2 ;;
@@ -80,6 +105,21 @@ while [[ $# -gt 0 ]]; do
     *) echo -e "${RED}Unknown option: $1${NC}"; usage; exit 1 ;;
   esac
 done
+
+# Resolve read-only flag
+READ_ONLY=$_READ_ONLY_
+[[ $_WRITE_ == true ]] && READ_ONLY=false
+
+# Resolve URLs based on environment
+if [[ $_ENV_ == production ]]; then
+  AWS_API_URL="${AWS_API_URL:-https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com}"
+  AZURE_API_URL="${AZURE_API_URL:-https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net/api}"
+  GCP_API_URL="${GCP_API_URL:-https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app}"
+else
+  AWS_API_URL="${AWS_API_URL:-https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com}"
+  AZURE_API_URL="${AZURE_API_URL:-https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net}"
+  GCP_API_URL="${GCP_API_URL:-https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app}"
+fi
 
 declare -A RESULTS
 PASS=0; FAIL=0; SKIP=0
@@ -155,6 +195,14 @@ test_cloud_suite() {
   fi
 
   # 4-6. Authenticated CRUD
+  if [[ $READ_ONLY == true ]]; then
+    echo -e "\n  ${CYAN}[SKIP]${NC}  Read-only mode: skipping write tests (POST/PUT/DELETE/presigned-urls)"
+    for lbl in "POST /posts" "GET /posts/:id" "PUT /posts/:id" "DELETE /posts/:id" "presigned-urls"; do
+      rec_skip "$cloud" "$lbl"
+    done
+    return
+  fi
+
   if [[ -z "$token" ]]; then
     echo -e "\n  ${CYAN}[SKIP]${NC}  Sections 4-6: no token provided"
     for lbl in "POST /posts" "GET /posts/:id" "PUT /posts/:id" "DELETE /posts/:id" "presigned-urls"; do

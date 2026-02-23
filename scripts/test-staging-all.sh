@@ -61,6 +61,9 @@ CLOUDS="aws,azure,gcp"
 VERBOSE=false
 SKIP_CLEANUP=false
 QUICK=false
+ENV=staging
+READ_ONLY=false
+_WRITE_=false
 
 # ── arg parsing ──────────────────────────────────────────────
 usage() {
@@ -68,6 +71,10 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Options:
+  -e, --env     <env>     Target environment: staging|production  (default: staging)
+                          --env production switches to custom domain URLs and implies --read-only
+  -r, --read-only         Skip all write tests (CRUD/presigned-urls) across all clouds
+      --write             Allow write tests even when --env production is set
   --aws-token   <token>   Cognito access token for AWS auth tests
   --azure-token <token>   Azure AD ID token for Azure auth tests
   --gcp-token   <token>   Firebase ID token for GCP auth tests
@@ -77,23 +84,31 @@ Options:
   -v, --verbose           Print full response bodies
   -h, --help              Show this help
 
-Environment variables (URL overrides):
-  AWS_CF_URL     CloudFront URL      (default: https://d1tf3uumcm4bo1.cloudfront.net)
-  AWS_API_URL    API Gateway URL     (default: https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com)
-  AZURE_FD_URL   Front Door URL      (default: https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net)
-  AZURE_API_URL  Function App URL    (default: https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net)
-  GCP_CDN_URL    Cloud CDN URL       (default: https://www.gcp.ashnova.jp)
-  GCP_API_URL    Cloud Run URL       (default: https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app)
+Environment variables (explicit URL overrides; take precedence over --env):
+  AWS_CF_URL     staging: https://d1tf3uumcm4bo1.cloudfront.net   production: https://www.aws.ashnova.jp
+  AWS_API_URL    staging: https://z42qmqdqac.execute-api...        production: https://qkzypr32af.execute-api...
+  AZURE_FD_URL   staging: https://mcad-staging-d45ihd-*.azurefd.net  production: https://www.azure.ashnova.jp
+  AZURE_API_URL  staging: https://multicloud-auto-deploy-staging-func-*.azurewebsites.net
+                 production: https://multicloud-auto-deploy-production-func-*.azurewebsites.net
+  GCP_CDN_URL    (same for both envs: https://www.gcp.ashnova.jp)
+  GCP_API_URL    staging: https://multicloud-auto-deploy-staging-api-*.run.app
+                 production: https://multicloud-auto-deploy-production-api-*.run.app
 
 Examples:
-  # Public-only (connectivity check):
-  $0
+  # Staging - public-only connectivity check:
+  $0 --quick
 
-  # Full authenticated run:
+  # Staging - full authenticated run:
   $0 \\
     --aws-token   "\$(aws cognito-idp initiate-auth --auth-flow USER_PASSWORD_AUTH --client-id 1k41lqkds4oah55ns8iod30dv2 --auth-parameters USERNAME=user@example.com,PASSWORD=pw --region ap-northeast-1 --query 'AuthenticationResult.AccessToken' --output text)" \\
     --gcp-token   "\$(gcloud auth print-identity-token)" \\
     --azure-token "<paste azure id_token from browser DevTools>"
+
+  # Production - read-only smoke test (no writes, no token needed):
+  $0 --env production
+
+  # Production - read-only, quick mode:
+  $0 --env production --quick
 
   # AWS + GCP only:
   $0 --clouds aws,gcp --aws-token eyJ... --gcp-token "\$(gcloud auth print-identity-token)"
@@ -102,6 +117,15 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case $1 in
+    -e|--env)
+      case "$2" in
+        production|prod) ENV=production; READ_ONLY=true ;;
+        staging|stag)    ENV=staging ;;
+        *) die "Unknown env: '$2'. Use staging or production." ;;
+      esac
+      shift 2 ;;
+    -r|--read-only) READ_ONLY=true;  SKIP_CLEANUP=true; shift ;;
+    --write)        _WRITE_=true;    shift ;;
     --aws-token)   AWS_TOKEN="$2";   shift 2 ;;
     --azure-token) AZURE_TOKEN="$2"; shift 2 ;;
     --gcp-token)   GCP_TOKEN="$2";   shift 2 ;;
@@ -113,6 +137,20 @@ while [[ $# -gt 0 ]]; do
     *) echo -e "${RED}Unknown option: $1${NC}"; usage; exit 1 ;;
   esac
 done
+
+# --write overrides the read-only implied by --env production
+[[ $_WRITE_ == true ]] && READ_ONLY=false
+[[ $READ_ONLY == true ]] && SKIP_CLEANUP=true
+
+# Apply env-specific URL defaults (env vars set externally take precedence via :=)
+if [[ $ENV == production ]]; then
+  : "${AWS_CF_URL:=https://www.aws.ashnova.jp}"
+  : "${AWS_API_URL:=https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com}"
+  : "${AZURE_FD_URL:=https://www.azure.ashnova.jp}"
+  : "${AZURE_API_URL:=https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net/api}"
+  : "${GCP_CDN_URL:=https://www.gcp.ashnova.jp}"
+  : "${GCP_API_URL:=https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app}"
+fi
 
 # ── timing helper ────────────────────────────────────────────
 _start_time=$(date +%s)
@@ -200,7 +238,7 @@ run_quick_check() {
     local label="$1" url="$2" expect="${3:-200}"
     total=$((total + 1))
     local status
-    status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 --compressed "$url" 2>/dev/null || echo "000")
+    status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 --compressed "$url" 2>/dev/null || true)
     if [[ "$status" == "$expect" ]]; then
       echo -e "  ${GREEN}[PASS]${NC}  $label  [HTTP $status]"
       passed=$((passed + 1))
@@ -246,11 +284,13 @@ run_quick_check() {
 
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║       Multicloud Staging — Full Test Suite                  ║${NC}"
+echo -e "${BOLD}║       Multicloud $(echo $ENV | tr '[:lower:]' '[:upper:]') — Test Suite                    ║${NC}"
 echo -e "${BOLD}║       $(date '+%Y-%m-%d %H:%M:%S %Z')                            ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  Clouds   : ${CYAN}$CLOUDS${NC}"
+echo -e "  Env      : ${CYAN}$ENV${NC}"
+echo -e "  ReadOnly : ${CYAN}$READ_ONLY${NC}"
 echo -e "  Quick    : ${CYAN}$QUICK${NC}"
 echo -e "  Verbose  : ${CYAN}$VERBOSE${NC}"
 echo -e "  Cleanup  : ${CYAN}$([ "$SKIP_CLEANUP" == true ] && echo skipped || echo enabled)${NC}"
@@ -275,6 +315,8 @@ if [[ "$CLOUDS" == *aws* ]]; then
   [[ -n "${AWS_CF_URL:-}"  ]] && aws_args+=(--cf  "$AWS_CF_URL")
   [[ -n "${AWS_API_URL:-}" ]] && aws_args+=(--api "$AWS_API_URL")
   [[ -n "$AWS_TOKEN"       ]] && aws_args+=(--token "$AWS_TOKEN")
+  [[ $READ_ONLY == true    ]] && aws_args+=(--read-only)
+  [[ $_WRITE_  == true     ]] && aws_args+=(--write)
   [[ "$VERBOSE" == true    ]] && aws_args+=(--verbose)
   [[ "$SKIP_CLEANUP" == true ]] && aws_args+=(--skip-cleanup)
 
@@ -292,6 +334,8 @@ if [[ "$CLOUDS" == *azure* ]]; then
   [[ -n "${AZURE_FD_URL:-}"  ]] && azure_args+=(--fd  "$AZURE_FD_URL")
   [[ -n "${AZURE_API_URL:-}" ]] && azure_args+=(--api "$AZURE_API_URL")
   [[ -n "$AZURE_TOKEN"       ]] && azure_args+=(--token "$AZURE_TOKEN")
+  [[ $READ_ONLY == true      ]] && azure_args+=(--read-only)
+  [[ $_WRITE_  == true       ]] && azure_args+=(--write)
   [[ "$VERBOSE" == true      ]] && azure_args+=(--verbose)
   [[ "$SKIP_CLEANUP" == true ]] && azure_args+=(--skip-cleanup)
 
@@ -309,6 +353,8 @@ if [[ "$CLOUDS" == *gcp* ]]; then
   [[ -n "${GCP_CDN_URL:-}"  ]] && gcp_args+=(--cdn "$GCP_CDN_URL")
   [[ -n "${GCP_API_URL:-}"  ]] && gcp_args+=(--api "$GCP_API_URL")
   [[ -n "$GCP_TOKEN"        ]] && gcp_args+=(--token "$GCP_TOKEN")
+  [[ $READ_ONLY == true     ]] && gcp_args+=(--read-only)
+  [[ $_WRITE_  == true      ]] && gcp_args+=(--write)
   [[ "$VERBOSE" == true     ]] && gcp_args+=(--verbose)
   [[ "$SKIP_CLEANUP" == true ]] && gcp_args+=(--skip-cleanup)
 

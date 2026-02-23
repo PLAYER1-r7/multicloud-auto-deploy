@@ -52,6 +52,7 @@ API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 **Current frontend bundle**: `index-BNBGmVGx.js` (uploaded 2026-02-22)
 
 **Build command for AWS staging**:
+
 ```bash
 cd services/frontend_react
 set -a && source .env.aws.staging && set +a
