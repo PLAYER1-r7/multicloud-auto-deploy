@@ -162,7 +162,8 @@ jobs:
           cd infrastructure/pulumi/azure
 
           # Get resource names from Pulumi
-          echo "resource_group_name=$(pulumi stack output resource_group_name)" >> $GITHUB_OUTPUT
+          RG_NAME=$(pulumi stack output resource_group_name)
+          echo "resource_group_name=${RG_NAME}" >> $GITHUB_OUTPUT
 
           # Get Azure AD outputs
           echo "azure_ad_client_id=$(pulumi stack output azure_ad_client_id)" >> $GITHUB_OUTPUT
