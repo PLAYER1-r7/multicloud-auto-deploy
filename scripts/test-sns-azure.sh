@@ -178,19 +178,15 @@ fi
 SNS_BODY=$(curl -s --max-time 25 --compressed "$FD_URL/sns/" 2>/dev/null || echo "")
 if echo "$SNS_BODY" | grep -q '<div id="root"'; then
   ok "  React SPA root element (<div id=\"root\">) found"
-  PASS=$((PASS + 1))
 else
   fail "  React SPA root element not found in /sns/ page"
-  FAIL=$((FAIL + 1))
 fi
 
 # Verify the SPA does not contain Python/Jinja2 SSR artifacts
 if echo "$SNS_BODY" | grep -qi 'jinja\|fastapi\|uvicorn'; then
   fail "  /sns/ page still contains SSR artifacts (Jinja/FastAPI)"
-  FAIL=$((FAIL + 1))
 else
   ok "  No SSR artifacts in React SPA page"
-  PASS=$((PASS + 1))
 fi
 
 # React SPA routing: deep links should also return 200 + HTML (SPA index)
@@ -202,23 +198,23 @@ sep
 echo -e "${BOLD}Section 2 — API Function App (direct)${NC}"
 sep
 
-run_test "API /api/health returns 200" \
-  GET "$API_URL/api/health"
+run_test "API /health returns 200" \
+  GET "$API_URL/health"
 
 if echo "$LAST_BODY" | jq -e '.status == "ok"' >/dev/null 2>&1; then
   ok "  .provider=$(echo "$LAST_BODY" | jq -r '.provider // "unknown"')"
 else
-  fail "  Unexpected /api/health response"
+  fail "  Unexpected /health response"
 fi
 
-run_test "API GET /api/posts returns 200 (unauthenticated)" \
-  GET "$API_URL/api/posts"
+run_test "API GET /posts returns 200 (unauthenticated)" \
+  GET "$API_URL/posts"
 
 if echo "$LAST_BODY" | jq -e '.items' >/dev/null 2>&1; then
   POST_COUNT=$(echo "$LAST_BODY" | jq '.items | length')
   ok "  .items array present (${POST_COUNT} posts)"
 else
-  fail "  .items missing in /api/posts response"
+  fail "  .items missing in /posts response"
 fi
 
 # ════════════════════════════════════════════════════════════
@@ -270,13 +266,13 @@ sep
 echo -e "${BOLD}Section 4 — Auth guard (unauthenticated = 401)${NC}"
 sep
 
-run_test "POST /api/posts without token returns 401" \
-  POST "$API_URL/api/posts" \
+run_test "POST /posts without token returns 401" \
+  POST "$API_URL/posts" \
   --data '{"content":"azure auth guard test"}' \
   --expect 401
 
-run_test "POST /api/uploads/presigned-urls without token returns 401" \
-  POST "$API_URL/api/uploads/presigned-urls" \
+run_test "POST /uploads/presigned-urls without token returns 401" \
+  POST "$API_URL/uploads/presigned-urls" \
   --data '{"count":1,"contentTypes":["image/jpeg"]}' \
   --expect 401
 
@@ -293,12 +289,12 @@ else
   AUTHH="Authorization: Bearer $TOKEN"
 
   # 5-1. Get profile
-  run_test "GET /api/profile returns 200" \
-    GET "$API_URL/api/profile" --header "$AUTHH"
+  run_test "GET /profile returns 200" \
+    GET "$API_URL/profile" --header "$AUTHH"
 
   # 5-2. Create post (text only)
-  run_test "POST /api/posts creates a new post" \
-    POST "$API_URL/api/posts" \
+  run_test "POST /posts creates a new post" \
+    POST "$API_URL/posts" \
     --header "$AUTHH" \
     --data "{\"content\":\"Azure E2E test post $(date +%s)\"}"
 
@@ -313,18 +309,20 @@ else
 
   # 5-3. Get post by ID
   if [[ -n "${POST_ID:-}" ]]; then
-    run_test "GET /api/posts/$POST_ID returns 200" \
-      GET "$API_URL/api/posts/$POST_ID" --header "$AUTHH"
+    run_test "GET /posts/$POST_ID returns 200" \
+      GET "$API_URL/posts/$POST_ID" --header "$AUTHH"
   fi
 
   # 5-4. Generate presigned URL for image upload
-  run_test "POST /api/uploads/presigned-urls returns 200" \
-    POST "$API_URL/api/uploads/presigned-urls" \
+  run_test "POST /uploads/presigned-urls returns 200" \
+    POST "$API_URL/uploads/presigned-urls" \
     --header "$AUTHH" \
     --data '{"count":1,"contentTypes":["image/jpeg"]}'
 
-  if echo "$LAST_BODY" | jq -e '.[0].uploadUrl' >/dev/null 2>&1; then
+  if echo "$LAST_BODY" | jq -e '.urls[0].url' >/dev/null 2>&1; then
     ok "  Presigned upload URL generated (Blob Storage SAS)"
+  elif echo "$LAST_BODY" | jq -e '.[0].url // .[0].uploadUrl' >/dev/null 2>&1; then
+    ok "  Presigned upload URL generated (legacy response format)"
   else
     fail "  Presigned URL missing in response"
   fi
@@ -335,8 +333,8 @@ import json, uuid
 keys = [f'testuser/{uuid.uuid4()}.jpg', f'testuser/{uuid.uuid4()}.jpg']
 print(json.dumps({'content': '[test] Azure E2E post with imageKeys', 'imageKeys': keys}))
 ")
-  run_test "POST /api/posts with imageKeys returns 201" \
-    POST "$API_URL/api/posts" \
+  run_test "POST /posts with imageKeys returns 201" \
+    POST "$API_URL/posts" \
     --header "$AUTHH" \
     --data "$KEYS_2" \
     --expect 201
@@ -348,8 +346,8 @@ print(json.dumps({'content': '[test] Azure E2E post with imageKeys', 'imageKeys'
   fi
 
   # 5-6. List posts — should include ours
-  run_test "GET /api/posts returns list with test posts" \
-    GET "$API_URL/api/posts?limit=20" --header "$AUTHH"
+  run_test "GET /posts returns list with test posts" \
+    GET "$API_URL/posts?limit=20" --header "$AUTHH"
 
   # ══════════════════════════════════════════════════════
   sep
@@ -358,8 +356,8 @@ print(json.dumps({'content': '[test] Azure E2E post with imageKeys', 'imageKeys'
 
   if [[ "$SKIP_CLEANUP" == "false" && ${#CREATED_POST_IDS[@]} -gt 0 ]]; then
     for pid in "${CREATED_POST_IDS[@]}"; do
-      run_test "DELETE /api/posts/$pid returns 200" \
-        DELETE "$API_URL/api/posts/$pid" \
+      run_test "DELETE /posts/$pid returns 200" \
+        DELETE "$API_URL/posts/$pid" \
         --header "$AUTHH" \
         --expect 200
     done

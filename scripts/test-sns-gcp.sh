@@ -141,11 +141,13 @@ run_test() {
   LAST_BODY=$(cat /tmp/gcp_sns_test_body 2>/dev/null || echo "")
 
   if [[ "$status" == "$expect" ]]; then
-    ok "$label  [HTTP $status]"
+    echo -e "${GREEN}[PASS]${NC}  $label  [HTTP $status]"
+    PASS=$((PASS + 1))
     [[ "$VERBOSE" == true ]] && echo "$LAST_BODY" | jq . 2>/dev/null || true
     return 0
   else
-    fail "$label  [expected HTTP $expect, got HTTP $status]"
+    echo -e "${RED}[FAIL]${NC}  $label  [expected HTTP $expect, got HTTP $status]"
+    FAIL=$((FAIL + 1))
     [[ -n "$LAST_BODY" ]] && echo "  Response: $(echo "$LAST_BODY" | head -c 300)"
     return 1
   fi

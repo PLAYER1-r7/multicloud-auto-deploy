@@ -64,10 +64,10 @@ PASS=0; FAIL=0; SKIP=0
 
 # ── helpers ─────────────────────────────────────────────────
 log()  { echo -e "${BLUE}[INFO]${NC}  $*"; }
-ok()   { echo -e "${GREEN}[PASS]${NC}  $*"; }
-fail() { echo -e "${RED}[FAIL]${NC}  $*"; }
+ok()   { echo -e "${GREEN}[PASS]${NC}  $*"; PASS=$((PASS + 1)); }
+fail() { echo -e "${RED}[FAIL]${NC}  $*"; FAIL=$((FAIL + 1)); }
 warn() { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-skip() { echo -e "${CYAN}[SKIP]${NC}  $*"; }
+skip() { echo -e "${CYAN}[SKIP]${NC}  $*"; SKIP=$((SKIP + 1)); }
 sep()  { echo -e "${YELLOW}────────────────────────────────────────${NC}"; }
 
 die() { echo -e "${RED}ERROR: $*${NC}" >&2; exit 2; }
@@ -148,12 +148,12 @@ run_test() {
   LAST_BODY=$(cat /tmp/sns_test_body 2>/dev/null || echo "")
 
   if [[ "$status" == "$expect" ]]; then
-    ok "$label  [HTTP $status]"
+    echo -e "${GREEN}[PASS]${NC}  $label  [HTTP $status]"
     PASS=$((PASS + 1))
     [[ "$VERBOSE" == true ]] && echo "$LAST_BODY" | jq . 2>/dev/null || true
     return 0
   else
-    fail "$label  [expected HTTP $expect, got HTTP $status]"
+    echo -e "${RED}[FAIL]${NC}  $label  [expected HTTP $expect, got HTTP $status]"
     FAIL=$((FAIL + 1))
     [[ -n "$LAST_BODY" ]] && echo "  Response: $(echo "$LAST_BODY" | head -c 300)"
     return 1

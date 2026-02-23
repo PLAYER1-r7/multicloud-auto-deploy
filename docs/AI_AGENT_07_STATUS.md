@@ -70,7 +70,7 @@ VITE_BASE_PATH=/sns/ npm run build
 
 ```
 CDN URL  : https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net
-API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger
+API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
 ```
 
 | Resource        | Name                                                                  | Status |
@@ -149,7 +149,7 @@ curl -s https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/health
 
 # Azure
 curl -I https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/
-curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger/health"
+curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/health"
 ```
 
 ---
