@@ -21,9 +21,6 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  # Landing page is deployed to the same bucket as the frontend (root level)
-  # so CloudFront serves it at / while the React SNS app lives under /sns/
-  S3_BUCKET: multicloud-auto-deploy-staging-frontend
 
 jobs:
   deploy-landing:
@@ -38,6 +35,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Determine Environment
+        id: env
+        run: |
+          # Use workflow_dispatch input if available, otherwise derive from branch
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            ENV="production"
+          else
+            ENV="staging"
+          fi
+
+          if [ "$ENV" = "production" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "s3_bucket=multicloud-auto-deploy-production-frontend" >> $GITHUB_OUTPUT
+            echo "cloudfront_id=E214XONKTXJEJD" >> $GITHUB_OUTPUT
+            echo "url=https://www.aws.ashnova.jp/" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "s3_bucket=multicloud-auto-deploy-staging-frontend" >> $GITHUB_OUTPUT
+            echo "cloudfront_id=E1TBH4R432SZBZ" >> $GITHUB_OUTPUT
+            echo "url=https://staging.aws.ashnova.jp/" >> $GITHUB_OUTPUT
+          fi
+          echo "🌍 Deploying to: $ENV"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -47,7 +69,7 @@ jobs:
 
       - name: Deploy to S3
         run: |
-          aws s3 sync static-site/ s3://${{ env.S3_BUCKET }}/ \
+          aws s3 sync static-site/ s3://${{ steps.env.outputs.s3_bucket }}/ \
             --cache-control "public, max-age=3600" \
             --exclude "*" \
             --include "*.html"
@@ -55,18 +77,19 @@ jobs:
       - name: Set AWS-specific landing page as root index.html
         run: |
           # Deploy aws/index.html as root index.html for AWS CloudFront
-          aws s3 cp static-site/aws/index.html s3://${{ env.S3_BUCKET }}/index.html \
+          aws s3 cp static-site/aws/index.html \
+            s3://${{ steps.env.outputs.s3_bucket }}/index.html \
             --content-type "text/html; charset=utf-8" \
             --cache-control "public, max-age=3600"
 
       - name: Invalidate CloudFront Cache
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id E1TBH4R432SZBZ \
+            --distribution-id ${{ steps.env.outputs.cloudfront_id }} \
             --paths "/*" \
             --no-cli-pager
 
       - name: Deployment Success
         run: |
-          echo "✅ Landing page deployed successfully!"
-          echo "🌐 URL: https://d1tf3uumcm4bo1.cloudfront.net/"
+          echo "✅ Landing page deployed to ${{ steps.env.outputs.environment }} successfully!"
+          echo "🌐 URL: ${{ steps.env.outputs.url }}"
