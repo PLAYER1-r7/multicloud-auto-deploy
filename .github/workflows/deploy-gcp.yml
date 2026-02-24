@@ -80,6 +80,22 @@ jobs:
           echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
           echo "📦 Using Pulumi stack: $STACK_NAME"
 
+      - name: Load Cloud Config
+        # Single source of truth for stable per-environment values.
+        # Eliminates dependency on repo-level secrets and inline case/esac patterns.
+        id: cloud_config
+        run: |
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          CONFIG_FILE=".github/config/gcp.${STACK_NAME}.env"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "❌ Config file $CONFIG_FILE not found — cannot proceed"
+            exit 1
+          fi
+          source "$CONFIG_FILE"
+          echo "📄 Loaded config: $CONFIG_FILE"
+          echo "  custom_domain=$CLOUD_CUSTOM_DOMAIN"
+          echo "custom_domain=$CLOUD_CUSTOM_DOMAIN" >> $GITHUB_OUTPUT
+
       - name: Initialize Pulumi Stack
         run: |
           cd infrastructure/pulumi/gcp
@@ -128,7 +144,7 @@ jobs:
 
       - name: Update Firebase Authorized Domains
         run: |
-          CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
+          CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
           if [ -z "$CUSTOM_DOMAIN" ]; then
             echo "⏭️  No custom domain configured, skipping Firebase domain registration"
             exit 0
@@ -248,11 +264,11 @@ jobs:
           # Get CDN IP from Pulumi outputs for CORS
           # GCP Classic HTTP LB serves over both HTTP and HTTPS
           CDN_URL="${{ steps.pulumi_outputs.outputs.cdn_ip_address }}"
-          CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
+          # Custom domain from config file (single source of truth)
+          CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
           CORS_ORIGINS="http://${CDN_URL},https://${CDN_URL},http://localhost:5173"
-          # Add custom domain if configured (e.g., staging.gcp.ashnova.jp)
           if [ -n "$CUSTOM_DOMAIN" ]; then
-            CORS_ORIGINS="${CORS_ORIGINS},https://${CUSTOM_DOMAIN},http://${CUSTOM_DOMAIN}"
+            CORS_ORIGINS="${CORS_ORIGINS},https://${CUSTOM_DOMAIN}"
           fi
 
           echo "🔒 CORS Origins: $CORS_ORIGINS"
@@ -305,12 +321,8 @@ jobs:
           API_URL="${{ steps.deploy_function.outputs.api_url }}"
           STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
 
-          # Use per-stack mapping to avoid repo-level secret domain mismatch
-          case "$STACK_NAME" in
-            production) GCP_CUSTOM_DOMAIN="www.gcp.ashnova.jp" ;;
-            staging)    GCP_CUSTOM_DOMAIN="staging.gcp.ashnova.jp" ;;
-            *)          GCP_CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}" ;;
-          esac
+          # Custom domain from config file (single source of truth)
+          GCP_CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
           PUBLIC_HOST="${GCP_CUSTOM_DOMAIN}"
 
           echo "🏗️  Building React frontend for GCP ($STACK_NAME)..."
