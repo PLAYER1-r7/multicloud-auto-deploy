@@ -63,6 +63,7 @@ develop branch sync:        ✅ main v1.17.22 と同期済み
 
 | #   | Task                                       | Description                                                                                       | Reference                                                |
 | --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 0d  | ~~**deploy-azure.yml Python 3.11→3.12 build fix**~~ ✅ | `PYTHON_VERSION` env var corrected from `3.13` → `3.12` to match Azure Functions FC1 runtime. | this session |
 | 1   | **Run integration tests (≥80% pass)**      | All backend blockers resolved. Run full suite on AWS/GCP/Azure and confirm.                       | [INTEGRATION_TESTS_GUIDE.md](INTEGRATION_TESTS_GUIDE.md) |
 | 2   | **Verify Azure `PUT /posts` endpoint**     | End-to-end PUT routing on Azure has not been confirmed. Test and fix.                             | —                                                        |
 | 4   | **Fix `SNS:Unsubscribe` permission error** | `DELETE /posts` fails on SNS Unsubscribe call. Add `sns:Unsubscribe` to IAM or redesign the flow. | —                                                        |

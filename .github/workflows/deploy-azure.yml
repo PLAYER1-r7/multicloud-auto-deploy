@@ -23,7 +23,9 @@ on:
 env:
   AZURE_REGION: japaneast
   NODE_VERSION: "24"
-  PYTHON_VERSION: "3.13"
+  # Must match Azure Functions Flex Consumption runtime version.
+  # The "Build and Package" step Docker image must also use this version.
+  PYTHON_VERSION: "3.12"
 
 # Prevent concurrent Pulumi updates on the same stack (causes 409 Conflict)
 concurrency:
@@ -394,7 +396,7 @@ jobs:
               --url "https://${FUNCTION_APP}.scm.azurewebsites.net/api/deployments/latest" \
               --resource "https://management.azure.com/" \
               --query "status" -o tsv 2>/dev/null || echo "Unknown")
-            
+
             if [ "$DEPLOY_STATUS" = "Running" ] || [ "$DEPLOY_STATUS" = "Building" ]; then
               echo "⏳ Deployment in progress (status: $DEPLOY_STATUS), waiting 30s..."
               sleep 30
@@ -674,7 +676,7 @@ jobs:
 
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             echo "Attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
-            
+
             # Run deployment and capture output
             # GitHub Actions runner is ubuntu-latest (x86_64), matching Azure Functions
             # linux/amd64 runtime. No need for --build-remote false on FC1 plans.
@@ -685,7 +687,7 @@ jobs:
               --src services/api/function-app.zip \
               --timeout 600 \
               2>&1 | tee deploy_log.txt || true
-            
+
             # Check for "another deployment in progress" error (retry with longer wait)
             if grep -q "another deployment is in progress" deploy_log.txt; then
               echo "⏳ Another deployment in progress, waiting 60s before retry..."
@@ -693,7 +695,7 @@ jobs:
               sleep 60
               continue
             fi
-            
+
             # Check for Kudu restart
             if grep -q "Kudu has been restarted" deploy_log.txt; then
               echo "🔄 Kudu restart detected, retrying..."
@@ -701,7 +703,7 @@ jobs:
               sleep 30
               continue
             fi
-            
+
             # Check for successful deployment (in order of reliability)
             # 1. Explicit success message (most reliable for Flex Consumption)
             if grep -q "Deployment was successful" deploy_log.txt; then
@@ -975,7 +977,7 @@ jobs:
               --webapp-name $FUNCTION_APP \
               --resource-group $RESOURCE_GROUP \
               --query '[0].name' -o tsv 2>/dev/null || echo "")
-            
+
             if [ -n "$FUNC_HOSTNAME" ] && [ "$FUNC_HOSTNAME" != "None" ]; then
               echo "✅ Got hostname: $FUNC_HOSTNAME"
               break

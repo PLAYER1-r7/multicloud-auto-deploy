@@ -1,0 +1,94 @@
+{
+  "python.terminal.activateEnvironment": true,
+  "python.venvFolders": [
+    ".venv"
+  ],
+  "editor.formatOnSave": true,
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.rulers": [100],
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "editor.bracketPairColorization.enabled": true,
+  "[python]": {
+    "editor.tabSize": 4,
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  "ruff.lint.enable": true,
+  "ruff.format.enable": true,
+  "mypy-type-checker.importStrategy": "fromEnvironment",
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml"
+  },
+  "yaml.schemas": {
+    "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+  },
+  "[markdown]": {
+    "editor.wordWrap": "on"
+  },
+  "terminal.integrated.defaultProfile.linux": "bash",
+  // ─── Terminal stability (dev container) ─────────────────────────────────────
+  // Disable GPU acceleration to prevent rendering crashes inside dev containers
+  "terminal.integrated.gpuAcceleration": "off",
+  // Disable persistent sessions to avoid zombie processes after window reload
+  "terminal.integrated.enablePersistentSessions": false,
+  // Limit scrollback buffer to reduce memory pressure during long-running tasks
+  "terminal.integrated.scrollback": 3000,
+  // Suppress decoration rendering that can cause flicker
+  "terminal.integrated.shellIntegration.decorationsEnabled": "never",
+  // Warn before killing terminals with running processes
+  "terminal.integrated.confirmOnKill": "editor",
+  // On host machine: set warp-terminal as the external terminal
+  // "terminal.external.linuxExec": "warp-terminal",
+  // Tailwind CSS
+  "tailwindCSS.includeLanguages": { "typescriptreact": "html" },
+  // Vitest
+  "vitest.enable": true,
+  "vitest.workspaceConfig": "services/frontend_react/vite.config.ts",
+  // TOML
+  "[toml]": { "editor.defaultFormatter": "tamasfe.even-better-toml" },
+  // Search / watcher exclusions (keep build artifacts out)
+  "search.exclude": {
+    "**/.build-layer": true,
+    "**/.deployment*": true,
+    "**/htmlcov": true
+  },
+  "files.watcherExclude": {
+    "**/.build-layer/**": true,
+    "**/.deployment*/**": true
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.venv": true,
+    "**/node_modules": true,
+    "**/.pulumi": true
+  },
+  "azureFunctions.projectSubpath": "services/frontend_web",
+  "azureFunctions.deploySubpath": "services/frontend_web",
+  "azureFunctions.scmDoBuildDuringDeployment": true,
+  "azureFunctions.pythonVenv": ".venv",
+  "azureFunctions.projectLanguage": "Python",
+  "azureFunctions.projectRuntime": "~4",
+  "debug.internalConsoleOptions": "neverOpen",
+  "azureFunctions.projectLanguageModel": 2,
+  "chat.tools.terminal.autoApprove": {
+    "/^sleep 10 && cd /workspaces/multicloud-auto-deploy && gh run list --branch develop --limit 12$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "git remote": true
+  }
+}

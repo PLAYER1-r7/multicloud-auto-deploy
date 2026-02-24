@@ -1,0 +1,69 @@
+version: 2
+
+updates:
+  # ── GitHub Actions ──────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "ci-cd"]
+    commit-message:
+      prefix: "chore(ci)"
+
+  # ── npm: React frontend ─────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/services/frontend_react"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "frontend"]
+    commit-message:
+      prefix: "chore(frontend)"
+    groups:
+      react:
+        patterns: ["react", "react-dom", "react-router*", "@types/react*"]
+      vite-build:
+        patterns: ["vite", "@vitejs/*", "typescript*", "eslint*", "@eslint/*"]
+      testing:
+        patterns: ["vitest*", "@vitest/*", "@testing-library/*", "jsdom"]
+      tailwind:
+        patterns:
+          ["tailwindcss*", "postcss*", "autoprefixer*", "@tailwindcss/*"]
+
+  # ── pip: API (shared requirements) ─────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/services/api"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    labels: ["dependencies", "backend"]
+    commit-message:
+      prefix: "chore(api)"
+
+  # ── pip: Pulumi AWS infrastructure ──────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/infrastructure/pulumi/aws"
+    schedule:
+      interval: "monthly"
+    labels: ["dependencies", "infrastructure", "aws"]
+    commit-message:
+      prefix: "chore(infra-aws)"
+
+  # ── pip: Pulumi Azure infrastructure ────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/infrastructure/pulumi/azure"
+    schedule:
+      interval: "monthly"
+    labels: ["dependencies", "infrastructure", "azure"]
+    commit-message:
+      prefix: "chore(infra-azure)"
+
+  # ── pip: Pulumi GCP infrastructure ──────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/infrastructure/pulumi/gcp"
+    schedule:
+      interval: "monthly"
+    labels: ["dependencies", "infrastructure", "gcp"]
+    commit-message:
+      prefix: "chore(infra-gcp)"

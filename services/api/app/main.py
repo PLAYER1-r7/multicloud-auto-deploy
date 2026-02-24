@@ -25,7 +25,7 @@ try:
 
     powertools_available = True
 except ImportError:
-    # Powertools が利用できない場合は標準loggingを使用
+    # Fallback to standard logging when AWS Lambda Powertools is not installed.
     logging.basicConfig(
         level=getattr(logging, settings.log_level.upper()),
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -81,12 +81,11 @@ app.include_router(uploads.router)
 app.include_router(profile.router)
 
 
-# ========================================
-# バリデーションエラー詳細ログ (422デバッグ用)
-# ========================================
+# ── Validation error handler ────────────────────────────────────────────────
+# Log request body on 422 to simplify debugging of malformed requests.
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """422バリデーションエラー時にリクエストボディをログに記録"""
+    """Log request body on 422 validation errors to aid debugging."""  # noqa: D401
     try:
         body = await request.body()
         body_str = body.decode("utf-8", errors="replace") if body else "(empty)"
@@ -99,16 +98,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
-# ========================================
-# 後方互換性: 旧フロントエンド用の /api/messages エイリアス
-# ========================================
+# ── Backward-compatible /api/messages aliases (legacy frontend) ─────────────
 @app.get("/api/messages/", response_model=ListPostsResponse)
 def legacy_list_messages(
-    limit: int = Query(20, ge=1, le=50, alias="page_size", description="取得件数"),
-    nextToken: str | None = Query(None, description="ページネーショントークン"),
-    tag: str | None = Query(None, description="タグフィルター"),
+    limit: int = Query(20, ge=1, le=50, alias="page_size", description="Number of items"),
+    nextToken: str | None = Query(None, description="Pagination token"),
+    tag: str | None = Query(None, description="Tag filter"),
 ) -> ListPostsResponse:
-    """旧フロントエンド互換: 投稿一覧を取得 (GET /api/messages/)"""
+    """Legacy alias: list posts (GET /api/messages/). Kept for old frontend compatibility."""
     backend = get_backend()
     posts_list, output_next_token = backend.list_posts(limit, nextToken, tag)
     return ListPostsResponse(items=posts_list, limit=limit, nextToken=output_next_token)
@@ -119,8 +116,8 @@ def legacy_create_message(
     body: CreatePostBody,
     user: Optional[UserInfo] = Depends(get_current_user),
 ) -> dict:
-    """旧フロントエンド互換: 投稿を作成 (POST /api/messages/)"""
-    # staging環境では認証をオプショナルに（匿名ユーザーを使用）
+    """Legacy alias: create post (POST /api/messages/). Kept for old frontend compatibility."""
+    # Allow anonymous users so staging tests work without auth.
     if not user:
         user = UserInfo(
             user_id="anonymous",
@@ -136,7 +133,7 @@ def legacy_delete_message(
     post_id: str,
     user: Optional[UserInfo] = Depends(get_current_user),
 ) -> dict:
-    """旧フロントエンド互換: 投稿を削除 (DELETE /api/messages/{id})"""
+    """Legacy alias: delete post (DELETE /api/messages/{id})."""
     # Legacy endpoint: unauthenticated requests receive admin-level access so that
     # staging / test users can delete any post without a real auth token.
     # In production with auth properly configured, get_current_user returns a real user.
@@ -160,7 +157,7 @@ def legacy_get_message(
     post_id: str,
     user: Optional[UserInfo] = Depends(get_current_user),
 ) -> dict:
-    """旧フロントエンド互換: 投稿を取得 (GET /api/messages/{id})"""
+    """Legacy alias: get single post (GET /api/messages/{id})."""
     backend = get_backend()
     try:
         return backend.get_post(post_id)
@@ -174,7 +171,7 @@ def legacy_update_message(
     body: UpdatePostBody,
     user: Optional[UserInfo] = Depends(get_current_user),
 ) -> dict:
-    """旧フロントエンド互換: 投稿を更新 (PUT /api/messages/{id})"""
+    """Legacy alias: update post (PUT /api/messages/{id})."""
     # Legacy endpoint: same policy as DELETE — unauthenticated = admin-level access.
     if not user:
         user = UserInfo(
@@ -193,7 +190,7 @@ def legacy_update_message(
 
 @app.get("/", response_model=HealthResponse)
 def root() -> HealthResponse:
-    """ルートエンドポイント"""
+    """Root endpoint — returns cloud provider info."""
     if powertools_available:
         metrics.add_metric(name="RootEndpointCalled",
                            unit=MetricUnit.Count, value=1)
@@ -206,7 +203,7 @@ def root() -> HealthResponse:
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    """ヘルスチェックエンドポイント"""
+    """Health check endpoint."""
     if powertools_available:
         metrics.add_metric(name="HealthCheckCalled",
                            unit=MetricUnit.Count, value=1)
@@ -227,7 +224,8 @@ try:
     _mangum_handler = Mangum(app, lifespan="off")
 
     if powertools_available:
-        # Powertools decorators を Lambda handler に適用
+        # Wrap the Mangum handler with Powertools decorators for structured logging,
+        # X-Ray tracing, and cold-start metrics.
         @logger.inject_lambda_context(clear_state=True)
         @tracer.capture_lambda_handler
         @metrics.log_metrics(capture_cold_start_metric=True)

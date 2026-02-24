@@ -1,0 +1,29 @@
+{
+  "recommendations": [
+    // Cloud platform tools
+    "pulumi.pulumi-lsp-client",
+    "ms-azuretools.vscode-docker",
+    "ms-azuretools.vscode-azurefunctions",
+    "ms-vscode.azure-account",
+    "amazonwebservices.aws-toolkit-vscode",
+    "googlecloudtools.cloudcode",
+    // Python: linting / formatting / type checking
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "ms-python.mypy-type-checker",
+    // JavaScript / TypeScript / React
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "vitest.explorer",
+    // GitHub / CI-CD
+    "github.vscode-github-actions",
+    "github.vscode-pull-request-github",
+    // General
+    "redhat.vscode-yaml",
+    "tamasfe.even-better-toml",
+    "ms-vscode.makefile-tools",
+    "streetsidesoftware.code-spell-checker"
+  ]
+}

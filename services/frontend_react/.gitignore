@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Local .env files (use .env.example for public template)
+.env
+.env.local
+.env.*.local
+
+# Cloud-specific build env files — commit intentional ones only via explicit git add
+# (staging non-secrets are currently tracked; secrets must never appear here)
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
