@@ -555,6 +555,37 @@ jobs:
             --output none 2>/dev/null && echo "ℹ️  WEBSITE_RUN_FROM_PACKAGE cleared" || echo "ℹ️  WEBSITE_RUN_FROM_PACKAGE not set (OK)"
           sleep 5
 
+          # Fix FC1 Flex Consumption deployment storage.
+          # The function app was created manually; its functionAppConfig.deployment.storage
+          # may point to a stale/deleted storage account (root cause of BlobUploadFailed/
+          # InaccessibleStorageException during zip deploy).
+          # Update it to the Pulumi-managed functions storage account via ARM PATCH.
+          echo "🔧 Fixing FC1 deployment storage configuration..."
+          FUNCTIONS_STORAGE_NAME="${{ steps.pulumi_outputs.outputs.functions_storage_name }}"
+          SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null)
+          DEPLOY_CONTAINER="app-package-${FUNCTION_APP}"
+
+          # Create deployment container if it doesn't exist (FC1 requires pre-existing container)
+          az storage container create \
+            --name "$DEPLOY_CONTAINER" \
+            --account-name "$FUNCTIONS_STORAGE_NAME" \
+            --auth-mode login \
+            --output none 2>/dev/null \
+            && echo "✅ Deployment container ready: $DEPLOY_CONTAINER" \
+            || echo "ℹ️  Container may already exist (OK)"
+
+          # PATCH the function app to point its FC1 deployment storage to the valid account
+          CONTAINER_URL="https://${FUNCTIONS_STORAGE_NAME}.blob.core.windows.net/${DEPLOY_CONTAINER}"
+          az rest \
+            --method PATCH \
+            --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}?api-version=2023-12-01" \
+            --headers "Content-Type=application/json" \
+            --body "{\"properties\":{\"functionAppConfig\":{\"deployment\":{\"storage\":{\"type\":\"blobContainer\",\"value\":\"${CONTAINER_URL}\",\"authentication\":{\"type\":\"StorageAccountConnectionString\",\"storageAccountConnectionStringName\":\"DEPLOYMENT_STORAGE_CONNECTION_STRING\"}}}}}}" \
+            --output none 2>/dev/null \
+            && echo "✅ FC1 deployment storage updated to: ${CONTAINER_URL}" \
+            || echo "⚠️  Could not update FC1 deployment storage (non-fatal — will retry if needed)"
+          sleep 15
+
           echo "📦 Deploying function app package (with retry logic)..."
 
           # Retry deployment up to 3 times to handle Kudu restarts
