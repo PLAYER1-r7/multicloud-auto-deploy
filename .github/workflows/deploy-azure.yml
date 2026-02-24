@@ -286,14 +286,14 @@ jobs:
           mkdir -p .deployment
 
           # Install dependencies using Docker with the EXACT same platform/Python as Azure Functions
-          # Azure Functions Flex Consumption uses Python 3.11 on linux/amd64.
+          # Azure Functions Flex Consumption uses Python 3.12 on linux/amd64.
           # The GitHub Actions runner may be a different arch (e.g., arm64), so using the runner's
-          # native pip would produce wrong .so binaries (e.g., cpython-312-aarch64 instead of
-          # cpython-311-x86_64). Docker ensures correct platform + Python version.
-          echo "Installing Azure-specific dependencies (linux/amd64 python:3.11)..."
+          # native pip would produce wrong .so binaries (e.g., cpython-311-aarch64 instead of
+          # cpython-312-x86_64). Docker ensures correct platform + Python version.
+          echo "Installing Azure-specific dependencies (linux/amd64 python:3.12)..."
           docker run --rm --platform linux/amd64 \
             -v "$(pwd):/work" \
-            python:3.11-slim \
+            python:3.12-slim \
             pip install --target /work/.deployment --no-cache-dir -q \
               -r /work/requirements-azure.txt
 
