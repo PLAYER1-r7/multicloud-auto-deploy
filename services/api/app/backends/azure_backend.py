@@ -69,15 +69,73 @@ class AzureBackend(BackendBase):
             f"storage_account={self.storage_account}"
         )
 
+    def _blob_key_to_read_sas_url(self, blob_name: str) -> str:
+        """Blobキーを読み取り用SAS URLに変換 (24時間有効)"""
+        if not _blob_available or not self.storage_key:
+            return (
+                f"https://{self.storage_account}.blob.core.windows.net/"
+                f"{self.images_container}/{blob_name}"
+            )
+        sas_token = generate_blob_sas(
+            account_name=self.storage_account,
+            container_name=self.images_container,
+            blob_name=blob_name,
+            account_key=self.storage_key,
+            permission=BlobSasPermissions(read=True),
+            expiry=datetime.now(timezone.utc) + timedelta(hours=24),
+        )
+        return (
+            f"https://{self.storage_account}.blob.core.windows.net/"
+            f"{self.images_container}/{blob_name}?{sas_token}"
+        )
+
+    def _resolve_image_urls(self, keys: list) -> list[str]:
+        """キー/URLリストをSAS読み取りURLに変換 (AWS _resolve_image_urls と同パターン)
+
+        - フルBlobURL → キーを抽出してSASを付与
+        - 生のBlobキー → SASを付与
+        - 他のhttps:// URL → そのまま返す
+        - http:// URL → Mixed Content のためスキップ
+        """
+        if not self.storage_account or not keys:
+            return []
+        prefix = (
+            f"https://{self.storage_account}.blob.core.windows.net/"
+            f"{self.images_container}/"
+        )
+        result = []
+        for k in keys:
+            if not k or not isinstance(k, str):
+                continue
+            if k.startswith(prefix):
+                # 既存の直接BlobURL: キーを抽出してSASを付与
+                blob_key = k[len(prefix):].split("?")[0]
+            elif k.startswith("https://"):
+                # 別のhttps URLはそのまま通す
+                result.append(k)
+                continue
+            elif k.startswith("http://"):
+                logger.warning(f"Skipping insecure HTTP image URL (mixed content): {k[:80]}")
+                continue
+            else:
+                # 生のBlobキー
+                blob_key = k
+            try:
+                result.append(self._blob_key_to_read_sas_url(blob_key))
+            except Exception as e:
+                logger.warning(f"Failed to generate SAS read URL for {k}: {e}")
+        return result
+
     def _item_to_post(self, item: dict) -> Post:
         """Cosmos DBアイテムをPostモデルに変換"""
+        raw_urls = item.get("imageKeys") or item.get("imageUrls") or []
         return Post(
             postId=item.get("postId", item.get("id", "")),
             userId=item.get("userId", "unknown"),
             nickname=item.get("nickname"),
             content=item.get("content", ""),
             isMarkdown=item.get("isMarkdown", False),
-            imageUrls=item.get("imageUrls", []),
+            imageUrls=self._resolve_image_urls(raw_urls),
             tags=item.get("tags", []),
             createdAt=item.get("createdAt", datetime.now(timezone.utc).isoformat()),
             updatedAt=item.get("updatedAt"),
@@ -168,14 +226,8 @@ class AzureBackend(BackendBase):
             except Exception as e:
                 logger.warning(f"Failed to fetch nickname for {user.user_id}: {e}")
 
-            # 画像キーをURLに変換
-            image_urls = []
-            if body.image_keys:
-                image_urls = [
-                    f"https://{self.storage_account}.blob.core.windows.net/"
-                    f"{self.images_container}/{key}"
-                    for key in body.image_keys
-                ]
+            # 画像キーをそのまま保存 (取得時にSAS URLに変換)
+            image_keys = list(body.image_keys) if body.image_keys else []
 
             item = {
                 "id": post_id,
@@ -184,7 +236,7 @@ class AzureBackend(BackendBase):
                 "nickname": nickname,
                 "content": body.content,
                 "isMarkdown": body.is_markdown,
-                "imageUrls": image_urls,
+                "imageKeys": image_keys,   # 生のBlobキーを保存 (SASなし)
                 "tags": body.tags or [],
                 "createdAt": now_str,
                 "updatedAt": None,
@@ -193,13 +245,15 @@ class AzureBackend(BackendBase):
             self.posts_container.create_item(body=item)
             logger.info(f"Created post {post_id} by user {user.user_id}")
 
+            presigned_urls = self._resolve_image_urls(image_keys)
+
             return Post(
                 postId=post_id,
                 userId=user.user_id,
                 nickname=nickname,
                 content=body.content,
                 isMarkdown=body.is_markdown,
-                imageUrls=image_urls,
+                imageUrls=presigned_urls,
                 tags=body.tags or [],
                 createdAt=now_str,
             ).model_dump()
@@ -215,6 +269,7 @@ class AzureBackend(BackendBase):
         except Exception:
             return None
         from app.models import Post
+        raw_urls = item.get("imageKeys") or item.get("imageUrls") or []
         return Post(
             postId=item["id"],
             userId=item["userId"],
@@ -223,7 +278,7 @@ class AzureBackend(BackendBase):
             tags=item.get("tags") or [],
             createdAt=item["createdAt"],
             updatedAt=item.get("updatedAt"),
-            imageUrls=item.get("imageUrls") or [],
+            imageUrls=self._resolve_image_urls(raw_urls),
         )
 
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
