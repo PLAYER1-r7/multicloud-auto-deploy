@@ -508,8 +508,9 @@ curl -s "https://<func-hostname>/api/HttpTrigger/health" | jq .
 # Expected: {"status":"ok","provider":"azure","version":"X.Y.Z"}
 ```
 
-**Prevention:**  
-- `deploy-azure.yml` contains a "Ensure deployment storage account exists" step that runs this logic automatically on every deployment.  
+**Prevention:**
+
+- `deploy-azure.yml` contains a "Ensure deployment storage account exists" step that runs this logic automatically on every deployment.
 - Do **not** delete storage accounts that share a resource group with FC1 function apps without first checking dependencies.
 
 ---

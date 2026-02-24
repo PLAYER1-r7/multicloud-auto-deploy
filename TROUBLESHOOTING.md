@@ -42,34 +42,34 @@
 
 素早く解決策を見つけるために、エラーメッセージから検索してください。
 
-| エラーメッセージ                                      | 問題                     | セクション                                                                |
-| ----------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------- |
-| `mapping values are not allowed in this context`      | YAML構文エラー           | [GitHub Actions YAML](#github-actions-yaml構文エラー)                     |
-| `Application setting already exists`                  | CORS設定の競合           | [Azure CORS設定](#azure-cors設定の名前競合)                               |
-| `AZURE_COSMOS_DATABASE value is null`                 | Azure CLI書式問題        | [Azure CLI --settings書式](#azure-cli---settings-yaml-multi-line書式問題) |
-| `environment variables all null`                      | Azure CLI書式問題        | [Azure CLI --settings書式](#azure-cli---settings-yaml-multi-line書式問題) |
-| `AccessDeniedException ... PublishLayerVersion`       | Lambda Layer権限不足     | [Lambda Layer権限](#aws-lambda-layer権限エラー)                           |
-| `ResourceConflictException ... update is in progress` | Lambda更新の競合         | [Lambda ResourceConflict](#aws-lambda-resourceconflictexception)          |
-| `Resource ... not found`                              | リソース名のハードコード | [Azureリソース名](#azureリソース名のハードコード問題)                     |
-| `Deployment was cancelled and another deployment`     | 同時デプロイ             | [Azure デプロイメント競合](#azure-function-appデプロイメント競合)         |
-| `pathspec ... did not match any files`                | Gitパス問題              | [Gitパス問題](#モノレポ構造でのgitパス問題)                               |
-| `no stack named ... found`                            | Pulumiディレクトリ       | [Pulumiスタック](#pulumiスタックとディレクトリの混同)                     |
-| `invalid character ... after object key:value pair`   | JSON構文エラー           | [環境変数エスケープ](#環境変数の引用符とエスケープ)                       |
-| `invalid CloudFront distribution ids`                 | CloudFront ID            | [CloudFront](#cloudフロントidの取得とキャッシュ無効化)                    |
-| `Could not find a version that satisfies`             | pip依存関係              | [Lambda Layer依存関係](#lambda-layerビルド時の依存関係エラー)             |
-| `unrecognized named-value: 'secrets'`                 | シークレット参照         | [GitHub Secretsエラー](#github-actionsシークレット参照エラー)             |
-| `Deployment was partially successful`                 | Azure Flex特有           | [Partially Successful](#azure-flex-consumption-partially-successful)      |
-| `defaultHostName returns null`                        | Azure Flex特有           | [defaultHostName null](#azure-flex-consumption-defaulthostname-null)      |
-| `Kudu has been restarted`                             | Azure Flex特有           | [Kudu再起動](#azure-flex-consumption-kudu再起動)                          |
-| `Runtime.ImportModuleError`                           | Lambda entrypoint        | [Lambda ImportError](#aws-lambda-runtime-errors)                          |
-| `ConnectionRefusedError: [Errno 111]`                 | GCP環境変数未設定        | [GCP Cloud Run 500](#gcp-cloud-run-500-errors)                            |
-| `PartitionKeyMismatchException` or 500 on POST        | Cosmos DBパーティション  | [Azure Cosmos DB Partition Key](#azure-cosmos-db-partition-key-mismatch)  |
-| `'UserInfo' object has no attribute 'nickname'`       | UserInfo属性エラー       | [Azure UserInfo AttributeError](#azure-userinfo-attributeerror)           |
-| `Input should be a valid boolean` for isMarkdown      | Pydantic検証エラー       | [Azure Post Model Validation](#azure-post-model-validation-error)         |
-| `InaccessibleStorageException: Failed to upload blob` | FC1 deployment storage 削除 | [Azure FC1: InaccessibleStorageException](#azure-fc1-inaccessiblestorageexception削除) |
-| `Deployment is still on-going`                        | FC1 非同期デプロイ応答   | [Azure FC1: on-going](#azure-fc1-websiterunfrompackage-残留による-404) |
-| `WEBSITE_RUN_FROM_PACKAGE` 残留 → 404                | FC1 パッケージマウント失敗 | [Azure FC1: WEBSITE_RUN_FROM_PACKAGE](#azure-fc1-websiterunfrompackage-残留による-404) |
-| `ScannerError: while scanning a simple key`           | YAML heredoc 破壊        | [GitHub Actions YAML heredoc](#github-actions-yaml-python-heredoc-が-block-scalar-を破壊する) |
+| エラーメッセージ                                      | 問題                        | セクション                                                                                    |
+| ----------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------- |
+| `mapping values are not allowed in this context`      | YAML構文エラー              | [GitHub Actions YAML](#github-actions-yaml構文エラー)                                         |
+| `Application setting already exists`                  | CORS設定の競合              | [Azure CORS設定](#azure-cors設定の名前競合)                                                   |
+| `AZURE_COSMOS_DATABASE value is null`                 | Azure CLI書式問題           | [Azure CLI --settings書式](#azure-cli---settings-yaml-multi-line書式問題)                     |
+| `environment variables all null`                      | Azure CLI書式問題           | [Azure CLI --settings書式](#azure-cli---settings-yaml-multi-line書式問題)                     |
+| `AccessDeniedException ... PublishLayerVersion`       | Lambda Layer権限不足        | [Lambda Layer権限](#aws-lambda-layer権限エラー)                                               |
+| `ResourceConflictException ... update is in progress` | Lambda更新の競合            | [Lambda ResourceConflict](#aws-lambda-resourceconflictexception)                              |
+| `Resource ... not found`                              | リソース名のハードコード    | [Azureリソース名](#azureリソース名のハードコード問題)                                         |
+| `Deployment was cancelled and another deployment`     | 同時デプロイ                | [Azure デプロイメント競合](#azure-function-appデプロイメント競合)                             |
+| `pathspec ... did not match any files`                | Gitパス問題                 | [Gitパス問題](#モノレポ構造でのgitパス問題)                                                   |
+| `no stack named ... found`                            | Pulumiディレクトリ          | [Pulumiスタック](#pulumiスタックとディレクトリの混同)                                         |
+| `invalid character ... after object key:value pair`   | JSON構文エラー              | [環境変数エスケープ](#環境変数の引用符とエスケープ)                                           |
+| `invalid CloudFront distribution ids`                 | CloudFront ID               | [CloudFront](#cloudフロントidの取得とキャッシュ無効化)                                        |
+| `Could not find a version that satisfies`             | pip依存関係                 | [Lambda Layer依存関係](#lambda-layerビルド時の依存関係エラー)                                 |
+| `unrecognized named-value: 'secrets'`                 | シークレット参照            | [GitHub Secretsエラー](#github-actionsシークレット参照エラー)                                 |
+| `Deployment was partially successful`                 | Azure Flex特有              | [Partially Successful](#azure-flex-consumption-partially-successful)                          |
+| `defaultHostName returns null`                        | Azure Flex特有              | [defaultHostName null](#azure-flex-consumption-defaulthostname-null)                          |
+| `Kudu has been restarted`                             | Azure Flex特有              | [Kudu再起動](#azure-flex-consumption-kudu再起動)                                              |
+| `Runtime.ImportModuleError`                           | Lambda entrypoint           | [Lambda ImportError](#aws-lambda-runtime-errors)                                              |
+| `ConnectionRefusedError: [Errno 111]`                 | GCP環境変数未設定           | [GCP Cloud Run 500](#gcp-cloud-run-500-errors)                                                |
+| `PartitionKeyMismatchException` or 500 on POST        | Cosmos DBパーティション     | [Azure Cosmos DB Partition Key](#azure-cosmos-db-partition-key-mismatch)                      |
+| `'UserInfo' object has no attribute 'nickname'`       | UserInfo属性エラー          | [Azure UserInfo AttributeError](#azure-userinfo-attributeerror)                               |
+| `Input should be a valid boolean` for isMarkdown      | Pydantic検証エラー          | [Azure Post Model Validation](#azure-post-model-validation-error)                             |
+| `InaccessibleStorageException: Failed to upload blob` | FC1 deployment storage 削除 | [Azure FC1: InaccessibleStorageException](#azure-fc1-inaccessiblestorageexception削除)        |
+| `Deployment is still on-going`                        | FC1 非同期デプロイ応答      | [Azure FC1: on-going](#azure-fc1-websiterunfrompackage-残留による-404)                        |
+| `WEBSITE_RUN_FROM_PACKAGE` 残留 → 404                 | FC1 パッケージマウント失敗  | [Azure FC1: WEBSITE_RUN_FROM_PACKAGE](#azure-fc1-websiterunfrompackage-残留による-404)        |
+| `ScannerError: while scanning a simple key`           | YAML heredoc 破壊           | [GitHub Actions YAML heredoc](#github-actions-yaml-python-heredoc-が-block-scalar-を破壊する) |
 
 ## 📑 目次
 
@@ -3215,7 +3215,7 @@ gcloud functions describe <name> --region <region> --format json
 
 | 日付       | 内容                                                                                                                                                                                                                                                                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-02-24 | 追加: Azure FC1 `InaccessibleStorageException`（deployment storage アカウント削除）、`WEBSITE_RUN_FROM_PACKAGE` 残留による 404、GitHub Actions YAML Python heredoc が block scalar を破壊する問題 |
+| 2026-02-24 | 追加: Azure FC1 `InaccessibleStorageException`（deployment storage アカウント削除）、`WEBSITE_RUN_FROM_PACKAGE` 残留による 404、GitHub Actions YAML Python heredoc が block scalar を破壊する問題                                                                                                                                                       |
 | 2026-02-17 | 🎯 **大幅改善**: クイック診断フローチャート、エラーメッセージ別インデックス、よくある問題トップ5を追加。全セクションに解決時間を表示。Azure Flex Consumption特有の問題（Partially Successful、defaultHostName null、Kudu再起動）を詳細ドキュメント化。AWS Lambda Runtime Errors、GCP Cloud Run 500 Errors、GitHub Actionsシークレット参照エラーを追加。 |
 | 2026-02-17 | 追加: リソース名ハードコード、デプロイメント競合、Gitパス、Pulumiディレクトリ、環境変数エスケープ、CloudFront、Lambda Layer、GitHub Secretsの全11トピック                                                                                                                                                                                               |
 | 2026-02-17 | 初版作成（CORS hardening デプロイの知見）                                                                                                                                                                                                                                                                                                               |
