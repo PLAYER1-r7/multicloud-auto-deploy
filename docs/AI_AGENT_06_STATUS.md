@@ -180,11 +180,11 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 
 ### Production Status Summary (2026-02-23)
 
-| Cloud     | CDN Landing (`/`)                 | SNS App (`/sns/`) | API                                                        |
-| --------- | --------------------------------- | ----------------- | ---------------------------------------------------------- |
-| **AWS**   | ✅ HTTP 200, 4737 bytes (Ashnova) | ✅ React SPA      | ✅ `/health` ok, `/limits` ok, `/posts` ok                 |
+| Cloud     | CDN Landing (`/`)                 | SNS App (`/sns/`) | API                                                                      |
+| --------- | --------------------------------- | ----------------- | ------------------------------------------------------------------------ |
+| **AWS**   | ✅ HTTP 200, 4737 bytes (Ashnova) | ✅ React SPA      | ✅ `/health` ok, `/limits` ok, `/posts` ok                               |
 | **Azure** | ✅ HTTP 200, 4608 bytes (Ashnova) | ✅ React SPA      | ✅ `/api/health` ok, `/api/limits` ok, `/api/posts` ok (修復 2026-02-24) |
-| **GCP**   | ✅ HTTP 200, 4737 bytes (Ashnova) | ✅ React SPA      | ✅ `/health` ok, `/limits` ok (修復 2026-02-24, revision 00013-big)       |
+| **GCP**   | ✅ HTTP 200, 4737 bytes (Ashnova) | ✅ React SPA      | ✅ `/health` ok, `/limits` ok (修復 2026-02-24, revision 00013-big)      |
 
 **Landing page test (2026-02-23)**: `test-landing-pages.sh --env production` → **37/37 PASS (100%)** ✅
 
@@ -285,6 +285,7 @@ gcloud compute target-https-proxies update multicloud-auto-deploy-production-cdn
 4. **Layer 4**: コンテナ名不一致: `app-package-multicloudautodeployproductionfr-8540439`（実際の active コンテナ、旧 frontend_web コードを保持）と `functionAppConfig.deployment.storage.value` が指す `app-package-...a4038fa`（空）が別コンテナ
 
 **最終修正 (2026-02-24)**:
+
 ```bash
 # Python 3.12 / linux/amd64 でパッケージをビルド
 docker run --rm --platform linux/amd64 -v "$(pwd):/work" python:3.12-slim \
@@ -300,6 +301,7 @@ az functionapp deployment source config-zip \
 ```
 
 **修復後の状態**:
+
 - `admin/functions` → `[{"name":"HttpTrigger",...}]` ✅
 - `/api/health` → `{"status":"ok","provider":"azure","version":"3.0.0"}` HTTP 200 ✅
 - `/api/limits` → `{"maxImagesPerPost":10}` HTTP 200 ✅
