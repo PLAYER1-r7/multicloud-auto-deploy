@@ -1,7 +1,7 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-24 (Production動作確認セッション v5 — Azure/GCP プロフィール CORS エラー修正 ✅ / Azure platform CORS + customDomain CI/CD 安全ネット追加 ✅ / Azure ログイン staging リダイレクト修正 ✅)
+> Last verified: 2026-02-24 (Staging 再デプロイ完全成功 ✅ — AWS#246/GCP#214/Azure#273 全成功 / FC1 deployment storage 修復 (`multicloudautodeploa752` 再作成) ✅ / 全3クラウド health check OK (`status:ok, version:3.0.0`) ✅)
 
 ---
 
@@ -9,9 +9,9 @@
 
 | Cloud     | Landing (`/`) | SNS App (`/sns/`) | API                                       |
 | --------- | ------------- | ----------------- | ----------------------------------------- |
-| **GCP**   | ✅            | ✅                | ✅ Cloud Run + Firebase Auth (2026-02-21) |
-| **AWS**   | ✅            | ✅                | ✅ Lambda (fully operational)             |
-| **Azure** | ✅            | ✅                | ✅ Azure Functions                        |
+| **GCP**   | ✅            | ✅                | ✅ Cloud Run + Firebase Auth (2026-02-24) |
+| **AWS**   | ✅            | ✅                | ✅ Lambda (fully operational, 2026-02-24) |
+| **Azure** | ✅            | ✅                | ✅ Azure Functions FC1 (2026-02-24)       |
 
 ---
 

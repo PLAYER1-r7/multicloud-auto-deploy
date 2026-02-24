@@ -1,7 +1,7 @@
 # 09 — Remaining Tasks
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last updated: 2026-02-24  
+> Last updated: 2026-02-24 (Staging 全3クラウド再デプロイ完全成功)
 > **AI Agent Note**: Update this file when a task is resolved.
 
 ---
@@ -13,6 +13,10 @@ Infrastructure (Pulumi):    ✅ All 3 clouds staging+production deployed
 AWS API (production):       ✅ {"status":"ok","provider":"aws","version":"3.0.0"}
 GCP API (production):       ✅ {"status":"ok","provider":"gcp","version":"3.0.0"}
 Azure API (production):     ✅ {"status":"ok","provider":"azure","version":"3.0.0"} (修復 2026-02-24)
+AWS API (staging):          ✅ {"status":"ok","provider":"aws","version":"3.0.0"} (2026-02-24 #246)
+GCP API (staging):          ✅ {"status":"ok","provider":"gcp","version":"3.0.0"} (2026-02-24 #214)
+Azure API (staging):        ✅ {"status":"ok","provider":"azure","version":"3.0.0"} (2026-02-24 #273)
+Azure FC1 deployment storage: ✅ RESOLVED 2026-02-24 (multicloudautodeploa752 再作成 + connection string 修正)
 AWS SNS Network Error:      ✅ RESOLVED 2026-02-24 (CI/CD customDomain 上書きバグ修正 / CORS_ORIGINS 修正)
 Azure CORS エラー (Profile): ✅ RESOLVED 2026-02-24 (platform CORS + CORS_ORIGINS に www.azure.ashnova.jp 追加 / CI/CD 安全ネット追加)
 Azure ログイン staging リダイレクト: ✅ RESOLVED 2026-02-24 (AD redirect URI追加 / フロント再ビルド / deploy-azure.yml 全4箇所 AZURE_CUSTOM_DOMAIN 修正)
@@ -24,8 +28,8 @@ Landing Pages (production): ✅ 37/37 PASS — AWS/Azure/GCP全クラウド 4400
 Custom Domains (all):       ✅ www.aws/azure/gcp.ashnova.jp HTTPS 200
 CI/CD pipelines:
   deploy-aws.yml:           ✅ Load Cloud Config ステップ追加 / Lambda Layer名バグ修正
-  deploy-azure.yml:         ✅ Load Cloud Config ステップ追加 / 全AD値をconfig参照 / case/esac全廃
-  deploy-gcp.yml:           ✅ Load Cloud Config ステップ追加 / custom_domain参照修正
+  deploy-azure.yml:         ✅ Load Cloud Config ステップ追加 / 全AD値をconfig参照 / case/esac全廃 / FC1 deployment storage fix
+  deploy-gcp.yml:           ✅ Load Cloud Config ステップ追加 / custom_domain参照修正 / pulumi refresh追加
   deploy-landing-azure.yml: ✅ 修正済み — staging hardcoded → environment-aware
   その他:                   ✅ 全10ワークフロー YAML valid
 develop branch sync:        ✅ main v1.17.22 と同期済み
@@ -48,6 +52,8 @@ develop branch sync:        ✅ main v1.17.22 と同期済み
 | --- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------- |
 | 0a  | **Azure Function App 関数登録0件の修正** | Python 3.12 / linux/amd64 ビルド + `--build-remote false` デプロイで解決。`admin/functions = [{"name":"HttpTrigger"}]` ✅ | v1.17.9  |
 | 0c  | **develop ブランチを main に同期**       | `git merge main --no-ff` 実行済み。`develop` v1.18.1 / `main` v1.17.10 ✅ (コミット `7efca78`)                            | —        |
+| 0e  | **Azure staging FC1 deployment storage 修復** | `functionAppConfig.deployment.storage` が削除済みストレージアカウント `multicloudautodeploa752` を指しており、全zip deployが `InaccessibleStorageException: Name or service not known` で失敗。`deploy-azure.yml` に ARM GET → storage account 作成 → connection string 更新ロジック追加。`WEBSITE_RUN_FROM_PACKAGE` クリア・再起動・Verify Deployment 600s待機も追加。 | v1.20.1  |
+| 0f  | **Staging 全3クラウド再デプロイ完全成功** | AWS#246 ✅ / GCP#214 ✅ / Azure#273 ✅。3クラウドとも `/health` = `{"status":"ok","version":"3.0.0"}` 確認。 | v1.20.1  |
 
 ### 既存タスク
 
