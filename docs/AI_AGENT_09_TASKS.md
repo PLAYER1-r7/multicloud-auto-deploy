@@ -1,7 +1,7 @@
 # 09 — Remaining Tasks
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last updated: 2026-02-23  
+> Last updated: 2026-02-24  
 > **AI Agent Note**: Update this file when a task is resolved.
 
 ---
@@ -12,28 +12,36 @@
 Infrastructure (Pulumi):    ✅ All 3 clouds staging+production deployed
 AWS API (production):       ✅ {"status":"ok","provider":"aws","version":"3.0.0"}
 GCP API (production):       ✅ {"status":"ok","provider":"gcp","version":"3.0.0"}
-Azure API (production):     ❌ 0 registered functions — Function App起動後に関数コードが読み込まれない
+Azure API (production):     ✅ {"status":"ok","provider":"azure","version":"3.0.0"} (修復 2026-02-24)
+AWS SNS Network Error:      ✅ RESOLVED 2026-02-24 (CI/CD customDomain 上書きバグ修正 / CORS_ORIGINS 修正)
 Landing Pages (production): ✅ 37/37 PASS — AWS/Azure/GCP全クラウド 4400-4450 bytes 正常コンテンツ
 Custom Domains (all):       ✅ www.aws/azure/gcp.ashnova.jp HTTPS 200
 CI/CD pipelines:
-  deploy-azure.yml:         ✅ YAML修正済み / ⚠️ Function App deply後にVerify Deploymentが失敗
+  deploy-aws.yml:           ✅ YAML修正済み / Sync Pulumi Config を YAML ファイルから読み込むよう修正
+  deploy-azure.yml:         ✅ YAML修正済み / Function App Python 3.12 ビルド要修正 (次回CI再発リスク)
   deploy-gcp.yml:           ✅ YAML修正済み (python heredoc→jq) / ⚠️ Pulumi state drift
   deploy-landing-azure.yml: ✅ 修正済み — staging hardcoded → environment-aware
   その他:                   ✅ 全10ワークフロー YAML valid
-develop branch sync:        ❌ main v1.17.6 に対してdevelopがv1.17.1で遅延
+develop branch sync:        ✅ develop v1.18.1 / main v1.17.10 同期済み (コミット 7efca78)
 ```
 
 ---
 
-## 🔴 High Priority Tasks (2026-02-23 update)
+## 🔴 High Priority Tasks (2026-02-24 update)
 
-### NEW: Azure Function App — 0 registered functions after deploy
+### ⚠️ 残存: Azure Function App — CI/CD 再発リスク
 
-| #   | Task                                                   | Description                                                                                                                                                                                 | Reference                 |
-| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| 0a  | **Azure Function App 関数登録0件の修正 (最優先)**       | `/admin/functions` が `[]` を返す。Host は Running (`v4.1046.100`) だがコードがロードされていない。`--remote-build false` もしくは `WEBSITE_RUN_FROM_PACKAGE` 方式を試みる。 | [STATUS#1](AI_AGENT_06_STATUS.md#1-azure-function-app--0-registered-functions-api-404) |
-| 0b  | **GCP Pulumi state drift 修正 (非ブロッキング)**        | `ManagedSslCertificate` 400 + `URLMap` 412 で `pulumi up` 失敗。`pulumi refresh` で解消予定。                                                                                               | [STATUS#2](AI_AGENT_06_STATUS.md#2-gcp-pulumi-state-drift-非ブロッキング) |
-| 0c  | **develop ブランチを main (v1.17.6) に同期**            | `git checkout develop && git merge main --no-ff && git push`                                                                                                                                | —                         |
+| #   | Task                                                       | Description                                                                                                                                        | Reference |
+| --- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 0b  | **GCP Pulumi state drift 修正 (非ブロッキング)**            | `ManagedSslCertificate` 400 + `URLMap` 412 で `pulumi up` 失敗。`pulumi refresh` で解消予定。                                                      | [STATUS#2](AI_AGENT_06_STATUS.md#2-gcp-pulumi-state-drift-非ブロッキング) |
+| 0d  | **deploy-azure.yml Python 3.11→3.12 ビルド修正**           | `Build and Package` ステップが `python:3.11-slim` でビルドしているが `functionAppConfig.runtime.version = "3.12"` → 次回CI再発リスク。`python:3.12-slim --platform linux/amd64` に変更が必要。 | [STATUS#1 Layer3](AI_AGENT_06_STATUS.md) |
+
+### ✅ 解決済み (2026-02-24)
+
+| #   | Task                                                   | 解決内容 | コミット |
+| --- | ------------------------------------------------------ | -------- | ------- |
+| 0a  | **Azure Function App 関数登録0件の修正**               | Python 3.12 / linux/amd64 ビルド + `--build-remote false` デプロイで解決。`admin/functions = [{"name":"HttpTrigger"}]` ✅ | v1.17.9 |
+| 0c  | **develop ブランチを main に同期**                     | `git merge main --no-ff` 実行済み。`develop` v1.18.1 / `main` v1.17.10 ✅ (コミット `7efca78`) | — |
 
 ### 既存タスク
 
@@ -46,6 +54,14 @@ develop branch sync:        ❌ main v1.17.6 に対してdevelopがv1.17.1で遅
 | 6   | **Enable Azure WAF**                       | WAF policy not applied to Front Door Standard SKU.                                                    | [09_SECURITY](AI_AGENT_08_SECURITY.md)                                             |
 
 ---
+
+## 2026-02-24 セッションで解決済みの問題
+
+| 問題 | 修正内容 | コミット |
+| ---- | -------- | ------- |
+| AWS Production SNS — "Network Error" | CI/CD `deploy-aws.yml` "Sync Pulumi Config" ステップを GitHub Secrets (`staging.aws.ashnova.jp`) から `Pulumi.production.yaml` 読み込みに変更。React SPA 再ビルド・S3 デプロイ。Lambda `CORS_ORIGINS` 即時修正。Cognito implicit フロー削除 | v1.17.10 (`3ea6a08`) |
+| Azure Function App — 0 registered functions | Python 3.12 / linux/amd64 でパッケージを再ビルドし `--build-remote false` でデプロイ。Layer 1〜4 の多層根本原因を解消 | v1.17.9 |
+| develop ブランチが main から遅延 | `git merge main --no-ff` 実行 → `develop` v1.18.1 同期 | — |
 
 ## 2026-02-23 セッションで解決済みの問題
 
