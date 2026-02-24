@@ -202,7 +202,7 @@ gh run watch <run-id>
 
 ---
 
-## CI/CD Current Status (2026-02-21)
+## CI/CD Current Status (2026-02-24)
 
 | Workflow                     | Branch  | Status | Commit    |
 | ---------------------------- | ------- | ------ | --------- |
@@ -240,6 +240,10 @@ gh run watch <run-id>
 | Azure AD Client ID empty after CI deploy      | `pulumi stack output azure_ad_client_id` returned blank → `VITE_AZURE_CLIENT_ID=''` → auth provider became `'none'` → "認証設定が不完全" error on login page             | `AZURE_CLIENT_ID` now sourced from `cloud_config` step (config file), never from Pulumi output                         |
 | AWS/Azure/GCP wrong custom domain             | `secrets.AZURE_CUSTOM_DOMAIN` (repo-level) contained staging domain → production frontend built with `staging.azure.ashnova.jp` redirect URI                             | All custom domain references replaced with `steps.cloud_config.outputs.custom_domain`                                  |
 | AWS `ResourceConflictException` race          | `update-function-code` issued while Pulumi's config update in progress                                                                                                   | Add `aws lambda wait function-updated` before AND after code/config updates                                            |
+| Azure FC1: `InaccessibleStorageException` on zip deploy | `config-zip` fails instantly with `BlobUploadFailedException: Name or service not known (xxxxx.blob.core.windows.net:443)` — Kudu `StorageAccessibleCheck` validation fails → status=3 on all attempts | ARM GET `functionAppConfig.deployment.storage.value` → `az storage account create` to recreate missing account → update `AzureWebJobsStorage__accountName` app setting in `deploy-azure.yml` |
+| Azure FC1: `"on-going"` message treated as CI error | `config-zip` returns `ERROR: Deployment is still on-going. Navigate to your scm site...` — old `grep ERROR:` pattern matched this FC1 async-accepted response → pipeline exited with code 1 immediately | Detect `on-going` substring **before** generic `ERROR:` check → set `DEPLOY_SUCCESS=true` + `sleep 120` to await completion |
+| Azure FC1: stale `WEBSITE_RUN_FROM_PACKAGE` causes 404 after deploy | Deploy completes without error but all function routes return 404; old expired SAS URL in setting overrides newly deployed package | `az functionapp config appsettings delete --setting-names WEBSITE_RUN_FROM_PACKAGE` before every `config-zip` deploy in `deploy-azure.yml` |
+| Python heredoc in GitHub Actions YAML block scalar | `python3 - <<'EOF' ... EOF` inside a `run: \|` block causes `yaml.scanner.ScannerError: while scanning a simple key` — YAML parser chokes on `EOF` at column 0 | Always use `jq` for JSON manipulation in shell steps; never use Python heredocs (`<<'EOF'`) inside GitHub Actions `run:` blocks |
 
 ---
 

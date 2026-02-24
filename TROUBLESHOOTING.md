@@ -66,6 +66,10 @@
 | `PartitionKeyMismatchException` or 500 on POST        | Cosmos DBパーティション  | [Azure Cosmos DB Partition Key](#azure-cosmos-db-partition-key-mismatch)  |
 | `'UserInfo' object has no attribute 'nickname'`       | UserInfo属性エラー       | [Azure UserInfo AttributeError](#azure-userinfo-attributeerror)           |
 | `Input should be a valid boolean` for isMarkdown      | Pydantic検証エラー       | [Azure Post Model Validation](#azure-post-model-validation-error)         |
+| `InaccessibleStorageException: Failed to upload blob` | FC1 deployment storage 削除 | [Azure FC1: InaccessibleStorageException](#azure-fc1-inaccessiblestorageexception削除) |
+| `Deployment is still on-going`                        | FC1 非同期デプロイ応答   | [Azure FC1: on-going](#azure-fc1-websiterunfrompackage-残留による-404) |
+| `WEBSITE_RUN_FROM_PACKAGE` 残留 → 404                | FC1 パッケージマウント失敗 | [Azure FC1: WEBSITE_RUN_FROM_PACKAGE](#azure-fc1-websiterunfrompackage-残留による-404) |
+| `ScannerError: while scanning a simple key`           | YAML heredoc 破壊        | [GitHub Actions YAML heredoc](#github-actions-yaml-python-heredoc-が-block-scalar-を破壊する) |
 
 ## 📑 目次
 
@@ -93,6 +97,8 @@
 - [Azure Flex Consumption: Partially Successful](#azure-flex-consumption-partially-successful)
 - [Azure Flex Consumption: defaultHostName null](#azure-flex-consumption-defaulthostname-null)
 - [Azure Flex Consumption: Kudu再起動](#azure-flex-consumption-kudu再起動)
+- [Azure FC1: InaccessibleStorageException（deployment storage 削除）](#azure-fc1-inaccessiblestorageexception削除)
+- [Azure FC1: WEBSITE_RUN_FROM_PACKAGE 残留による 404](#azure-fc1-websiterunfrompackage-残留による-404)
 
 #### GCP
 
@@ -103,6 +109,7 @@
 ### 共通問題
 
 - [GitHub Actions YAML構文エラー](#github-actions-yaml構文エラー)
+- [GitHub Actions YAML Python heredoc が block scalar を破壊する](#github-actions-yaml-python-heredoc-が-block-scalar-を破壊する)
 - [GitHub Actionsシークレット参照エラー](#github-actionsシークレット参照エラー)
 - [GitHub Actionsワークフローがトリガーされない](#github-actionsワークフローがトリガーされない)
 - [モノレポ構造でのGitパス問題](#モノレポ構造でのgitパス問題)
@@ -2958,6 +2965,183 @@ Settings → Environments → New environment
 
 ---
 
+## Azure FC1: InaccessibleStorageException（deployment storage アカウント削除）
+
+> **発生日:** 2026-02-24 / Azure staging run #268〜#272
+
+### 症状
+
+`az functionapp deployment source config-zip` が即座に失敗し、以下のエラーが出る。
+
+```
+ERROR: Deployment failed. InaccessibleStorageException:
+  Failed to upload blob to storage account:
+  BlobUploadFailedException: Name or service not known
+    (multicloudautodeploa752.blob.core.windows.net:443)
+```
+
+- Kudu の `StorageAccessibleCheck` が validation 段階 (status=3) で失敗→ code/config の更新はまったく行われない。
+- 再試行しても **必ず同じエラーで失敗** する。
+
+### 原因
+
+Azure FC1 (Flex Consumption) function app は、zip パッケージを一時保存する専用の  
+`functionAppConfig.deployment.storage` ストレージアカウントを持つ。  
+このアカウントが削除されると（コスト削減・手動クリーンアップ等）、  
+function app の設定には旧アカウント名が残ったまま全 zip deploy が InaccessibleStorageException で拒否される。
+
+### 調査方法
+
+```bash
+# 1. ARM から実際の deployment storage 設定を確認
+az rest --method GET \
+  --url "https://management.azure.com/subscriptions/<SUB>/resourceGroups/<RG>/providers/Microsoft.Web/sites/<FUNC>?api-version=2023-12-01" \
+  | jq '.properties.functionAppConfig.deployment.storage'
+# -> value フィールドに blob エンドポイントが入っている
+
+# 2. そのストレージアカウントが存在するか確認
+ACCT=$(az rest ... | jq -r '.properties.functionAppConfig.deployment.storage.value' \
+  | sed 's|https://||; s|\.blob.*||')
+az storage account show --name "$ACCT" --resource-group "<RG>" 2>&1
+# -> "ResourceNotFound" → 削除済みが確定
+```
+
+### 解決策
+
+```bash
+# 手動修復の場合
+RESOURCE_GROUP="multicloud-auto-deploy-staging"
+FUNCTION_APP="multicloud-auto-deploy-staging-func"
+LOCATION="japaneast"
+STORAGE_NAME="${FUNCTION_APP:0:24}"  # 24文字以内
+
+# 1. ストレージを再作成
+az storage account create \
+  --name "$STORAGE_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --location "$LOCATION" \
+  --sku Standard_LRS \
+  --kind StorageV2 \
+  --allow-blob-public-access false
+
+# 2. 接続文字列を取得して app setting に設定
+CONN_STR=$(az storage account show-connection-string \
+  --name "$STORAGE_NAME" --resource-group "$RESOURCE_GROUP" \
+  --query connectionString --output tsv)
+
+az functionapp config appsettings set \
+  --name "$FUNCTION_APP" \
+  --resource-group "$RESOURCE_GROUP" \
+  --settings "AzureWebJobsStorage=$CONN_STR"
+
+# 3. function app を再起動して設定をリロード
+az functionapp restart --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP"
+sleep 30
+
+# 4. 再度 zip deploy を試行
+az functionapp deployment source config-zip ...
+```
+
+CI (`deploy-azure.yml`) では上記ロジックが Storage 再作成ステップとして自動実行される。
+
+### 予防
+
+- ストレージアカウントを削除する前に function app の依存を確認する。
+- CI の "Deploy Function App" ステップで deployment storage の存在確認→自動再作成を行っている（2026-02-24 追加）。
+
+### 該当ファイル
+
+- `.github/workflows/deploy-azure.yml` — "Ensure deployment storage account exists" ステップ
+
+---
+
+## Azure FC1: `WEBSITE_RUN_FROM_PACKAGE` 残留による 404
+
+> **発生日:** 2026-02-24 / Azure staging run #271
+
+### 症状
+
+`config-zip` でのデプロイは成功するが、function の全ルートが **404 Not Found** を返し続ける。  
+`az functionapp show` や Kudu サイトではデプロイ完了と表示される。
+
+### 原因
+
+`WEBSITE_RUN_FROM_PACKAGE` app setting に期限切れの Blob SAS URL が残っていると、
+FC1 ランタイムは新しい zip package ではなく **古い（または存在しない）パッケージ** をマウントしようとする。  
+`config-zip` deploy は完了しても `WEBSITE_RUN_FROM_PACKAGE` の SAS URL が優先されるため 404 が発生する。
+
+### 解決策
+
+```bash
+# zip deploy を実行する前に必ず削除する
+az functionapp config appsettings delete \
+  --name "$FUNCTION_APP" \
+  --resource-group "$RESOURCE_GROUP" \
+  --setting-names WEBSITE_RUN_FROM_PACKAGE
+```
+
+`deploy-azure.yml` では Deploy ステップの先頭でこの削除が自動実行される（2026-02-24 追加）。
+
+### 該当ファイル
+
+- `.github/workflows/deploy-azure.yml` — "Deploy Function App" ステップ（deploy 前にappsettings削除）
+
+---
+
+## GitHub Actions YAML: Python heredoc が block scalar を破壊する
+
+> **発生日:** 2026-02-24 / Azure deploy-azure.yml YAML 修正中
+
+### 症状
+
+GitHub Actions の `run: |` ブロック内で Python heredoc (`<<'EOF'`) を使うと、
+Push 後に **Workflow が認識されない** か、CI がすぐに失敗する。  
+ローカルで `python3 -c 'import yaml; yaml.safe_load(open(".github/workflows/deploy-azure.yml").read())'`
+を実行すると:
+
+```
+yaml.scanner.ScannerError: while scanning a simple key
+  in ".github/workflows/deploy-azure.yml", line NNN, column 1
+```
+
+### 原因
+
+YAML の block scalar (`run: |`) 内で heredoc の終端マーカー `EOF` が **行頭（column 0）** に置かれると、
+YAML パーサーがそれを mapping key として誤解釈し `ScannerError` を発生させる。  
+GitHub Actions は YAML パース失敗時に Workflow をスキップ or 無効化するため、エラーが分かりにくい。
+
+```yaml
+# ❌ NG: heredoc はブロックスカラー内では使えない
+- run: |
+    python3 - <<'EOF'
+    import json
+    ...
+    EOF    # <- column 0 で YAML パーサーがクラッシュ
+
+# ✅ OK: jq を使う（heredoc 不要）
+- run: |
+    echo "$JSON" | jq -r '.key // empty'
+```
+
+### 解決策
+
+1. **`jq` を使う** — JSON の読み書き・フィールド抽出はすべて `jq` で代替する。
+2. Python が必要な場合は1行に収める: `python3 -c "import json; ..."` （改行なし）
+3. 複雑なスクリプトは `scripts/` に `.py` ファイルとして置き、`python3 scripts/foo.py` で呼び出す。
+
+### 検証コマンド
+
+```bash
+# push 前にローカルで YAML 構文確認
+python3 -c "import yaml; yaml.safe_load(open('.github/workflows/deploy-azure.yml').read()); print('OK')"
+```
+
+### 該当ファイル
+
+- `.github/workflows/deploy-azure.yml` — 2026-02-24 の修正で Python heredoc を `jq` に置換
+
+---
+
 ## 一般的なトラブルシューティングのヒント
 
 ### 1. Azure CLIのデバッグ
@@ -3031,6 +3215,7 @@ gcloud functions describe <name> --region <region> --format json
 
 | 日付       | 内容                                                                                                                                                                                                                                                                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-02-24 | 追加: Azure FC1 `InaccessibleStorageException`（deployment storage アカウント削除）、`WEBSITE_RUN_FROM_PACKAGE` 残留による 404、GitHub Actions YAML Python heredoc が block scalar を破壊する問題 |
 | 2026-02-17 | 🎯 **大幅改善**: クイック診断フローチャート、エラーメッセージ別インデックス、よくある問題トップ5を追加。全セクションに解決時間を表示。Azure Flex Consumption特有の問題（Partially Successful、defaultHostName null、Kudu再起動）を詳細ドキュメント化。AWS Lambda Runtime Errors、GCP Cloud Run 500 Errors、GitHub Actionsシークレット参照エラーを追加。 |
 | 2026-02-17 | 追加: リソース名ハードコード、デプロイメント競合、Gitパス、Pulumiディレクトリ、環境変数エスケープ、CloudFront、Lambda Layer、GitHub Secretsの全11トピック                                                                                                                                                                                               |
 | 2026-02-17 | 初版作成（CORS hardening デプロイの知見）                                                                                                                                                                                                                                                                                                               |

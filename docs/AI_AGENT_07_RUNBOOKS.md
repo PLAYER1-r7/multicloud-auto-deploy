@@ -438,6 +438,82 @@ pulumi config set acmCertificateArn \
 
 ---
 
+## [RB-16] Fix Azure FC1 InaccessibleStorageException (deployment storage account deleted)
+
+**Trigger:** `az functionapp deployment source config-zip` fails immediately with  
+`InaccessibleStorageException: BlobUploadFailedException: Name or service not known (xxxxx.blob.core.windows.net:443)`
+
+**Root cause:** The `functionAppConfig.deployment.storage` account linked to the FC1 function app has been deleted.  
+Kudu's `StorageAccessibleCheck` blocks **all** zip deploys until the storage account is restored.
+
+```bash
+RESOURCE_GROUP="multicloud-auto-deploy-staging"   # or -production
+FUNCTION_APP="multicloud-auto-deploy-staging-func"
+LOCATION="japaneast"
+
+# 1. Read the storage endpoint currently set in the function app
+DEPLOY_STORAGE_URL=$(az rest --method GET \
+  --url "https://management.azure.com/subscriptions/$(az account show --query id -o tsv)/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}?api-version=2023-12-01" \
+  | jq -r '.properties.functionAppConfig.deployment.storage.value // empty')
+echo "Deployment storage URL: $DEPLOY_STORAGE_URL"
+
+# 2. Derive storage account name from the URL (format: https://<name>.blob.core.windows.net/...)
+STORAGE_ACCT=$(echo "$DEPLOY_STORAGE_URL" | sed 's|https://||; s|\.blob\.core.*||')
+echo "Storage account name: $STORAGE_ACCT"
+
+# 3. Check whether the account exists
+if ! az storage account show --name "$STORAGE_ACCT" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+  echo "Storage account missing — recreating..."
+  az storage account create \
+    --name "$STORAGE_ACCT" \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --sku Standard_LRS \
+    --kind StorageV2 \
+    --allow-blob-public-access false
+fi
+
+# 4. Fetch connection string and update the app setting Kudu uses for deploy storage
+CONN_STR=$(az storage account show-connection-string \
+  --name "$STORAGE_ACCT" \
+  --resource-group "$RESOURCE_GROUP" \
+  --query connectionString --output tsv)
+
+az functionapp config appsettings set \
+  --name "$FUNCTION_APP" \
+  --resource-group "$RESOURCE_GROUP" \
+  --settings "AzureWebJobsStorage=$CONN_STR"
+
+# 5. Also clear any stale WEBSITE_RUN_FROM_PACKAGE to avoid 404 after deploy
+az functionapp config appsettings delete \
+  --name "$FUNCTION_APP" \
+  --resource-group "$RESOURCE_GROUP" \
+  --setting-names WEBSITE_RUN_FROM_PACKAGE 2>/dev/null || true
+
+# 6. Restart the function app to pick up the new settings
+az functionapp restart --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP"
+sleep 30
+
+# 7. Re-run zip deploy
+az functionapp deployment source config-zip \
+  --name "$FUNCTION_APP" \
+  --resource-group "$RESOURCE_GROUP" \
+  --src <path/to/package.zip>
+```
+
+**Verify:**
+
+```bash
+curl -s "https://<func-hostname>/api/HttpTrigger/health" | jq .
+# Expected: {"status":"ok","provider":"azure","version":"X.Y.Z"}
+```
+
+**Prevention:**  
+- `deploy-azure.yml` contains a "Ensure deployment storage account exists" step that runs this logic automatically on every deployment.  
+- Do **not** delete storage accounts that share a resource group with FC1 function apps without first checking dependencies.
+
+---
+
 ## Next Section
 
 → [08 — Security](AI_AGENT_08_SECURITY.md)
