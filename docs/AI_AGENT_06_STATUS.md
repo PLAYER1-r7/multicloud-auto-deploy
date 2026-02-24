@@ -1,7 +1,7 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-24 (Production動作確認セッション v5 — Azure/GCP プロフィール CORS エラー修正 ✅ / Azure platform CORS + customDomain CI/CD 安全ネット追加 ✅)
+> Last verified: 2026-02-24 (Production動作確認セッション v5 — Azure/GCP プロフィール CORS エラー修正 ✅ / Azure platform CORS + customDomain CI/CD 安全ネット追加 ✅ / Azure ログイン staging リダイレクト修正 ✅)
 
 ---
 
@@ -254,6 +254,7 @@ gcloud compute target-https-proxies update multicloud-auto-deploy-production-cdn
 **症状**: `https://www.azure.ashnova.jp/sns/profile` でプロフィール取得時に CORS エラー発生。
 
 **根本原因**:
+
 1. Azure Function App は Kestrel がプラットフォームレベル CORS 判定を FastAPI `CORSMiddleware` の手前に行う
 2. `deploy-azure.yml` が `AZURE_CUSTOM_DOMAIN` シークレット (`staging.azure.ashnova.jp`) を使用してアプリ設定と platform CORS を構築
 3. その結果 `CORS_ORIGINS` アプリ設定とプラットフォーム CORS allowedOrigins の両方に `https://www.azure.ashnova.jp` が欠落
@@ -262,14 +263,37 @@ gcloud compute target-https-proxies update multicloud-auto-deploy-production-cdn
 **確認 (GCP)**: GCP は `CORS_ORIGINS` に `https://www.gcp.ashnova.jp` が含まれており問題なし ✅
 
 **即時修正**:
+
 - `az functionapp config appsettings set ... CORS_ORIGINS=https://mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net,https://www.azure.ashnova.jp,http://localhost:5173` ✅
 - `az functionapp cors add --allowed-origins "https://www.azure.ashnova.jp"` ✅
 - 確認: OPTIONS `/api/profile` → `Access-Control-Allow-Origin: https://www.azure.ashnova.jp` ✅
 
 **根本修正 (v1.17.15)**:
+
 - `infrastructure/pulumi/azure/Pulumi.production.yaml`: `customDomain: www.azure.ashnova.jp` を追加
 - `deploy-azure.yml` CORS 構築: シークレットではなく `Pulumi.${STACK_NAME}.yaml` から `customDomain` を読み取るよう変更
 - `deploy-azure.yml`: "Ensure Azure CORS Origins" 安全ネットステップを追加 (AWS パターンと同様)
+
+#### ✅ 7. Azure ログイン後に staging SNS に遷移 — RESOLVED 2026-02-24
+
+**症状**: `https://www.azure.ashnova.jp/sns/` でログインすると `staging.azure.ashnova.jp/sns/` にリダイレクトされる。
+
+**根本原因**:
+
+1. フロントエンドバンドル `index-D7IfXIdg.js` が `VITE_AZURE_REDIRECT_URI=https://staging.azure.ashnova.jp/sns/auth/callback` でビルドされていた
+2. "Build and Deploy Frontend" ステップが `AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"` (= `staging.azure.ashnova.jp`) を使用
+3. 同様に Azure AD アプリの redirect URIs にも `www.azure.ashnova.jp` がなく `staging.azure.ashnova.jp` のみだった
+
+**即時修正**:
+
+- `az ad app update --id "0b926ff6-fc03-4c9c-a359-96964ef15941" --web-redirect-uris` で `www.azure.ashnova.jp` を追加 ✅
+- フロントエンドを `VITE_AZURE_REDIRECT_URI=https://www.azure.ashnova.jp/sns/auth/callback` で再ビルド → `index-CPcQQsCR.js` ✅
+- Blob Storage `mcadwebdiev0w/$web/sns/` にアップロード ✅
+- 確認: `curl www.azure.ashnova.jp/sns/` → `index-CPcQQsCR.js` を配信 ✅
+
+**根本修正 (v1.17.16)**:
+
+- `deploy-azure.yml`: "Build and Deploy Frontend"、"Update Azure AD App Redirect URIs"、"Link Custom Domain to Front Door Route"、"Blob Storage CORS" の全4箇所の `${{ secrets.AZURE_CUSTOM_DOMAIN }}` を stack 名マッピング (`production`→`www.azure.ashnova.jp`) に変更
 
 ---
 
