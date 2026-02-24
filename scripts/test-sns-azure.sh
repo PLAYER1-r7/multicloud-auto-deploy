@@ -136,8 +136,17 @@ FD_URL="${FD_URL%/}"
 API_URL="${API_URL%/}"
 
 # ── dependency check ──────────────────────────────────────────
-command -v curl >/dev/null 2>&1 || die "curl is required but not installed"
-command -v jq   >/dev/null 2>&1 || die "jq is required but not installed"
+command -v curl    >/dev/null 2>&1 || die "curl is required but not installed"
+command -v jq      >/dev/null 2>&1 || die "jq is required but not installed"
+command -v python3 >/dev/null 2>&1 || die "python3 is required but not installed"
+
+# ── shared test image (1x1 transparent PNG, 68 bytes) ───────
+python3 -c "
+import base64, sys
+sys.stdout.buffer.write(base64.b64decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+))
+" > /tmp/test_upload_azure.png 2>/dev/null || true
 
 # ── test runner ───────────────────────────────────────────────
 LAST_STATUS=0
@@ -373,9 +382,9 @@ else
     --data '{"count":1,"contentTypes":["image/jpeg"]}'
 
   UPLOAD_URL_RAW=$(echo "$LAST_BODY" | jq -r '.urls[0].url // .[0].url // .[0].uploadUrl // ""' 2>/dev/null || echo "")
+  UPLOAD_KEY_RAW=$(echo "$LAST_BODY" | jq -r '.urls[0].key // .urls[0].imageKey // ""' 2>/dev/null || echo "")
   if [[ -n "$UPLOAD_URL_RAW" && "$UPLOAD_URL_RAW" != "null" ]]; then
     ok "  Presigned upload URL generated (Blob Storage SAS)"
-    # SAS write トークンが含まれているか確認
     if echo "$UPLOAD_URL_RAW" | grep -qE 'sig=|sv='; then
       ok "    Upload URL contains SAS token ✓"
     else
@@ -383,6 +392,57 @@ else
     fi
   else
     fail "  Presigned URL missing in response"
+  fi
+
+  # 5-4a. ★ Binary PUT: 実際にテスト画像を Azure Blob へアップロード
+  UPLOAD_REAL_POST_ID=""
+  if [[ -n "$UPLOAD_URL_RAW" && "$UPLOAD_URL_RAW" != "null" && -s /tmp/test_upload_azure.png ]]; then
+    PUT_AZ_STATUS=$(curl -s -o /tmp/put_resp_azure.txt -w "%{http_code}" \
+      -X PUT \
+      -H "x-ms-blob-type: BlockBlob" \
+      -H "Content-Type: image/jpeg" \
+      --data-binary @/tmp/test_upload_azure.png \
+      --max-time 20 \
+      "$UPLOAD_URL_RAW" 2>/dev/null || echo "000")
+    if [[ "$PUT_AZ_STATUS" == "201" || "$PUT_AZ_STATUS" == "200" ]]; then
+      ok "  PUT test image → Azure Blob SAS URL: HTTP $PUT_AZ_STATUS ✓"
+    else
+      fail "  PUT test image → Azure Blob: HTTP $PUT_AZ_STATUS (expected 201)"
+      [[ -s /tmp/put_resp_azure.txt ]] && echo "  Response: $(head -c 200 /tmp/put_resp_azure.txt)"
+    fi
+
+    # 4b. アップロードしたキーで投稿を作成し imageUrls がアクセス可能か検証
+    if [[ -n "$UPLOAD_KEY_RAW" && "$UPLOAD_KEY_RAW" != "null" && ("$PUT_AZ_STATUS" == "201" || "$PUT_AZ_STATUS" == "200") ]]; then
+      IMG_POST_REAL_DATA=$(python3 -c "import json; print(json.dumps({'content':'[test] Azure E2E real image upload', 'imageKeys':['$UPLOAD_KEY_RAW']}))")
+      run_test "POST /posts with real uploaded imageKey returns 201" \
+        POST "$API_URL/posts" \
+        --header "$AUTHH" \
+        --data "$IMG_POST_REAL_DATA" \
+        --expect 201
+      UPLOAD_REAL_POST_ID=$(echo "$LAST_BODY" | jq -r '.id // .postId // ""' 2>/dev/null)
+      [[ -n "$UPLOAD_REAL_POST_ID" && "$UPLOAD_REAL_POST_ID" != "null" ]] && CREATED_POST_IDS+=("$UPLOAD_REAL_POST_ID")
+
+      # GET /posts/:id → imageUrls が HTTP 200 で取得できるか確認 (SASあり read URL)
+      if [[ -n "$UPLOAD_REAL_POST_ID" && "$UPLOAD_REAL_POST_ID" != "null" ]]; then
+        run_test "GET /posts/$UPLOAD_REAL_POST_ID returns 200" \
+          GET "$API_URL/posts/$UPLOAD_REAL_POST_ID" --header "$AUTHH"
+        REAL_BLOB_URL=$(echo "$LAST_BODY" | jq -r '.imageUrls[0] // ""' 2>/dev/null)
+        if [[ -n "$REAL_BLOB_URL" && "$REAL_BLOB_URL" != "null" ]]; then
+          BLOB_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$REAL_BLOB_URL" 2>/dev/null || echo "000")
+          if [[ "$BLOB_HTTP" == "200" ]]; then
+            ok "  GET imageUrl (Blob SAS read URL) → HTTP 200 ✓ (image displayable)"
+          else
+            fail "  GET imageUrl → HTTP $BLOB_HTTP (image not displayable!) URL: ${REAL_BLOB_URL:0:100}"
+          fi
+        else
+          warn "  No imageUrls in response — skipping accessibility check"
+        fi
+      fi
+    else
+      warn "  key not in response or PUT failed — skipping real-upload post test"
+    fi
+  else
+    warn "  No presigned URL or test PNG missing — skipping binary PUT test"
   fi
 
   # 5-5. Create post with imageKeys (React SPA format)
