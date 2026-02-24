@@ -257,6 +257,18 @@ jobs:
             staging)    AZURE_CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
             *)          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}" ;;
           esac
+          # Fallback: use per-stack known AD app IDs if Pulumi output is empty
+          if [ -z "$AD_APP_ID" ]; then
+            case "$STACK_NAME" in
+              production) AD_APP_ID="0b926ff6-fc03-4c9c-a359-96964ef15941" ;;
+              staging)    AD_APP_ID="03a168ac-7de3-4e5c-8fb1-99fa6dcbfe77" ;;
+            esac
+            echo "⚠️  Using fallback Azure AD App ID: $AD_APP_ID"
+          fi
+          if [ -z "$AD_APP_ID" ]; then
+            echo "⏭️  No Azure AD App ID available, skipping redirect URI update"
+            exit 0
+          fi
 
           # Build redirect URI list: login callbacks (/sns/auth/callback) + logout redirects (/sns/)
           URIS=(
@@ -750,7 +762,6 @@ jobs:
           API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
           AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
           AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}"
-          # Use custom domain for production/staging, fall back to FrontDoor hostname.
           # Use per-stack mapping to avoid wrong domain from repo-level AZURE_CUSTOM_DOMAIN secret.
           STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
           case "$STACK_NAME" in
@@ -760,8 +771,28 @@ jobs:
           esac
           AZURE_PUBLIC_HOST="${AZURE_CUSTOM_DOMAIN:-${FRONTDOOR_HOSTNAME}}"
 
+          # Fallback: Pulumi output may be empty if the deployment was skipped or
+          # the stack state was not updated. Use known per-stack AD app values.
+          if [ -z "$AZURE_CLIENT_ID" ]; then
+            case "$STACK_NAME" in
+              production) AZURE_CLIENT_ID="0b926ff6-fc03-4c9c-a359-96964ef15941" ;;
+              staging)    AZURE_CLIENT_ID="03a168ac-7de3-4e5c-8fb1-99fa6dcbfe77" ;;
+            esac
+            echo "⚠️  Pulumi output empty — using fallback Azure AD Client ID: $AZURE_CLIENT_ID"
+          fi
+          if [ -z "$AZURE_TENANT_ID" ]; then
+            AZURE_TENANT_ID="a3182bec-d835-4ce3-af06-04579abf597e"
+            echo "⚠️  Pulumi output empty — using fallback Azure AD Tenant ID: $AZURE_TENANT_ID"
+          fi
+          if [ -z "$AZURE_CLIENT_ID" ]; then
+            echo "❌ AZURE_CLIENT_ID is still empty. Cannot build frontend."
+            exit 1
+          fi
+
           echo "🏗️  Building React frontend for Azure..."
           echo "🌐 Using public host for redirect URIs: ${AZURE_PUBLIC_HOST}"
+          echo "🔑 Azure AD Client ID: ${AZURE_CLIENT_ID}"
+          echo "🏢 Azure AD Tenant ID: ${AZURE_TENANT_ID}"
           cd services/frontend_react
 
           # Install dependencies
