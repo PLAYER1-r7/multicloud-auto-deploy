@@ -6,7 +6,7 @@ on:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
     paths:
-      - "services/**"
+      - "services/api/**"
       - "infrastructure/pulumi/azure/**"
       - ".github/workflows/deploy-azure.yml"
   workflow_dispatch:
@@ -28,7 +28,8 @@ env:
 # Prevent concurrent Pulumi updates on the same stack (causes 409 Conflict)
 concurrency:
   group: deploy-azure-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
-  cancel-in-progress: false
+  # staging(develop): 古いRunをキャンセルしてコスト削減 / production(main): 安全確実に完走
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   build-and-deploy:
@@ -54,6 +55,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: infrastructure/pulumi/azure/requirements.txt
 
       - name: Install Pulumi CLI
         uses: pulumi/actions@v5
@@ -542,6 +545,16 @@ jobs:
           echo "  Database: ${{ steps.pulumi_outputs.outputs.cosmos_database_name }}"
           echo "  Container: ${{ steps.pulumi_outputs.outputs.cosmos_container_name }}"
 
+          # Clear WEBSITE_RUN_FROM_PACKAGE to prevent stale package blob from overriding new deployment.
+          # If this is set to an old/expired SAS URL, the function will ignore the new zip deploy and serve 404.
+          echo "🔧 Clearing WEBSITE_RUN_FROM_PACKAGE (prevent stale package conflict)..."
+          az functionapp config appsettings delete \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --setting-names WEBSITE_RUN_FROM_PACKAGE \
+            --output none 2>/dev/null && echo "ℹ️  WEBSITE_RUN_FROM_PACKAGE cleared" || echo "ℹ️  WEBSITE_RUN_FROM_PACKAGE not set (OK)"
+          sleep 5
+
           echo "📦 Deploying function app package (with retry logic)..."
 
           # Retry deployment up to 3 times to handle Kudu restarts
@@ -618,6 +631,15 @@ jobs:
           else
             echo "✅ Deployment completed successfully!"
           fi
+
+          # Restart function app to ensure new package is loaded.
+          # FC1 Flex Consumption may keep old code in memory after async zip extraction.
+          echo "🔄 Restarting function app to load new deployment..."
+          az functionapp restart \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --output none 2>/dev/null && echo "✅ Function app restarted" || echo "⚠️  Restart failed (non-fatal)"
+          sleep 30
 
           # Configure always-ready instances to prevent FlexConsumption cold starts
           echo "🔥 Configuring always-ready instances (cold start prevention)..."
@@ -887,7 +909,7 @@ jobs:
             echo "📍 API URL: ${FUNC_URL}"
           else
             echo ""
-            echo "❌ Health check failed after waiting for $((max_attempts * 5)) seconds"
+            echo "❌ Health check failed after waiting for $((max_attempts * 10)) seconds"
             echo "This may be a transient issue. Check manually: ${FUNC_URL}/health"
             exit 1
           fi
