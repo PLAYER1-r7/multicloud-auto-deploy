@@ -436,6 +436,18 @@ jobs:
           echo "✅ Cosmos DB Account: $COSMOS_ACCOUNT"
           echo "✅ Cosmos DB Endpoint: $COSMOS_ENDPOINT"
 
+          # Get web storage key for image uploads (SAS URL generation)
+          FRONTEND_STORAGE_NAME="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+          IMAGES_STORAGE_KEY=$(az storage account keys list \
+            --account-name "$FRONTEND_STORAGE_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "[0].value" -o tsv 2>/dev/null || echo "")
+          if [ -z "$IMAGES_STORAGE_KEY" ]; then
+            echo "⚠️  Could not retrieve storage key for $FRONTEND_STORAGE_NAME — image uploads may fail"
+          else
+            echo "✅ Images storage: $FRONTEND_STORAGE_NAME (key retrieved)"
+          fi
+
           # Get Front Door URL for CORS from Pulumi outputs
           FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
           CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
@@ -524,6 +536,9 @@ jobs:
               AUTH_PROVIDER=azure \
               AZURE_TENANT_ID="${{ steps.cloud_config.outputs.azure_tenant_id }}" \
               AZURE_CLIENT_ID="${{ steps.cloud_config.outputs.azure_client_id }}" \
+              AZURE_STORAGE_ACCOUNT_NAME="${FRONTEND_STORAGE_NAME}" \
+              AZURE_STORAGE_ACCOUNT_KEY="${IMAGES_STORAGE_KEY}" \
+              AZURE_STORAGE_CONTAINER="images" \
               CORS_ORIGINS="${CORS_ORIGINS}" \
               WEBSITE_WARMUP_PATH="/sns/health" \
               WEBSITE_KEEPALIVE_TIMEOUT="30" \
