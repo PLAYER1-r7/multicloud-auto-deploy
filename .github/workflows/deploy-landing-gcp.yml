@@ -22,9 +22,6 @@ on:
 env:
   GCP_PROJECT_ID: ashnova
   GCP_REGION: asia-northeast1
-  # Landing page is deployed to the same bucket as the frontend (root level)
-  # so Cloud CDN serves it at / while the React SNS app lives under /sns/
-  BUCKET_NAME: ashnova-multicloud-auto-deploy-staging-frontend
 
 jobs:
   deploy-landing:
@@ -39,6 +36,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Determine Environment
+        id: env
+        run: |
+          # Use workflow_dispatch input if available, otherwise derive from branch
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            ENV="production"
+          else
+            ENV="staging"
+          fi
+
+          if [ "$ENV" = "production" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "bucket_name=ashnova-multicloud-auto-deploy-production-frontend" >> $GITHUB_OUTPUT
+            echo "url=https://www.gcp.ashnova.jp/" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "bucket_name=ashnova-multicloud-auto-deploy-staging-frontend" >> $GITHUB_OUTPUT
+            echo "url=https://staging.gcp.ashnova.jp/" >> $GITHUB_OUTPUT
+          fi
+          echo "🌍 Deploying to: $ENV"
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -51,20 +71,28 @@ jobs:
 
       - name: Deploy to Cloud Storage
         run: |
-          gcloud storage cp static-site/*.html gs://${{ env.BUCKET_NAME }}/ \
+          gcloud storage cp static-site/*.html \
+            gs://${{ steps.env.outputs.bucket_name }}/ \
             --cache-control="public, max-age=3600"
 
       - name: Set GCP-specific landing page as root index.html
         run: |
           # Deploy gcp/index.html as root index.html for Cloud CDN
-          gcloud storage cp static-site/gcp/index.html gs://${{ env.BUCKET_NAME }}/index.html \
+          gcloud storage cp static-site/gcp/index.html \
+            gs://${{ steps.env.outputs.bucket_name }}/index.html \
             --cache-control="public, max-age=3600"
 
       - name: Invalidate CDN Cache
         run: |
-          # Dynamically look up the URL map name for the current stack
+          # Dynamically look up the URL map name for the current environment
+          ENV_SUFFIX="${{ steps.env.outputs.environment }}"
           URLMAP_NAME=$(gcloud compute url-maps list --format="value(name)" \
-            --project=${{ secrets.GCP_PROJECT_ID }} | grep "cdn-urlmap" | head -1)
+            --project=${{ secrets.GCP_PROJECT_ID }} | grep "cdn-urlmap" | grep "$ENV_SUFFIX" | head -1)
+          # Fallback: any cdn-urlmap if env-specific not found
+          if [ -z "$URLMAP_NAME" ]; then
+            URLMAP_NAME=$(gcloud compute url-maps list --format="value(name)" \
+              --project=${{ secrets.GCP_PROJECT_ID }} | grep "cdn-urlmap" | head -1)
+          fi
           if [ -n "$URLMAP_NAME" ]; then
             gcloud compute url-maps invalidate-cdn-cache "$URLMAP_NAME" \
               --path "/*" --async --project=${{ secrets.GCP_PROJECT_ID }} 2>/dev/null || true
@@ -75,5 +103,5 @@ jobs:
 
       - name: Deployment Success
         run: |
-          echo "✅ Landing page deployed successfully!"
-          echo "🌐 URL: http://34.117.111.182/"
+          echo "✅ Landing page deployed to ${{ steps.env.outputs.environment }} successfully!"
+          echo "🌐 URL: ${{ steps.env.outputs.url }}"
