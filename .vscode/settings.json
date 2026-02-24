@@ -6,7 +6,9 @@
   "editor.formatOnSave": true,
   "editor.tabSize": 2,
   "editor.insertSpaces": true,
-  "editor.rulers": [100],
+  "editor.rulers": [
+    100
+  ],
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,
   "editor.bracketPairColorization.enabled": true,
@@ -52,14 +54,21 @@
   // Warn before killing terminals with running processes
   "terminal.integrated.confirmOnKill": "editor",
   // On host machine: set warp-terminal as the external terminal
-  // "terminal.external.linuxExec": "warp-terminal",
+  "terminal.external.linuxExec": "warp-terminal",
+  "terminal.external.osxExec": "Warp.app",
+  // Open external terminal (Warp) when clicking "Open in Terminal" from Explorer
+  "terminal.explorerKind": "external",
   // Tailwind CSS
-  "tailwindCSS.includeLanguages": { "typescriptreact": "html" },
+  "tailwindCSS.includeLanguages": {
+    "typescriptreact": "html"
+  },
   // Vitest
   "vitest.enable": true,
   "vitest.workspaceConfig": "services/frontend_react/vite.config.ts",
   // TOML
-  "[toml]": { "editor.defaultFormatter": "tamasfe.even-better-toml" },
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
   // Search / watcher exclusions (keep build artifacts out)
   "search.exclude": {
     "**/.build-layer": true,

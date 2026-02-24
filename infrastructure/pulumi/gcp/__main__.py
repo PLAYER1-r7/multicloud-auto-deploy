@@ -13,11 +13,12 @@ because Pulumi requires the ZIP file to exist before creating the function.
 Cost: ~$2-5/month for low traffic
 """
 
+import hashlib
+import os
+
+import monitoring
 import pulumi
 import pulumi_gcp as gcp
-import os
-import hashlib
-import monitoring
 
 # Configuration
 config = pulumi.Config()
@@ -29,13 +30,11 @@ project_name = "multicloud-auto-deploy"
 
 # Get the service account email from environment or config (used by GitHub Actions)
 # This will be set from GCP_CREDENTIALS in the workflow
-github_actions_sa = config.get(
-    "github_actions_sa") or os.getenv("GITHUB_ACTIONS_SA")
+github_actions_sa = config.get("github_actions_sa") or os.getenv("GITHUB_ACTIONS_SA")
 
 # CORS allowed origins (configurable per environment)
 allowed_origins = config.get("allowedOrigins") or "*"
-allowed_origins_list = allowed_origins.split(
-    ",") if allowed_origins != "*" else ["*"]
+allowed_origins_list = allowed_origins.split(",") if allowed_origins != "*" else ["*"]
 
 # Common labels
 common_labels = {
@@ -67,6 +66,24 @@ for service in services:
         disable_on_destroy=False,
     )
     enabled_services.append(svc)
+
+# ========================================
+# Cloud Audit Logs
+# ========================================
+# Enable Admin Read, Data Read, and Data Write audit logs project-wide.
+# Covers Firestore, Cloud Storage, Secret Manager, Cloud Run, and IAM.
+# Admin Read logs are free; Data Read/Write logs incur minimal ingestion cost.
+audit_config = gcp.projects.IAMAuditConfig(
+    "audit-config",
+    project=project,
+    service="allServices",
+    audit_log_configs=[
+        gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="ADMIN_READ"),
+        gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="DATA_READ"),
+        gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="DATA_WRITE"),
+    ],
+    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+)
 
 # ========================================
 # Authentication Setup - Firebase Project
@@ -159,9 +176,12 @@ uploads_bucket = gcp.storage.Bucket(
         gcp.storage.BucketCorArgs(
             origins=allowed_origins_list,
             methods=["GET", "HEAD", "PUT", "OPTIONS"],
-            response_headers=["Content-Type",
-                              "Authorization", "X-Requested-With",
-                              "x-ms-blob-type"],
+            response_headers=[
+                "Content-Type",
+                "Authorization",
+                "X-Requested-With",
+                "x-ms-blob-type",
+            ],
             max_age_seconds=3600,
         )
     ],
@@ -214,8 +234,7 @@ frontend_bucket = gcp.storage.Bucket(
         gcp.storage.BucketCorArgs(
             origins=allowed_origins_list,
             methods=["GET", "HEAD", "OPTIONS"],
-            response_headers=["Content-Type",
-                              "Authorization", "X-Requested-With"],
+            response_headers=["Content-Type", "Authorization", "X-Requested-With"],
             max_age_seconds=3600,
         )
     ],
@@ -336,8 +355,7 @@ url_map = gcp.compute.URLMap(
 # Custom domain configuration (optional)
 custom_domain = config.get("customDomain")  # e.g., gcp.yourdomain.com
 ssl_domains = (
-    [custom_domain] if custom_domain else [
-        f"{project_name}-{stack}.example.com"]
+    [custom_domain] if custom_domain else [f"{project_name}-{stack}.example.com"]
 )
 
 # Use a hash of the domain list in the cert name so that changing domains
@@ -366,12 +384,26 @@ https_proxy = gcp.compute.TargetHttpsProxy(
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
 
-# Target HTTP Proxy (for HTTP to HTTPS redirect)
+# URL Map for HTTP → HTTPS redirect (301 Moved Permanently)
+# All HTTP traffic is redirected to HTTPS; no content is served over HTTP.
+redirect_url_map = gcp.compute.URLMap(
+    "cdn-redirect-url-map",
+    name=f"{project_name}-{stack}-cdn-redirect",
+    project=project,
+    default_url_redirect=gcp.compute.URLMapDefaultUrlRedirectArgs(
+        https_redirect=True,
+        redirect_response_code="MOVED_PERMANENTLY_DEFAULT",
+        strip_query=False,
+    ),
+    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+)
+
+# Target HTTP Proxy — redirects HTTP → HTTPS (not serving content directly)
 http_proxy = gcp.compute.TargetHttpProxy(
     "cdn-http-proxy",
     name=f"{project_name}-{stack}-cdn-http-proxy",
     project=project,
-    url_map=url_map.self_link,
+    url_map=redirect_url_map.self_link,
     opts=pulumi.ResourceOptions(depends_on=enabled_services),
 )
 
@@ -451,7 +483,7 @@ pulumi.export(
         "2. Enable Google Sign-In provider\\n",
         "3. Configure OAuth consent screen\\n",
         "\\n",
-        "Cloud Functions environment variables:\\n" "  AUTH_PROVIDER=firebase\\n",
+        "Cloud Functions environment variables:\\n  AUTH_PROVIDER=firebase\\n",
         "  GCP_PROJECT_ID=",
         project,
         "\\n",
@@ -469,12 +501,12 @@ pulumi.export(
     ),
 )
 pulumi.export("cdn_ip_address", cdn_ip_address.address)
-pulumi.export("cdn_url", cdn_ip_address.address.apply(
-    lambda ip: f"http://{ip}"))
-pulumi.export("cdn_https_url", cdn_ip_address.address.apply(
-    lambda ip: f"https://{ip}"))
+pulumi.export("cdn_url", cdn_ip_address.address.apply(lambda ip: f"http://{ip}"))
+pulumi.export("cdn_https_url", cdn_ip_address.address.apply(lambda ip: f"https://{ip}"))
 pulumi.export("backend_bucket_name", backend_bucket.name)
 pulumi.export("url_map_name", url_map.name)
+pulumi.export("redirect_url_map_name", redirect_url_map.name)
+pulumi.export("audit_config_service", audit_config.service)
 # Cloud Armor exports only for production
 if stack == "production":
     pulumi.export("cloud_armor_policy_name", armor_security_policy.name)
@@ -511,12 +543,10 @@ if monitoring_resources["notification_channel"]:
         monitoring_resources["notification_channel"].id,
     )
 pulumi.export(
-    "monitoring_function_alerts", list(
-        monitoring_resources["function_alerts"].keys())
+    "monitoring_function_alerts", list(monitoring_resources["function_alerts"].keys())
 )
 pulumi.export(
-    "monitoring_firestore_alerts", list(
-        monitoring_resources["firestore_alerts"].keys())
+    "monitoring_firestore_alerts", list(monitoring_resources["firestore_alerts"].keys())
 )
 if monitoring_resources["billing_budget"]:
     pulumi.export(
@@ -542,8 +572,7 @@ if stack == "production":
     )
 else:
     cost_estimate = (
-        cost_estimate_base +
-        "Cloud Armor: Disabled for staging (saves ~$6-7/month). "
+        cost_estimate_base + "Cloud Armor: Disabled for staging (saves ~$6-7/month). "
         "Estimated: $8-15/month for low traffic without Cloud Armor."
     )
 

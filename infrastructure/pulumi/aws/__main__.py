@@ -10,13 +10,13 @@ Architecture:
 Cost: ~$2-5/month for low traffic
 """
 
-import base64
-import pathlib
-import os
 import json
+import os
+import pathlib
+
+import monitoring
 import pulumi
 import pulumi_aws as aws
-import monitoring
 
 # Configuration
 config = pulumi.Config()
@@ -27,8 +27,7 @@ project_name = "multicloud-auto-deploy"
 
 # CORS allowed origins (configurable per environment)
 allowed_origins = config.get("allowedOrigins") or "*"
-allowed_origins_list = allowed_origins.split(
-    ",") if allowed_origins != "*" else ["*"]
+allowed_origins_list = allowed_origins.split(",") if allowed_origins != "*" else ["*"]
 
 # CloudFront domain (set after first deploy: pulumi config set cloudFrontDomain <domain>)
 # Used for Cognito callback/logout URLs and frontend_web redirect URIs
@@ -147,21 +146,11 @@ user_pool_client = aws.cognito.UserPoolClient(
     allowed_oauth_scopes=["openid", "email", "profile"],
     allowed_oauth_flows_user_pool_client=True,
     callback_urls=(
-        [
-            "http://localhost:5173/sns/auth/callback",
-            "http://localhost:8080/callback",
-            "https://localhost:8080/callback",
-        ]
-        + ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else [])
+        ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else [])
         + ([f"https://{custom_domain}/sns/auth/callback"] if custom_domain else [])
     ),
     logout_urls=(
-        [
-            "http://localhost:5173/sns/",
-            "http://localhost:8080/",
-            "https://localhost:8080/",
-        ]
-        + ([f"https://{cf_domain}/sns/"] if cf_domain else [])
+        ([f"https://{cf_domain}/sns/"] if cf_domain else [])
         + ([f"https://{custom_domain}/sns/"] if custom_domain else [])
     ),
     access_token_validity=1,
@@ -336,14 +325,19 @@ workspace_root = os.environ.get("GITHUB_WORKSPACE")
 if workspace_root:
     # GitHub Actions: GITHUB_WORKSPACE points to repository root (/home/runner/work/multicloud-auto-deploy/multicloud-auto-deploy)
     # Build step creates ZIP at services/api/lambda-layer.zip (relative to repository root)
-    layer_zip_path = pathlib.Path(
-        workspace_root) / "services" / "api" / "lambda-layer.zip"
+    layer_zip_path = (
+        pathlib.Path(workspace_root) / "services" / "api" / "lambda-layer.zip"
+    )
 else:
     # Local development: Calculate relative path from this file
     # __file__ -> infrastructure/pulumi/aws/__main__.py
     # Go up 3 levels to reach project root, then down to services/api
-    layer_zip_path = pathlib.Path(
-        __file__).parent.parent.parent / "services" / "api" / "lambda-layer.zip"
+    layer_zip_path = (
+        pathlib.Path(__file__).parent.parent.parent
+        / "services"
+        / "api"
+        / "lambda-layer.zip"
+    )
 
 # Check if layer ZIP exists
 if not layer_zip_path.exists():
@@ -356,7 +350,8 @@ if not layer_zip_path.exists():
     layer_zip_path = None
 else:
     pulumi.log.info(
-        f"Lambda Layer ZIP found: {layer_zip_path} ({os.path.getsize(layer_zip_path) / 1024 / 1024:.2f} MB)")
+        f"Lambda Layer ZIP found: {layer_zip_path} ({os.path.getsize(layer_zip_path) / 1024 / 1024:.2f} MB)"
+    )
 
 # Create Lambda Layer (only if ZIP exists)
 lambda_layer = None
@@ -410,15 +405,15 @@ lambda_function = aws.lambda_.Function(
     layers=[lambda_layer.arn] if lambda_layer else [],
     # Use inline code or skip code updates
     # Code will be uploaded separately via deploy-lambda-aws.sh
-    code=pulumi.AssetArchive(
-        {"index.py": pulumi.StringAsset(placeholder_code)}),
+    code=pulumi.AssetArchive({"index.py": pulumi.StringAsset(placeholder_code)}),
     # Skip code and layer updates: deployed by deploy-aws.yml workflow
     # Layers are managed by the CI/CD pipeline (lambda-layer.zip is built at deploy time)
     # Also skip environment: CI/CD (Update Lambda step) sets CORS_ORIGINS with the correct
     # custom domain. If Pulumi manages environment, it sets CORS_ORIGINS from allowedOrigins
     # which may not include the custom domain, causing "CORS policy" errors on every deploy.
     opts=pulumi.ResourceOptions(
-        ignore_changes=["code", "source_code_hash", "layers", "environment"]),
+        ignore_changes=["code", "source_code_hash", "layers", "environment"]
+    ),
     environment={
         "variables": {
             "ENVIRONMENT": stack,
@@ -782,7 +777,9 @@ if stack == "production":
 # CloudFront Function で /sns/ → /sns/index.html にリライト (SPA ルーティング対応)
 cf_function_name = f"spa-sns-rewrite-{stack}"
 caller_identity = aws.get_caller_identity()
-cf_function_arn = f"arn:aws:cloudfront::{caller_identity.account_id}:function/{cf_function_name}"
+cf_function_arn = (
+    f"arn:aws:cloudfront::{caller_identity.account_id}:function/{cf_function_name}"
+)
 cloudfront_kwargs["ordered_cache_behaviors"] = [
     aws.cloudfront.DistributionOrderedCacheBehaviorArgs(
         path_pattern="/sns*",
@@ -805,6 +802,81 @@ cloudfront_kwargs["ordered_cache_behaviors"] = [
 
 cloudfront_distribution = aws.cloudfront.Distribution(
     "cloudfront-distribution", **cloudfront_kwargs
+)
+
+# ========================================
+# CloudTrail - Audit Logging
+# ========================================
+# S3 bucket to store CloudTrail management event logs
+cloudtrail_bucket = aws.s3.BucketV2(
+    "cloudtrail-bucket",
+    bucket=f"{project_name}-{stack}-cloudtrail-logs",
+    force_destroy=True,
+    tags=common_tags,
+)
+
+# Block all public access to the audit log bucket
+aws.s3.BucketPublicAccessBlock(
+    "cloudtrail-bucket-public-access",
+    bucket=cloudtrail_bucket.id,
+    block_public_acls=True,
+    block_public_policy=True,
+    ignore_public_acls=True,
+    restrict_public_buckets=True,
+)
+
+# Enable versioning on the CloudTrail bucket for tamper evidence
+aws.s3.BucketVersioningV2(
+    "cloudtrail-bucket-versioning",
+    bucket=cloudtrail_bucket.id,
+    versioning_configuration={"status": "Enabled"},
+)
+
+# Bucket policy: grant CloudTrail service permission to write logs
+cloudtrail_bucket_policy = aws.s3.BucketPolicy(
+    "cloudtrail-bucket-policy",
+    bucket=cloudtrail_bucket.id,
+    policy=cloudtrail_bucket.arn.apply(
+        lambda bucket_arn: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "AWSCloudTrailAclCheck",
+                        "Effect": "Allow",
+                        "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                        "Action": "s3:GetBucketAcl",
+                        "Resource": bucket_arn,
+                    },
+                    {
+                        "Sid": "AWSCloudTrailWrite",
+                        "Effect": "Allow",
+                        "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                        "Action": "s3:PutObject",
+                        "Resource": f"{bucket_arn}/AWSLogs/*",
+                        "Condition": {
+                            "StringEquals": {
+                                "s3:x-amz-acl": "bucket-owner-full-control"
+                            }
+                        },
+                    },
+                ],
+            }
+        )
+    ),
+    opts=pulumi.ResourceOptions(depends_on=[cloudtrail_bucket]),
+)
+
+# CloudTrail trail: multi-region, global service events, log file validation
+cloudtrail = aws.cloudtrail.Trail(
+    "cloudtrail",
+    name=f"{project_name}-{stack}-trail",
+    s3_bucket_name=cloudtrail_bucket.id,
+    include_global_service_events=True,  # Capture IAM, STS, etc.
+    is_multi_region_trail=True,  # Cover all regions
+    enable_log_file_validation=True,  # SHA-256 digest for tamper detection
+    tags=common_tags,
+    opts=pulumi.ResourceOptions(depends_on=[cloudtrail_bucket_policy]),
 )
 
 # ========================================
@@ -833,15 +905,13 @@ pulumi.export("api_url", api_gateway.api_endpoint)  # For workflow
 pulumi.export("frontend_bucket_name", frontend_bucket.id)
 pulumi.export(
     "frontend_url",
-    frontend_bucket.website_endpoint.apply(
-        lambda endpoint: f"http://{endpoint}"),
+    frontend_bucket.website_endpoint.apply(lambda endpoint: f"http://{endpoint}"),
 )
 pulumi.export("cloudfront_distribution_id", cloudfront_distribution.id)
 pulumi.export("cloudfront_domain", cloudfront_distribution.domain_name)
 pulumi.export(
     "cloudfront_url",
-    cloudfront_distribution.domain_name.apply(
-        lambda domain: f"https://{domain}"),
+    cloudfront_distribution.domain_name.apply(lambda domain: f"https://{domain}"),
 )
 # Custom domain exports (if configured)
 if custom_domain:
@@ -862,18 +932,17 @@ pulumi.export("posts_table_name", posts_table.name)
 pulumi.export("posts_table_arn", posts_table.arn)
 pulumi.export("images_bucket_name", images_bucket.id)
 pulumi.export("images_bucket_arn", images_bucket.arn)
+pulumi.export("cloudtrail_name", cloudtrail.name)
+pulumi.export("cloudtrail_bucket_name", cloudtrail_bucket.id)
 
 # Monitoring exports
 if monitoring_resources["sns_topic"]:
-    pulumi.export("monitoring_sns_topic_arn",
-                  monitoring_resources["sns_topic"].arn)
+    pulumi.export("monitoring_sns_topic_arn", monitoring_resources["sns_topic"].arn)
 pulumi.export(
-    "monitoring_lambda_alarms", list(
-        monitoring_resources["lambda_alarms"].keys())
+    "monitoring_lambda_alarms", list(monitoring_resources["lambda_alarms"].keys())
 )
 pulumi.export(
-    "monitoring_api_alarms", list(
-        monitoring_resources["api_gateway_alarms"].keys())
+    "monitoring_api_alarms", list(monitoring_resources["api_gateway_alarms"].keys())
 )
 pulumi.export(
     "monitoring_cloudfront_alarms",

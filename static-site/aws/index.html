@@ -127,39 +127,39 @@
     <main class="hero">
         <h1>Powered by <em>Amazon Web Services</em></h1>
         <p>
-            Lambda + API Gateway + DynamoDB + CloudFront + S3。<br>
-            サーバーレスアーキテクチャでスケーラブルなSNSを提供します。
+            Lambda + API Gateway v2 + DynamoDB + CloudFront + S3 + Cognito。<br>
+            サーバーレスアーキテクチャで高速・スケーラブルな SNS を提供します。
         </p>
 
         <div class="cta-group">
             <a href="/sns/" class="btn btn-primary">SNS アプリを開く</a>
-            <a href="https://github.com/PLAYER1-r7/ashnova" class="btn btn-secondary">GitHub</a>
+            <a href="https://github.com/PLAYER1-r7/multicloud-auto-deploy" class="btn btn-secondary">GitHub</a>
         </div>
 
         <div class="services">
             <div class="service-card">
                 <div class="icon">⚡</div>
                 <h3>AWS Lambda</h3>
-                <p>Python 3.13 サーバーレス API。コールドスタート ~500ms。</p>
+                <p>Python 3.12 サーバーレス API（Mangum アダプター）。Lambda Layer で依存関係を分離。</p>
             </div>
             <div class="service-card">
                 <div class="icon">🌐</div>
                 <h3>CloudFront CDN</h3>
-                <p>グローバルエッジ配信。WAF v2 + マネージドルール。</p>
+                <p>PriceClass_200（JP/KR/IN/NA/EU）。WAF v2 + HSTS/CSP セキュリティヘッダー。</p>
             </div>
             <div class="service-card">
                 <div class="icon">🗃️</div>
                 <h3>DynamoDB</h3>
-                <p>PAY_PER_REQUEST。自動スケーリング対応 NoSQL。</p>
+                <p>PAY_PER_REQUEST。Single Table Design。GSI: postId / userId / createdAt。</p>
             </div>
             <div class="service-card">
                 <div class="icon">🔒</div>
-                <h3>Cognito Auth</h3>
-                <p>マネージド認証。JWT トークン発行・検証。</p>
+                <h3>Cognito 認証</h3>
+                <p>PKCE (S256) フロー。JWT 検証。S3 パブリックアクセス完全遮断済み。</p>
             </div>
         </div>
     </main>
 
-    <footer>Ashnova · Multi-Cloud Platform · Powered by Python + Pulumi</footer>
+    <footer>Ashnova · Multi-Cloud Platform · Powered by FastAPI + Pulumi</footer>
 </body>
 </html>

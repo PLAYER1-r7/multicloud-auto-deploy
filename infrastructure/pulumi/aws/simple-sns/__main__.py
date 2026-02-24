@@ -9,9 +9,10 @@ Architecture:
 - CloudFront Distribution (optional)
 - Cognito User Pool (optional)
 """
+
 import json
-import zipfile
 from pathlib import Path
+
 import pulumi
 import pulumi_aws as aws
 
@@ -28,7 +29,9 @@ use_klayers = config.get_bool("use_klayers") or False  # Default to custom layer
 
 # AWS Lambda Powertools Layer (AWS official, always available)
 # https://docs.powertools.aws.dev/lambda/python/latest/#lambda-layer
-powertools_layer_arn = f"arn:aws:lambda:{aws_region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:68"
+powertools_layer_arn = (
+    f"arn:aws:lambda:{aws_region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:68"
+)
 
 # Klayers ARNs (update these to latest versions from https://api.klayers.cloud/)
 # Note: Klayers has resource-based policy restrictions and may not be accessible
@@ -208,24 +211,47 @@ lambda_policy = aws.iam.RolePolicy(
     ),
 )
 
+
 # Build Lambda deployment package (application code only)
 def build_lambda_package():
     """Build Lambda deployment package - application code only, dependencies in Layer"""
-    api_dir = Path("../../../../services/api") - for custom layer option
+    api_dir = Path("../../../../services/api")  # for custom layer option
+    code_path = api_dir / "lambda-code.zip"
+
+    # Check if code zip exists (created by CI/CD or manual build step)
+    if code_path.exists():
+        return str(code_path)
+
+    # Fallback to lambda.zip if lambda-code.zip not found
+    import sys
+
+    print(
+        "⚠️  Warning: lambda-code.zip not found. Falling back to lambda.zip.",
+        file=sys.stderr,
+    )
+    print(f"    Expected path: {code_path}", file=sys.stderr)
+    return str(api_dir / "lambda.zip")
+
+
 def build_lambda_layer():
     """Build Lambda Layer package - dependencies only"""
     api_dir = Path("../../../../services/api")
     layer_path = api_dir / "lambda-layer.zip"
-    
+
     # Check if layer zip exists (created by build-lambda-layer.sh)
     if layer_path.exists():
         return str(layer_path)
-    
+
     # If not exists, return None and skip layer creation
     import sys
-    print("⚠️  Warning: lambda-layer.zip not found. Run scripts/build-lambda-layer.sh first.", file=sys.stderr)
+
+    print(
+        "⚠️  Warning: lambda-layer.zip not found. Run scripts/build-lambda-layer.sh first.",
+        file=sys.stderr,
+    )
     print(f"    Expected path: {layer_path}", file=sys.stderr)
     return None
+
 
 # Determine which layers to use
 dependency_layers = []
@@ -358,20 +384,22 @@ api_ecr_repo = aws.ecr.Repository(
 aws.ecr.LifecyclePolicy(
     "api-ecr-lifecycle",
     repository=api_ecr_repo.name,
-    policy=json.dumps({
-        "rules": [{
-            "rulePriority": 1,
-            "description": "Keep last 10 images",
-            "selection": {
-                "tagStatus": "any",
-                "countType": "imageCountMoreThan",
-                "countNumber": 10
-            },
-            "action": {
-                "type": "expire"
-            }
-        }]
-    }),
+    policy=json.dumps(
+        {
+            "rules": [
+                {
+                    "rulePriority": 1,
+                    "description": "Keep last 10 images",
+                    "selection": {
+                        "tagStatus": "any",
+                        "countType": "imageCountMoreThan",
+                        "countNumber": 10,
+                    },
+                    "action": {"type": "expire"},
+                }
+            ]
+        }
+    ),
 )
 
 # ECR repository for frontend container images
@@ -389,20 +417,22 @@ frontend_ecr_repo = aws.ecr.Repository(
 aws.ecr.LifecyclePolicy(
     "frontend-ecr-lifecycle",
     repository=frontend_ecr_repo.name,
-    policy=json.dumps({
-        "rules": [{
-            "rulePriority": 1,
-            "description": "Keep last 10 images",
-            "selection": {
-                "tagStatus": "any",
-                "countType": "imageCountMoreThan",
-                "countNumber": 10
-            },
-            "action": {
-                "type": "expire"
-            }
-        }]
-    }),
+    policy=json.dumps(
+        {
+            "rules": [
+                {
+                    "rulePriority": 1,
+                    "description": "Keep last 10 images",
+                    "selection": {
+                        "tagStatus": "any",
+                        "countType": "imageCountMoreThan",
+                        "countNumber": 10,
+                    },
+                    "action": {"type": "expire"},
+                }
+            ]
+        }
+    ),
 )
 
 

@@ -73,6 +73,19 @@ jobs:
             --content-cache-control "public, max-age=3600" \
             --content-type "text/html; charset=utf-8"
 
+      - name: Set Azure-specific landing page as root index.html
+        run: |
+          # Deploy azure/index.html as root index.html for Azure Front Door
+          az storage blob upload \
+            --account-name ${{ steps.env.outputs.storage_account }} \
+            --auth-mode key \
+            --container-name '$web' \
+            --name index.html \
+            --file static-site/azure/index.html \
+            --overwrite \
+            --content-type "text/html; charset=utf-8" \
+            --content-cache-control "public, max-age=3600"
+
       - name: Purge Azure Front Door Cache
         run: |
           az afd endpoint purge \

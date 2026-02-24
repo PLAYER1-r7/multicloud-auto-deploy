@@ -123,38 +123,38 @@
         <h1>Powered by <em>Microsoft Azure</em></h1>
         <p>
             Azure Functions + Cosmos DB + Front Door + Blob Storage。<br>
-            エンタープライズグレードのサーバーレス基盤でSNSを運用します。
+            エンタープライズグレードのサーバーレス基盤で SNS を運用します。
         </p>
 
         <div class="cta-group">
             <a href="/sns/" class="btn btn-primary">SNS アプリを開く</a>
-            <a href="https://github.com/PLAYER1-r7/ashnova" class="btn btn-secondary">GitHub</a>
+            <a href="https://github.com/PLAYER1-r7/multicloud-auto-deploy" class="btn btn-secondary">GitHub</a>
         </div>
 
         <div class="services">
             <div class="service-card">
                 <div class="icon">⚡</div>
                 <h3>Azure Functions</h3>
-                <p>Python 3.13 FlexConsumption。従量課金で自動スケール。</p>
+                <p>Python 3.12 FlexConsumption (FC1)。always-ready=1 でコールドスタート解消。</p>
             </div>
             <div class="service-card">
                 <div class="icon">🌐</div>
                 <h3>Azure Front Door</h3>
-                <p>グローバルCDN + WAF。Standard SKU で HTTPS 自動付与。</p>
+                <p>グローバル CDN。Standard SKU + SpaRuleSet による SPA ルーティング。</p>
             </div>
             <div class="service-card">
                 <div class="icon">🗃️</div>
                 <h3>Cosmos DB</h3>
-                <p>サーバーレスプラン。マルチリージョン対応の NoSQL DB。</p>
+                <p>サーバーレスプラン。DB: simple-sns / Container: items。</p>
             </div>
             <div class="service-card">
                 <div class="icon">🔒</div>
-                <h3>Azure AD Auth</h3>
-                <p>エンタープライズ認証。シングルテナント App Registration。</p>
+                <h3>Azure AD 認証</h3>
+                <p>シングルテナント App Registration。JWT 検証付き API 保護。</p>
             </div>
         </div>
     </main>
 
-    <footer>Ashnova · Multi-Cloud Platform · Powered by Python + Pulumi</footer>
+    <footer>Ashnova · Multi-Cloud Platform · Powered by FastAPI + Pulumi</footer>
 </body>
 </html>
