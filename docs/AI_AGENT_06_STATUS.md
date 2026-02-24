@@ -1,7 +1,7 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-24 (Staging 再デプロイ完全成功 ✅ — AWS#246/GCP#214/Azure#273 全成功 / FC1 deployment storage 修復 (`multicloudautodeploa752` 再作成) ✅ / 全3クラウド health check OK (`status:ok, version:3.0.0`) ✅)
+> Last verified: 2026-02-24 (Staging 再デプロイ完全成功 ✅ — AWS#246/GCP#214/Azure#273 全成功 / FC1 deployment storage 修復 (`multicloudautodeploa752` 再作成) ✅ / 全3クラウド health check OK (`status:ok, version:3.0.0`) ✅ / E2Eテストスクリプト大幅改良 + `test-sns-all.sh` 新規追加 ✅ (commit `73af560`))
 
 ---
 
@@ -566,6 +566,59 @@ gcloud functions delete mcad-staging-api \
 > ⚠️ `multicloud-auto-deploy-tfstate-gcp` contains the Terraform state for `ashnova-staging-frontend` and `ashnova-staging-function-source`. Delete all four buckets as a set.
 
 ---
+
+---
+
+## E2E テストスクリプト (2026-02-24)
+
+> commit `73af560` — `scripts/` 配下の4ファイルを改良
+
+### `test-sns-all.sh` (新規)
+
+3クラウド統合ラッパー。すべてのクラウドを一括でテストし、最後にサマリーテーブルを表示する。
+
+```bash
+# 基本使用 (read-only, production)
+bash scripts/test-sns-all.sh --env production
+
+# 特定クラウドのみ
+bash scripts/test-sns-all.sh --env production --only azure
+
+# 書き込みテスト有効 (AWS: Cognito 自動認証)
+bash scripts/test-sns-all.sh --env production --write \
+  --aws-username user@example.com --aws-password *** --aws-client-id 4h3b285v1a9746sqhukk5k3a7i
+
+# 書き込みテスト有効 (GCP: gcloud 自動認証)
+bash scripts/test-sns-all.sh --env production --write --gcp-auto-token
+```
+
+**サマリー出力例** (production read-only, 2026-02-24):
+
+```
+  Cloud       PASS    FAIL    SKIP  Status
+  ────────  ──────  ──────  ──────  ──────────
+  aws            9       0       4  ✅ PASS
+  azure         17       0       2  ✅ PASS
+  gcp           13       0       4  ✅ PASS
+  ────────  ──────  ──────  ──────  ──────────
+  TOTAL         39       0      10
+```
+
+### 各スクリプトの改良内容
+
+| スクリプト | 追加機能 |
+| --------------------------------- | -------- |
+| `scripts/test-sns-aws.sh`  | `--username`/`--password`/`--client-id` で Cognito 自動認証、X-Amz-Signature 検証、binary PUT to S3、imageUrl HTTP 200 確認 |
+| `scripts/test-sns-gcp.sh`  | `--auto-token` で `gcloud auth print-identity-token` 自動認証、X-Goog-Signature 検証、binary PUT to GCS、imageUrl HTTP 200 確認 |
+| `scripts/test-sns-azure.sh` | `x-ms-blob-type: BlockBlob` で binary PUT to Azure Blob (HTTP 201)、SAS read URL HTTP 200 確認 |
+
+### テスト一覧 (write モード時の追加項目)
+
+| # | テスト | 概要 |
+|---|--------|------|
+| 5-2 | 署名URL検証 | presigned URL に `X-Amz-Signature=` / `X-Goog-Signature=` / SAS token が含まれることを確認 |
+| 5-3 | binary PUT | 1×1 PNG を実際に presigned URL へ PUT し HTTP 200/201 を確認 |
+| 5-4 | imageUrl アクセス確認 | PUT したキーで POST /posts → GET /posts/:id → imageUrls[0] に GET → HTTP 200 を確認 |
 
 ## Next Section
 

@@ -1,7 +1,7 @@
 # 09 — Remaining Tasks
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last updated: 2026-02-24 (Staging 全3クラウド再デプロイ完全成功)
+> Last updated: 2026-02-24 (E2Eテストスクリプト大幅改良 + `test-sns-all.sh` 新規追加 — commit `73af560`)
 > **AI Agent Note**: Update this file when a task is resolved.
 
 ---
@@ -13,6 +13,7 @@ Infrastructure (Pulumi):    ✅ All 3 clouds staging+production deployed
 AWS API (production):       ✅ {"status":"ok","provider":"aws","version":"3.0.0"}
 GCP API (production):       ✅ {"status":"ok","provider":"gcp","version":"3.0.0"}
 Azure API (production):     ✅ {"status":"ok","provider":"azure","version":"3.0.0"} (修復 2026-02-24)
+E2E test-sns-all.sh:        ✅ AWS 9/0/4, Azure 17/0/2, GCP 13/0/4 (PASS/FAIL/SKIP) — production read-only (2026-02-24 commit 73af560)
 AWS API (staging):          ✅ {"status":"ok","provider":"aws","version":"3.0.0"} (2026-02-24 #246)
 GCP API (staging):          ✅ {"status":"ok","provider":"gcp","version":"3.0.0"} (2026-02-24 #214)
 Azure API (staging):        ✅ {"status":"ok","provider":"azure","version":"3.0.0"} (2026-02-24 #273)
@@ -54,6 +55,7 @@ develop branch sync:        ✅ main v1.17.22 と同期済み
 | 0c  | **develop ブランチを main に同期**       | `git merge main --no-ff` 実行済み。`develop` v1.18.1 / `main` v1.17.10 ✅ (コミット `7efca78`)                            | —        |
 | 0e  | **Azure staging FC1 deployment storage 修復** | `functionAppConfig.deployment.storage` が削除済みストレージアカウント `multicloudautodeploa752` を指しており、全zip deployが `InaccessibleStorageException: Name or service not known` で失敗。`deploy-azure.yml` に ARM GET → storage account 作成 → connection string 更新ロジック追加。`WEBSITE_RUN_FROM_PACKAGE` クリア・再起動・Verify Deployment 600s待機も追加。 | v1.20.1  |
 | 0f  | **Staging 全3クラウド再デプロイ完全成功** | AWS#246 ✅ / GCP#214 ✅ / Azure#273 ✅。3クラウドとも `/health` = `{"status":"ok","version":"3.0.0"}` 確認。 | v1.20.1  |
+| 0g  | **E2Eテストスクリプト大幅改良**          | `test-sns-aws.sh`: Cognito 自動認証・X-Amz-Signature 検証・binary PUT・imageUrl 確認追加。`test-sns-gcp.sh`: gcloud 自動認証・X-Goog-Signature 検証・binary PUT・imageUrl 確認追加。`test-sns-azure.sh`: binary PUT (BlockBlob)・SAS read URL 確認追加。`test-sns-all.sh` 新規作成 (3クラウド統合ラッパー)。production read-only: PASS 39 / FAIL 0 / SKIP 10。 | v1.22.1  |
 
 ### 既存タスク
 
@@ -117,7 +119,7 @@ develop branch sync:        ✅ main v1.17.22 と同期済み
 | 15  | **~~Custom domain setup~~** ✅  | Complete for all 3 clouds (2026-02-21). See [CUSTOM_DOMAIN_SETUP.md](CUSTOM_DOMAIN_SETUP.md). |
 | 16  | **Load testing**                | Establish a performance baseline with Locust or similar.                                      |
 | 17  | **CI/CD failure notifications** | Add Slack / Discord webhook integration.                                                      |
-| 18  | **Expand test coverage**        | Currently minimal. Add E2E + auth tests.                                                      |
+| 18  | **Expand test coverage**        | ✅ 部分解決 (2026-02-24): `test-sns-all.sh` 追加、AWS/GCP 自動認証、3クラウドで binary PUT + imageUrl アクセス確認を実装。残作業: Azure 自動認証 (`--auto-token` 相当)、CI/CD への統合。 |
 | 19  | **Chaos engineering**           | Simulate network outages, DB failures, and cold-start spikes.                                 |
 
 ---
