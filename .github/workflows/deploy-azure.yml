@@ -556,34 +556,98 @@ jobs:
           sleep 5
 
           # Fix FC1 Flex Consumption deployment storage.
-          # The function app was created manually; its functionAppConfig.deployment.storage
-          # may point to a stale/deleted storage account (root cause of BlobUploadFailed/
-          # InaccessibleStorageException during zip deploy).
-          # Update it to the Pulumi-managed functions storage account via ARM PATCH.
-          echo "🔧 Fixing FC1 deployment storage configuration..."
-          FUNCTIONS_STORAGE_NAME="${{ steps.pulumi_outputs.outputs.functions_storage_name }}"
+          # Strategy: read the ACTUAL deployment storage account from the function app's
+          # ARM resource (functionAppConfig.deployment.storage.value), then ensure that
+          # storage account EXISTS and the correct connection string app setting is set.
+          echo "🔍 Reading FC1 deployment storage configuration from ARM..."
           SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null)
-          DEPLOY_CONTAINER="app-package-${FUNCTION_APP}"
+          FUNCTIONS_STORAGE_NAME="${{ steps.pulumi_outputs.outputs.functions_storage_name }}"
 
-          # Create deployment container if it doesn't exist (FC1 requires pre-existing container)
-          az storage container create \
-            --name "$DEPLOY_CONTAINER" \
-            --account-name "$FUNCTIONS_STORAGE_NAME" \
-            --auth-mode login \
-            --output none 2>/dev/null \
-            && echo "✅ Deployment container ready: $DEPLOY_CONTAINER" \
-            || echo "ℹ️  Container may already exist (OK)"
-
-          # PATCH the function app to point its FC1 deployment storage to the valid account
-          CONTAINER_URL="https://${FUNCTIONS_STORAGE_NAME}.blob.core.windows.net/${DEPLOY_CONTAINER}"
-          az rest \
-            --method PATCH \
+          # Read current functionAppConfig from ARM resource using jq
+          DEPLOY_STORAGE_URL=$(az rest \
+            --method GET \
             --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}?api-version=2023-12-01" \
-            --headers "Content-Type=application/json" \
-            --body "{\"properties\":{\"functionAppConfig\":{\"deployment\":{\"storage\":{\"type\":\"blobContainer\",\"value\":\"${CONTAINER_URL}\",\"authentication\":{\"type\":\"StorageAccountConnectionString\",\"storageAccountConnectionStringName\":\"DEPLOYMENT_STORAGE_CONNECTION_STRING\"}}}}}}" \
-            --output none 2>/dev/null \
-            && echo "✅ FC1 deployment storage updated to: ${CONTAINER_URL}" \
-            || echo "⚠️  Could not update FC1 deployment storage (non-fatal — will retry if needed)"
+            --output json 2>/dev/null \
+            | jq -r '.properties.functionAppConfig.deployment.storage.value // empty' 2>/dev/null || echo "")
+          DEPLOY_AUTH_TYPE=$(az rest \
+            --method GET \
+            --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}?api-version=2023-12-01" \
+            --output json 2>/dev/null \
+            | jq -r '.properties.functionAppConfig.deployment.storage.authentication.type // empty' 2>/dev/null || echo "")
+          DEPLOY_CONN_KEY=$(az rest \
+            --method GET \
+            --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}?api-version=2023-12-01" \
+            --output json 2>/dev/null \
+            | jq -r '.properties.functionAppConfig.deployment.storage.authentication.storageAccountConnectionStringName // "DEPLOYMENT_STORAGE_CONNECTION_STRING"' 2>/dev/null || echo "DEPLOYMENT_STORAGE_CONNECTION_STRING")
+
+          echo "📦 FC1 Deployment storage URL: ${DEPLOY_STORAGE_URL}"
+          echo "🔐 FC1 Auth type: ${DEPLOY_AUTH_TYPE} (connection key: ${DEPLOY_CONN_KEY})"
+
+          if [ -n "$DEPLOY_STORAGE_URL" ]; then
+            # Extract storage account name and container from URL
+            DEPLOY_STORAGE_ACCOUNT=$(echo "$DEPLOY_STORAGE_URL" | sed 's|https://||; s|\.blob\.core\.windows\.net.*||')
+            DEPLOY_STORAGE_CONTAINER=$(echo "$DEPLOY_STORAGE_URL" | sed 's|https://[^/]*/||; s|/.*||')
+            echo "📦 Storage account: ${DEPLOY_STORAGE_ACCOUNT}, Container: ${DEPLOY_STORAGE_CONTAINER}"
+
+            # Ensure the storage account exists (recreate if deleted)
+            if ! az storage account show --name "$DEPLOY_STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --output none 2>/dev/null; then
+              echo "⚠️  Deployment storage $DEPLOY_STORAGE_ACCOUNT does NOT exist — recreating..."
+              az storage account create \
+                --name "$DEPLOY_STORAGE_ACCOUNT" \
+                --resource-group "$RESOURCE_GROUP" \
+                --location japaneast \
+                --sku Standard_LRS \
+                --kind StorageV2 \
+                --allow-blob-public-access false \
+                --output none 2>/dev/null \
+                && echo "✅ Storage account recreated: $DEPLOY_STORAGE_ACCOUNT" \
+                || echo "⚠️  Could not create storage account (name globally taken or permissions)"
+            else
+              echo "✅ Deployment storage account exists: $DEPLOY_STORAGE_ACCOUNT"
+            fi
+
+            # Get connection string for the deployment storage account
+            DEPLOY_STORAGE_CONN=$(az storage account show-connection-string \
+              --name "$DEPLOY_STORAGE_ACCOUNT" \
+              --resource-group "$RESOURCE_GROUP" \
+              --query connectionString -o tsv 2>/dev/null || echo "")
+
+            if [ -n "$DEPLOY_STORAGE_CONN" ]; then
+              # Create deployment container if needed
+              az storage container create \
+                --name "${DEPLOY_STORAGE_CONTAINER:-deployments}" \
+                --connection-string "$DEPLOY_STORAGE_CONN" \
+                --output none 2>/dev/null \
+                && echo "✅ Container ${DEPLOY_STORAGE_CONTAINER:-deployments} ready" || true
+
+              # Update the app setting that Kudu reads for the connection string
+              az functionapp config appsettings set \
+                --name $FUNCTION_APP \
+                --resource-group $RESOURCE_GROUP \
+                --settings "${DEPLOY_CONN_KEY}=${DEPLOY_STORAGE_CONN}" \
+                --output none 2>/dev/null \
+                && echo "✅ ${DEPLOY_CONN_KEY} updated to point to $DEPLOY_STORAGE_ACCOUNT"
+            else
+              echo "⚠️  Could not get connection string for $DEPLOY_STORAGE_ACCOUNT"
+            fi
+          else
+            echo "⚠️  No FC1 deployment storage URL found — using ARM PATCH fallback"
+            DEPLOY_CONTAINER="app-package-${FUNCTION_APP}"
+            CONTAINER_URL="https://${FUNCTIONS_STORAGE_NAME}.blob.core.windows.net/${DEPLOY_CONTAINER}"
+            az storage container create \
+              --name "$DEPLOY_CONTAINER" \
+              --account-name "$FUNCTIONS_STORAGE_NAME" \
+              --auth-mode login \
+              --output none 2>/dev/null || true
+            az rest \
+              --method PATCH \
+              --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}?api-version=2023-12-01" \
+              --headers "Content-Type=application/json" \
+              --body "{\"properties\":{\"functionAppConfig\":{\"deployment\":{\"storage\":{\"type\":\"blobContainer\",\"value\":\"${CONTAINER_URL}\",\"authentication\":{\"type\":\"StorageAccountConnectionString\",\"storageAccountConnectionStringName\":\"DEPLOYMENT_STORAGE_CONNECTION_STRING\"}}}}}}" \
+              2>/dev/null \
+              && echo "✅ FC1 deployment storage updated via ARM PATCH" \
+              || echo "⚠️  ARM PATCH also failed"
+          fi
           sleep 15
 
           echo "📦 Deploying function app package (with retry logic)..."
