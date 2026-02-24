@@ -99,6 +99,7 @@
 - [Azure Flex Consumption: Kudu再起動](#azure-flex-consumption-kudu再起動)
 - [Azure FC1: InaccessibleStorageException（deployment storage 削除）](#azure-fc1-inaccessiblestorageexception削除)
 - [Azure FC1: WEBSITE_RUN_FROM_PACKAGE 残留による 404](#azure-fc1-websiterunfrompackage-残留による-404)
+- [Azure FC1: POST /uploads/presigned-urls → 500（AZURE_STORAGE_* 未設定）](#azure-fc1-post-uploadspresigned-urls--500azure_storage_-未設定)
 
 #### GCP
 
@@ -3142,6 +3143,135 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/deploy-azure.yml
 
 ---
 
+## Azure FC1: POST /uploads/presigned-urls → 500（AZURE_STORAGE_* 未設定）
+
+> **発生日:** 2026-02-24 / 本番甲1号機
+
+### 症状
+
+ブラウザの画像投稿時に `POST /uploads/presigned-urls` が HTTP 500 を返す。
+
+```
+POST https://<func>.japaneast-01.azurewebsites.net/api/HttpTrigger/uploads/presigned-urls
+500 (Internal Server Error)
+```
+
+ヘルスチェック (`/health`) は正常。入助・一覧取得は正常。画像ダウンロードおよび画像アップロード SAS URL 生成のみ失敗する。
+
+### 原因
+
+`azure_backend.py` の `generate_upload_urls()` は以下設定を参照する:
+
+```python
+account = self.storage_account   # settings.azure_storage_account_name
+key     = self.storage_key       # settings.azure_storage_account_key
+container = self.images_container  # settings.azure_storage_container
+
+sas_token = generate_blob_sas(
+    account_name=account,   # None の場合例外
+    account_key=key,        # None の場合例外
+    ...
+)
+```
+
+下記 3つの環境変数が Function App app settings に **設定されていなかった**:
+
+| 環境変数 | 正しい値 |
+|---|---|
+| `AZURE_STORAGE_ACCOUNT_NAME` | `mcadwebdiev0w` (本番) / `mcadwebd45ihd` (staging) |
+| `AZURE_STORAGE_ACCOUNT_KEY` | (ストレージアカウントキー) |
+| `AZURE_STORAGE_CONTAINER` | `images` |
+
+**なぜ漏れたか:** 最初の CI (`deploy-azure.yml`) で `az functionapp config appsettings set` 命令にこの 3 全が含まれていなかった。Cosmos DB や Auth の設定はあったが、画像ストレージの設定が CI に含まれていなかった。
+
+### 決定手法
+
+```bash
+# ストレージアカウントキーを取得
+STORAGE_KEY=$(az storage account keys list \
+  --account-name mcadwebdiev0w \
+  --resource-group multicloud-auto-deploy-production-rg \
+  --query "[0].value" --output tsv)
+
+# images コンテナがなければ作成
+az storage container create \
+  --name images \
+  --account-name mcadwebdiev0w \
+  --account-key "$STORAGE_KEY" \
+  --public-access off
+
+# Function App に env vars を設定
+az functionapp config appsettings set \
+  --name <FUNCTION_APP> \
+  --resource-group <RESOURCE_GROUP> \
+  --settings \
+    "AZURE_STORAGE_ACCOUNT_NAME=mcadwebdiev0w" \
+    "AZURE_STORAGE_ACCOUNT_KEY=${STORAGE_KEY}" \
+    "AZURE_STORAGE_CONTAINER=images"
+
+az functionapp restart --name <FUNCTION_APP> --resource-group <RESOURCE_GROUP>
+```
+
+**Blob CORS** は既に設定済みであるか確認:
+
+```bash
+az storage cors list --account-name mcadwebdiev0w --account-key "$STORAGE_KEY" --services b
+# AFD hostname 、カスタムドメイン、http://localhost:5173 の 3ルールが必要
+```
+
+CORS が未設定の場合:
+
+```bash
+# AFD URL
+az storage cors add --account-name mcadwebdiev0w --account-key "$STORAGE_KEY" --services b \
+  --origins "https://mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net" \
+  --methods "PUT,GET,HEAD,OPTIONS,DELETE" --allowed-headers "*" --exposed-headers "*" --max-age 3600
+# カスタムドメイン
+az storage cors add --account-name mcadwebdiev0w --account-key "$STORAGE_KEY" --services b \
+  --origins "https://www.azure.ashnova.jp" \
+  --methods "PUT,GET,HEAD,OPTIONS,DELETE" --allowed-headers "*" --exposed-headers "*" --max-age 3600
+```
+
+### 予防 / CI 修正
+
+`deploy-azure.yml` の `Deploy Function App` ステップで以下を定垎化済み (commit `856d6dc`):
+
+```yaml
+FRONTEND_STORAGE_NAME="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+IMAGES_STORAGE_KEY=$(az storage account keys list \
+  --account-name "$FRONTEND_STORAGE_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --query "[0].value" -o tsv)
+
+az functionapp config appsettings set ... \
+  AZURE_STORAGE_ACCOUNT_NAME="${FRONTEND_STORAGE_NAME}" \
+  AZURE_STORAGE_ACCOUNT_KEY="${IMAGES_STORAGE_KEY}" \
+  AZURE_STORAGE_CONTAINER="images"
+```
+
+### 診断チェックリスト
+
+```bash
+# 1. STORAGE env vars の確認
+az rest --method POST \
+  --url "https://management.azure.com/subscriptions/<SUB>/resourceGroups/<RG>/providers/Microsoft.Web/sites/<FUNC>/config/appsettings/list?api-version=2023-12-01" \
+  | jq '.properties | to_entries[] | select(.key | test("STORAGE")) | {(.key): .value}'
+
+# 2. images コンテナの存在確認
+az storage container list --account-name mcadwebdiev0w --account-key "$KEY" --query "[].name" --output tsv
+
+# 3. Blob CORS 確認
+az storage cors list --account-name mcadwebdiev0w --account-key "$KEY" --services b
+```
+
+### 該当ファイル
+
+- `.github/workflows/deploy-azure.yml` — `Deploy Function App` ステップ (commit `856d6dc`)
+- `services/api/app/backends/azure_backend.py` — `generate_upload_urls()` メソッド
+- `services/api/app/config.py` — `azure_storage_account_name` / `azure_storage_account_key` / `azure_storage_container`
+
+---
+
 ## 一般的なトラブルシューティングのヒント
 
 ### 1. Azure CLIのデバッグ
@@ -3215,7 +3345,7 @@ gcloud functions describe <name> --region <region> --format json
 
 | 日付       | 内容                                                                                                                                                                                                                                                                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-02-24 | 追加: Azure FC1 `InaccessibleStorageException`（deployment storage アカウント削除）、`WEBSITE_RUN_FROM_PACKAGE` 残留による 404、GitHub Actions YAML Python heredoc が block scalar を破壊する問題                                                                                                                                                       |
+| 2026-02-24 | 追加: Azure FC1 `InaccessibleStorageException`（deployment storage アカウント削除）、`WEBSITE_RUN_FROM_PACKAGE` 残留による 404、GitHub Actions YAML Python heredoc が block scalar を破壊する問題、Azure FC1 `POST /uploads/presigned-urls` 500（`AZURE_STORAGE_*` 未設定） |
 | 2026-02-17 | 🎯 **大幅改善**: クイック診断フローチャート、エラーメッセージ別インデックス、よくある問題トップ5を追加。全セクションに解決時間を表示。Azure Flex Consumption特有の問題（Partially Successful、defaultHostName null、Kudu再起動）を詳細ドキュメント化。AWS Lambda Runtime Errors、GCP Cloud Run 500 Errors、GitHub Actionsシークレット参照エラーを追加。 |
 | 2026-02-17 | 追加: リソース名ハードコード、デプロイメント競合、Gitパス、Pulumiディレクトリ、環境変数エスケープ、CloudFront、Lambda Layer、GitHub Secretsの全11トピック                                                                                                                                                                                               |
 | 2026-02-17 | 初版作成（CORS hardening デプロイの知見）                                                                                                                                                                                                                                                                                                               |
