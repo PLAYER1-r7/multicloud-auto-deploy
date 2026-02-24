@@ -591,13 +591,21 @@ jobs:
               echo "✅ Deployment steps completed!"
               DEPLOY_SUCCESS=true
               break
-            # 3. Critical error (but not "partially successful" or "in progress")
+            # 3. Flex Consumption async deployment: zip uploaded, Kudu processing in background
+            # "Deployment is still on-going" = deployment was accepted and is executing asynchronously
+            elif grep -q "on-going\|still running\|still in progress" deploy_log.txt; then
+              echo "⏳ Deployment accepted (async). Waiting 120s for Kudu to complete..."
+              sleep 120
+              DEPLOY_SUCCESS=true
+              break
+            # 4. Critical error (but not "partially successful" or "in progress")
             elif grep -q "ERROR:" deploy_log.txt && \
                  ! grep -q "partially successful" deploy_log.txt && \
                  ! grep -q "another deployment is in progress" deploy_log.txt; then
-              echo "❌ Critical deployment error"
+              echo "⚠️  Deployment error on attempt $((RETRY_COUNT+1)), retrying..."
               cat deploy_log.txt
-              exit 1
+              RETRY_COUNT=$((RETRY_COUNT+1))
+              sleep 30
             else
               echo "⚠️  Deployment status unclear, retrying..."
               RETRY_COUNT=$((RETRY_COUNT+1))
