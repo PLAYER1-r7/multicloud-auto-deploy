@@ -553,13 +553,13 @@ jobs:
             echo "Attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
             
             # Run deployment and capture output
-            # --build-remote false: use pre-built package (linux/amd64 + Python 3.12)
-            # Without this flag Azure tries to re-build server-side, causing wrong arch .so
+            # GitHub Actions runner is ubuntu-latest (x86_64), matching Azure Functions
+            # linux/amd64 runtime. No need for --build-remote false on FC1 plans.
+            # Note: --build-remote false on FC1 prevents Kudu from completing async extraction.
             az functionapp deployment source config-zip \
               --resource-group $RESOURCE_GROUP \
               --name $FUNCTION_APP \
               --src services/api/function-app.zip \
-              --build-remote false \
               --timeout 600 \
               2>&1 | tee deploy_log.txt || true
             
@@ -863,8 +863,8 @@ jobs:
           FUNC_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
           echo "Testing: ${FUNC_URL}/health"
 
-          # Wait for function to be ready (max 3 minutes)
-          max_attempts=36
+          # Wait for function to be ready (max 10 minutes for FC1 cold start + async deploy)
+          max_attempts=60
           attempt=0
           health_check_passed=false
 
@@ -876,7 +876,7 @@ jobs:
               break
             else
               echo "⏳ Waiting for function to be ready... (attempt $((attempt+1))/$max_attempts)"
-              sleep 5
+              sleep 10
               attempt=$((attempt+1))
             fi
           done
