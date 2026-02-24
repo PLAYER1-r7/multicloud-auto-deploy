@@ -1,7 +1,7 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-23 (セキュリティヘッダー追加・コールドスタート解消 — [AWS](#aws-ap-northeast-1), [GCP](#gcp-asia-northeast1), [Azure](#azure-japaneast))
+> Last verified: 2026-02-24 (Production動作確認セッション v3 — CDN全クラウド ✅ / AWS API ✅ / GCP API /limits 修復 ✅ / Azure API 修復 ✅ / AWS CF SecurityHeaders ✅)
 
 ---
 
@@ -22,18 +22,18 @@ CDN URL  : https://d1tf3uumcm4bo1.cloudfront.net
 API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 ```
 
-| Resource              | Name / ID                                                             | Status |
-| --------------------- | --------------------------------------------------------------------- | ------ |
-| CloudFront            | `E1TBH4R432SZBZ` (PriceClass_200: NA/EU/JP/KR/IN)                     | ✅     |
+| Resource              | Name / ID                                                                  | Status |
+| --------------------- | -------------------------------------------------------------------------- | ------ |
+| CloudFront            | `E1TBH4R432SZBZ` (PriceClass_200: NA/EU/JP/KR/IN)                          | ✅     |
 | CloudFront RHP        | `multicloud-auto-deploy-staging-security-headers` (HSTS + CSP + 4 headers) | ✅     |
-| S3 (frontend)         | `multicloud-auto-deploy-staging-frontend`                             | ✅     |
-| S3 (images)           | `multicloud-auto-deploy-staging-images` (CORS: \*)                    | ✅     |
-| Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, 512MB)             | ✅     |
-| Lambda (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (512MB, 30s)            | ✅     |
-| API Gateway           | `z42qmqdqac` (HTTP API v2)                                            | ✅     |
-| DynamoDB              | `multicloud-auto-deploy-staging-posts` (PAY_PER_REQUEST)              | ✅     |
-| Cognito               | Pool `ap-northeast-1_AoDxOvCib` / Client `1k41lqkds4oah55ns8iod30dv2` | ✅     |
-| WAF                   | WebACL attached to CloudFront                                         | ✅     |
+| S3 (frontend)         | `multicloud-auto-deploy-staging-frontend`                                  | ✅     |
+| S3 (images)           | `multicloud-auto-deploy-staging-images` (CORS: \*)                         | ✅     |
+| Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, 512MB)                  | ✅     |
+| Lambda (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (512MB, 30s)                 | ✅     |
+| API Gateway           | `z42qmqdqac` (HTTP API v2)                                                 | ✅     |
+| DynamoDB              | `multicloud-auto-deploy-staging-posts` (PAY_PER_REQUEST)                   | ✅     |
+| Cognito               | Pool `ap-northeast-1_AoDxOvCib` / Client `1k41lqkds4oah55ns8iod30dv2`      | ✅     |
+| WAF                   | WebACL attached to CloudFront                                              | ✅     |
 
 **Confirmed working (verified 2026-02-22)**:
 
@@ -178,6 +178,16 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 > Frontend is served as **React SPA** (Vite build) from object storage via CDN — `frontend_web` (Python SSR) is no longer used in production.
 > Full migration report: [REACT_SPA_MIGRATION_REPORT.md](REACT_SPA_MIGRATION_REPORT.md)
 
+### Production Status Summary (2026-02-23)
+
+| Cloud     | CDN Landing (`/`)                 | SNS App (`/sns/`) | API                                                                      |
+| --------- | --------------------------------- | ----------------- | ------------------------------------------------------------------------ |
+| **AWS**   | ✅ HTTP 200, 4737 bytes (Ashnova) | ✅ React SPA      | ✅ `/health` ok, `/limits` ok, `/posts` ok                               |
+| **Azure** | ✅ HTTP 200, 4608 bytes (Ashnova) | ✅ React SPA      | ✅ `/api/health` ok, `/api/limits` ok, `/api/posts` ok (修復 2026-02-24) |
+| **GCP**   | ✅ HTTP 200, 4737 bytes (Ashnova) | ✅ React SPA      | ✅ `/health` ok, `/limits` ok (修復 2026-02-24, revision 00013-big)      |
+
+**Landing page test (2026-02-23)**: `test-landing-pages.sh --env production` → **37/37 PASS (100%)** ✅
+
 ### Production Endpoints
 
 | Cloud     | CDN / Endpoint                                            | API Endpoint                                                                                     | Distribution ID        |
@@ -225,19 +235,122 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 
 #### Remaining Work
 
-- **GCP**: Once `multicloud-auto-deploy-production-ssl-cert-3ee2c3ce` becomes ACTIVE, `ashnova-production-cert-c41311` can be removed from the proxy
+- **GCP**: `multicloud-auto-deploy-production-ssl-cert-3ee2c3ce` は **ACTIVE** (2026-02-23 確認済み) ✅
+  → `ashnova-production-cert-c41311` を HTTPS プロキシから削除可能
 
 ```bash
-# Check GCP SSL cert status
-gcloud compute ssl-certificates describe multicloud-auto-deploy-production-ssl-cert-3ee2c3ce \
-  --global --format="value(managed.status)"
-# Once ACTIVE:
+# ashnova-production-cert-c41311 を削除して production cert のみ使用
 gcloud compute target-https-proxies update multicloud-auto-deploy-production-cdn-https-proxy \
-  --global \
+  --global --project=ashnova \
   --ssl-certificates=multicloud-auto-deploy-production-ssl-cert-3ee2c3ce
 ```
 
-#### All-Cloud Test Results (final check 2026-02-21)
+---
+
+### ✅ Production Issues — 全件解決済み (2026-02-24)
+
+#### ✅ 1. Azure Function App — 0 registered functions (API 404) — RESOLVED 2026-02-24
+
+**症状**: `https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net/api/HttpTrigger/health` → HTTP 404
+
+**確認事項**:
+
+- Host状態: Running ✅ (`v4.1046.100`, uptime: 805719ms)
+- Admin `/admin/functions` → `[]` (0件) ❌ → 関数コードが読み込まれていない
+- `AzureWebJobsStorage` → `AccountName=mcadfuncdiev0w` ✅ (修正済み)
+- `DEPLOYMENT_STORAGE_CONNECTION_STRING` → `AccountName=mcadfuncdiev0w` ✅ (修正済み)
+
+**根本原因 (推定)**:
+
+- 過去に非存在ストレージ `multicloudautodeploa148` が設定されていた
+- Kudu RemoteBuild モードでは validation check として blob upload を試みる → NXDOMAIN で失敗
+- デプロイが繰り返し失敗したため、wwwroot に有効なコードが存在しない
+- Deploy Function App ステップで `az webapp restart` 後も古いコード（または無コード）状態が継続
+
+**修正済み内容**:
+
+- `deploy-azure.yml` へ "Storage fix before zip deploy" ステップを追加 (v1.17.6)
+  - `az storage account show-connection-string` で `mcadfuncdiev0w` の接続文字列を取得
+  - zip deploy 前に `AzureWebJobsStorage` と `DEPLOYMENT_STORAGE_CONNECTION_STRING` を更新
+- 最新デプロイ (run 22310372431) では "Deploy Function App" が ✅ 成功
+- しかし "Verify Deployment" (health check 180秒) が ❌ タイムアウト → 関数がロードされていない
+
+**解決経緯 (2026-02-24 セッション v3):**
+
+多層的な根本原因を特定・修正:
+
+1. **Layer 1** (v1.17.6で修正済み): `AzureWebJobsStorage` / `DEPLOYMENT_STORAGE_CONNECTION_STRING` が非存在ストレージ `multicloudautodeploa148` を指していた
+2. **Layer 2** (セッションv2で修正): `functionAppConfig.deployment.storage.value` が `multicloudautodeploa148.blob.core.windows.net/app-package-...a4038fa` を指していた → Kudu ValidationStep `StorageAccessibleCheck` が NXDOMAIN で失敗 → Python urllib で PATCH して `mcadfuncdiev0w.blob.core.windows.net/app-package-...a4038fa` に修正
+3. **Layer 3 (根本原因)**: `functionAppConfig.runtime.version = "3.12"` (Python 3.12) だが、デプロイ試行に使用していた `function-app-amd64.zip` は Python 3.11 (`cpython-311-x86_64`) でビルドされたパッケージを使用 → Python バージョン不一致でモジュールロード失敗 → `admin/functions = []`
+4. **Layer 4**: コンテナ名不一致: `app-package-multicloudautodeployproductionfr-8540439`（実際の active コンテナ、旧 frontend_web コードを保持）と `functionAppConfig.deployment.storage.value` が指す `app-package-...a4038fa`（空）が別コンテナ
+
+**最終修正 (2026-02-24)**:
+
+```bash
+# Python 3.12 / linux/amd64 でパッケージをビルド
+docker run --rm --platform linux/amd64 -v "$(pwd):/work" python:3.12-slim \
+  pip install --target /work/.deployment-py312 --no-cache-dir -q -r /work/requirements-azure.txt
+# アプリコードをコピーしてzip作成
+cd .deployment-py312 && zip -r9 -q ../function-app-py312.zip .
+# デプロイ
+az functionapp deployment source config-zip \
+  --resource-group multicloud-auto-deploy-production-rg \
+  --name multicloud-auto-deploy-production-func \
+  --src services/api/function-app-py312.zip \
+  --build-remote false --timeout 180
+```
+
+**修復後の状態**:
+
+- `admin/functions` → `[{"name":"HttpTrigger",...}]` ✅
+- `/api/health` → `{"status":"ok","provider":"azure","version":"3.0.0"}` HTTP 200 ✅
+- `/api/limits` → `{"maxImagesPerPost":10}` HTTP 200 ✅
+- `/api/posts` → `{"items":[],...}` HTTP 200, Cosmos DB 接続 OK ✅
+
+**⚠️ CI/CD 残課題**: `deploy-azure.yml` の Build ステップが `python:3.11-slim` でパッケージをビルドしているが `functionAppConfig.runtime.version = "3.12"` → 次回CIデプロイ時に再発する可能性あり。`deploy-azure.yml` に `python:3.12-slim` へ変更が必要 (P1 残課題)。
+
+#### ✅ 3. GCP Production API — `/limits` エンドポイント 404 — RESOLVED 2026-02-24
+
+**解決**: セッションv2で修復。GCP production API を再デプロイ (revision `00013-big`)。`gcp-production-source.zip` を `gs://ashnova-multicloud-auto-deploy-production-function-source/function-source.zip` にアップロードして `gcloud functions deploy` 実行。CORS_ORIGINS に `https://www.gcp.ashnova.jp` を追加。
+
+**確認済み**: `GET /limits` → `{"maxImagesPerPost":10}` HTTP 200 ✅
+
+#### ✅ 4. AWS Production CloudFront — セキュリティヘッダーポリシー未設定 — RESOLVED 2026-02-24
+
+**解決**: セッションv2で修復。既存ポリシー `multicloud-auto-deploy-production-security-headers` (ID: `aaad020f-c94c-4143-ba2c-4b7921a1a6de`) を DefaultCacheBehavior と `/sns*` CacheBehavior の両方に適用。ETag `E3P5ROKL5A1OLE` → 更新後 `E3JWKAKR8XB7XF`。
+
+**確認済み**: CloudFront Distribution `E214XONKTXJEJD` に HSTS/CSP/X-Content-Type-Options/X-Frame-Options/Referrer-Policy/XSS-Protection ポリシー適用 ✅
+
+---
+
+#### 2. GCP Pulumi state drift (非ブロッキング)
+
+**症状**: `pulumi up` が `ManagedSslCertificate` Error 400 (in use) + `URLMap` Error 412 (invalid fingerprint) で失敗
+
+**影響**: GCP production は完全に動作中 ✅。CI/CD の GCP deploy ワークフローが失敗するだけ
+
+**解決方法**:
+
+```bash
+cd infrastructure/pulumi/gcp
+pulumi stack select production
+pulumi refresh --yes  # Pulumiの状態をGCPの実際の状態に同期
+pulumi up --yes       # 差分を適用
+```
+
+#### 3. develop ブランチが main から遅延
+
+**現状**: `develop` は v1.17.1、`main` は v1.17.6
+
+**解決方法**:
+
+```bash
+git checkout develop
+git merge main --no-ff -m "chore: sync develop with main (v1.17.6)"
+git push origin develop
+```
+
+---
 
 ```
 test-cloud-env.sh production → PASS: 14, FAIL: 0, WARN: 3 (all POST 401 = expected auth guard)

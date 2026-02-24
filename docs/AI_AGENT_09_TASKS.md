@@ -1,7 +1,7 @@
 # 09 — Remaining Tasks
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last updated: 2026-02-22  
+> Last updated: 2026-02-23  
 > **AI Agent Note**: Update this file when a task is resolved.
 
 ---
@@ -10,33 +10,54 @@
 
 ```
 Infrastructure (Pulumi):    ✅ All 3 clouds staging+production deployed
-AWS API:                    ✅ Fully operational (12 bugs fixed 2026-02-22, see AWS_SNS_FIX_REPORT_20260222.md)
-GCP API (staging):          ✅ CRUD verified
-GCP API (production):       ✅ CRUD verified
-GCP Firebase Auth:          ✅ Google Sign-In + image upload/display verified (2026-02-21)
-Azure API:                  ✅ Operational (POST 201 / GET 200 confirmed)
-All CI/CD pipelines:        ✅ Green (2026-02-21 commit 27a44af)
-Custom Domains:             ✅ All 3 clouds live (2026-02-21)
-  www.aws.ashnova.jp:       ✅ HTTPS OK
-  www.gcp.ashnova.jp:       ✅ HTTPS OK
-  www.azure.ashnova.jp:     ✅ HTTPS OK (⚠️ /sns/* intermittent 502 under investigation)
-Azure WAF:                  ❌ Not configured
-Integration tests:          ⚠️ Not yet run (blockers resolved)
+AWS API (production):       ✅ {"status":"ok","provider":"aws","version":"3.0.0"}
+GCP API (production):       ✅ {"status":"ok","provider":"gcp","version":"3.0.0"}
+Azure API (production):     ❌ 0 registered functions — Function App起動後に関数コードが読み込まれない
+Landing Pages (production): ✅ 37/37 PASS — AWS/Azure/GCP全クラウド 4400-4450 bytes 正常コンテンツ
+Custom Domains (all):       ✅ www.aws/azure/gcp.ashnova.jp HTTPS 200
+CI/CD pipelines:
+  deploy-azure.yml:         ✅ YAML修正済み / ⚠️ Function App deply後にVerify Deploymentが失敗
+  deploy-gcp.yml:           ✅ YAML修正済み (python heredoc→jq) / ⚠️ Pulumi state drift
+  deploy-landing-azure.yml: ✅ 修正済み — staging hardcoded → environment-aware
+  その他:                   ✅ 全10ワークフロー YAML valid
+develop branch sync:        ❌ main v1.17.6 に対してdevelopがv1.17.1で遅延
 ```
 
 ---
 
-## 🔴 High Priority Tasks
+## 🔴 High Priority Tasks (2026-02-23 update)
+
+### NEW: Azure Function App — 0 registered functions after deploy
+
+| #   | Task                                                   | Description                                                                                                                                                                                 | Reference                 |
+| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| 0a  | **Azure Function App 関数登録0件の修正 (最優先)**       | `/admin/functions` が `[]` を返す。Host は Running (`v4.1046.100`) だがコードがロードされていない。`--remote-build false` もしくは `WEBSITE_RUN_FROM_PACKAGE` 方式を試みる。 | [STATUS#1](AI_AGENT_06_STATUS.md#1-azure-function-app--0-registered-functions-api-404) |
+| 0b  | **GCP Pulumi state drift 修正 (非ブロッキング)**        | `ManagedSslCertificate` 400 + `URLMap` 412 で `pulumi up` 失敗。`pulumi refresh` で解消予定。                                                                                               | [STATUS#2](AI_AGENT_06_STATUS.md#2-gcp-pulumi-state-drift-非ブロッキング) |
+| 0c  | **develop ブランチを main (v1.17.6) に同期**            | `git checkout develop && git merge main --no-ff && git push`                                                                                                                                | —                         |
+
+### 既存タスク
 
 | #   | Task                                       | Description                                                                                           | Reference                                                                          |
 | --- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| 0   | **Resolve Azure AFD intermittent 502 errors**  | AFD returns 502 immediately on ~50% of `/sns/*` requests. Likely caused by stale TCP connections on Dynamic Consumption plan. | [AZURE_SNS_FIX_REPORT.md](AZURE_SNS_FIX_REPORT.md#issue-2) |
 | 1   | **Run integration tests (≥80% pass)**      | All backend blockers resolved. Run full suite on AWS/GCP/Azure and confirm.                           | [INTEGRATION_TESTS_GUIDE.md](INTEGRATION_TESTS_GUIDE.md)                           |
 | 2   | **Verify Azure `PUT /posts` endpoint**     | End-to-end PUT routing on Azure has not been confirmed. Test and fix.                                 | —                                                                                  |
-| 3   | **~~Confirm DynamoDB `PostIdIndex` GSI~~** ✅ | GSI confirmed. `GET /posts/{id}` implemented and working (2026-02-22). | [RB-09](AI_AGENT_07_RUNBOOKS.md#rb-09-verify--create-the-dynamodb-postidindex-gsi) |
 | 4   | **Fix `SNS:Unsubscribe` permission error** | `DELETE /posts` fails on SNS Unsubscribe call. Add `sns:Unsubscribe` to IAM or redesign the flow.     | —                                                                                  |
 | 5   | **GCP HTTPS**                              | GCP frontend is HTTP only. Requires `TargetHttpsProxy` + Managed SSL certificate.                     | [09_SECURITY](AI_AGENT_08_SECURITY.md)                                             |
 | 6   | **Enable Azure WAF**                       | WAF policy not applied to Front Door Standard SKU.                                                    | [09_SECURITY](AI_AGENT_08_SECURITY.md)                                             |
+
+---
+
+## 2026-02-23 セッションで解決済みの問題
+
+| 問題 | 修正内容 | コミット |
+| ---- | -------- | ------- |
+| deploy-azure.yml: `run:` キー重複 (YAML error) | `Build and Package Azure Function` ステップ追加 | v1.16.2 |
+| deploy-azure.yml: `$RG_NAME` 未定義 (`az functionapp config hostname list` 失敗) | `RG_NAME=$(pulumi stack output ...)` に修正 | v1.17.3 |
+| deploy-gcp.yml: Python heredoc が YAML block scalar を壊す | Firebase domain更新を `jq` コマンドに置き換え | v1.17.2 |
+| deploy-azure.yml: AFD route に custom domain が未リンク | AFD route PATCH 後、ワークフローに "Link Custom Domain" ステップ追加 | v1.17.4 |
+| deploy-azure.yml: `AzureWebJobsStorage` が存在しないSA `multicloudautodeploa148` を指していた | zip deploy前にストレージを `mcadfuncdiev0w` に修正するステップ追加 | v1.17.6 |
+| deploy-landing-azure.yml: staging にハードコード（production デプロイ不可） | environment-aware に修正 (`main` → production SA `mcadwebdiev0w`) | v1.17.5 |
+| Azure CDN landing page: 843バイトのReact SPA が配信されていた | 上記 deploy-landing-azure.yml 修正により解消 → 4412バイトの正しいコンテンツ | v1.17.5 |
 
 ---
 

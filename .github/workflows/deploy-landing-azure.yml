@@ -19,12 +19,6 @@ on:
           - staging
           - production
 
-env:
-  # Landing page is deployed to the same storage account as the frontend (root level)
-  # so Azure Front Door serves it at / while the React SNS app lives under /sns/
-  AZURE_STORAGE_ACCOUNT: mcadwebd45ihd
-  AZURE_RESOURCE_GROUP: multicloud-auto-deploy-staging-rg
-
 jobs:
   deploy-landing:
     name: Deploy Landing Page to Azure Storage
@@ -34,6 +28,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Determine Environment
+        id: env
+        run: |
+          # Use workflow_dispatch input if available, otherwise derive from branch
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            ENV="production"
+          else
+            ENV="staging"
+          fi
+
+          if [ "$ENV" = "production" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "storage_account=mcadwebdiev0w" >> $GITHUB_OUTPUT
+            echo "resource_group=multicloud-auto-deploy-production-rg" >> $GITHUB_OUTPUT
+            echo "afd_profile=multicloud-auto-deploy-production-fd" >> $GITHUB_OUTPUT
+            echo "afd_endpoint=mcad-production-diev0w" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "storage_account=mcadwebd45ihd" >> $GITHUB_OUTPUT
+            echo "resource_group=multicloud-auto-deploy-staging-rg" >> $GITHUB_OUTPUT
+            echo "afd_profile=multicloud-auto-deploy-staging-fd" >> $GITHUB_OUTPUT
+            echo "afd_endpoint=mcad-staging-d45ihd" >> $GITHUB_OUTPUT
+          fi
+          echo "🌍 Deploying to: $ENV"
+
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -41,24 +62,25 @@ jobs:
 
       - name: Deploy to Azure Storage
         run: |
+          echo "📤 Deploying landing page to ${{ steps.env.outputs.environment }} storage: ${{ steps.env.outputs.storage_account }}"
           az storage blob upload-batch \
-            --account-name ${{ env.AZURE_STORAGE_ACCOUNT }} \
+            --account-name ${{ steps.env.outputs.storage_account }} \
             --auth-mode key \
             --destination '$web' \
             --source static-site/ \
             --pattern "*.html" \
             --overwrite \
-            --content-cache-control "public, max-age=3600"
+            --content-cache-control "public, max-age=3600" \
+            --content-type "text/html; charset=utf-8"
 
       - name: Purge Azure Front Door Cache
         run: |
           az afd endpoint purge \
-            --profile-name multicloud-auto-deploy-staging-fd \
-            --resource-group multicloud-auto-deploy-staging-rg \
-            --endpoint-name mcad-staging-d45ihd \
+            --profile-name ${{ steps.env.outputs.afd_profile }} \
+            --resource-group ${{ steps.env.outputs.resource_group }} \
+            --endpoint-name ${{ steps.env.outputs.afd_endpoint }} \
             --content-paths "/*"
 
       - name: Deployment Success
         run: |
-          echo "✅ Landing page deployed successfully!"
-          echo "🌐 URL: https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/"
+          echo "✅ Landing page deployed successfully to ${{ steps.env.outputs.environment }}!"
