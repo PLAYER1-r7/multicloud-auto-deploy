@@ -178,6 +178,54 @@ jobs:
           echo "posts_table_name=$(pulumi stack output posts_table_name)" >> $GITHUB_OUTPUT
           echo "images_bucket_name=$(pulumi stack output images_bucket_name)" >> $GITHUB_OUTPUT
           echo "secret_name=$(pulumi stack output secret_name)" >> $GITHUB_OUTPUT
+          echo "acm_certificate_arn=$(pulumi stack output acm_certificate_arn 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+
+      - name: Ensure CloudFront alias + ACM cert (post-Pulumi safety net)
+        run: |
+          CD="${{ steps.pulumi_outputs.outputs.cloudfront_distribution_id }}"
+          CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          STACK_FILE="infrastructure/pulumi/aws/Pulumi.${STACK_NAME}.yaml"
+          ACM_CERT_ARN=$(grep -E "^\s+multicloud-auto-deploy-aws:acmCertificateArn:" "$STACK_FILE" 2>/dev/null \
+            | awk '{print $2}' | tr -d '"')
+
+          if [[ -z "$CUSTOM_DOMAIN" || -z "$ACM_CERT_ARN" || -z "$CD" ]]; then
+            echo "⏭️  No custom domain or ACM cert configured — skipping alias check"
+            exit 0
+          fi
+
+          CURRENT_ALIAS=$(aws cloudfront get-distribution --id "$CD" \
+            --query 'Distribution.DistributionConfig.Aliases.Items[0]' --output text 2>/dev/null || echo "None")
+          if [[ "$CURRENT_ALIAS" == "$CUSTOM_DOMAIN" ]]; then
+            echo "✅ CloudFront alias already set to $CUSTOM_DOMAIN — no action needed"
+            exit 0
+          fi
+
+          echo "⚠️  CloudFront alias is '$CURRENT_ALIAS' (expected '$CUSTOM_DOMAIN') — restoring..."
+          ETAG=$(aws cloudfront get-distribution-config --id "$CD" --query 'ETag' --output text)
+          aws cloudfront get-distribution-config --id "$CD" --query 'DistributionConfig' --output json > /tmp/cf-dist.json
+          export CF_CUSTOM_DOMAIN="$CUSTOM_DOMAIN"
+          export CF_ACM_CERT_ARN="$ACM_CERT_ARN"
+          python3 - << 'PYEOF'
+import json, os
+with open('/tmp/cf-dist.json') as f:
+    cfg = json.load(f)
+cfg['Aliases'] = {'Quantity': 1, 'Items': [os.environ['CF_CUSTOM_DOMAIN']]}
+cfg['ViewerCertificate'] = {
+    'ACMCertificateArn': os.environ['CF_ACM_CERT_ARN'],
+    'SSLSupportMethod': 'sni-only',
+    'MinimumProtocolVersion': 'TLSv1.2_2021',
+    'CertificateSource': 'acm'
+}
+cfg['ViewerCertificate'].pop('CloudFrontDefaultCertificate', None)
+with open('/tmp/cf-dist.json', 'w') as f:
+    json.dump(cfg, f)
+PYEOF
+          aws cloudfront update-distribution --id "$CD" --if-match "$ETAG" \
+            --distribution-config file:///tmp/cf-dist.json \
+            --query 'Distribution.{Status:Status,Aliases:DistributionConfig.Aliases.Items}' \
+            --output json
+          echo "✅ CloudFront alias + ACM cert restored for $CUSTOM_DOMAIN"
 
       - name: Build and Deploy Frontend
         run: |
