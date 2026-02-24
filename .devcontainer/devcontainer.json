@@ -26,32 +26,78 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        // Cloud platform tools
         "pulumi.pulumi-lsp-client",
         "ms-azuretools.vscode-docker",
-        "dbaeumer.vscode-eslint",
-        "esbenp.prettier-vscode",
-        "ms-python.python",
-        "ms-python.vscode-pylance",
-        "redhat.vscode-yaml",
-        "github.vscode-github-actions",
         "ms-vscode.azure-account",
         "amazonwebservices.aws-toolkit-vscode",
-        "googlecloudtools.cloudcode"
+        "googlecloudtools.cloudcode",
+        // Python
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-python.mypy-type-checker",
+        "ms-python.black-formatter",
+        // JavaScript / TypeScript / React
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "vitest.explorer",
+        // GitHub / CI-CD
+        "github.vscode-github-actions",
+        "github.vscode-pull-request-github",
+        // General
+        "redhat.vscode-yaml",
+        "tamasfe.even-better-toml",
+        "ms-vscode.makefile-tools",
+        "streetsidesoftware.code-spell-checker"
       ],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "bash",
         "editor.formatOnSave": true,
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
+        "editor.rulers": [
+          100
+        ],
+        // Python: use ruff as the default formatter + linter
+        "[python]": {
+          "editor.tabSize": 4,
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.fixAll.ruff": "explicit",
+            "source.organizeImports.ruff": "explicit"
+          }
+        },
+        // JavaScript / TypeScript: ESLint auto-fix on save
+        "[javascript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[typescriptreact]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
         "editor.codeActionsOnSave": {
           "source.fixAll.eslint": "explicit"
         },
-        "editor.tabSize": 2,
-        "editor.insertSpaces": true,
-        "[python]": {
-          "editor.tabSize": 4
-        },
+        // Markdown
         "[markdown]": {
           "editor.wordWrap": "on"
-        }
+        },
+        // Ruff settings
+        "ruff.lint.enable": true,
+        "ruff.format.enable": true,
+        // Mypy settings
+        "mypy-type-checker.importStrategy": "fromEnvironment",
+        // Tailwind CSS
+        "tailwindCSS.includeLanguages": {
+          "typescriptreact": "html"
+        },
+        // Vitest
+        "vitest.enable": true
       }
     }
   },

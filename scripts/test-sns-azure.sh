@@ -128,7 +128,8 @@ if [[ $_ENV_ == production ]]; then
   [[ $_API_URL_EXPLICIT == false ]] && API_URL="${API_URL:-https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net/api}"
 else
   FD_URL="${FD_URL:-https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net}"
-  API_URL="${API_URL:-https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net}"
+  # Azure Functions default routePrefix is "api", so /health is at /api/health
+  API_URL="${API_URL:-https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api}"
 fi
 [[ $READ_ONLY == true ]] && SKIP_CLEANUP=true
 
@@ -136,8 +137,17 @@ FD_URL="${FD_URL%/}"
 API_URL="${API_URL%/}"
 
 # ── dependency check ──────────────────────────────────────────
-command -v curl >/dev/null 2>&1 || die "curl is required but not installed"
-command -v jq   >/dev/null 2>&1 || die "jq is required but not installed"
+command -v curl    >/dev/null 2>&1 || die "curl is required but not installed"
+command -v jq      >/dev/null 2>&1 || die "jq is required but not installed"
+command -v python3 >/dev/null 2>&1 || die "python3 is required but not installed"
+
+# ── shared test image (1x1 transparent PNG, 68 bytes) ───────
+python3 -c "
+import base64, sys
+sys.stdout.buffer.write(base64.b64decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+))
+" > /tmp/test_upload_azure.png 2>/dev/null || true
 
 # ── test runner ───────────────────────────────────────────────
 LAST_STATUS=0
@@ -250,8 +260,19 @@ run_test "API GET /posts returns 200 (unauthenticated)" \
 if echo "$LAST_BODY" | jq -e '.items' >/dev/null 2>&1; then
   POST_COUNT=$(echo "$LAST_BODY" | jq '.items | length')
   ok "  .items array present (${POST_COUNT} posts)"
+elif echo "$LAST_BODY" | jq -e '.posts' >/dev/null 2>&1; then
+  POST_COUNT=$(echo "$LAST_BODY" | jq '.posts | length')
+  ok "  .posts array present (${POST_COUNT} posts)"
 else
-  fail "  .items missing in /posts response"
+  fail "  .items/.posts missing in /posts response"
+fi
+
+# imageUrls に直接Blob URL (SASなし) が含まれていないことを確認
+DIRECT_BLOB_URLS=$(echo "$LAST_BODY" | jq -r '[.items // .posts // [] | .[] | .imageUrls // [] | .[] | select(startswith("https://") and (contains("blob.core.windows.net")) and (contains("?sv=") | not) and (contains("?se=") | not) and (contains("sig=") | not))] | length' 2>/dev/null || echo "0")
+if [[ "$DIRECT_BLOB_URLS" == "0" ]]; then
+  ok "  No direct Blob URLs (all image URLs have SAS token or no images) ✓"
+else
+  fail "  $DIRECT_BLOB_URLS direct Blob URL(s) without SAS found — 409 will occur on display!"
 fi
 
 # ════════════════════════════════════════════════════════════
@@ -361,12 +382,68 @@ else
     --header "$AUTHH" \
     --data '{"count":1,"contentTypes":["image/jpeg"]}'
 
-  if echo "$LAST_BODY" | jq -e '.urls[0].url' >/dev/null 2>&1; then
+  UPLOAD_URL_RAW=$(echo "$LAST_BODY" | jq -r '.urls[0].url // .[0].url // .[0].uploadUrl // ""' 2>/dev/null || echo "")
+  UPLOAD_KEY_RAW=$(echo "$LAST_BODY" | jq -r '.urls[0].key // .urls[0].imageKey // ""' 2>/dev/null || echo "")
+  if [[ -n "$UPLOAD_URL_RAW" && "$UPLOAD_URL_RAW" != "null" ]]; then
     ok "  Presigned upload URL generated (Blob Storage SAS)"
-  elif echo "$LAST_BODY" | jq -e '.[0].url // .[0].uploadUrl' >/dev/null 2>&1; then
-    ok "  Presigned upload URL generated (legacy response format)"
+    if echo "$UPLOAD_URL_RAW" | grep -qE 'sig=|sv='; then
+      ok "    Upload URL contains SAS token ✓"
+    else
+      warn "    Upload URL may lack SAS token: ${UPLOAD_URL_RAW:0:80}"
+    fi
   else
     fail "  Presigned URL missing in response"
+  fi
+
+  # 5-4a. ★ Binary PUT: 実際にテスト画像を Azure Blob へアップロード
+  UPLOAD_REAL_POST_ID=""
+  if [[ -n "$UPLOAD_URL_RAW" && "$UPLOAD_URL_RAW" != "null" && -s /tmp/test_upload_azure.png ]]; then
+    PUT_AZ_STATUS=$(curl -s -o /tmp/put_resp_azure.txt -w "%{http_code}" \
+      -X PUT \
+      -H "x-ms-blob-type: BlockBlob" \
+      -H "Content-Type: image/jpeg" \
+      --data-binary @/tmp/test_upload_azure.png \
+      --max-time 20 \
+      "$UPLOAD_URL_RAW" 2>/dev/null || echo "000")
+    if [[ "$PUT_AZ_STATUS" == "201" || "$PUT_AZ_STATUS" == "200" ]]; then
+      ok "  PUT test image → Azure Blob SAS URL: HTTP $PUT_AZ_STATUS ✓"
+    else
+      fail "  PUT test image → Azure Blob: HTTP $PUT_AZ_STATUS (expected 201)"
+      [[ -s /tmp/put_resp_azure.txt ]] && echo "  Response: $(head -c 200 /tmp/put_resp_azure.txt)"
+    fi
+
+    # 4b. アップロードしたキーで投稿を作成し imageUrls がアクセス可能か検証
+    if [[ -n "$UPLOAD_KEY_RAW" && "$UPLOAD_KEY_RAW" != "null" && ("$PUT_AZ_STATUS" == "201" || "$PUT_AZ_STATUS" == "200") ]]; then
+      IMG_POST_REAL_DATA=$(python3 -c "import json; print(json.dumps({'content':'[test] Azure E2E real image upload', 'imageKeys':['$UPLOAD_KEY_RAW']}))")
+      run_test "POST /posts with real uploaded imageKey returns 201" \
+        POST "$API_URL/posts" \
+        --header "$AUTHH" \
+        --data "$IMG_POST_REAL_DATA" \
+        --expect 201
+      UPLOAD_REAL_POST_ID=$(echo "$LAST_BODY" | jq -r '.id // .postId // ""' 2>/dev/null)
+      [[ -n "$UPLOAD_REAL_POST_ID" && "$UPLOAD_REAL_POST_ID" != "null" ]] && CREATED_POST_IDS+=("$UPLOAD_REAL_POST_ID")
+
+      # GET /posts/:id → imageUrls が HTTP 200 で取得できるか確認 (SASあり read URL)
+      if [[ -n "$UPLOAD_REAL_POST_ID" && "$UPLOAD_REAL_POST_ID" != "null" ]]; then
+        run_test "GET /posts/$UPLOAD_REAL_POST_ID returns 200" \
+          GET "$API_URL/posts/$UPLOAD_REAL_POST_ID" --header "$AUTHH"
+        REAL_BLOB_URL=$(echo "$LAST_BODY" | jq -r '.imageUrls[0] // ""' 2>/dev/null)
+        if [[ -n "$REAL_BLOB_URL" && "$REAL_BLOB_URL" != "null" ]]; then
+          BLOB_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$REAL_BLOB_URL" 2>/dev/null || echo "000")
+          if [[ "$BLOB_HTTP" == "200" ]]; then
+            ok "  GET imageUrl (Blob SAS read URL) → HTTP 200 ✓ (image displayable)"
+          else
+            fail "  GET imageUrl → HTTP $BLOB_HTTP (image not displayable!) URL: ${REAL_BLOB_URL:0:100}"
+          fi
+        else
+          warn "  No imageUrls in response — skipping accessibility check"
+        fi
+      fi
+    else
+      warn "  key not in response or PUT failed — skipping real-upload post test"
+    fi
+  else
+    warn "  No presigned URL or test PNG missing — skipping binary PUT test"
   fi
 
   # 5-5. Create post with imageKeys (React SPA format)
@@ -385,11 +462,57 @@ print(json.dumps({'content': '[test] Azure E2E post with imageKeys', 'imageKeys'
     IMG_POST_ID=$(echo "$LAST_BODY" | jq -r '.id // .postId // ""')
     [[ -n "$IMG_POST_ID" && "$IMG_POST_ID" != "null" ]] && CREATED_POST_IDS+=("$IMG_POST_ID")
     ok "  Post with imageKeys created: id=$IMG_POST_ID"
+
+    # ── 5-5a. 作成レスポンスの imageUrls に SAS トークンが含まれているか検証 ──
+    IMG_URLS=$(echo "$LAST_BODY" | jq -r '.imageUrls // [] | .[]' 2>/dev/null || echo "")
+    IMG_URL_COUNT=$(echo "$LAST_BODY" | jq -r '.imageUrls // [] | length' 2>/dev/null || echo "0")
+    if [[ "$IMG_URL_COUNT" -gt 0 ]]; then
+      DIRECT=$(echo "$LAST_BODY" | jq -r '[.imageUrls // [] | .[] | select(startswith("https://") and (contains("blob.core.windows.net")) and (contains("?sv=") | not) and (contains("?se=") | not) and (contains("sig=") | not))] | length' 2>/dev/null || echo "0")
+      SAS_COUNT=$(echo "$LAST_BODY" | jq -r '[.imageUrls // [] | .[] | select(contains("sig=") or contains("sv="))] | length' 2>/dev/null || echo "0")
+      if [[ "$DIRECT" == "0" && "$SAS_COUNT" -gt 0 ]]; then
+        ok "    create_post response: $SAS_COUNT/$IMG_URL_COUNT image URL(s) have SAS token ✓ (no direct Blob URLs)"
+      elif [[ "$DIRECT" -gt 0 ]]; then
+        fail "    create_post response: $DIRECT direct Blob URL(s) without SAS — 409 on display!"
+        echo "$IMG_URLS" | head -3 | while read u; do echo "      URL: ${u:0:100}"; done
+      else
+        warn "    create_post response: $IMG_URL_COUNT URL(s) but SAS pattern not detected"
+      fi
+    else
+      ok "    create_post response: no imageUrls (expected — imageKeys stored, not validated against Blob)"
+    fi
+
+    # ── 5-5b. GET /posts/:id でも SAS URL が返るか確認 ──
+    if [[ -n "$IMG_POST_ID" && "$IMG_POST_ID" != "null" ]]; then
+      run_test "GET /posts/$IMG_POST_ID (with imageKeys) returns 200" \
+        GET "$API_URL/posts/$IMG_POST_ID" --header "$AUTHH"
+      GET_IMG_URLS=$(echo "$LAST_BODY" | jq -r '.imageUrls // [] | length' 2>/dev/null || echo "0")
+      if [[ "$GET_IMG_URLS" -gt 0 ]]; then
+        DIRECT_GET=$(echo "$LAST_BODY" | jq -r '[.imageUrls // [] | .[] | select(startswith("https://") and (contains("blob.core.windows.net")) and (contains("?sv=") | not) and (contains("?se=") | not) and (contains("sig=") | not))] | length' 2>/dev/null || echo "0")
+        SAS_GET=$(echo "$LAST_BODY" | jq -r '[.imageUrls // [] | .[] | select(contains("sig=") or contains("sv="))] | length' 2>/dev/null || echo "0")
+        if [[ "$DIRECT_GET" == "0" && "$SAS_GET" -gt 0 ]]; then
+          ok "    GET response: $SAS_GET/$GET_IMG_URLS image URL(s) have SAS token ✓"
+        elif [[ "$DIRECT_GET" -gt 0 ]]; then
+          fail "    GET response: $DIRECT_GET direct Blob URL(s) without SAS — 409 on display!"
+        else
+          warn "    GET response: $GET_IMG_URLS URL(s) but SAS pattern not detected"
+        fi
+      else
+        ok "    GET response: imageUrls empty (dummy imageKeys stored but not validated against Blob)"
+      fi
+    fi
   fi
 
   # 5-6. List posts — should include ours
   run_test "GET /posts returns list with test posts" \
     GET "$API_URL/posts?limit=20" --header "$AUTHH"
+
+  # imageUrls の SAS 検証 (一覧レスポンス)
+  DIRECT_LIST=$(echo "$LAST_BODY" | jq -r '[.items // .posts // [] | .[] | .imageUrls // [] | .[] | select(startswith("https://") and (contains("blob.core.windows.net")) and (contains("?sv=") | not) and (contains("?se=") | not) and (contains("sig=") | not))] | length' 2>/dev/null || echo "0")
+  if [[ "$DIRECT_LIST" == "0" ]]; then
+    ok "  /posts list: no direct Blob URL without SAS ✓"
+  else
+    fail "  /posts list: $DIRECT_LIST direct Blob URL(s) without SAS found!"
+  fi
 
   # ══════════════════════════════════════════════════════
   sep

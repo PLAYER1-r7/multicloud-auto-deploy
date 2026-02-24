@@ -42,11 +42,16 @@ tfplan
 Pulumi.*.yaml
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
 *~
+# Commit VS Code project config; ignore personal/machine-specific overrides
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
 
 # OS
 .DS_Store

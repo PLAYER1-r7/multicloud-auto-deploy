@@ -52,6 +52,13 @@ jobs:
             --exclude "*" \
             --include "*.html"
 
+      - name: Set AWS-specific landing page as root index.html
+        run: |
+          # Deploy aws/index.html as root index.html for AWS CloudFront
+          aws s3 cp static-site/aws/index.html s3://${{ env.S3_BUCKET }}/index.html \
+            --content-type "text/html; charset=utf-8" \
+            --cache-control "public, max-age=3600"
+
       - name: Invalidate CloudFront Cache
         run: |
           aws cloudfront create-invalidation \

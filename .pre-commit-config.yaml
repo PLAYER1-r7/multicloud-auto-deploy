@@ -1,0 +1,64 @@
+repos:
+  # ── General code hygiene ────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: "^docs/"
+      - id: end-of-file-fixer
+        exclude: "^docs/"
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      # Prevent accidentally committed secrets / large files
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=500]
+
+  # ── Python: ruff (lint auto-fix + import sort + format) ────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.7
+    hooks:
+      - id: ruff
+        name: "ruff lint (auto-fix)"
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^services/api/
+      - id: ruff-format
+        name: "ruff format"
+        files: ^services/api/
+
+  # ── Python: mypy static type checking ──────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.1
+    hooks:
+      - id: mypy
+        name: "mypy type check"
+        files: ^services/api/app/
+        args: [--ignore-missing-imports]
+        additional_dependencies:
+          - fastapi
+          - pydantic
+
+  # ── Frontend: TypeScript type check ────────────────────────────────────────
+  - repo: local
+    hooks:
+      - id: tsc
+        name: "TypeScript type check (frontend_react)"
+        language: node
+        entry: bash -c "cd services/frontend_react && npx tsc --noEmit"
+        files: ^services/frontend_react/src/
+        pass_filenames: false
+        types: [file]
+
+  # ── GitHub Actions: validate workflow YAML ──────────────────────────────────
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.4
+    hooks:
+      - id: actionlint
+        name: "actionlint (GitHub Actions)"
+        files: ^\.github/workflows/

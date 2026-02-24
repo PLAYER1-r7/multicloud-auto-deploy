@@ -99,7 +99,7 @@
 - [Azure Flex Consumption: Kudu再起動](#azure-flex-consumption-kudu再起動)
 - [Azure FC1: InaccessibleStorageException（deployment storage 削除）](#azure-fc1-inaccessiblestorageexception削除)
 - [Azure FC1: WEBSITE_RUN_FROM_PACKAGE 残留による 404](#azure-fc1-websiterunfrompackage-残留による-404)
-- [Azure FC1: POST /uploads/presigned-urls → 500（AZURE_STORAGE_* 未設定）](#azure-fc1-post-uploadspresigned-urls--500azure_storage_-未設定)
+- [Azure FC1: POST /uploads/presigned-urls → 500（AZURE*STORAGE*\* 未設定）](#azure-fc1-post-uploadspresigned-urls--500azure_storage_-未設定)
 
 #### GCP
 
@@ -3143,7 +3143,7 @@ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/deploy-azure.yml
 
 ---
 
-## Azure FC1: POST /uploads/presigned-urls → 500（AZURE_STORAGE_* 未設定）
+## Azure FC1: POST /uploads/presigned-urls → 500（AZURE*STORAGE*\* 未設定）
 
 > **発生日:** 2026-02-24 / 本番甲1号機
 
@@ -3176,11 +3176,11 @@ sas_token = generate_blob_sas(
 
 下記 3つの環境変数が Function App app settings に **設定されていなかった**:
 
-| 環境変数 | 正しい値 |
-|---|---|
+| 環境変数                     | 正しい値                                           |
+| ---------------------------- | -------------------------------------------------- |
 | `AZURE_STORAGE_ACCOUNT_NAME` | `mcadwebdiev0w` (本番) / `mcadwebd45ihd` (staging) |
-| `AZURE_STORAGE_ACCOUNT_KEY` | (ストレージアカウントキー) |
-| `AZURE_STORAGE_CONTAINER` | `images` |
+| `AZURE_STORAGE_ACCOUNT_KEY`  | (ストレージアカウントキー)                         |
+| `AZURE_STORAGE_CONTAINER`    | `images`                                           |
 
 **なぜ漏れたか:** 最初の CI (`deploy-azure.yml`) で `az functionapp config appsettings set` 命令にこの 3 全が含まれていなかった。Cosmos DB や Auth の設定はあったが、画像ストレージの設定が CI に含まれていなかった。
 
@@ -3239,14 +3239,14 @@ az storage cors add --account-name mcadwebdiev0w --account-key "$STORAGE_KEY" --
 ```yaml
 FRONTEND_STORAGE_NAME="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
 IMAGES_STORAGE_KEY=$(az storage account keys list \
-  --account-name "$FRONTEND_STORAGE_NAME" \
-  --resource-group "$RESOURCE_GROUP" \
-  --query "[0].value" -o tsv)
+--account-name "$FRONTEND_STORAGE_NAME" \
+--resource-group "$RESOURCE_GROUP" \
+--query "[0].value" -o tsv)
 
 az functionapp config appsettings set ... \
-  AZURE_STORAGE_ACCOUNT_NAME="${FRONTEND_STORAGE_NAME}" \
-  AZURE_STORAGE_ACCOUNT_KEY="${IMAGES_STORAGE_KEY}" \
-  AZURE_STORAGE_CONTAINER="images"
+AZURE_STORAGE_ACCOUNT_NAME="${FRONTEND_STORAGE_NAME}" \
+AZURE_STORAGE_ACCOUNT_KEY="${IMAGES_STORAGE_KEY}" \
+AZURE_STORAGE_CONTAINER="images"
 ```
 
 ### 診断チェックリスト
@@ -3345,7 +3345,7 @@ gcloud functions describe <name> --region <region> --format json
 
 | 日付       | 内容                                                                                                                                                                                                                                                                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-02-24 | 追加: Azure FC1 `InaccessibleStorageException`（deployment storage アカウント削除）、`WEBSITE_RUN_FROM_PACKAGE` 残留による 404、GitHub Actions YAML Python heredoc が block scalar を破壊する問題、Azure FC1 `POST /uploads/presigned-urls` 500（`AZURE_STORAGE_*` 未設定） |
+| 2026-02-24 | 追加: Azure FC1 `InaccessibleStorageException`（deployment storage アカウント削除）、`WEBSITE_RUN_FROM_PACKAGE` 残留による 404、GitHub Actions YAML Python heredoc が block scalar を破壊する問題、Azure FC1 `POST /uploads/presigned-urls` 500（`AZURE_STORAGE_*` 未設定）                                                                             |
 | 2026-02-17 | 🎯 **大幅改善**: クイック診断フローチャート、エラーメッセージ別インデックス、よくある問題トップ5を追加。全セクションに解決時間を表示。Azure Flex Consumption特有の問題（Partially Successful、defaultHostName null、Kudu再起動）を詳細ドキュメント化。AWS Lambda Runtime Errors、GCP Cloud Run 500 Errors、GitHub Actionsシークレット参照エラーを追加。 |
 | 2026-02-17 | 追加: リソース名ハードコード、デプロイメント競合、Gitパス、Pulumiディレクトリ、環境変数エスケープ、CloudFront、Lambda Layer、GitHub Secretsの全11トピック                                                                                                                                                                                               |
 | 2026-02-17 | 初版作成（CORS hardening デプロイの知見）                                                                                                                                                                                                                                                                                                               |

@@ -57,6 +57,13 @@ _API_URL_EXPLICIT=false
 TOKEN=""
 VERBOSE=false
 SKIP_CLEANUP=false
+# Auto token acquisition
+USERNAME=""
+PASSWORD=""
+COGNITO_CLIENT_ID=""
+COGNITO_REGION="ap-northeast-1"
+# staging default (production client ID should be passed via --client-id)
+_STAGING_COGNITO_CLIENT_ID="1k41lqkds4oah55ns8iod30dv2"
 
 # ── colours ─────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'
@@ -89,6 +96,10 @@ Options:
   -r, --read-only          Skip all write tests (Sections 4-7); safe for production
       --write              Allow write tests even when --env production is set
   -t, --token <token>      Cognito access token (required for auth tests)
+  -u, --username <email>   Cognito username for auto token acquisition
+  -p, --password <pw>      Cognito password for auto token acquisition
+      --client-id <id>     Cognito App Client ID (default: staging client)
+      --cognito-region <r> AWS region for Cognito (default: ap-northeast-1)
   -v, --verbose            Print full response bodies
   -s, --skip-cleanup       Do not delete posts created during the test run
   -h, --help               Show this help
@@ -96,10 +107,12 @@ Options:
 Examples:
   # Staging (default):
   $0 --token eyJraWQ...
+  # Staging with auto token acquisition:
+  $0 --username user@example.com --password 'P@ss123'
   # Production - read-only smoke test (no writes):
   $0 --env production
   # Production - full authenticated test (write tests enabled):
-  $0 --env production --write --token eyJraWQ...
+  $0 --env production --write --username user@example.com --password 'P@ss123' --client-id <prod-client-id>
   # Custom URL override:
   $0 --cf https://my-cf.cloudfront.net --api https://my-api.execute-api.amazonaws.com --token eyJ...
 EOF
@@ -119,7 +132,11 @@ while [[ $# -gt 0 ]]; do
       shift 2 ;;
     -r|--read-only)    _READ_ONLY_=true;  SKIP_CLEANUP=true; shift ;;
     --write)           _WRITE_=true;      shift ;;
-    -t|--token) TOKEN="$2";   shift 2 ;;
+    -t|--token)        TOKEN="$2";        shift 2 ;;
+    -u|--username)     USERNAME="$2";     shift 2 ;;
+    -p|--password)     PASSWORD="$2";     shift 2 ;;
+    --client-id)       COGNITO_CLIENT_ID="$2"; shift 2 ;;
+    --cognito-region)  COGNITO_REGION="$2"; shift 2 ;;
     -v|--verbose) VERBOSE=true; shift ;;
     -s|--skip-cleanup) SKIP_CLEANUP=true; shift ;;
     -h|--help)  usage; exit 0 ;;
@@ -144,8 +161,40 @@ CF_URL="${CF_URL%/}"
 API_URL="${API_URL%/}"
 
 # ── dependency check ────────────────────────────────────────
-command -v curl >/dev/null 2>&1 || die "curl is required but not installed"
-command -v jq   >/dev/null 2>&1 || die "jq is required but not installed"
+command -v curl    >/dev/null 2>&1 || die "curl is required but not installed"
+command -v jq      >/dev/null 2>&1 || die "jq is required but not installed"
+command -v python3 >/dev/null 2>&1 || die "python3 is required but not installed"
+
+# ── auto token acquisition (Cognito) ────────────────────────
+if [[ -z "$TOKEN" && -n "$USERNAME" && -n "$PASSWORD" ]]; then
+  [[ -z "$COGNITO_CLIENT_ID" ]] && \
+    COGNITO_CLIENT_ID="$( [[ $_ENV_ == production ]] && echo "" || echo "$_STAGING_COGNITO_CLIENT_ID" )"
+  if [[ -z "$COGNITO_CLIENT_ID" ]]; then
+    die "--client-id is required for automatic token acquisition in production"
+  fi
+  log "Auto-acquiring Cognito token for $USERNAME ..."
+  TOKEN=$(aws cognito-idp initiate-auth \
+    --auth-flow USER_PASSWORD_AUTH \
+    --client-id "$COGNITO_CLIENT_ID" \
+    --auth-parameters "USERNAME=$USERNAME,PASSWORD=$PASSWORD" \
+    --region "$COGNITO_REGION" \
+    --query 'AuthenticationResult.AccessToken' \
+    --output text 2>/dev/null || echo "")
+  if [[ -n "$TOKEN" && "$TOKEN" != "None" ]]; then
+    log "  ✓ Cognito token acquired (${TOKEN:0:20}...)"
+  else
+    warn "  Failed to acquire Cognito token — check --username/--password/--client-id"
+    TOKEN=""
+  fi
+fi
+
+# ── shared test image (1x1 transparent PNG, 68 bytes) ───────
+python3 -c "
+import base64, sys
+sys.stdout.buffer.write(base64.b64decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+))
+" > /tmp/test_upload_aws.png 2>/dev/null || true
 
 # ── test runner ─────────────────────────────────────────────
 # run_test <label> <method> <url> [--header "K: V"] ... [--data '{...}'] [--expect <code>]
@@ -347,16 +396,72 @@ else
     FAIL=$((FAIL + 1))
   fi
 
-  # 5-2. Validate presigned URL starts with https://s3
-  FIRST_URL=$(echo "$LAST_BODY" | jq -r '.urls[0].url // ""' 2>/dev/null)
-  if echo "$FIRST_URL" | grep -q "^https://.*s3"; then
+  # 5-2. Validate presigned URL format + AWS SigV4 signature
+  FIRST_UPLOAD_URL=$(echo "$LAST_BODY" | jq -r '.urls[0].url // ""' 2>/dev/null)
+  FIRST_UPLOAD_KEY=$(echo "$LAST_BODY" | jq -r '.urls[0].key // .urls[0].imageKey // ""' 2>/dev/null)
+  if echo "$FIRST_UPLOAD_URL" | grep -qE '^https://.*s3'; then
     ok "  Presigned URL is a valid S3 HTTPS URL"
     PASS=$((PASS + 1))
-  elif [[ -n "$FIRST_URL" ]]; then
-    warn "  Presigned URL format unexpected: ${FIRST_URL:0:80}..."
+  elif [[ -n "$FIRST_UPLOAD_URL" ]]; then
+    warn "  Presigned URL format unexpected: ${FIRST_UPLOAD_URL:0:80}..."
+  fi
+  if echo "$FIRST_UPLOAD_URL" | grep -qiE 'X-Amz-Signature='; then
+    ok "  Presigned URL contains X-Amz-Signature ✓"
+  elif [[ -n "$FIRST_UPLOAD_URL" ]]; then
+    fail "  X-Amz-Signature missing from presigned URL"
   fi
 
-  # 5-3. Upper bound: 16 files (max allowed)
+  # 5-3. ★ Binary PUT: 実際にテスト画像を S3 へアップロード
+  UPLOAD_POST_ID=""
+  if [[ -n "$FIRST_UPLOAD_URL" && -s /tmp/test_upload_aws.png ]]; then
+    PUT_STATUS=$(curl -s -o /tmp/put_resp_aws.txt -w "%{http_code}" \
+      -X PUT \
+      -H "Content-Type: image/jpeg" \
+      --data-binary @/tmp/test_upload_aws.png \
+      --max-time 20 \
+      "$FIRST_UPLOAD_URL" 2>/dev/null || echo "000")
+    if [[ "$PUT_STATUS" == "200" ]]; then
+      ok "  PUT test image → S3 presigned URL: HTTP 200 ✓"
+    else
+      fail "  PUT test image → S3: HTTP $PUT_STATUS (expected 200)"
+      [[ -s /tmp/put_resp_aws.txt ]] && echo "  Response: $(head -c 200 /tmp/put_resp_aws.txt)"
+    fi
+
+    # 5-4. ★ アップロードしたキーで投稿を作成し imageUrls が取得可能か検証
+    if [[ -n "$FIRST_UPLOAD_KEY" && "$FIRST_UPLOAD_KEY" != "null" && "$PUT_STATUS" == "200" ]]; then
+      IMG_POST_DATA=$(python3 -c "import json; print(json.dumps({'content':'[test] AWS E2E real image upload', 'imageKeys':['$FIRST_UPLOAD_KEY']}))")
+      run_test "POST /posts with real uploaded imageKey returns 201" \
+        POST "$API_URL/posts" \
+        --header "$AUTHH" \
+        --data "$IMG_POST_DATA" \
+        --expect 201
+      UPLOAD_POST_ID=$(echo "$LAST_BODY" | jq -r '.postId // .post_id // ""' 2>/dev/null)
+      [[ -n "$UPLOAD_POST_ID" && "$UPLOAD_POST_ID" != "null" ]] && CREATED_POST_IDS+=("$UPLOAD_POST_ID")
+
+      # GET /posts/:id → imageUrls が HTTP 200 で取得できるか確認
+      if [[ -n "$UPLOAD_POST_ID" && "$UPLOAD_POST_ID" != "null" ]]; then
+        run_test "GET /posts/$UPLOAD_POST_ID returns 200" \
+          GET "$API_URL/posts/$UPLOAD_POST_ID" --header "$AUTHH"
+        REAL_IMG_URL=$(echo "$LAST_BODY" | jq -r '.imageUrls[0] // ""' 2>/dev/null)
+        if [[ -n "$REAL_IMG_URL" && "$REAL_IMG_URL" != "null" ]]; then
+          IMG_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$REAL_IMG_URL" 2>/dev/null || echo "000")
+          if [[ "$IMG_HTTP" == "200" ]]; then
+            ok "  GET imageUrl (presigned GET) → HTTP 200 ✓ (image displayable)"
+          else
+            fail "  GET imageUrl → HTTP $IMG_HTTP (image not displayable!) URL: ${REAL_IMG_URL:0:80}"
+          fi
+        else
+          warn "  No imageUrls in response — skipping image accessibility check"
+        fi
+      fi
+    else
+      warn "  key not in presigned-urls response or PUT failed — skipping real-upload post test"
+    fi
+  else
+    warn "  No presigned URL or test PNG missing — skipping binary PUT test"
+  fi
+
+  # 5-5. Upper bound: 16 files (max allowed)
   TYPES_16=$(python3 -c "import json; print(json.dumps({'count':16,'contentTypes':['image/jpeg']*16}))")
   run_test "POST /uploads/presigned-urls (count=16, max) returns 200" \
     POST "$API_URL/uploads/presigned-urls" \
@@ -364,7 +469,7 @@ else
     --data "$TYPES_16" \
     --expect 200
 
-  # 5-4. Over limit: 17 files should return 422
+  # 5-6. Over limit: 17 files should return 422
   TYPES_17=$(python3 -c "import json; print(json.dumps({'count':17,'contentTypes':['image/jpeg']*17}))")
   run_test "POST /uploads/presigned-urls (count=17, over limit) returns 422" \
     POST "$API_URL/uploads/presigned-urls" \

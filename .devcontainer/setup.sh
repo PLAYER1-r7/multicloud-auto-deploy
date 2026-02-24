@@ -59,6 +59,12 @@ echo -e "${BLUE}Setting script permissions...${NC}"
 chmod +x scripts/*.sh
 echo -e "${GREEN}✓ Script permissions set${NC}"
 
+# pre-commit: install hooks into .git/hooks/
+echo -e "${BLUE}Installing pre-commit hooks...${NC}"
+pip install -q pre-commit
+pre-commit install --install-hooks || echo "pre-commit hook install skipped (not a git repo or hook already installed)"
+echo -e "${GREEN}✓ pre-commit hooks installed${NC}"
+
 # 便利なエイリアス表示
 echo ""
 echo -e "${YELLOW}=========================================${NC}"

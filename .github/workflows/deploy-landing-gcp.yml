@@ -54,11 +54,24 @@ jobs:
           gcloud storage cp static-site/*.html gs://${{ env.BUCKET_NAME }}/ \
             --cache-control="public, max-age=3600"
 
+      - name: Set GCP-specific landing page as root index.html
+        run: |
+          # Deploy gcp/index.html as root index.html for Cloud CDN
+          gcloud storage cp static-site/gcp/index.html gs://${{ env.BUCKET_NAME }}/index.html \
+            --cache-control="public, max-age=3600"
+
       - name: Invalidate CDN Cache
         run: |
-          gcloud compute url-maps invalidate-cdn-cache multicloud-auto-deploy-staging-cdn-urlmap \
-            --path "/*" \
-            --project=${{ secrets.GCP_PROJECT_ID }}
+          # Dynamically look up the URL map name for the current stack
+          URLMAP_NAME=$(gcloud compute url-maps list --format="value(name)" \
+            --project=${{ secrets.GCP_PROJECT_ID }} | grep "cdn-urlmap" | head -1)
+          if [ -n "$URLMAP_NAME" ]; then
+            gcloud compute url-maps invalidate-cdn-cache "$URLMAP_NAME" \
+              --path "/*" --async --project=${{ secrets.GCP_PROJECT_ID }} 2>/dev/null || true
+            echo "✅ CDN cache invalidated: $URLMAP_NAME"
+          else
+            echo "⚠️  No CDN URL map found, skipping cache invalidation"
+          fi
 
       - name: Deployment Success
         run: |

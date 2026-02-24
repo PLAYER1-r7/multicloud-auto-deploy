@@ -146,38 +146,38 @@
         </h1>
         <p>
             Cloud Run + Firestore + Cloud CDN + Cloud Storage。<br>
-            コンテナベースのサーバーレス基盤でSNSを高速配信します。
+            コンテナベースのサーバーレス基盤で SNS を高速配信します。
         </p>
 
         <div class="cta-group">
             <a href="/sns/" class="btn btn-primary">SNS アプリを開く</a>
-            <a href="https://github.com/PLAYER1-r7/ashnova" class="btn btn-secondary">GitHub</a>
+            <a href="https://github.com/PLAYER1-r7/multicloud-auto-deploy" class="btn btn-secondary">GitHub</a>
         </div>
 
         <div class="services">
             <div class="service-card">
                 <div class="icon">🚢</div>
                 <h3>Cloud Run</h3>
-                <p>Python 3.13 コンテナ。リクエスト単位の完全サーバーレス。</p>
+                <p>Python 3.12 コンテナ (gen2)。min-instances=1 でコールドスタート解消。</p>
             </div>
             <div class="service-card">
                 <div class="icon">🌐</div>
                 <h3>Cloud CDN</h3>
-                <p>グローバルエッジキャッシュ。Cloud Armor WAF 付き（本番）。</p>
+                <p>グローバルエッジキャッシュ。GCS バックエンドバケットで SNS SPA 配信。</p>
             </div>
             <div class="service-card">
                 <div class="icon">🔥</div>
                 <h3>Firestore</h3>
-                <p>ネイティブモード NoSQL。リアルタイム同期対応。</p>
+                <p>ネイティブモード NoSQL。collections: messages / posts。</p>
             </div>
             <div class="service-card">
                 <div class="icon">🔒</div>
                 <h3>Firebase Auth</h3>
-                <p>Google / メール認証。Identity Platform バックエンド。</p>
+                <p>Google Sign-In。httponly Cookie セッション管理。</p>
             </div>
         </div>
     </main>
 
-    <footer>Ashnova · Multi-Cloud Platform · Powered by Python + Pulumi</footer>
+    <footer>Ashnova · Multi-Cloud Platform · Powered by FastAPI + Pulumi</footer>
 </body>
 </html>

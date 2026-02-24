@@ -53,6 +53,7 @@ _API_URL_EXPLICIT=false
 TOKEN=""
 VERBOSE=false
 SKIP_CLEANUP=false
+AUTO_TOKEN=false
 
 # ── colours ─────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'
@@ -80,12 +81,20 @@ Options:
   -c, --cdn   <url>    Cloud CDN (LB) base URL  (default: https://www.gcp.ashnova.jp)
   -a, --api   <url>    Cloud Run API base URL   (default: https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app)
   -t, --token <token>  Firebase ID token (required for auth tests)
+      --auto-token     Auto-acquire token via gcloud auth print-identity-token
   -v, --verbose        Print full response bodies
   -s, --skip-cleanup   Do not delete posts created during the test run
   -h, --help           Show this help
 
 Examples:
+  # Staging with manual token:
   $0 --token \$(gcloud auth print-identity-token)
+  # Staging with auto token:
+  $0 --auto-token
+  # Production read-only:
+  $0 --env production
+  # Production full test:
+  $0 --env production --write --auto-token
   $0 --cdn https://www.gcp.ashnova.jp --api https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app --token eyJ...
 EOF
 }
@@ -105,6 +114,7 @@ while [[ $# -gt 0 ]]; do
     -r|--read-only)    _READ_ONLY_=true;  SKIP_CLEANUP=true; shift ;;
     --write)           _WRITE_=true;      shift ;;
     -t|--token) TOKEN="$2";    shift 2 ;;
+    --auto-token)      AUTO_TOKEN=true;   shift ;;
     -v|--verbose) VERBOSE=true; shift ;;
     -s|--skip-cleanup) SKIP_CLEANUP=true; shift ;;
     -h|--help)  usage; exit 0 ;;
@@ -129,8 +139,33 @@ CDN_URL="${CDN_URL%/}"
 API_URL="${API_URL%/}"
 
 # ── dependency check ────────────────────────────────────────
-command -v curl >/dev/null 2>&1 || die "curl is required but not installed"
-command -v jq   >/dev/null 2>&1 || die "jq is required but not installed"
+command -v curl    >/dev/null 2>&1 || die "curl is required but not installed"
+command -v jq      >/dev/null 2>&1 || die "jq is required but not installed"
+command -v python3 >/dev/null 2>&1 || die "python3 is required but not installed"
+
+# ── auto token acquisition (gcloud) ──────────────────────────
+if [[ -z "$TOKEN" && "$AUTO_TOKEN" == true ]]; then
+  if command -v gcloud >/dev/null 2>&1; then
+    log "Auto-acquiring GCP identity token via gcloud ..."
+    TOKEN=$(gcloud auth print-identity-token 2>/dev/null || echo "")
+    if [[ -n "$TOKEN" && "$TOKEN" != "None" ]]; then
+      log "  ✓ gcloud identity token acquired (${TOKEN:0:20}...)"
+    else
+      warn "  gcloud auth print-identity-token failed — run: gcloud auth login"
+      TOKEN=""
+    fi
+  else
+    warn "  gcloud not found — install Google Cloud SDK for --auto-token support"
+  fi
+fi
+
+# ── shared test image (1x1 transparent PNG, 68 bytes) ───────
+python3 -c "
+import base64, sys
+sys.stdout.buffer.write(base64.b64decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+))
+" > /tmp/test_upload_gcp.png 2>/dev/null || true
 
 # ── test runner ─────────────────────────────────────────────
 LAST_STATUS=0
@@ -357,15 +392,71 @@ else
     fail "  Expected 2 presigned URLs, got $URL_COUNT"
   fi
 
-  # 5-2. Validate presigned URL starts with https://storage.googleapis.com
-  FIRST_URL=$(echo "$LAST_BODY" | jq -r '.urls[0].url // ""' 2>/dev/null)
-  if echo "$FIRST_URL" | grep -q "^https://storage.googleapis.com"; then
+  # 5-2. Validate presigned URL format + GCS signature
+  FIRST_UPLOAD_URL=$(echo "$LAST_BODY" | jq -r '.urls[0].url // ""' 2>/dev/null)
+  FIRST_UPLOAD_KEY=$(echo "$LAST_BODY" | jq -r '.urls[0].key // .urls[0].imageKey // ""' 2>/dev/null)
+  if echo "$FIRST_UPLOAD_URL" | grep -q "^https://storage.googleapis.com"; then
     ok "  Presigned URL is a valid GCS HTTPS URL"
-  elif [[ -n "$FIRST_URL" ]]; then
-    warn "  Presigned URL format unexpected: ${FIRST_URL:0:80}..."
+  elif [[ -n "$FIRST_UPLOAD_URL" ]]; then
+    warn "  Presigned URL format unexpected: ${FIRST_UPLOAD_URL:0:80}..."
+  fi
+  if echo "$FIRST_UPLOAD_URL" | grep -qiE 'X-Goog-Signature=|x-goog-signature='; then
+    ok "  Presigned URL contains X-Goog-Signature ✓"
+  elif [[ -n "$FIRST_UPLOAD_URL" ]]; then
+    warn "  X-Goog-Signature not found — GCS signed URL may be using service account key (check GCP config)"
   fi
 
-  # 5-3. Upper bound: 16 files (max allowed)
+  # 5-3. ★ Binary PUT: 実際にテスト画像を GCS へアップロード
+  UPLOAD_POST_ID=""
+  if [[ -n "$FIRST_UPLOAD_URL" && "$FIRST_UPLOAD_URL" != "null" && -s /tmp/test_upload_gcp.png ]]; then
+    PUT_STATUS=$(curl -s -o /tmp/put_resp_gcp.txt -w "%{http_code}" \
+      -X PUT \
+      -H "Content-Type: image/jpeg" \
+      --data-binary @/tmp/test_upload_gcp.png \
+      --max-time 20 \
+      "$FIRST_UPLOAD_URL" 2>/dev/null || echo "000")
+    if [[ "$PUT_STATUS" == "200" ]]; then
+      ok "  PUT test image → GCS presigned URL: HTTP 200 ✓"
+    else
+      fail "  PUT test image → GCS: HTTP $PUT_STATUS (expected 200)"
+      [[ -s /tmp/put_resp_gcp.txt ]] && echo "  Response: $(head -c 200 /tmp/put_resp_gcp.txt)"
+    fi
+
+    # 5-4. ★ アップロードしたキーで投稿を作成し imageUrls が取得可能か検証
+    if [[ -n "$FIRST_UPLOAD_KEY" && "$FIRST_UPLOAD_KEY" != "null" && "$PUT_STATUS" == "200" ]]; then
+      IMG_POST_DATA=$(python3 -c "import json; print(json.dumps({'content':'[test] GCP E2E real image upload', 'imageKeys':['$FIRST_UPLOAD_KEY']}))")
+      run_test "POST /posts with real uploaded imageKey returns 201" \
+        POST "$API_URL/posts" \
+        --header "$AUTHH" \
+        --data "$IMG_POST_DATA" \
+        --expect 201
+      UPLOAD_POST_ID=$(echo "$LAST_BODY" | jq -r '.postId // .post_id // ""' 2>/dev/null)
+      [[ -n "$UPLOAD_POST_ID" && "$UPLOAD_POST_ID" != "null" ]] && CREATED_POST_IDS+=("$UPLOAD_POST_ID")
+
+      # GET /posts/:id → imageUrls が HTTP 200 で取得できるか確認
+      if [[ -n "$UPLOAD_POST_ID" && "$UPLOAD_POST_ID" != "null" ]]; then
+        run_test "GET /posts/$UPLOAD_POST_ID returns 200" \
+          GET "$API_URL/posts/$UPLOAD_POST_ID" --header "$AUTHH"
+        REAL_IMG_URL=$(echo "$LAST_BODY" | jq -r '.imageUrls[0] // ""' 2>/dev/null)
+        if [[ -n "$REAL_IMG_URL" && "$REAL_IMG_URL" != "null" ]]; then
+          IMG_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$REAL_IMG_URL" 2>/dev/null || echo "000")
+          if [[ "$IMG_HTTP" == "200" ]]; then
+            ok "  GET imageUrl → HTTP 200 ✓ (image displayable)"
+          else
+            fail "  GET imageUrl → HTTP $IMG_HTTP (image not displayable!) URL: ${REAL_IMG_URL:0:80}"
+          fi
+        else
+          warn "  No imageUrls in response — skipping image accessibility check"
+        fi
+      fi
+    else
+      warn "  key not in presigned-urls response or PUT failed — skipping real-upload post test"
+    fi
+  else
+    warn "  No presigned URL or test PNG missing — skipping binary PUT test"
+  fi
+
+  # 5-5. Upper bound: 16 files (max allowed)
   TYPES_16=$(python3 -c "import json; print(json.dumps({'count':16,'contentTypes':['image/jpeg']*16}))")
   run_test "POST /uploads/presigned-urls (count=16, max) returns 200" \
     POST "$API_URL/uploads/presigned-urls" \
@@ -373,7 +464,7 @@ else
     --data "$TYPES_16" \
     --expect 200
 
-  # 5-4. Over limit: 17 files should return 422
+  # 5-6. Over limit: 17 files should return 422
   TYPES_17=$(python3 -c "import json; print(json.dumps({'count':17,'contentTypes':['image/jpeg']*17}))")
   run_test "POST /uploads/presigned-urls (count=17, over limit) returns 422" \
     POST "$API_URL/uploads/presigned-urls" \

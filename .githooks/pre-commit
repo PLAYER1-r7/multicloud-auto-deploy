@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================
 # .githooks/pre-commit
-# コミット前に全コンポーネントのパッチバージョン(Z)を自動インクリメント
+# コミット前に変更対象コンポーネントのコミット数 (D) を自動インクリメント
 #
 # スキップ方法:
 #   SKIP_VERSION_BUMP=1 git commit -m "message"
 #
 # 注意: [skip-version-bump] はコミットメッセージへの記載は GitHub Actions
-#       (マイナーバンプ) のスキップ用。pre-commit 時点では commit message
+#       (プッシュカウントバンプ) のスキップ用。pre-commit 時点では commit message
 #       はまだ確定していないため、pre-commit のスキップには環境変数を使用。
 #
 # このフックを有効化するには:
@@ -28,8 +28,9 @@ if [[ "${SKIP_VERSION_BUMP:-0}" == "1" ]]; then
 fi
 
 # --- スキップ: versions.json が唯一の変更ファイルの場合 (ループ防止) ---
-STAGED=$(git diff --cached --name-only)
-if [[ "$STAGED" == "versions.json" ]]; then
+STAGED="$(git diff --cached --name-only 2>/dev/null || true)"
+NON_VERSION_FILES="$(echo "$STAGED" | grep -v '^versions\.json$' || true)"
+if [[ -z "$NON_VERSION_FILES" ]]; then
   exit 0
 fi
 
@@ -39,8 +40,41 @@ if [[ ! -x "$BUMP_SCRIPT" ]]; then
   exit 0
 fi
 
-echo "🔖 [pre-commit] パッチバージョン (Z) をインクリメント..."
-"$BUMP_SCRIPT" patch all
+# ----- コンポーネント検出 (パスフィルタ) -----
+BUMP_AWS=0
+BUMP_AZURE=0
+BUMP_GCP=0
+BUMP_SNS=0
+BUMP_ALL=0
+
+while IFS= read -r file; do
+  case "$file" in
+    static-site/aws/*)            BUMP_AWS=1 ;;
+    static-site/azure/*)          BUMP_AZURE=1 ;;
+    static-site/gcp/*)            BUMP_GCP=1 ;;
+    static-site/*)                BUMP_AWS=1; BUMP_AZURE=1; BUMP_GCP=1 ;;
+    services/frontend_react/*)    BUMP_SNS=1 ;;
+    *)                            BUMP_ALL=1 ;;
+  esac
+done <<< "$NON_VERSION_FILES"
+
+# ----- D (コミット数) をインクリメント -----
+echo ""
+echo "🔖 [pre-commit] パッチバージョン (D) をインクリメント..."
+
+if [[ "$BUMP_ALL" == "1" ]]; then
+  "$BUMP_SCRIPT" commit all
+else
+  [[ "$BUMP_AWS"   == "1" ]] && "$BUMP_SCRIPT" commit aws-static-site
+  [[ "$BUMP_AZURE" == "1" ]] && "$BUMP_SCRIPT" commit azure-static-site
+  [[ "$BUMP_GCP"   == "1" ]] && "$BUMP_SCRIPT" commit gcp-static-site
+  [[ "$BUMP_SNS"   == "1" ]] && "$BUMP_SCRIPT" commit simple-sns
+
+  # 対象コンポーネントなし → バージョンバンプは不要
+  if [[ "$BUMP_AWS$BUMP_AZURE$BUMP_GCP$BUMP_SNS" == "0000" ]]; then
+    exit 0
+  fi
+fi
 
 # versions.json をコミットに追加
 git add "$VERSIONS_FILE"

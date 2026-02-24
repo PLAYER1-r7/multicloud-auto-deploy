@@ -9,11 +9,11 @@ Architecture:
 Cost: ~$2-8/month for low traffic
 """
 
+import monitoring
 import pulumi
 import pulumi_azure_native as azure
 import pulumi_azuread as azuread
 import pulumi_random as random
-import monitoring
 
 # Configuration
 config = pulumi.Config()
@@ -62,8 +62,7 @@ oauth2_scope_id = random.RandomUuid("oauth2-scope-id")
 # ========================================
 functions_storage = azure.storage.StorageAccount(
     "functions-storage",
-    account_name=storage_suffix.result.apply(
-        lambda suffix: f"mcadfunc{suffix}"),
+    account_name=storage_suffix.result.apply(lambda suffix: f"mcadfunc{suffix}"),
     resource_group_name=resource_group.name,
     location=location,
     sku=azure.storage.SkuArgs(
@@ -79,8 +78,7 @@ functions_storage = azure.storage.StorageAccount(
 # ========================================
 frontend_storage = azure.storage.StorageAccount(
     "frontend-storage",
-    account_name=storage_suffix.result.apply(
-        lambda suffix: f"mcadweb{suffix}"),
+    account_name=storage_suffix.result.apply(lambda suffix: f"mcadweb{suffix}"),
     resource_group_name=resource_group.name,
     location=location,
     sku=azure.storage.SkuArgs(
@@ -96,6 +94,22 @@ frontend_storage = azure.storage.StorageAccount(
 # Pulumi doesn't directly support static website configuration yet
 
 # ========================================
+# Log Analytics Workspace (Centralized audit & security logging)
+# ========================================
+# Workspace for aggregating logs from Front Door, Function App, Cosmos DB, and Azure AD
+log_analytics_workspace = azure.operationalinsights.Workspace(
+    "log-analytics-workspace",
+    workspace_name=storage_suffix.result.apply(lambda suffix: f"mcad-logs-{suffix}"),
+    resource_group_name=resource_group.name,
+    location=location,
+    sku=azure.operationalinsights.WorkspaceSkuArgs(
+        name="PerGB2018",  # Pay-per-GB (5 GB/month free tier)
+    ),
+    retention_in_days=30,  # Retain logs for 30 days
+    tags=common_tags,
+)
+
+# ========================================
 # Application Insights
 # ========================================
 app_insights = azure.insights.Component(
@@ -104,8 +118,9 @@ app_insights = azure.insights.Component(
     location=location,
     application_type="web",
     kind="web",
-    # Use ApplicationInsights instead of LogAnalytics
-    ingestion_mode="ApplicationInsights",
+    # Send telemetry to Log Analytics Workspace for centralized visibility
+    ingestion_mode="LogAnalytics",
+    workspace_resource_id=log_analytics_workspace.id,
     tags=common_tags,
 )
 
@@ -114,8 +129,7 @@ app_insights = azure.insights.Component(
 # ========================================
 cosmos_account = azure.documentdb.DatabaseAccount(
     "cosmos-account",
-    account_name=storage_suffix.result.apply(
-        lambda suffix: f"mcad-cosmos-{suffix}"),
+    account_name=storage_suffix.result.apply(lambda suffix: f"mcad-cosmos-{suffix}"),
     resource_group_name=resource_group.name,
     location=location,
     database_account_offer_type="Standard",
@@ -166,12 +180,8 @@ cosmos_container = azure.documentdb.SqlResourceSqlContainer(
         indexing_policy=azure.documentdb.IndexingPolicyArgs(
             automatic=True,
             indexing_mode="Consistent",
-            included_paths=[
-                azure.documentdb.IncludedPathArgs(path="/*")
-            ],
-            excluded_paths=[
-                azure.documentdb.ExcludedPathArgs(path='/"_etag"/?')
-            ],
+            included_paths=[azure.documentdb.IncludedPathArgs(path="/*")],
+            excluded_paths=[azure.documentdb.ExcludedPathArgs(path='/"_etag"/?')],
         ),
     ),
     opts=pulumi.ResourceOptions(depends_on=[cosmos_database]),
@@ -223,8 +233,7 @@ app_secret = azure.keyvault.Secret(
     resource_group_name=resource_group.name,
     vault_name=key_vault.name,
     properties=azure.keyvault.SecretPropertiesArgs(
-        value=pulumi.Output.secret(
-            '{"database_url":"changeme","api_key":"changeme"}'),
+        value=pulumi.Output.secret('{"database_url":"changeme","api_key":"changeme"}'),
     ),
     tags=common_tags,
 )
@@ -237,8 +246,7 @@ app_secret = azure.keyvault.Secret(
 
 # Get Azure AD tenant from azuread config
 azuread_config = pulumi.Config("azuread")
-azure_tenant_id = azuread_config.get(
-    "tenantId") or pulumi.Output.from_input("")
+azure_tenant_id = azuread_config.get("tenantId") or pulumi.Output.from_input("")
 
 # Create Azure AD Application
 app_registration = azuread.Application(
@@ -252,13 +260,6 @@ app_registration = azuread.Application(
             [
                 # Legacy / fallback
                 f"https://{project_name}-{stack}-web.azurewebsites.net/callback",
-                # Local development — login callbacks
-                "http://localhost:3000/callback",
-                "https://localhost:3000/callback",
-                "http://localhost:5173/sns/auth/callback",
-                "https://localhost:5173/sns/auth/callback",
-                # Local development — post-logout redirects
-                "http://localhost:5173/sns/",
             ]
             + (
                 [
@@ -266,7 +267,8 @@ app_registration = azuread.Application(
                     f"https://{frontend_domain}/sns/auth/callback",
                     f"https://{frontend_domain}/sns/",
                 ]
-                if frontend_domain else []
+                if frontend_domain
+                else []
             )
         ),
         implicit_grant=azuread.ApplicationWebImplicitGrantArgs(
@@ -334,8 +336,7 @@ frontdoor_profile = azure.cdn.Profile(
 # Front Door Endpoint
 frontdoor_endpoint = azure.cdn.AFDEndpoint(
     "frontdoor-endpoint",
-    endpoint_name=storage_suffix.result.apply(
-        lambda suffix: f"mcad-{stack}-{suffix}"),
+    endpoint_name=storage_suffix.result.apply(lambda suffix: f"mcad-{stack}-{suffix}"),
     profile_name=frontdoor_profile.name,
     resource_group_name=resource_group.name,
     location="Global",
@@ -446,8 +447,16 @@ spa_rewrite_rule = azure.cdn.Rule(
                 operator="EndsWith",
                 negate_condition=True,
                 match_values=[
-                    ".html", ".js", ".css", ".png", ".svg",
-                    ".ico", ".json", ".woff", ".woff2", ".map",
+                    ".html",
+                    ".js",
+                    ".css",
+                    ".png",
+                    ".svg",
+                    ".ico",
+                    ".json",
+                    ".woff",
+                    ".woff2",
+                    ".map",
                 ],
                 transforms=["Lowercase"],
             ),
@@ -484,6 +493,26 @@ frontdoor_route = azure.cdn.Route(
     https_redirect="Enabled",
     rule_sets=[azure.cdn.ResourceReferenceArgs(id=spa_rule_set.id)],
     opts=pulumi.ResourceOptions(depends_on=[frontdoor_origin, spa_rewrite_rule]),
+)
+
+# ========================================
+# Front Door Diagnostic Settings (Access Logs → Log Analytics)
+# ========================================
+# Captures FrontDoorAccessLog and WAF logs for security auditing.
+frontdoor_diagnostics = azure.insights.DiagnosticSetting(
+    "frontdoor-diagnostics",
+    name=f"{project_name}-{stack}-fd-diag",
+    resource_uri=frontdoor_profile.id,
+    workspace_id=log_analytics_workspace.id,
+    logs=[
+        azure.insights.LogSettingsArgs(
+            category_group="allLogs",
+            enabled=True,
+        ),
+    ],
+    opts=pulumi.ResourceOptions(
+        depends_on=[frontdoor_profile, log_analytics_workspace]
+    ),
 )
 
 # ========================================
@@ -563,10 +592,11 @@ pulumi.export(
     "frontdoor_url",
     frontdoor_endpoint.host_name.apply(lambda hostname: f"https://{hostname}"),
 )
-pulumi.export("app_insights_instrumentation_key",
-              app_insights.instrumentation_key)
+pulumi.export("app_insights_instrumentation_key", app_insights.instrumentation_key)
 pulumi.export("key_vault_name", key_vault.name)
 pulumi.export("key_vault_uri", key_vault.properties.vault_uri)
+pulumi.export("log_analytics_workspace_name", log_analytics_workspace.name)
+pulumi.export("log_analytics_workspace_id", log_analytics_workspace.id)
 
 # Cosmos DB exports
 pulumi.export("cosmos_account_name", cosmos_account.name)
@@ -596,19 +626,16 @@ pulumi.export(
 
 # Monitoring exports
 if monitoring_resources["action_group"]:
-    pulumi.export("monitoring_action_group_id",
-                  monitoring_resources["action_group"].id)
+    pulumi.export("monitoring_action_group_id", monitoring_resources["action_group"].id)
 pulumi.export(
     "monitoring_function_alerts",
     list(monitoring_resources["function_alerts"].keys()),
 )
 pulumi.export(
-    "monitoring_cosmos_alerts", list(
-        monitoring_resources["cosmos_alerts"].keys())
+    "monitoring_cosmos_alerts", list(monitoring_resources["cosmos_alerts"].keys())
 )
 pulumi.export(
-    "monitoring_frontdoor_alerts", list(
-        monitoring_resources["frontdoor_alerts"].keys())
+    "monitoring_frontdoor_alerts", list(monitoring_resources["frontdoor_alerts"].keys())
 )
 
 # Cost estimation

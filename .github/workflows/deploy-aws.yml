@@ -387,6 +387,23 @@ jobs:
           echo "✅ Layer published: $LAYER_VERSION_ARN"
           echo "layer_arn=$LAYER_VERSION_ARN" >> $GITHUB_OUTPUT
 
+      - name: Cleanup Old Lambda Layer Versions
+        run: |
+          LAYER_NAME="multicloud-auto-deploy-${{ steps.set_stack.outputs.stack_name }}-dependencies"
+          echo "🧹 Cleaning up old Lambda Layer versions (keeping latest 3) for: $LAYER_NAME"
+          VERSIONS=$(aws lambda list-layer-versions --layer-name $LAYER_NAME \
+            --region ${{ env.AWS_REGION }} --query "LayerVersions[].Version" --output text 2>/dev/null || echo "")
+          if [ -z "$VERSIONS" ]; then
+            echo "ℹ️  No versions found or insufficient permissions — skipping cleanup"
+            exit 0
+          fi
+          SORTED=$(echo $VERSIONS | tr ' ' '\n' | sort -n | head -n -3)
+          for v in $SORTED; do
+            aws lambda delete-layer-version --layer-name $LAYER_NAME --version-number $v --region ${{ env.AWS_REGION }} 2>/dev/null && echo "  Deleted $LAYER_NAME:$v" || echo "  ⚠️  Could not delete $LAYER_NAME:$v (skipped)"
+          done
+          REMAINING=$(aws lambda list-layer-versions --layer-name $LAYER_NAME --region ${{ env.AWS_REGION }} --query "length(LayerVersions)" --output text 2>/dev/null || echo "unknown")
+          echo "✅ Layer cleanup done. Remaining versions: $REMAINING"
+
       - name: Update Lambda Function
         id: update_lambda
         run: |
