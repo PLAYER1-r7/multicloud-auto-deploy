@@ -450,6 +450,15 @@ print(' '.join(merged))
           # Get CloudFront domain for CORS
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
           CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
+
+          # Fallback: if custom_domain is empty, read directly from committed Pulumi YAML
+          if [[ -z "$CUSTOM_DOMAIN" ]]; then
+            STACK_FILE="infrastructure/pulumi/aws/Pulumi.${{ steps.set_stack.outputs.stack_name }}.yaml"
+            CUSTOM_DOMAIN=$(grep -E "^\s+multicloud-auto-deploy-aws:customDomain:" "$STACK_FILE" 2>/dev/null \
+              | awk '{print $2}' | tr -d '"')
+            [[ -n "$CUSTOM_DOMAIN" ]] && echo "📄 CUSTOM_DOMAIN from YAML fallback: $CUSTOM_DOMAIN"
+          fi
+
           # Include custom domain in CORS if set
           if [[ -n "$CUSTOM_DOMAIN" ]]; then
             CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},https://${CUSTOM_DOMAIN},http://localhost:5173"
