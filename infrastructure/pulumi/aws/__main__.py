@@ -414,8 +414,11 @@ lambda_function = aws.lambda_.Function(
         {"index.py": pulumi.StringAsset(placeholder_code)}),
     # Skip code and layer updates: deployed by deploy-aws.yml workflow
     # Layers are managed by the CI/CD pipeline (lambda-layer.zip is built at deploy time)
+    # Also skip environment: CI/CD (Update Lambda step) sets CORS_ORIGINS with the correct
+    # custom domain. If Pulumi manages environment, it sets CORS_ORIGINS from allowedOrigins
+    # which may not include the custom domain, causing "CORS policy" errors on every deploy.
     opts=pulumi.ResourceOptions(
-        ignore_changes=["code", "source_code_hash", "layers"]),
+        ignore_changes=["code", "source_code_hash", "layers", "environment"]),
     environment={
         "variables": {
             "ENVIRONMENT": stack,
