@@ -1,7 +1,7 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-24 (Production動作確認セッション v3 — CDN全クラウド ✅ / AWS API ✅ / GCP API /limits 修復 ✅ / Azure API 修復 ✅ / AWS CF SecurityHeaders ✅)
+> Last verified: 2026-02-24 (Production動作確認セッション v4 — CDN全クラウド ✅ / AWS API ✅ / GCP API /limits 修復 ✅ / Azure API 修復 ✅ / AWS CF SecurityHeaders ✅ / AWS SNS Network Error 根本原因修正 ✅)
 
 ---
 
@@ -247,7 +247,7 @@ gcloud compute target-https-proxies update multicloud-auto-deploy-production-cdn
 
 ---
 
-### ✅ Production Issues — 全件解決済み (2026-02-24)
+### ✅ Production Issues — 全件解決済み (2026-02-24 v4)
 
 #### ✅ 1. Azure Function App — 0 registered functions (API 404) — RESOLVED 2026-02-24
 
@@ -321,6 +321,35 @@ az functionapp deployment source config-zip \
 
 **確認済み**: CloudFront Distribution `E214XONKTXJEJD` に HSTS/CSP/X-Content-Type-Options/X-Frame-Options/Referrer-Policy/XSS-Protection ポリシー適用 ✅
 
+#### ✅ 5. AWS Production SNS — Network Error (CI/CD customDomain 上書き) — RESOLVED 2026-02-24
+
+**症状**: `https://www.aws.ashnova.jp/sns/` の SNS アプリで API 呼び出し時に "Network Error" が発生。Axios が status 0 を返す。
+
+**根本原因チェーン**:
+
+1. `deploy-aws.yml` "Sync Pulumi Config" ステップが `${{ secrets.AWS_CUSTOM_DOMAIN }}` (リポジトリレベルシークレット = `staging.aws.ashnova.jp`) を使用
+2. `pulumi config set multicloud-auto-deploy-aws:customDomain "staging.aws.ashnova.jp"` が `Pulumi.production.yaml` を上書き
+3. `pulumi stack output custom_domain` → `staging.aws.ashnova.jp` を返す (正: `www.aws.ashnova.jp`)
+4. Lambda 環境変数 `CORS_ORIGINS` = `...,https://staging.aws.ashnova.jp,...` (正: `https://www.aws.ashnova.jp`)
+5. FastAPI CORS ミドルウェアが `Origin: https://www.aws.ashnova.jp` を拒否 → レスポンスに `Access-Control-Allow-Origin` ヘッダーなし → ブラウザが "Network Error" を報告
+
+**補足**:
+- API Gateway CORS: `AllowOrigins: ["*"]` → gateway レベルでは通過するが FastAPI が二次レイヤーで拒否
+- `auth.ts` は `window.location.origin` を実行時に使用 → Cognito リダイレクト URI は正常動作（auth 自体は壊れていなかった）
+- バンドル内 `VITE_COGNITO_REDIRECT_URI` の誤値は CI/CD バグの証拠だが auth には直接影響なし
+
+**修正内容 (コミット `3ea6a08` v1.17.10)**:
+
+| 修正 | 内容 |
+| ---- | ---- |
+| `deploy-aws.yml` CI/CD 修正 | "Sync Pulumi Config" を GitHub Secrets ではなく `Pulumi.${STACK_NAME}.yaml` から読むように変更。シークレットはフォールバックのみ |
+| React SPA 再ビルド・デプロイ | `www.aws.ashnova.jp` を持つ新バンドル `index-Ch-ro-3Y.js` を S3 デプロイ。旧バンドル `index-BDZFhT4n.js` 削除 |
+| CloudFront キャッシュ無効化 | Invalidation `I1P7ASR5TSVXJUGPQ56A6M6K09` (`/sns/*`) 完了 |
+| Lambda CORS_ORIGINS 即時修正 | `staging.aws.ashnova.jp` 削除: `https://d1qob7569mn5nw.cloudfront.net,https://www.aws.ashnova.jp,http://localhost:5173` |
+| Cognito implicit フロー削除 | `AllowedOAuthFlows: ["code", "implicit"]` → `["code"]` のみ |
+
+**確認済み**: Lambda `CORS_ORIGINS` から `staging.aws.ashnova.jp` 削除 ✅ / 次回 CI デプロイでも `Pulumi.production.yaml` から正しい値を読み込む ✅
+
 ---
 
 #### 2. GCP Pulumi state drift (非ブロッキング)
@@ -338,17 +367,9 @@ pulumi refresh --yes  # Pulumiの状態をGCPの実際の状態に同期
 pulumi up --yes       # 差分を適用
 ```
 
-#### 3. develop ブランチが main から遅延
+#### ✅ 3. develop ブランチが main から遅延 — RESOLVED 2026-02-24
 
-**現状**: `develop` は v1.17.1、`main` は v1.17.6
-
-**解決方法**:
-
-```bash
-git checkout develop
-git merge main --no-ff -m "chore: sync develop with main (v1.17.6)"
-git push origin develop
-```
+**現状**: `develop` v1.18.1 / `main` v1.17.10 — ✅ 同期済み (コミット `7efca78`、pre-commit フックにより develop が patch バンプ済み)
 
 ---
 
