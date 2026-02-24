@@ -299,6 +299,62 @@ jobs:
           echo "✅ Cloud Function deployed successfully"
           echo "  URL: $FUNCTION_URL"
 
+      - name: Build and Deploy Frontend
+        run: |
+          FRONTEND_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
+          API_URL="${{ steps.deploy_function.outputs.api_url }}"
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+
+          # Use per-stack mapping to avoid repo-level secret domain mismatch
+          case "$STACK_NAME" in
+            production) GCP_CUSTOM_DOMAIN="www.gcp.ashnova.jp" ;;
+            staging)    GCP_CUSTOM_DOMAIN="staging.gcp.ashnova.jp" ;;
+            *)          GCP_CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}" ;;
+          esac
+          PUBLIC_HOST="${GCP_CUSTOM_DOMAIN}"
+
+          echo "🏗️  Building React frontend for GCP ($STACK_NAME)..."
+          echo "🌐 Public host: ${PUBLIC_HOST}"
+          echo "🔗 API URL: ${API_URL}"
+          cd services/frontend_react
+          npm ci --prefer-offline
+
+          VITE_AUTH_PROVIDER=firebase \
+          VITE_API_URL="${API_URL}" \
+          VITE_FIREBASE_API_KEY="${{ secrets.FIREBASE_API_KEY }}" \
+          VITE_FIREBASE_AUTH_DOMAIN="${{ secrets.FIREBASE_AUTH_DOMAIN }}" \
+          VITE_FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}" \
+          VITE_FIREBASE_APP_ID="${{ secrets.FIREBASE_APP_ID }}" \
+          npx vite build --base=/sns/
+          echo "✅ Build complete ($(du -sh dist | cut -f1))"
+          cd ../..
+
+          # Upload index.html with no-cache
+          gsutil -h "Content-Type:text/html" \
+            -h "Cache-Control:no-cache, no-store, must-revalidate" \
+            cp services/frontend_react/dist/index.html \
+            "gs://${FRONTEND_BUCKET}/sns/index.html"
+
+          # Upload assets with immutable cache
+          gsutil -m -h "Cache-Control:public, max-age=31536000, immutable" \
+            cp -r services/frontend_react/dist/assets \
+            "gs://${FRONTEND_BUCKET}/sns/"
+
+          # Upload SVGs
+          gsutil -m -h "Cache-Control:public, max-age=3600" \
+            cp services/frontend_react/dist/*.svg \
+            "gs://${FRONTEND_BUCKET}/sns/" 2>/dev/null || true
+
+          echo "✅ Frontend deployed to gs://${FRONTEND_BUCKET}/sns/"
+
+          # Invalidate Cloud CDN cache
+          URLMAP_NAME=$(gcloud compute url-maps list --format="value(name)" | grep "${STACK_NAME}" | head -1)
+          if [ -n "$URLMAP_NAME" ]; then
+            gcloud compute url-maps invalidate-cdn-cache "$URLMAP_NAME" \
+              --path "/sns/*" --async 2>/dev/null || true
+            echo "✅ CDN cache invalidated: $URLMAP_NAME"
+          fi
+
       - name: Notify Success
         if: success()
         run: |
