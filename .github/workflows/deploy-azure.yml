@@ -411,8 +411,14 @@ jobs:
           # Get Front Door URL for CORS from Pulumi outputs
           FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
           CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
-          # Include custom domain if set
-          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"
+          # Include custom domain — use explicit per-stack mapping (Pulumi.*.yaml files are
+          # gitignored so cannot be read; repo-level secret may be wrong for production).
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          case "$STACK_NAME" in
+            production) AZURE_CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
+            staging)    AZURE_CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
+            *)          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}" ;;
+          esac
           if [ -n "$AZURE_CUSTOM_DOMAIN" ]; then
             CORS_ORIGINS="https://${AZURE_CUSTOM_DOMAIN},${CORS_ORIGINS}"
           fi
@@ -590,6 +596,65 @@ jobs:
             --resource-group $RESOURCE_GROUP \
             --settings http=1 \
             2>/dev/null && echo "✅ always-ready http=1 configured" || echo "⚠️  Could not set always-ready (non-fatal)"
+
+      - name: Ensure Azure CORS Origins
+        # Safety net: Pulumi/secrets may set CORS_ORIGINS without the custom domain.
+        # This step ensures both the app setting and platform-level CORS (Kestrel intercept)
+        # always include https://<customDomain> regardless of what the deploy step set.
+        # customDomain is determined from the stack name (Pulumi.*.yaml files are gitignored)
+        # so we use an explicit per-stack mapping here.
+        run: |
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
+          FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
+          FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
+
+          # Resolve production custom domain from stack name (explicit mapping)
+          case "$STACK_NAME" in
+            production) CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
+            staging)    CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
+            *)          CUSTOM_DOMAIN="" ;;
+          esac
+          # Fall back to secret if no explicit mapping found
+          [[ -z "$CUSTOM_DOMAIN" ]] && CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"
+
+          if [[ -z "$CUSTOM_DOMAIN" ]]; then
+            echo "⏭️  No custom domain set — skipping CORS safety net"
+            exit 0
+          fi
+
+          echo "🔒 Ensuring CORS origins include https://$CUSTOM_DOMAIN (stack: $STACK_NAME)..."
+
+          # Build correct CORS_ORIGINS
+          CORS_ORIGINS="https://${FRONTDOOR_URL},https://${CUSTOM_DOMAIN},http://localhost:5173"
+
+          # 1. Ensure app setting CORS_ORIGINS includes custom domain
+          CURRENT_CORS=$(az functionapp config appsettings list \
+            --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" \
+            --query "[?name=='CORS_ORIGINS'].value" -o tsv 2>/dev/null || echo "")
+          if echo "$CURRENT_CORS" | grep -q "$CUSTOM_DOMAIN"; then
+            echo "✅ CORS_ORIGINS app setting already includes $CUSTOM_DOMAIN"
+          else
+            echo "⚠️  CORS_ORIGINS missing $CUSTOM_DOMAIN — restoring: $CORS_ORIGINS"
+            az functionapp config appsettings set \
+              --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" \
+              --settings "CORS_ORIGINS=${CORS_ORIGINS}" > /dev/null
+            echo "✅ CORS_ORIGINS restored to: $CORS_ORIGINS"
+          fi
+
+          # 2. Ensure platform-level CORS (Kestrel) includes custom domain
+          CURRENT_PLATFORM=$(az functionapp cors show \
+            --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" \
+            --query "allowedOrigins" -o json 2>/dev/null || echo "[]")
+          if echo "$CURRENT_PLATFORM" | grep -q "$CUSTOM_DOMAIN"; then
+            echo "✅ Platform-level CORS already includes $CUSTOM_DOMAIN"
+          else
+            echo "⚠️  Platform CORS missing $CUSTOM_DOMAIN — adding..."
+            az functionapp cors add \
+              --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" \
+              --allowed-origins "https://${CUSTOM_DOMAIN}" > /dev/null
+            echo "✅ Platform CORS updated to include https://$CUSTOM_DOMAIN"
+          fi
 
       - name: Enable Static Website Hosting
         run: |

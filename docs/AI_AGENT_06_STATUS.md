@@ -1,7 +1,7 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-24 (Production動作確認セッション v4 — CDN全クラウド ✅ / AWS API ✅ / GCP API /limits 修復 ✅ / Azure API 修復 ✅ / AWS CF SecurityHeaders ✅ / AWS SNS Network Error 根本原因修正 ✅)
+> Last verified: 2026-02-24 (Production動作確認セッション v5 — Azure/GCP プロフィール CORS エラー修正 ✅ / Azure platform CORS + customDomain CI/CD 安全ネット追加 ✅)
 
 ---
 
@@ -247,7 +247,31 @@ gcloud compute target-https-proxies update multicloud-auto-deploy-production-cdn
 
 ---
 
-### ✅ Production Issues — 全件解決済み (2026-02-24 v4)
+### ✅ Production Issues — 全件解決済み (2026-02-24 v5)
+
+#### ✅ 6. Azure プロフィール画面 CORS エラー — RESOLVED 2026-02-24
+
+**症状**: `https://www.azure.ashnova.jp/sns/profile` でプロフィール取得時に CORS エラー発生。
+
+**根本原因**:
+1. Azure Function App は Kestrel がプラットフォームレベル CORS 判定を FastAPI `CORSMiddleware` の手前に行う
+2. `deploy-azure.yml` が `AZURE_CUSTOM_DOMAIN` シークレット (`staging.azure.ashnova.jp`) を使用してアプリ設定と platform CORS を構築
+3. その結果 `CORS_ORIGINS` アプリ設定とプラットフォーム CORS allowedOrigins の両方に `https://www.azure.ashnova.jp` が欠落
+4. OPTIONS プリフライトが 204 で返るが `Access-Control-Allow-Origin` ヘッダーなし → ブラウザが CORS エラーを報告
+
+**確認 (GCP)**: GCP は `CORS_ORIGINS` に `https://www.gcp.ashnova.jp` が含まれており問題なし ✅
+
+**即時修正**:
+- `az functionapp config appsettings set ... CORS_ORIGINS=https://mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net,https://www.azure.ashnova.jp,http://localhost:5173` ✅
+- `az functionapp cors add --allowed-origins "https://www.azure.ashnova.jp"` ✅
+- 確認: OPTIONS `/api/profile` → `Access-Control-Allow-Origin: https://www.azure.ashnova.jp` ✅
+
+**根本修正 (v1.17.15)**:
+- `infrastructure/pulumi/azure/Pulumi.production.yaml`: `customDomain: www.azure.ashnova.jp` を追加
+- `deploy-azure.yml` CORS 構築: シークレットではなく `Pulumi.${STACK_NAME}.yaml` から `customDomain` を読み取るよう変更
+- `deploy-azure.yml`: "Ensure Azure CORS Origins" 安全ネットステップを追加 (AWS パターンと同様)
+
+---
 
 #### ✅ 1. Azure Function App — 0 registered functions (API 404) — RESOLVED 2026-02-24
 
@@ -334,19 +358,20 @@ az functionapp deployment source config-zip \
 5. FastAPI CORS ミドルウェアが `Origin: https://www.aws.ashnova.jp` を拒否 → レスポンスに `Access-Control-Allow-Origin` ヘッダーなし → ブラウザが "Network Error" を報告
 
 **補足**:
+
 - API Gateway CORS: `AllowOrigins: ["*"]` → gateway レベルでは通過するが FastAPI が二次レイヤーで拒否
 - `auth.ts` は `window.location.origin` を実行時に使用 → Cognito リダイレクト URI は正常動作（auth 自体は壊れていなかった）
 - バンドル内 `VITE_COGNITO_REDIRECT_URI` の誤値は CI/CD バグの証拠だが auth には直接影響なし
 
 **修正内容 (コミット `3ea6a08` v1.17.10)**:
 
-| 修正 | 内容 |
-| ---- | ---- |
-| `deploy-aws.yml` CI/CD 修正 | "Sync Pulumi Config" を GitHub Secrets ではなく `Pulumi.${STACK_NAME}.yaml` から読むように変更。シークレットはフォールバックのみ |
-| React SPA 再ビルド・デプロイ | `www.aws.ashnova.jp` を持つ新バンドル `index-Ch-ro-3Y.js` を S3 デプロイ。旧バンドル `index-BDZFhT4n.js` 削除 |
-| CloudFront キャッシュ無効化 | Invalidation `I1P7ASR5TSVXJUGPQ56A6M6K09` (`/sns/*`) 完了 |
-| Lambda CORS_ORIGINS 即時修正 | `staging.aws.ashnova.jp` 削除: `https://d1qob7569mn5nw.cloudfront.net,https://www.aws.ashnova.jp,http://localhost:5173` |
-| Cognito implicit フロー削除 | `AllowedOAuthFlows: ["code", "implicit"]` → `["code"]` のみ |
+| 修正                         | 内容                                                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy-aws.yml` CI/CD 修正  | "Sync Pulumi Config" を GitHub Secrets ではなく `Pulumi.${STACK_NAME}.yaml` から読むように変更。シークレットはフォールバックのみ |
+| React SPA 再ビルド・デプロイ | `www.aws.ashnova.jp` を持つ新バンドル `index-Ch-ro-3Y.js` を S3 デプロイ。旧バンドル `index-BDZFhT4n.js` 削除                    |
+| CloudFront キャッシュ無効化  | Invalidation `I1P7ASR5TSVXJUGPQ56A6M6K09` (`/sns/*`) 完了                                                                        |
+| Lambda CORS_ORIGINS 即時修正 | `staging.aws.ashnova.jp` 削除: `https://d1qob7569mn5nw.cloudfront.net,https://www.aws.ashnova.jp,http://localhost:5173`          |
+| Cognito implicit フロー削除  | `AllowedOAuthFlows: ["code", "implicit"]` → `["code"]` のみ                                                                      |
 
 **確認済み**: Lambda `CORS_ORIGINS` から `staging.aws.ashnova.jp` 削除 ✅ / 次回 CI デプロイでも `Pulumi.production.yaml` から正しい値を読み込む ✅
 
