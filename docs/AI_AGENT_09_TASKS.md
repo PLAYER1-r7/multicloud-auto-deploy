@@ -16,22 +16,26 @@ Azure API (production):     ✅ {"status":"ok","provider":"azure","version":"3.0
 AWS SNS Network Error:      ✅ RESOLVED 2026-02-24 (CI/CD customDomain 上書きバグ修正 / CORS_ORIGINS 修正)
 Azure CORS エラー (Profile): ✅ RESOLVED 2026-02-24 (platform CORS + CORS_ORIGINS に www.azure.ashnova.jp 追加 / CI/CD 安全ネット追加)
 Azure ログイン staging リダイレクト: ✅ RESOLVED 2026-02-24 (AD redirect URI追加 / フロント再ビルド / deploy-azure.yml 全4箇所 AZURE_CUSTOM_DOMAIN 修正)
+Azure ログイン「認証設定が不完全」: ✅ RESOLVED 2026-02-24 (Pulumi出力空時の AD Client ID 消去バグ / bundle 手動修正 + deploy-azure.yml フォールバック追加)
+GCP プロフィール画面が表示されない:  ✅ RESOLVED 2026-02-24 (deploy-gcp.yml にフロントエンドビルド/デプロイ ステップを追加 / bundle 手動修正)
+危険なサイト警告 (all clouds):       ✅ RESOLVED 2026-02-24 (non-www → www リダイレクト追加 main.tsx)
+CI/CD 環境変数消去・混在 (全クラウド): ✅ RESOLVED 2026-02-24 (.github/config/ 導入 / case/esac 全廃 / Lambda Layer名バグ修正)
 Landing Pages (production): ✅ 37/37 PASS — AWS/Azure/GCP全クラウド 4400-4450 bytes 正常コンテンツ
 Custom Domains (all):       ✅ www.aws/azure/gcp.ashnova.jp HTTPS 200
 CI/CD pipelines:
-  deploy-aws.yml:           ✅ YAML修正済み / Sync Pulumi Config を YAML ファイルから読み込むよう修正
-  deploy-azure.yml:         ✅ YAML修正済み / "Ensure Azure CORS Origins" 安全ネット追加 / customDomain を YAML から読み取り → deploy 4箇所すべて stack 名マッピングに統一
-  deploy-gcp.yml:           ✅ YAML修正済み (python heredoc→jq) / ⚠️ Pulumi state drift
+  deploy-aws.yml:           ✅ Load Cloud Config ステップ追加 / Lambda Layer名バグ修正
+  deploy-azure.yml:         ✅ Load Cloud Config ステップ追加 / 全AD値をconfig参照 / case/esac全廃
+  deploy-gcp.yml:           ✅ Load Cloud Config ステップ追加 / custom_domain参照修正
   deploy-landing-azure.yml: ✅ 修正済み — staging hardcoded → environment-aware
   その他:                   ✅ 全10ワークフロー YAML valid
-develop branch sync:        ⚠️ main v1.17.16 に未同期 (要実施)
+develop branch sync:        ✅ main v1.17.22 と同期済み
 ```
 
 ---
 
 ## 🔴 High Priority Tasks (2026-02-24 update)
 
-### ⚠️ 残存: Azure Function App — CI/CD 再発リスク
+### ⚠️ 残存問題
 
 | #   | Task                                             | Description                                                                                                                                                                                    | Reference                                                                 |
 | --- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -65,7 +69,7 @@ develop branch sync:        ⚠️ main v1.17.16 に未同期 (要実施)
 | Azure Function App — 0 registered functions | Python 3.12 / linux/amd64 でパッケージを再ビルドし `--build-remote false` でデプロイ。Layer 1〜4 の多層根本原因を解消                                                                                                                                                                    | v1.17.9              |
 | develop ブランチが main から遅延            | `git merge main --no-ff` 実行 → `develop` v1.18.1 同期                                                                                                                                                                                                                                   | —                    |
 | Azure プロフィール画面 CORS エラー          | platform CORS `az functionapp cors add` で `https://www.azure.ashnova.jp` を追加。`CORS_ORIGINS` アプリ設定も修正。`deploy-azure.yml`: YAML から customDomain 読み取り + "Ensure Azure CORS Origins" 安全ネット追加。`Pulumi.production.yaml`: `customDomain: www.azure.ashnova.jp` 追加 | v1.17.15             |
-| Azure ログイン後に staging SNS に遷移       | Azure AD redirect URIs に `www.azure.ashnova.jp` を追加。フロントエンドを正しい `VITE_AZURE_REDIRECT_URI` で再ビルド → `index-CPcQQsCR.js`。`deploy-azure.yml` の 4箇所の `${{ secrets.AZURE_CUSTOM_DOMAIN }}` を stack 名マッピングに変更 | v1.17.16             |
+| Azure ログイン後に staging SNS に遷移       | Azure AD redirect URIs に `www.azure.ashnova.jp` を追加。フロントエンドを正しい `VITE_AZURE_REDIRECT_URI` で再ビルド → `index-CPcQQsCR.js`。`deploy-azure.yml` の 4箇所の `${{ secrets.AZURE_CUSTOM_DOMAIN }}` を stack 名マッピングに変更                                               | v1.17.16             |
 
 ## 2026-02-23 セッションで解決済みの問題
 
@@ -78,6 +82,10 @@ develop branch sync:        ⚠️ main v1.17.16 に未同期 (要実施)
 | deploy-azure.yml: `AzureWebJobsStorage` が存在しないSA `multicloudautodeploa148` を指していた | zip deploy前にストレージを `mcadfuncdiev0w` に修正するステップ追加          | v1.17.6  |
 | deploy-landing-azure.yml: staging にハードコード（production デプロイ不可）                   | environment-aware に修正 (`main` → production SA `mcadwebdiev0w`)           | v1.17.5  |
 | Azure CDN landing page: 843バイトのReact SPA が配信されていた                                 | 上記 deploy-landing-azure.yml 修正により解消 → 4412バイトの正しいコンテンツ | v1.17.5  |
+| Azure ログイン「認証設定が不完全です」                                                         | Pulumi出力 `azure_ad_client_id` が空 → `VITE_AZURE_CLIENT_ID=''` → Provider='none'。`index-CzWB96PN.js` を手動ビルド＆Blob Storage デプロイ。`deploy-azure.yml` にフォールバック追加 | v1.17.21 |
+| GCP プロフィール画面が表示されない                                                             | `deploy-gcp.yml` にフロントエンドビルド/デプロイステップが存在しなかった。`index-DNqlhCH0.js` を手動ビルド＆GCS デプロイ。ワークフローにステップ追加 | v1.17.20 |
+| 危険なサイト警告 (all clouds)                                                                  | non-www (`azure.ashnova.jp` 等) → Google Safe Browsing 警告。`main.tsx` に `window.location.replace()` リダイレクト追加 (3クラウド対応) | v1.17.17–19 |
+| CI/CD 環境変数消去・混在 (全クラウド)                                                          | `Pulumi.*.yaml` gitignore → Secrets fallback → 環境混在。`.github/config/` 導入により根本解決。Lambda Layer名バグ・全 `case/esac` 廃止 | v1.17.22 |
 
 ---
 
