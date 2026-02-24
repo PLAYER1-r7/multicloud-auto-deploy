@@ -73,19 +73,19 @@ develop branch sync:        ✅ main v1.17.22 と同期済み
 
 ## 2026-02-23 セッションで解決済みの問題
 
-| 問題                                                                                          | 修正内容                                                                    | コミット |
-| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------- |
-| deploy-azure.yml: `run:` キー重複 (YAML error)                                                | `Build and Package Azure Function` ステップ追加                             | v1.16.2  |
-| deploy-azure.yml: `$RG_NAME` 未定義 (`az functionapp config hostname list` 失敗)              | `RG_NAME=$(pulumi stack output ...)` に修正                                 | v1.17.3  |
-| deploy-gcp.yml: Python heredoc が YAML block scalar を壊す                                    | Firebase domain更新を `jq` コマンドに置き換え                               | v1.17.2  |
-| deploy-azure.yml: AFD route に custom domain が未リンク                                       | AFD route PATCH 後、ワークフローに "Link Custom Domain" ステップ追加        | v1.17.4  |
-| deploy-azure.yml: `AzureWebJobsStorage` が存在しないSA `multicloudautodeploa148` を指していた | zip deploy前にストレージを `mcadfuncdiev0w` に修正するステップ追加          | v1.17.6  |
-| deploy-landing-azure.yml: staging にハードコード（production デプロイ不可）                   | environment-aware に修正 (`main` → production SA `mcadwebdiev0w`)           | v1.17.5  |
-| Azure CDN landing page: 843バイトのReact SPA が配信されていた                                 | 上記 deploy-landing-azure.yml 修正により解消 → 4412バイトの正しいコンテンツ | v1.17.5  |
-| Azure ログイン「認証設定が不完全です」                                                         | Pulumi出力 `azure_ad_client_id` が空 → `VITE_AZURE_CLIENT_ID=''` → Provider='none'。`index-CzWB96PN.js` を手動ビルド＆Blob Storage デプロイ。`deploy-azure.yml` にフォールバック追加 | v1.17.21 |
-| GCP プロフィール画面が表示されない                                                             | `deploy-gcp.yml` にフロントエンドビルド/デプロイステップが存在しなかった。`index-DNqlhCH0.js` を手動ビルド＆GCS デプロイ。ワークフローにステップ追加 | v1.17.20 |
-| 危険なサイト警告 (all clouds)                                                                  | non-www (`azure.ashnova.jp` 等) → Google Safe Browsing 警告。`main.tsx` に `window.location.replace()` リダイレクト追加 (3クラウド対応) | v1.17.17–19 |
-| CI/CD 環境変数消去・混在 (全クラウド)                                                          | `Pulumi.*.yaml` gitignore → Secrets fallback → 環境混在。`.github/config/` 導入により根本解決。Lambda Layer名バグ・全 `case/esac` 廃止 | v1.17.22 |
+| 問題                                                                                          | 修正内容                                                                                                                                                                             | コミット    |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
+| deploy-azure.yml: `run:` キー重複 (YAML error)                                                | `Build and Package Azure Function` ステップ追加                                                                                                                                      | v1.16.2     |
+| deploy-azure.yml: `$RG_NAME` 未定義 (`az functionapp config hostname list` 失敗)              | `RG_NAME=$(pulumi stack output ...)` に修正                                                                                                                                          | v1.17.3     |
+| deploy-gcp.yml: Python heredoc が YAML block scalar を壊す                                    | Firebase domain更新を `jq` コマンドに置き換え                                                                                                                                        | v1.17.2     |
+| deploy-azure.yml: AFD route に custom domain が未リンク                                       | AFD route PATCH 後、ワークフローに "Link Custom Domain" ステップ追加                                                                                                                 | v1.17.4     |
+| deploy-azure.yml: `AzureWebJobsStorage` が存在しないSA `multicloudautodeploa148` を指していた | zip deploy前にストレージを `mcadfuncdiev0w` に修正するステップ追加                                                                                                                   | v1.17.6     |
+| deploy-landing-azure.yml: staging にハードコード（production デプロイ不可）                   | environment-aware に修正 (`main` → production SA `mcadwebdiev0w`)                                                                                                                    | v1.17.5     |
+| Azure CDN landing page: 843バイトのReact SPA が配信されていた                                 | 上記 deploy-landing-azure.yml 修正により解消 → 4412バイトの正しいコンテンツ                                                                                                          | v1.17.5     |
+| Azure ログイン「認証設定が不完全です」                                                        | Pulumi出力 `azure_ad_client_id` が空 → `VITE_AZURE_CLIENT_ID=''` → Provider='none'。`index-CzWB96PN.js` を手動ビルド＆Blob Storage デプロイ。`deploy-azure.yml` にフォールバック追加 | v1.17.21    |
+| GCP プロフィール画面が表示されない                                                            | `deploy-gcp.yml` にフロントエンドビルド/デプロイステップが存在しなかった。`index-DNqlhCH0.js` を手動ビルド＆GCS デプロイ。ワークフローにステップ追加                                 | v1.17.20    |
+| 危険なサイト警告 (all clouds)                                                                 | non-www (`azure.ashnova.jp` 等) → Google Safe Browsing 警告。`main.tsx` に `window.location.replace()` リダイレクト追加 (3クラウド対応)                                              | v1.17.17–19 |
+| CI/CD 環境変数消去・混在 (全クラウド)                                                         | `Pulumi.*.yaml` gitignore → Secrets fallback → 環境混在。`.github/config/` 導入により根本解決。Lambda Layer名バグ・全 `case/esac` 廃止                                               | v1.17.22    |
 
 ---
 
