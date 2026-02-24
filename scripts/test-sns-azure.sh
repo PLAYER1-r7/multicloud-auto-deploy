@@ -128,7 +128,8 @@ if [[ $_ENV_ == production ]]; then
   [[ $_API_URL_EXPLICIT == false ]] && API_URL="${API_URL:-https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net/api}"
 else
   FD_URL="${FD_URL:-https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net}"
-  API_URL="${API_URL:-https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net}"
+  # Azure Functions default routePrefix is "api", so /health is at /api/health
+  API_URL="${API_URL:-https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api}"
 fi
 [[ $READ_ONLY == true ]] && SKIP_CLEANUP=true
 
