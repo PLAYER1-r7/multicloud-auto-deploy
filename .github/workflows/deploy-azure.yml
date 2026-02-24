@@ -553,10 +553,13 @@ jobs:
             echo "Attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
             
             # Run deployment and capture output
+            # --build-remote false: use pre-built package (linux/amd64 + Python 3.12)
+            # Without this flag Azure tries to re-build server-side, causing wrong arch .so
             az functionapp deployment source config-zip \
               --resource-group $RESOURCE_GROUP \
               --name $FUNCTION_APP \
               --src services/api/function-app.zip \
+              --build-remote false \
               --timeout 600 \
               2>&1 | tee deploy_log.txt || true
             

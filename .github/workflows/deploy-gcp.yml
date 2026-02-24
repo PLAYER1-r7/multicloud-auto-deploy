@@ -119,6 +119,18 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
+      - name: Refresh Pulumi State (sync with actual GCP resources)
+        # Prevents 400/412 errors on ManagedSslCertificate and URLMap during pulumi up.
+        # Known issue: GCP Pulumi state drift causes pulumi up to fail with
+        #   "ManagedSslCertificate 400" or "URLMap 412 precondition failed"
+        # pulumi refresh syncs the state to match actual GCP resource state before making changes.
+        run: |
+          cd infrastructure/pulumi/gcp
+          pulumi refresh --yes --stack ${{ steps.set_stack.outputs.stack_name }} 2>/dev/null || echo "⚠️  pulumi refresh encountered warnings — proceeding with up"
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5

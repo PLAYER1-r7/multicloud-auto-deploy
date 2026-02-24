@@ -215,23 +215,18 @@ jobs:
           echo "⚠️  CloudFront alias is '$CURRENT_ALIAS' (expected '$CUSTOM_DOMAIN') — restoring..."
           ETAG=$(aws cloudfront get-distribution-config --id "$CD" --query 'ETag' --output text)
           aws cloudfront get-distribution-config --id "$CD" --query 'DistributionConfig' --output json > /tmp/cf-dist.json
-          export CF_CUSTOM_DOMAIN="$CUSTOM_DOMAIN"
-          export CF_ACM_CERT_ARN="$ACM_CERT_ARN"
-          python3 - << 'PYEOF'
-import json, os
-with open('/tmp/cf-dist.json') as f:
-    cfg = json.load(f)
-cfg['Aliases'] = {'Quantity': 1, 'Items': [os.environ['CF_CUSTOM_DOMAIN']]}
-cfg['ViewerCertificate'] = {
-    'ACMCertificateArn': os.environ['CF_ACM_CERT_ARN'],
-    'SSLSupportMethod': 'sni-only',
-    'MinimumProtocolVersion': 'TLSv1.2_2021',
-    'CertificateSource': 'acm'
-}
-cfg['ViewerCertificate'].pop('CloudFrontDefaultCertificate', None)
-with open('/tmp/cf-dist.json', 'w') as f:
-    json.dump(cfg, f)
-PYEOF
+          # Replace Python heredoc with jq to avoid YAML block scalar parsing issues
+          # (same fix pattern applied to deploy-gcp.yml: "Python heredoc が YAML block scalar を壊す")
+          jq --arg domain "$CUSTOM_DOMAIN" --arg cert "$ACM_CERT_ARN" '
+            .Aliases = {"Quantity": 1, "Items": [$domain]} |
+            .ViewerCertificate = {
+              "ACMCertificateArn": $cert,
+              "SSLSupportMethod": "sni-only",
+              "MinimumProtocolVersion": "TLSv1.2_2021",
+              "CertificateSource": "acm"
+            } |
+            del(.ViewerCertificate.CloudFrontDefaultCertificate)
+          ' /tmp/cf-dist.json > /tmp/cf-dist-updated.json && mv /tmp/cf-dist-updated.json /tmp/cf-dist.json
           aws cloudfront update-distribution --id "$CD" --if-match "$ETAG" \
             --distribution-config file:///tmp/cf-dist.json \
             --query 'Distribution.{Status:Status,Aliases:DistributionConfig.Aliases.Items}' \
@@ -262,19 +257,9 @@ PYEOF
           fi
 
           echo "⚠️  Cognito callback URL missing $REQUIRED_CALLBACK — restoring..."
-          CALLBACK_URLS=$(python3 -c "
-import json, sys
-current = json.loads('''$CURRENT''')
-required = [
-    'http://localhost:5173/sns/auth/callback',
-    'https://${CUSTOM_DOMAIN}/sns/auth/callback',
-]
-if '${CF_DOMAIN}' and '${CF_DOMAIN}' != '${CUSTOM_DOMAIN}':
-    required.append('https://${CF_DOMAIN}/sns/auth/callback')
-# merge keeping unique values
-merged = list(dict.fromkeys(required + [u for u in current if u not in required]))
-print(' '.join(merged))
-")
+          # Build merged callback URL list using jq (avoids multi-line Python heredoc that breaks YAML parsing)
+          CALLBACK_URLS=$(echo "$CURRENT" | jq -r --arg d "$CUSTOM_DOMAIN" --arg c "$CF_DOMAIN" \
+            '(["http://localhost:5173/sns/auth/callback", "https://\($d)/sns/auth/callback"] + (if ($c != "" and $c != $d) then ["https://\($c)/sns/auth/callback"] else [] end) + .) | reduce .[] as $u ([]; if (. | index($u)) then . else . + [$u] end) | join(" ")')
           LOGOUT_URLS="http://localhost:5173/sns/ https://${CUSTOM_DOMAIN}/sns/"
 
           aws cognito-idp update-user-pool-client \
