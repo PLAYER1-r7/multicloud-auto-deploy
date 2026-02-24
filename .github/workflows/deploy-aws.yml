@@ -227,6 +227,57 @@ PYEOF
             --output json
           echo "✅ CloudFront alias + ACM cert restored for $CUSTOM_DOMAIN"
 
+      - name: Ensure Cognito callback URLs (post-Pulumi safety net)
+        run: |
+          USER_POOL_ID="${{ steps.pulumi_outputs.outputs.cognito_user_pool_id }}"
+          CLIENT_ID="${{ steps.pulumi_outputs.outputs.cognito_client_id }}"
+          CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
+          CF_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
+
+          if [[ -z "$USER_POOL_ID" || -z "$CLIENT_ID" ]]; then
+            echo "⏭️  No Cognito pool/client — skipping"
+            exit 0
+          fi
+
+          # Build required callback URLs
+          REQUIRED_CALLBACK="https://${CUSTOM_DOMAIN}/sns/auth/callback"
+          CURRENT=$(aws cognito-idp describe-user-pool-client \
+            --user-pool-id "$USER_POOL_ID" --client-id "$CLIENT_ID" \
+            --query 'UserPoolClient.CallbackURLs' --output json)
+
+          if echo "$CURRENT" | grep -q "$REQUIRED_CALLBACK"; then
+            echo "✅ Cognito callback URL already includes $REQUIRED_CALLBACK"
+            exit 0
+          fi
+
+          echo "⚠️  Cognito callback URL missing $REQUIRED_CALLBACK — restoring..."
+          CALLBACK_URLS=$(python3 -c "
+import json, sys
+current = json.loads('''$CURRENT''')
+required = [
+    'http://localhost:5173/sns/auth/callback',
+    'https://${CUSTOM_DOMAIN}/sns/auth/callback',
+]
+if '${CF_DOMAIN}' and '${CF_DOMAIN}' != '${CUSTOM_DOMAIN}':
+    required.append('https://${CF_DOMAIN}/sns/auth/callback')
+# merge keeping unique values
+merged = list(dict.fromkeys(required + [u for u in current if u not in required]))
+print(' '.join(merged))
+")
+          LOGOUT_URLS="http://localhost:5173/sns/ https://${CUSTOM_DOMAIN}/sns/"
+
+          aws cognito-idp update-user-pool-client \
+            --user-pool-id "$USER_POOL_ID" \
+            --client-id "$CLIENT_ID" \
+            --callback-urls $CALLBACK_URLS \
+            --logout-urls $LOGOUT_URLS \
+            --allowed-o-auth-flows "code" \
+            --allowed-o-auth-scopes "email" "openid" "profile" \
+            --supported-identity-providers "COGNITO" \
+            --allowed-o-auth-flows-user-pool-client \
+            --query 'UserPoolClient.CallbackURLs' --output json
+          echo "✅ Cognito callback URLs restored"
+
       - name: Build and Deploy Frontend
         run: |
           FRONTEND_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
