@@ -207,9 +207,14 @@ jobs:
         # custom domain after each Pulumi deploy. Without this step, Azure Front Door serves the
         # *.azureedge.net wildcard cert instead of the managed cert for www.azure.ashnova.jp.
         run: |
-          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          case "$STACK_NAME" in
+            production) AZURE_CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
+            staging)    AZURE_CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
+            *)          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}" ;;
+          esac
           if [ -z "$AZURE_CUSTOM_DOMAIN" ]; then
-            echo "⏭️  No custom domain configured (AZURE_CUSTOM_DOMAIN secret not set), skipping"
+            echo "⏭️  No custom domain configured, skipping"
             exit 0
           fi
 
@@ -246,7 +251,12 @@ jobs:
         run: |
           AD_APP_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
           FRONTDOOR="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
-          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          case "$STACK_NAME" in
+            production) AZURE_CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
+            staging)    AZURE_CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
+            *)          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}" ;;
+          esac
 
           # Build redirect URI list: login callbacks (/sns/auth/callback) + logout redirects (/sns/)
           URIS=(
@@ -681,7 +691,12 @@ jobs:
           # so Blob Storage must allow CORS from both the custom domain and FrontDoor hostname.
           echo "🔒 Configuring Blob Storage CORS for image uploads..."
           FRONTDOOR_HOSTNAME="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
-          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          case "$STACK_NAME" in
+            production) AZURE_CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
+            staging)    AZURE_CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
+            *)          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}" ;;
+          esac
 
           # Clear existing CORS rules and re-add them fresh
           az storage cors clear \
@@ -735,8 +750,14 @@ jobs:
           API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
           AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
           AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}"
-          # Use custom domain if set, fall back to FrontDoor hostname
-          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"
+          # Use custom domain for production/staging, fall back to FrontDoor hostname.
+          # Use per-stack mapping to avoid wrong domain from repo-level AZURE_CUSTOM_DOMAIN secret.
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          case "$STACK_NAME" in
+            production) AZURE_CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
+            staging)    AZURE_CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
+            *)          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}" ;;
+          esac
           AZURE_PUBLIC_HOST="${AZURE_CUSTOM_DOMAIN:-${FRONTDOOR_HOSTNAME}}"
 
           echo "🏗️  Building React frontend for Azure..."
