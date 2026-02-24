@@ -1,5 +1,6 @@
-from typing import Optional, Any
 from enum import Enum
+from typing import Any
+
 from pydantic import BaseModel, Field, model_serializer
 
 
@@ -17,13 +18,13 @@ class Post(BaseModel):
 
     id: str = Field(..., alias="postId")
     user_id: str = Field(..., alias="userId")
-    nickname: Optional[str] = None
+    nickname: str | None = None
     content: str
     is_markdown: bool = Field(False, alias="isMarkdown")
-    image_urls: Optional[list[str]] = Field(None, alias="imageUrls")
-    tags: Optional[list[str]] = None
+    image_urls: list[str] | None = Field(None, alias="imageUrls")
+    tags: list[str] | None = None
     created_at: str = Field(..., alias="createdAt")
-    updated_at: Optional[str] = Field(None, alias="updatedAt")
+    updated_at: str | None = Field(None, alias="updatedAt")
 
     model_config = {"populate_by_name": True}
 
@@ -55,8 +56,10 @@ class CreatePostBody(BaseModel):
 
     content: str = Field(..., min_length=1, max_length=10000)
     is_markdown: bool = Field(False, alias="isMarkdown")
-    image_keys: Optional[list[str]] = Field(None, alias="imageKeys")  # 枚数制限はルートで settings.max_images_per_post により強制
-    tags: Optional[list[str]] = Field(None, max_length=10)
+    image_keys: list[str] | None = Field(
+        None, alias="imageKeys"
+    )  # 枚数制限はルートで settings.max_images_per_post により強制
+    tags: list[str] | None = Field(None, max_length=10)
 
     model_config = {"populate_by_name": True}
 
@@ -64,10 +67,10 @@ class CreatePostBody(BaseModel):
 class UpdatePostBody(BaseModel):
     """投稿更新リクエスト（全フィールドオプション）"""
 
-    content: Optional[str] = Field(None, min_length=1, max_length=10000)
-    is_markdown: Optional[bool] = Field(None, alias="isMarkdown")
-    image_keys: Optional[list[str]] = Field(None, alias="imageKeys")
-    tags: Optional[list[str]] = Field(None, max_length=10)
+    content: str | None = Field(None, min_length=1, max_length=10000)
+    is_markdown: bool | None = Field(None, alias="isMarkdown")
+    image_keys: list[str] | None = Field(None, alias="imageKeys")
+    tags: list[str] | None = Field(None, max_length=10)
 
     model_config = {"populate_by_name": True}
 
@@ -77,7 +80,7 @@ class ListPostsResponse(BaseModel):
 
     items: list[Post]
     limit: int
-    next_token: Optional[str] = Field(None, alias="nextToken")
+    next_token: str | None = Field(None, alias="nextToken")
 
     model_config = {"populate_by_name": True}
 
@@ -100,11 +103,11 @@ class ProfileResponse(BaseModel):
     """プロフィールレスポンス"""
 
     user_id: str = Field(..., alias="userId")
-    nickname: Optional[str] = None
-    bio: Optional[str] = None
-    avatar_url: Optional[str] = Field(None, alias="avatarUrl")
-    created_at: Optional[str] = Field(None, alias="createdAt")
-    updated_at: Optional[str] = Field(None, alias="updatedAt")
+    nickname: str | None = None
+    bio: str | None = None
+    avatar_url: str | None = Field(None, alias="avatarUrl")
+    created_at: str | None = Field(None, alias="createdAt")
+    updated_at: str | None = Field(None, alias="updatedAt")
 
     model_config = {"populate_by_name": True}
 
@@ -112,9 +115,9 @@ class ProfileResponse(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     """プロフィール更新リクエスト"""
 
-    nickname: Optional[str] = Field(None, max_length=100)
-    bio: Optional[str] = Field(None, max_length=500)
-    avatar_key: Optional[str] = Field(None, alias="avatarKey")
+    nickname: str | None = Field(None, max_length=100)
+    bio: str | None = Field(None, max_length=500)
+    avatar_key: str | None = Field(None, alias="avatarKey")
 
     model_config = {"populate_by_name": True}
 
@@ -122,8 +125,10 @@ class ProfileUpdateRequest(BaseModel):
 class UploadUrlsRequest(BaseModel):
     """アップロードURL生成リクエスト"""
 
-    count: int = Field(..., ge=1, le=100)  # 絶対上限 100、実際の制限は settings.max_images_per_post
-    content_types: Optional[list[str]] = Field(
+    count: int = Field(
+        ..., ge=1, le=100
+    )  # 絶対上限 100、実際の制限は settings.max_images_per_post
+    content_types: list[str] | None = Field(
         None,
         alias="contentTypes",
         description="各ファイルのContent-Type (image/jpeg, image/png 等)",
@@ -144,3 +149,86 @@ class HealthResponse(BaseModel):
     status: str
     provider: str
     version: str = "3.0.0"
+
+
+class SolveInput(BaseModel):
+    """数学問題画像入力"""
+
+    image_base64: str | None = Field(None, alias="imageBase64")
+    image_url: str | None = Field(None, alias="imageUrl")
+    source: str = Field("paste", pattern="^(paste|upload|url)$")
+
+    model_config = {"populate_by_name": True}
+
+
+class SolveExam(BaseModel):
+    """試験メタデータ"""
+
+    university: str = "tokyo"
+    year: int | None = None
+    subject: str = "math"
+    question_no: str | None = Field(None, alias="questionNo")
+
+    model_config = {"populate_by_name": True}
+
+
+class SolveOptions(BaseModel):
+    """解答オプション"""
+
+    mode: str = Field("fast", pattern="^(fast|accurate)$")
+    need_steps: bool = Field(True, alias="needSteps")
+    need_latex: bool = Field(True, alias="needLatex")
+    max_tokens: int = Field(2000, alias="maxTokens", ge=256, le=4096)
+
+    model_config = {"populate_by_name": True}
+
+
+class SolveRequest(BaseModel):
+    """数学問題解答リクエスト"""
+
+    input: SolveInput
+    exam: SolveExam = Field(default_factory=SolveExam)
+    options: SolveOptions = Field(default_factory=SolveOptions)
+
+
+class SolveAnswer(BaseModel):
+    """AI解答"""
+
+    final: str
+    latex: str | None = None
+    steps: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class SolveMeta(BaseModel):
+    """実行メタ情報"""
+
+    ocr_provider: str = Field(alias="ocrProvider")
+    ocr_source: str | None = Field(default=None, alias="ocrSource")
+    ocr_score: float | None = Field(default=None, alias="ocrScore")
+    ocr_candidates: int | None = Field(default=None, alias="ocrCandidates")
+    ocr_top_candidates: list[dict[str, float | str]] | None = Field(
+        default=None, alias="ocrTopCandidates"
+    )
+    ocr_replacement_ratio: float | None = Field(
+        default=None, alias="ocrReplacementRatio"
+    )
+    ocr_non_ascii_ratio: float | None = Field(default=None, alias="ocrNonAsciiRatio")
+    ocr_needs_review: bool | None = Field(default=None, alias="ocrNeedsReview")
+    model: str
+    latency_ms: int = Field(alias="latencyMs")
+    cost_usd: float = Field(alias="costUsd")
+
+    model_config = {"populate_by_name": True}
+
+
+class SolveResponse(BaseModel):
+    """数学問題解答レスポンス"""
+
+    request_id: str = Field(alias="requestId")
+    status: str
+    problem_text: str = Field(alias="problemText")
+    answer: SolveAnswer
+    meta: SolveMeta
+
+    model_config = {"populate_by_name": True}

@@ -440,10 +440,10 @@ jobs:
             # S3 upload for large packages
             S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
             S3_KEY="lambda-deployments/lambda-$(date +%Y%m%d-%H%M%S).zip"
-            
+
             echo "☁️  Uploading to S3: s3://$S3_BUCKET/$S3_KEY"
             aws s3 cp services/api/lambda.zip s3://$S3_BUCKET/$S3_KEY || { echo "❌ S3 upload failed!"; exit 1; }
-            
+
             echo "🚀 Updating Lambda from S3"
             aws lambda update-function-code \
               --function-name $LAMBDA_FUNCTION \
@@ -503,6 +503,11 @@ jobs:
           echo "    \"POSTS_TABLE_NAME\": \"$POSTS_TABLE\"," >> /tmp/lambda-env.json
           echo "    \"IMAGES_BUCKET_NAME\": \"$IMAGES_BUCKET\"," >> /tmp/lambda-env.json
           echo "    \"SECRET_NAME\": \"$SECRET_NAME\"," >> /tmp/lambda-env.json
+          echo "    \"TEXTRACT_REGION\": \"ap-northeast-2\"," >> /tmp/lambda-env.json
+          echo "    \"BEDROCK_REGION\": \"us-east-1\"," >> /tmp/lambda-env.json
+          echo "    \"BEDROCK_MODEL_ID\": \"amazon.nova-pro-v1:0\"," >> /tmp/lambda-env.json
+          echo "    \"SOLVE_OCR_REVIEW_MIN_SCORE\": \"0.35\"," >> /tmp/lambda-env.json
+          echo "    \"SOLVE_OCR_REVIEW_MAX_REPLACEMENT_RATIO\": \"0.01\"," >> /tmp/lambda-env.json
           echo "    \"CORS_ORIGINS\": \"$CORS_ORIGINS\"" >> /tmp/lambda-env.json
           echo '  }' >> /tmp/lambda-env.json
           echo '}' >> /tmp/lambda-env.json

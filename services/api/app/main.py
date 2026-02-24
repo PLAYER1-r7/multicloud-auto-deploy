@@ -1,17 +1,17 @@
+import logging
 from contextlib import asynccontextmanager
-from typing import Optional
-from fastapi import FastAPI, Request, Query, Depends
+
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-import logging
 
-from app.config import settings
-from app.models import HealthResponse, ListPostsResponse, CreatePostBody, UpdatePostBody
-from app.routes import posts, profile, uploads, limits
+from app.auth import UserInfo, get_current_user
 from app.backends import get_backend
-from app.auth import UserInfo, get_current_user, require_user
+from app.config import settings
+from app.models import CreatePostBody, HealthResponse, ListPostsResponse, UpdatePostBody
+from app.routes import limits, posts, profile, solve, uploads
 
 # AWS Lambda Powertools (observability)
 try:
@@ -61,8 +61,7 @@ app = FastAPI(
 )
 
 # CORS設定
-origins = settings.cors_origins.split(
-    ",") if settings.cors_origins != "*" else ["*"]
+origins = settings.cors_origins.split(",") if settings.cors_origins != "*" else ["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -79,6 +78,7 @@ app.include_router(limits.router)
 app.include_router(posts.router)
 app.include_router(uploads.router)
 app.include_router(profile.router)
+app.include_router(solve.router)
 
 
 # ── Validation error handler ────────────────────────────────────────────────
@@ -101,7 +101,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # ── Backward-compatible /api/messages aliases (legacy frontend) ─────────────
 @app.get("/api/messages/", response_model=ListPostsResponse)
 def legacy_list_messages(
-    limit: int = Query(20, ge=1, le=50, alias="page_size", description="Number of items"),
+    limit: int = Query(
+        20, ge=1, le=50, alias="page_size", description="Number of items"
+    ),
     nextToken: str | None = Query(None, description="Pagination token"),
     tag: str | None = Query(None, description="Tag filter"),
 ) -> ListPostsResponse:
@@ -114,7 +116,7 @@ def legacy_list_messages(
 @app.post("/api/messages/", status_code=201)
 def legacy_create_message(
     body: CreatePostBody,
-    user: Optional[UserInfo] = Depends(get_current_user),
+    user: UserInfo | None = Depends(get_current_user),
 ) -> dict:
     """Legacy alias: create post (POST /api/messages/). Kept for old frontend compatibility."""
     # Allow anonymous users so staging tests work without auth.
@@ -131,7 +133,7 @@ def legacy_create_message(
 @app.delete("/api/messages/{post_id}")
 def legacy_delete_message(
     post_id: str,
-    user: Optional[UserInfo] = Depends(get_current_user),
+    user: UserInfo | None = Depends(get_current_user),
 ) -> dict:
     """Legacy alias: delete post (DELETE /api/messages/{id})."""
     # Legacy endpoint: unauthenticated requests receive admin-level access so that
@@ -155,7 +157,7 @@ def legacy_delete_message(
 @app.get("/api/messages/{post_id}")
 def legacy_get_message(
     post_id: str,
-    user: Optional[UserInfo] = Depends(get_current_user),
+    user: UserInfo | None = Depends(get_current_user),
 ) -> dict:
     """Legacy alias: get single post (GET /api/messages/{id})."""
     backend = get_backend()
@@ -169,7 +171,7 @@ def legacy_get_message(
 def legacy_update_message(
     post_id: str,
     body: UpdatePostBody,
-    user: Optional[UserInfo] = Depends(get_current_user),
+    user: UserInfo | None = Depends(get_current_user),
 ) -> dict:
     """Legacy alias: update post (PUT /api/messages/{id})."""
     # Legacy endpoint: same policy as DELETE — unauthenticated = admin-level access.
@@ -192,8 +194,7 @@ def legacy_update_message(
 def root() -> HealthResponse:
     """Root endpoint — returns cloud provider info."""
     if powertools_available:
-        metrics.add_metric(name="RootEndpointCalled",
-                           unit=MetricUnit.Count, value=1)
+        metrics.add_metric(name="RootEndpointCalled", unit=MetricUnit.Count, value=1)
 
     return HealthResponse(
         status="ok",
@@ -205,11 +206,11 @@ def root() -> HealthResponse:
 def health() -> HealthResponse:
     """Health check endpoint."""
     if powertools_available:
-        metrics.add_metric(name="HealthCheckCalled",
-                           unit=MetricUnit.Count, value=1)
+        metrics.add_metric(name="HealthCheckCalled", unit=MetricUnit.Count, value=1)
 
-    logger.info("Health check requested", extra={
-                "provider": settings.cloud_provider.value})
+    logger.info(
+        "Health check requested", extra={"provider": settings.cloud_provider.value}
+    )
 
     return HealthResponse(
         status="ok",
@@ -238,6 +239,5 @@ try:
         logger.info("Mangum handler initialized for AWS Lambda")
 
 except ImportError:
-    logger.warning(
-        "Mangum not available - AWS Lambda deployment not supported")
+    logger.warning("Mangum not available - AWS Lambda deployment not supported")
     handler = None
