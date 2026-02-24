@@ -89,29 +89,44 @@ jobs:
       - name: Sync Pulumi Config (custom domain + ACM cert)
         run: |
           cd infrastructure/pulumi/aws
-          # Pulumi.staging.yaml is gitignored — inject custom domain configs from
-          # GitHub Secrets so Pulumi includes staging.aws.ashnova.jp in Cognito
-          # callback URLs and adds the ACM alias to CloudFront on every run.
-          CUSTOM_DOMAIN="${{ secrets.AWS_CUSTOM_DOMAIN }}"
-          ACM_CERT_ARN="${{ secrets.AWS_ACM_CERTIFICATE_ARN }}"
-          CF_DOMAIN="${{ secrets.AWS_CLOUDFRONT_DOMAIN }}"
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          STACK_FILE="Pulumi.${STACK_NAME}.yaml"
+
+          # Read config from committed Pulumi YAML (single source of truth).
+          # Previously this step read from GitHub Secrets (AWS_CUSTOM_DOMAIN etc.),
+          # which caused production to inherit the staging custom domain when the
+          # repo-level secret was set to staging.aws.ashnova.jp.
+          # Fix: always read customDomain / acmCertificateArn / cloudFrontDomain
+          # from the committed Pulumi.<stack>.yaml — no secrets needed.
+          if [ -f "$STACK_FILE" ]; then
+            CUSTOM_DOMAIN=$(grep -E "^\s+multicloud-auto-deploy-aws:customDomain:" "$STACK_FILE" | awk '{print $2}' | tr -d '"')
+            ACM_CERT_ARN=$(grep -E "^\s+multicloud-auto-deploy-aws:acmCertificateArn:" "$STACK_FILE" | awk '{print $2}' | tr -d '"')
+            CF_DOMAIN=$(grep -E "^\s+multicloud-auto-deploy-aws:cloudFrontDomain:" "$STACK_FILE" | awk '{print $2}' | tr -d '"')
+            echo "📄 Reading config from $STACK_FILE"
+          else
+            echo "⚠️  $STACK_FILE not found — falling back to GitHub Secrets"
+            CUSTOM_DOMAIN="${{ secrets.AWS_CUSTOM_DOMAIN }}"
+            ACM_CERT_ARN="${{ secrets.AWS_ACM_CERTIFICATE_ARN }}"
+            CF_DOMAIN="${{ secrets.AWS_CLOUDFRONT_DOMAIN }}"
+          fi
+
           if [ -n "$CUSTOM_DOMAIN" ]; then
             echo "✅ Setting customDomain = $CUSTOM_DOMAIN"
             pulumi config set multicloud-auto-deploy-aws:customDomain "$CUSTOM_DOMAIN"
           else
-            echo "⚠️  AWS_CUSTOM_DOMAIN secret not set — skipping customDomain config"
+            echo "⚠️  customDomain not set in $STACK_FILE — skipping"
           fi
           if [ -n "$ACM_CERT_ARN" ]; then
             echo "✅ Setting acmCertificateArn"
             pulumi config set multicloud-auto-deploy-aws:acmCertificateArn "$ACM_CERT_ARN"
           else
-            echo "⚠️  AWS_ACM_CERTIFICATE_ARN secret not set — skipping acmCertificateArn config"
+            echo "⚠️  acmCertificateArn not set in $STACK_FILE — skipping"
           fi
           if [ -n "$CF_DOMAIN" ]; then
             echo "✅ Setting cloudFrontDomain = $CF_DOMAIN"
             pulumi config set multicloud-auto-deploy-aws:cloudFrontDomain "$CF_DOMAIN"
           else
-            echo "⚠️  AWS_CLOUDFRONT_DOMAIN secret not set — skipping cloudFrontDomain config"
+            echo "⚠️  cloudFrontDomain not set in $STACK_FILE — skipping"
           fi
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
