@@ -755,11 +755,12 @@ jobs:
 
           # Configure always-ready instances to prevent FlexConsumption cold starts
           echo "🔥 Configuring always-ready instances (cold start prevention)..."
+          ALWAYS_READY_COUNT=$([[ "$STACK_NAME" == "staging" ]] && echo 0 || echo 1)
           az functionapp scale config always-ready set \
             --name $FUNCTION_APP \
             --resource-group $RESOURCE_GROUP \
-            --settings http=1 \
-            2>/dev/null && echo "✅ always-ready http=1 configured" || echo "⚠️  Could not set always-ready (non-fatal)"
+            --settings http=$ALWAYS_READY_COUNT \
+            2>/dev/null && echo "✅ always-ready http=$ALWAYS_READY_COUNT configured" || echo "⚠️  Could not set always-ready (non-fatal)"
 
       - name: Ensure Azure CORS Origins
         # Safety net: ensures both the app setting and platform-level CORS (Kestrel intercept)

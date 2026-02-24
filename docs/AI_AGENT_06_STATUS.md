@@ -1,7 +1,7 @@
 # 06 — Environment Status
 
-> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last verified: 2026-02-24 (Staging 再デプロイ完全成功 ✅ — AWS#246/GCP#214/Azure#273 全成功 / FC1 deployment storage 修復 (`multicloudautodeploa752` 再作成) ✅ / 全3クラウド health check OK (`status:ok, version:3.0.0`) ✅ / E2Eテストスクリプト大幅改良 + `test-sns-all.sh` 新規追加 ✅ (commit `73af560`))
+> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> Last verified: 2026-02-24 (コスト削減クリーンアップ実行 ✅ — GCP Cloud Run `production-frontend-web` 削除 / GCP Cloud Function `mcad-staging-api` 削除 / GCP SSL旧証明書 `ashnova-production-cert-c41311` 削除 / AWS S3 `staging/production-landing` バケット削除 / Staging 再デプロイ完全成功 ✅ — AWS#246/GCP#214/Azure#273 全成功 / FC1 deployment storage 修復 (`multicloudautodeploa752` 再作成) ✅ / 全3クラウド health check OK (`status:ok, version:3.0.0`) ✅ / E2Eテストスクリプト大幅改良 + `test-sns-all.sh` 新規追加 ✅ (commit `73af560`))
 
 ---
 
@@ -104,20 +104,18 @@ API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneas
 ## GCP (asia-northeast1)
 
 ```
-CDN URL          : http://34.117.111.182
-API URL          : https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app
-Frontend Web URL : https://multicloud-auto-deploy-staging-frontend-web-899621454670.asia-northeast1.run.app
+CDN URL : http://34.117.111.182
+API URL : https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast1.run.app
 ```
 
-| Resource                 | Name / ID                                                         | Status |
-| ------------------------ | ----------------------------------------------------------------- | ------ |
-| Global IP                | `34.117.111.182`                                                  | ✅     |
-| GCS Bucket (frontend)    | `ashnova-multicloud-auto-deploy-staging-frontend`                 | ✅     |
-| GCS Bucket (uploads)     | `ashnova-multicloud-auto-deploy-staging-uploads` (public read)    | ✅     |
-| Cloud Run (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, **min=1**)     | ✅     |
-| Cloud Run (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (Docker, port 8080) | ✅     |
-| Firestore                | `(default)` — collections: messages, posts                        | ✅     |
-| Backend Bucket           | `multicloud-auto-deploy-staging-cdn-backend`                      | ✅     |
+| Resource              | Name / ID                                                      | Status |
+| --------------------- | -------------------------------------------------------------- | ------ |
+| Global IP             | `34.117.111.182`                                               | ✅     |
+| GCS Bucket (frontend) | `ashnova-multicloud-auto-deploy-staging-frontend`              | ✅     |
+| GCS Bucket (uploads)  | `ashnova-multicloud-auto-deploy-staging-uploads` (public read) | ✅     |
+| Cloud Run (API)       | `multicloud-auto-deploy-staging-api` (Python 3.12, **min=1**)  | ✅     |
+| Firestore             | `(default)` — collections: messages, posts                     | ✅     |
+| Backend Bucket        | `multicloud-auto-deploy-staging-cdn-backend`                   | ✅     |
 
 **Confirmed working (verified 2026-02-21)**:
 
@@ -174,7 +172,7 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 
 ## Production Environment
 
-> Production has its own independent Pulumi stack (deployed). Resources are separate from staging.  
+> Production has its own independent Pulumi stack (deployed). Resources are separate from staging.
 > Frontend is served as **React SPA** (Vite build) from object storage via CDN — `frontend_web` (Python SSR) is no longer used in production.
 > Full migration report: [REACT_SPA_MIGRATION_REPORT.md](REACT_SPA_MIGRATION_REPORT.md)
 
@@ -215,7 +213,7 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 | --------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **AWS**   | https://www.aws.ashnova.jp   | ✅ **Fully operational** (HTTP/2 200, ACM cert `914b86b1` + CloudFront alias set directly — details: [AWS_HTTPS_FIX_REPORT.md](AWS_HTTPS_FIX_REPORT.md)) |
 | **Azure** | https://www.azure.ashnova.jp | ✅ **Fully operational** (HTTPS 200, DigiCert/GeoTrust managed cert, AFD route active)                                                                   |
-| **GCP**   | https://www.gcp.ashnova.jp   | ✅ **Fully operational** (HTTPS 200, TLS cert active via ACTIVE cert `ashnova-production-cert-c41311`)                                                   |
+| **GCP**   | https://www.gcp.ashnova.jp   | ✅ **Fully operational** (HTTPS 200, TLS cert `multicloud-auto-deploy-production-ssl-cert-3ee2c3ce` — Pulumi管理, ACTIVE)                                |
 
 #### Completed Work (2026-02-21)
 
@@ -235,15 +233,7 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 
 #### Remaining Work
 
-- **GCP**: `multicloud-auto-deploy-production-ssl-cert-3ee2c3ce` は **ACTIVE** (2026-02-23 確認済み) ✅
-  → `ashnova-production-cert-c41311` を HTTPS プロキシから削除可能
-
-```bash
-# ashnova-production-cert-c41311 を削除して production cert のみ使用
-gcloud compute target-https-proxies update multicloud-auto-deploy-production-cdn-https-proxy \
-  --global --project=ashnova \
-  --ssl-certificates=multicloud-auto-deploy-production-ssl-cert-3ee2c3ce
-```
+- **GCP**: ✅ `ashnova-production-cert-c41311` を HTTPS プロキシから切り離し・削除済み (2026-02-24)。`multicloud-auto-deploy-production-ssl-cert-3ee2c3ce` のみ使用中。
 
 ---
 
@@ -606,19 +596,19 @@ bash scripts/test-sns-all.sh --env production --write --gcp-auto-token
 
 ### 各スクリプトの改良内容
 
-| スクリプト | 追加機能 |
-| --------------------------------- | -------- |
-| `scripts/test-sns-aws.sh`  | `--username`/`--password`/`--client-id` で Cognito 自動認証、X-Amz-Signature 検証、binary PUT to S3、imageUrl HTTP 200 確認 |
-| `scripts/test-sns-gcp.sh`  | `--auto-token` で `gcloud auth print-identity-token` 自動認証、X-Goog-Signature 検証、binary PUT to GCS、imageUrl HTTP 200 確認 |
-| `scripts/test-sns-azure.sh` | `x-ms-blob-type: BlockBlob` で binary PUT to Azure Blob (HTTP 201)、SAS read URL HTTP 200 確認 |
+| スクリプト                  | 追加機能                                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/test-sns-aws.sh`   | `--username`/`--password`/`--client-id` で Cognito 自動認証、X-Amz-Signature 検証、binary PUT to S3、imageUrl HTTP 200 確認     |
+| `scripts/test-sns-gcp.sh`   | `--auto-token` で `gcloud auth print-identity-token` 自動認証、X-Goog-Signature 検証、binary PUT to GCS、imageUrl HTTP 200 確認 |
+| `scripts/test-sns-azure.sh` | `x-ms-blob-type: BlockBlob` で binary PUT to Azure Blob (HTTP 201)、SAS read URL HTTP 200 確認                                  |
 
 ### テスト一覧 (write モード時の追加項目)
 
-| # | テスト | 概要 |
-|---|--------|------|
-| 5-2 | 署名URL検証 | presigned URL に `X-Amz-Signature=` / `X-Goog-Signature=` / SAS token が含まれることを確認 |
-| 5-3 | binary PUT | 1×1 PNG を実際に presigned URL へ PUT し HTTP 200/201 を確認 |
-| 5-4 | imageUrl アクセス確認 | PUT したキーで POST /posts → GET /posts/:id → imageUrls[0] に GET → HTTP 200 を確認 |
+| #   | テスト                | 概要                                                                                       |
+| --- | --------------------- | ------------------------------------------------------------------------------------------ |
+| 5-2 | 署名URL検証           | presigned URL に `X-Amz-Signature=` / `X-Goog-Signature=` / SAS token が含まれることを確認 |
+| 5-3 | binary PUT            | 1×1 PNG を実際に presigned URL へ PUT し HTTP 200/201 を確認                               |
+| 5-4 | imageUrl アクセス確認 | PUT したキーで POST /posts → GET /posts/:id → imageUrls[0] に GET → HTTP 200 を確認        |
 
 ## Next Section
 

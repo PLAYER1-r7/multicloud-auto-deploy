@@ -1,7 +1,7 @@
 # 09 — Remaining Tasks
 
-> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last updated: 2026-02-24 (バージョン番号を4桁スキーム A.B.C.D に変更 — commit `c2f6870`)
+> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> Last updated: 2026-02-24 (コスト削減クリーンアップ完了 — GCP/AWS 不要リソース全削除)
 > **AI Agent Note**: Update this file when a task is resolved.
 
 ---
@@ -50,25 +50,25 @@ develop branch sync:        ✅ main v1.17.22 と同期済み
 
 ### ✅ 解決済み (2026-02-24)
 
-| #   | Task                                     | 解決内容                                                                                                                  | コミット |
-| --- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------- |
-| 0a  | **Azure Function App 関数登録0件の修正** | Python 3.12 / linux/amd64 ビルド + `--build-remote false` デプロイで解決。`admin/functions = [{"name":"HttpTrigger"}]` ✅ | v1.17.9  |
-| 0c  | **develop ブランチを main に同期**       | `git merge main --no-ff` 実行済み。`develop` v1.18.1 / `main` v1.17.10 ✅ (コミット `7efca78`)                            | —        |
-| 0e  | **Azure staging FC1 deployment storage 修復** | `functionAppConfig.deployment.storage` が削除済みストレージアカウント `multicloudautodeploa752` を指しており、全zip deployが `InaccessibleStorageException: Name or service not known` で失敗。`deploy-azure.yml` に ARM GET → storage account 作成 → connection string 更新ロジック追加。`WEBSITE_RUN_FROM_PACKAGE` クリア・再起動・Verify Deployment 600s待機も追加。 | v1.20.1  |
-| 0f  | **Staging 全3クラウド再デプロイ完全成功** | AWS#246 ✅ / GCP#214 ✅ / Azure#273 ✅。3クラウドとも `/health` = `{"status":"ok","version":"3.0.0"}` 確認。 | v1.20.1  |
-| 0g  | **E2Eテストスクリプト大幅改良**          | `test-sns-aws.sh`: Cognito 自動認証・X-Amz-Signature 検証・binary PUT・imageUrl 確認追加。`test-sns-gcp.sh`: gcloud 自動認証・X-Goog-Signature 検証・binary PUT・imageUrl 確認追加。`test-sns-azure.sh`: binary PUT (BlockBlob)・SAS read URL 確認追加。`test-sns-all.sh` 新規作成 (3クラウド統合ラッパー)。production read-only: PASS 39 / FAIL 0 / SKIP 10。 | v1.22.1  |
+| #   | Task                                            | 解決内容                                                                                                                                                                                                                                                                                                                                                                                  | コミット    |
+| --- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| 0a  | **Azure Function App 関数登録0件の修正**        | Python 3.12 / linux/amd64 ビルド + `--build-remote false` デプロイで解決。`admin/functions = [{"name":"HttpTrigger"}]` ✅                                                                                                                                                                                                                                                                 | v1.17.9     |
+| 0c  | **develop ブランチを main に同期**              | `git merge main --no-ff` 実行済み。`develop` v1.18.1 / `main` v1.17.10 ✅ (コミット `7efca78`)                                                                                                                                                                                                                                                                                            | —           |
+| 0e  | **Azure staging FC1 deployment storage 修復**   | `functionAppConfig.deployment.storage` が削除済みストレージアカウント `multicloudautodeploa752` を指しており、全zip deployが `InaccessibleStorageException: Name or service not known` で失敗。`deploy-azure.yml` に ARM GET → storage account 作成 → connection string 更新ロジック追加。`WEBSITE_RUN_FROM_PACKAGE` クリア・再起動・Verify Deployment 600s待機も追加。                   | v1.20.1     |
+| 0f  | **Staging 全3クラウド再デプロイ完全成功**       | AWS#246 ✅ / GCP#214 ✅ / Azure#273 ✅。3クラウドとも `/health` = `{"status":"ok","version":"3.0.0"}` 確認。                                                                                                                                                                                                                                                                              | v1.20.1     |
+| 0g  | **E2Eテストスクリプト大幅改良**                 | `test-sns-aws.sh`: Cognito 自動認証・X-Amz-Signature 検証・binary PUT・imageUrl 確認追加。`test-sns-gcp.sh`: gcloud 自動認証・X-Goog-Signature 検証・binary PUT・imageUrl 確認追加。`test-sns-azure.sh`: binary PUT (BlockBlob)・SAS read URL 確認追加。`test-sns-all.sh` 新規作成 (3クラウド統合ラッパー)。production read-only: PASS 39 / FAIL 0 / SKIP 10。                            | v1.22.1     |
 | 0h  | **バージョン番号を 4桁スキーム A.B.C.D に変更** | `X.Y.Z` → `A.B.C.D`。A/B: 手動指示で+1。C: `git push`のたび+1 (GitHub Actions)。D: `git commit`のたび+1 (pre-commit hook)。どの桁も他の桁をリセットしない。`.githooks/pre-commit` のパスフィルタを維持しつつ `patch all` → `commit` (対象コンポーネントのみ) に変更。`version-bump.yml` を `minor all` → `push all` に変更。初期値 `1.0.84.203` (C=84: push実測値, D=203: commit実測値)。 | v1.0.84.204 |
 
 ### 既存タスク
 
-| #   | Task                                       | Description                                                                                       | Reference                                                |
-| --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| 0d  | ~~**deploy-azure.yml Python 3.11→3.12 build fix**~~ ✅ | `PYTHON_VERSION` env var corrected from `3.13` → `3.12` to match Azure Functions FC1 runtime. | this session |
-| 1   | **Run integration tests (≥80% pass)**      | All backend blockers resolved. Run full suite on AWS/GCP/Azure and confirm.                       | [INTEGRATION_TESTS_GUIDE.md](INTEGRATION_TESTS_GUIDE.md) |
-| 2   | **Verify Azure `PUT /posts` endpoint**     | End-to-end PUT routing on Azure has not been confirmed. Test and fix.                             | —                                                        |
-| 4   | **Fix `SNS:Unsubscribe` permission error** | `DELETE /posts` fails on SNS Unsubscribe call. Add `sns:Unsubscribe` to IAM or redesign the flow. | —                                                        |
-| 5   | **GCP HTTPS**                              | GCP frontend is HTTP only. Requires `TargetHttpsProxy` + Managed SSL certificate.                 | [09_SECURITY](AI_AGENT_08_SECURITY.md)                   |
-| 6   | **Enable Azure WAF**                       | WAF policy not applied to Front Door Standard SKU.                                                | [09_SECURITY](AI_AGENT_08_SECURITY.md)                   |
+| #   | Task                                                   | Description                                                                                       | Reference                                                |
+| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 0d  | ~~**deploy-azure.yml Python 3.11→3.12 build fix**~~ ✅ | `PYTHON_VERSION` env var corrected from `3.13` → `3.12` to match Azure Functions FC1 runtime.     | this session                                             |
+| 1   | **Run integration tests (≥80% pass)**                  | All backend blockers resolved. Run full suite on AWS/GCP/Azure and confirm.                       | [INTEGRATION_TESTS_GUIDE.md](INTEGRATION_TESTS_GUIDE.md) |
+| 2   | **Verify Azure `PUT /posts` endpoint**                 | End-to-end PUT routing on Azure has not been confirmed. Test and fix.                             | —                                                        |
+| 4   | **Fix `SNS:Unsubscribe` permission error**             | `DELETE /posts` fails on SNS Unsubscribe call. Add `sns:Unsubscribe` to IAM or redesign the flow. | —                                                        |
+| 5   | **GCP HTTPS**                                          | GCP frontend is HTTP only. Requires `TargetHttpsProxy` + Managed SSL certificate.                 | [09_SECURITY](AI_AGENT_08_SECURITY.md)                   |
+| 6   | **Enable Azure WAF**                                   | WAF policy not applied to Front Door Standard SKU.                                                | [09_SECURITY](AI_AGENT_08_SECURITY.md)                   |
 
 ---
 
@@ -102,28 +102,28 @@ develop branch sync:        ✅ main v1.17.22 と同期済み
 
 ## 🟡 Medium Priority Tasks
 
-| #   | Task                                        | Description                                                                                                                                                                                                                                                                                                                                                |
-| --- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 7   | **Release unused GCP static IPs**           | Release 3 RESERVED static IPs (`ashnova-production-ip-c41311` / `multicloud-frontend-ip` / `simple-sns-frontend-ip`) to reduce cost. Details: [07_STATUS FinOps section](AI_AGENT_06_STATUS.md#finops--gcp-unused-static-ip-address-audit-2026-02-21).                                                                                                     |
-| 8   | **Delete unused GCP Cloud Storage buckets** | Delete 4 Terraform-legacy buckets (`ashnova-staging-frontend` / `ashnova-staging-function-source` / `multicloud-auto-deploy-tfstate` / `multicloud-auto-deploy-tfstate-gcp`) and the FAILED Cloud Function `mcad-staging-api`. Details: [07_STATUS Cloud Storage section](AI_AGENT_06_STATUS.md#finops--gcp-unused-cloud-storage-bucket-audit-2026-02-21). |
-| 9   | **Set up monitoring and alerts**            | Configure CloudWatch Alarms (AWS) / Azure Monitor (Azure) / Cloud Monitoring (GCP).                                                                                                                                                                                                                                                                        |
-| 10  | **Security hardening**                      | Change CORS `allowedOrigins` to actual domain names. Update the `example.com` placeholder in GCP SSL certificate config. Strengthen Azure Key Vault network ACLs.                                                                                                                                                                                          |
-| 11  | **Aggregate WAF logs**                      | Centralize WAF logs from all 3 clouds for a unified view.                                                                                                                                                                                                                                                                                                  |
-| 12  | **Fully automate Lambda Layer CI/CD**       | Eliminate non-fatal warnings during layer build and publish steps.                                                                                                                                                                                                                                                                                         |
-| 13  | **Update README**                           | Reflect current endpoints, auth behavior, and CI/CD status in the README.                                                                                                                                                                                                                                                                                  |
-| 14  | **Branch protection rules**                 | Prevent direct pushes to `main`. Require PR + CI pass.                                                                                                                                                                                                                                                                                                     |
+| #   | Task                                               | Description                                                                                                                                                                                                                      |
+| --- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 7   | ✅ ~~**Release unused GCP static IPs**~~           | **DONE 2026-02-24** — 3座のRESERVED IP (`ashnova-production-ip-c41311` / `multicloud-frontend-ip` / `simple-sns-frontend-ip`) 削除済み。                                                                                         |
+| 8   | ✅ ~~**Delete unused GCP Cloud Storage buckets**~~ | **DONE 2026-02-24** — 4バケット (`ashnova-staging-frontend` / `ashnova-staging-function-source` / `multicloud-auto-deploy-tfstate` / `multicloud-auto-deploy-tfstate-gcp`) + FAILED Cloud Function `mcad-staging-api` 削除済み。 |
+| 9   | **Set up monitoring and alerts**                   | Configure CloudWatch Alarms (AWS) / Azure Monitor (Azure) / Cloud Monitoring (GCP).                                                                                                                                              |
+| 10  | **Security hardening**                             | Change CORS `allowedOrigins` to actual domain names. Update the `example.com` placeholder in GCP SSL certificate config. Strengthen Azure Key Vault network ACLs.                                                                |
+| 11  | **Aggregate WAF logs**                             | Centralize WAF logs from all 3 clouds for a unified view.                                                                                                                                                                        |
+| 12  | **Fully automate Lambda Layer CI/CD**              | Eliminate non-fatal warnings during layer build and publish steps.                                                                                                                                                               |
+| 13  | **Update README**                                  | Reflect current endpoints, auth behavior, and CI/CD status in the README.                                                                                                                                                        |
+| 14  | **Branch protection rules**                        | Prevent direct pushes to `main`. Require PR + CI pass.                                                                                                                                                                           |
 
 ---
 
 ## 🟢 Low Priority Tasks
 
-| #   | Task                            | Description                                                                                   |
-| --- | ------------------------------- | --------------------------------------------------------------------------------------------- |
-| 15  | **~~Custom domain setup~~** ✅  | Complete for all 3 clouds (2026-02-21). See [CUSTOM_DOMAIN_SETUP.md](CUSTOM_DOMAIN_SETUP.md). |
-| 16  | **Load testing**                | Establish a performance baseline with Locust or similar.                                      |
-| 17  | **CI/CD failure notifications** | Add Slack / Discord webhook integration.                                                      |
+| #   | Task                            | Description                                                                                                                                                                              |
+| --- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 15  | **~~Custom domain setup~~** ✅  | Complete for all 3 clouds (2026-02-21). See [CUSTOM_DOMAIN_SETUP.md](CUSTOM_DOMAIN_SETUP.md).                                                                                            |
+| 16  | **Load testing**                | Establish a performance baseline with Locust or similar.                                                                                                                                 |
+| 17  | **CI/CD failure notifications** | Add Slack / Discord webhook integration.                                                                                                                                                 |
 | 18  | **Expand test coverage**        | ✅ 部分解決 (2026-02-24): `test-sns-all.sh` 追加、AWS/GCP 自動認証、3クラウドで binary PUT + imageUrl アクセス確認を実装。残作業: Azure 自動認証 (`--auto-token` 相当)、CI/CD への統合。 |
-| 19  | **Chaos engineering**           | Simulate network outages, DB failures, and cold-start spikes.                                 |
+| 19  | **Chaos engineering**           | Simulate network outages, DB failures, and cold-start spikes.                                                                                                                            |
 
 ---
 
@@ -136,8 +136,8 @@ develop branch sync:        ✅ main v1.17.22 と同期済み
 4 → Fix SNS:Unsubscribe (restore DELETE flow)
 5 → GCP HTTPS (production quality)
 6 → Azure WAF (production quality)
-7 → Release unused GCP static IPs (cost reduction, can be done immediately)
-8 → Delete unused GCP Cloud Storage buckets (cost reduction, can be done immediately)
+✅7 → Release unused GCP static IPs (DONE 2026-02-24)
+✅8 → Delete unused GCP Cloud Storage buckets (DONE 2026-02-24)
 9 → Monitoring & alerts
 10 → Security hardening
 11-14 → Operational polish

@@ -704,7 +704,7 @@ cloudfront_kwargs = {
     "is_ipv6_enabled": True,
     "comment": f"{project_name}-{stack} Frontend Distribution",
     "default_root_object": "index.html",
-    "price_class": "PriceClass_200" if stack == "staging" else "PriceClass_All",
+    "price_class": "PriceClass_200",  # NA/EU/JP/KR/IN エッジ使用 (PriceClass_All より安価)
     "origins": [
         aws.cloudfront.DistributionOriginArgs(
             origin_id=frontend_bucket.bucket_regional_domain_name,
