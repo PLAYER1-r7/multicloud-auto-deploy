@@ -76,6 +76,26 @@ jobs:
           echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
           echo "📦 Using Pulumi stack: $STACK_NAME"
 
+      - name: Load Cloud Config
+        # Single source of truth for stable per-environment values.
+        # Eliminates dependency on repo-level secrets and Pulumi runtime outputs
+        # for values that rarely change (AD Client ID, Tenant ID, custom domain).
+        id: cloud_config
+        run: |
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          CONFIG_FILE=".github/config/azure.${STACK_NAME}.env"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "❌ Config file $CONFIG_FILE not found — cannot proceed"
+            exit 1
+          fi
+          source "$CONFIG_FILE"
+          echo "📄 Loaded config: $CONFIG_FILE"
+          echo "  custom_domain=$CLOUD_CUSTOM_DOMAIN"
+          echo "  azure_client_id=${CLOUD_AZURE_CLIENT_ID:0:8}..."
+          echo "custom_domain=$CLOUD_CUSTOM_DOMAIN" >> $GITHUB_OUTPUT
+          echo "azure_client_id=$CLOUD_AZURE_CLIENT_ID" >> $GITHUB_OUTPUT
+          echo "azure_tenant_id=$CLOUD_AZURE_TENANT_ID" >> $GITHUB_OUTPUT
+
       - name: Initialize Pulumi Stack
         run: |
           cd infrastructure/pulumi/azure
@@ -207,20 +227,15 @@ jobs:
         # custom domain after each Pulumi deploy. Without this step, Azure Front Door serves the
         # *.azureedge.net wildcard cert instead of the managed cert for www.azure.ashnova.jp.
         run: |
-          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
-          case "$STACK_NAME" in
-            production) AZURE_CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
-            staging)    AZURE_CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
-            *)          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}" ;;
-          esac
+          AZURE_CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
           if [ -z "$AZURE_CUSTOM_DOMAIN" ]; then
             echo "⏭️  No custom domain configured, skipping"
             exit 0
           fi
 
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
           RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
           ENDPOINT_NAME="${{ steps.pulumi_outputs.outputs.frontdoor_endpoint_name }}"
-          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
           PROFILE_NAME="multicloud-auto-deploy-${STACK_NAME}-fd"
           ROUTE_NAME="multicloud-auto-deploy-${STACK_NAME}-route"
           SUBSCRIPTION_ID=$(az account show --query id --output tsv)
@@ -249,24 +264,12 @@ jobs:
         # Ensures ALL required redirect URIs are registered (login callbacks + post-logout redirects).
         # Pulumi only manages FrontDoor-based URIs; custom domain and /sns/ logout URIs are added here.
         run: |
-          AD_APP_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
+          # Config file is authoritative — no Pulumi runtime dependency for stable AD values
+          AD_APP_ID="${{ steps.cloud_config.outputs.azure_client_id }}"
           FRONTDOOR="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
-          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
-          case "$STACK_NAME" in
-            production) AZURE_CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
-            staging)    AZURE_CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
-            *)          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}" ;;
-          esac
-          # Fallback: use per-stack known AD app IDs if Pulumi output is empty
+          AZURE_CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
           if [ -z "$AD_APP_ID" ]; then
-            case "$STACK_NAME" in
-              production) AD_APP_ID="0b926ff6-fc03-4c9c-a359-96964ef15941" ;;
-              staging)    AD_APP_ID="03a168ac-7de3-4e5c-8fb1-99fa6dcbfe77" ;;
-            esac
-            echo "⚠️  Using fallback Azure AD App ID: $AD_APP_ID"
-          fi
-          if [ -z "$AD_APP_ID" ]; then
-            echo "⏭️  No Azure AD App ID available, skipping redirect URI update"
+            echo "⏭️  No Azure AD App ID in config file, skipping redirect URI update"
             exit 0
           fi
 
@@ -433,14 +436,8 @@ jobs:
           # Get Front Door URL for CORS from Pulumi outputs
           FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
           CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
-          # Include custom domain — use explicit per-stack mapping (Pulumi.*.yaml files are
-          # gitignored so cannot be read; repo-level secret may be wrong for production).
-          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
-          case "$STACK_NAME" in
-            production) AZURE_CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
-            staging)    AZURE_CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
-            *)          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}" ;;
-          esac
+          # Custom domain from config file (single source of truth)
+          AZURE_CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
           if [ -n "$AZURE_CUSTOM_DOMAIN" ]; then
             CORS_ORIGINS="https://${AZURE_CUSTOM_DOMAIN},${CORS_ORIGINS}"
           fi
@@ -522,8 +519,8 @@ jobs:
               COSMOS_DB_DATABASE="${{ steps.pulumi_outputs.outputs.cosmos_database_name }}" \
               COSMOS_DB_CONTAINER="${{ steps.pulumi_outputs.outputs.cosmos_container_name }}" \
               AUTH_PROVIDER=azure \
-              AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}" \
-              AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}" \
+              AZURE_TENANT_ID="${{ steps.cloud_config.outputs.azure_tenant_id }}" \
+              AZURE_CLIENT_ID="${{ steps.cloud_config.outputs.azure_client_id }}" \
               CORS_ORIGINS="${CORS_ORIGINS}" \
               WEBSITE_WARMUP_PATH="/sns/health" \
               WEBSITE_KEEPALIVE_TIMEOUT="30" \
@@ -620,25 +617,17 @@ jobs:
             2>/dev/null && echo "✅ always-ready http=1 configured" || echo "⚠️  Could not set always-ready (non-fatal)"
 
       - name: Ensure Azure CORS Origins
-        # Safety net: Pulumi/secrets may set CORS_ORIGINS without the custom domain.
-        # This step ensures both the app setting and platform-level CORS (Kestrel intercept)
+        # Safety net: ensures both the app setting and platform-level CORS (Kestrel intercept)
         # always include https://<customDomain> regardless of what the deploy step set.
-        # customDomain is determined from the stack name (Pulumi.*.yaml files are gitignored)
-        # so we use an explicit per-stack mapping here.
+        # customDomain comes from the committed config file (.github/config/azure.<stack>.env).
         run: |
           STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
           RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
           FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
           FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
 
-          # Resolve production custom domain from stack name (explicit mapping)
-          case "$STACK_NAME" in
-            production) CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
-            staging)    CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
-            *)          CUSTOM_DOMAIN="" ;;
-          esac
-          # Fall back to secret if no explicit mapping found
-          [[ -z "$CUSTOM_DOMAIN" ]] && CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}"
+          # Custom domain from config file (single source of truth)
+          CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
 
           if [[ -z "$CUSTOM_DOMAIN" ]]; then
             echo "⏭️  No custom domain set — skipping CORS safety net"
@@ -703,12 +692,8 @@ jobs:
           # so Blob Storage must allow CORS from both the custom domain and FrontDoor hostname.
           echo "🔒 Configuring Blob Storage CORS for image uploads..."
           FRONTDOOR_HOSTNAME="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
-          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
-          case "$STACK_NAME" in
-            production) AZURE_CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
-            staging)    AZURE_CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
-            *)          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}" ;;
-          esac
+          # Custom domain from config file (single source of truth)
+          AZURE_CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
 
           # Clear existing CORS rules and re-add them fresh
           az storage cors clear \
@@ -760,32 +745,15 @@ jobs:
           RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
           FRONTDOOR_HOSTNAME="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
           API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
-          AZURE_CLIENT_ID="${{ steps.pulumi_outputs.outputs.azure_ad_client_id }}"
-          AZURE_TENANT_ID="${{ steps.azure_env.outputs.tenant_id }}"
-          # Use per-stack mapping to avoid wrong domain from repo-level AZURE_CUSTOM_DOMAIN secret.
+          # Config file is authoritative for stable AD values — no Pulumi runtime dependency
           STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
-          case "$STACK_NAME" in
-            production) AZURE_CUSTOM_DOMAIN="www.azure.ashnova.jp" ;;
-            staging)    AZURE_CUSTOM_DOMAIN="staging.azure.ashnova.jp" ;;
-            *)          AZURE_CUSTOM_DOMAIN="${{ secrets.AZURE_CUSTOM_DOMAIN }}" ;;
-          esac
+          AZURE_CLIENT_ID="${{ steps.cloud_config.outputs.azure_client_id }}"
+          AZURE_TENANT_ID="${{ steps.cloud_config.outputs.azure_tenant_id }}"
+          AZURE_CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
           AZURE_PUBLIC_HOST="${AZURE_CUSTOM_DOMAIN:-${FRONTDOOR_HOSTNAME}}"
 
-          # Fallback: Pulumi output may be empty if the deployment was skipped or
-          # the stack state was not updated. Use known per-stack AD app values.
           if [ -z "$AZURE_CLIENT_ID" ]; then
-            case "$STACK_NAME" in
-              production) AZURE_CLIENT_ID="0b926ff6-fc03-4c9c-a359-96964ef15941" ;;
-              staging)    AZURE_CLIENT_ID="03a168ac-7de3-4e5c-8fb1-99fa6dcbfe77" ;;
-            esac
-            echo "⚠️  Pulumi output empty — using fallback Azure AD Client ID: $AZURE_CLIENT_ID"
-          fi
-          if [ -z "$AZURE_TENANT_ID" ]; then
-            AZURE_TENANT_ID="a3182bec-d835-4ce3-af06-04579abf597e"
-            echo "⚠️  Pulumi output empty — using fallback Azure AD Tenant ID: $AZURE_TENANT_ID"
-          fi
-          if [ -z "$AZURE_CLIENT_ID" ]; then
-            echo "❌ AZURE_CLIENT_ID is still empty. Cannot build frontend."
+            echo "❌ AZURE_CLIENT_ID is empty. Check .github/config/azure.${STACK_NAME}.env"
             exit 1
           fi
 

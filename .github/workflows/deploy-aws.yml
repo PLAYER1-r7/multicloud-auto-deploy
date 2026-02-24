@@ -77,6 +77,26 @@ jobs:
           echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
           echo "📦 Using Pulumi stack: $STACK_NAME"
 
+      - name: Load Cloud Config
+        # Single source of truth for stable per-environment values.
+        # eliminates dependency on gitignored Pulumi.*.yaml and repo-level secrets.
+        id: cloud_config
+        run: |
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          CONFIG_FILE=".github/config/aws.${STACK_NAME}.env"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "❌ Config file $CONFIG_FILE not found — cannot proceed"
+            exit 1
+          fi
+          source "$CONFIG_FILE"
+          echo "📄 Loaded config: $CONFIG_FILE"
+          echo "  custom_domain=$CLOUD_CUSTOM_DOMAIN"
+          echo "  cloudfront_domain=$CLOUD_CLOUDFRONT_DOMAIN"
+          echo "custom_domain=$CLOUD_CUSTOM_DOMAIN" >> $GITHUB_OUTPUT
+          echo "acm_cert_arn=$CLOUD_ACM_CERT_ARN" >> $GITHUB_OUTPUT
+          echo "cloudfront_domain=$CLOUD_CLOUDFRONT_DOMAIN" >> $GITHUB_OUTPUT
+          echo "cloudfront_distribution_id=$CLOUD_CLOUDFRONT_DISTRIBUTION_ID" >> $GITHUB_OUTPUT
+
       - name: Initialize Pulumi Stack
         run: |
           cd infrastructure/pulumi/aws
@@ -98,17 +118,10 @@ jobs:
           # repo-level secret was set to staging.aws.ashnova.jp.
           # Fix: always read customDomain / acmCertificateArn / cloudFrontDomain
           # from the committed Pulumi.<stack>.yaml — no secrets needed.
-          if [ -f "$STACK_FILE" ]; then
-            CUSTOM_DOMAIN=$(grep -E "^\s+multicloud-auto-deploy-aws:customDomain:" "$STACK_FILE" | awk '{print $2}' | tr -d '"')
-            ACM_CERT_ARN=$(grep -E "^\s+multicloud-auto-deploy-aws:acmCertificateArn:" "$STACK_FILE" | awk '{print $2}' | tr -d '"')
-            CF_DOMAIN=$(grep -E "^\s+multicloud-auto-deploy-aws:cloudFrontDomain:" "$STACK_FILE" | awk '{print $2}' | tr -d '"')
-            echo "📄 Reading config from $STACK_FILE"
-          else
-            echo "⚠️  $STACK_FILE not found — falling back to GitHub Secrets"
-            CUSTOM_DOMAIN="${{ secrets.AWS_CUSTOM_DOMAIN }}"
-            ACM_CERT_ARN="${{ secrets.AWS_ACM_CERTIFICATE_ARN }}"
-            CF_DOMAIN="${{ secrets.AWS_CLOUDFRONT_DOMAIN }}"
-          fi
+          # Read from committed config file (Pulumi.*.yaml is gitignored and unavailable in CI)
+          CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
+          ACM_CERT_ARN="${{ steps.cloud_config.outputs.acm_cert_arn }}"
+          CF_DOMAIN="${{ steps.cloud_config.outputs.cloudfront_domain }}"
 
           if [ -n "$CUSTOM_DOMAIN" ]; then
             echo "✅ Setting customDomain = $CUSTOM_DOMAIN"
@@ -185,9 +198,7 @@ jobs:
           CD="${{ steps.pulumi_outputs.outputs.cloudfront_distribution_id }}"
           CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
           STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
-          STACK_FILE="infrastructure/pulumi/aws/Pulumi.${STACK_NAME}.yaml"
-          ACM_CERT_ARN=$(grep -E "^\s+multicloud-auto-deploy-aws:acmCertificateArn:" "$STACK_FILE" 2>/dev/null \
-            | awk '{print $2}' | tr -d '"')
+          ACM_CERT_ARN="${{ steps.cloud_config.outputs.acm_cert_arn }}"
 
           if [[ -z "$CUSTOM_DOMAIN" || -z "$ACM_CERT_ARN" || -z "$CD" ]]; then
             echo "⏭️  No custom domain or ACM cert configured — skipping alias check"
@@ -376,7 +387,7 @@ print(' '.join(merged))
         run: |
           set -e
 
-          LAYER_NAME="multicloud-auto-deploy-${{ github.event.inputs.environment || 'staging' }}-dependencies"
+          LAYER_NAME="multicloud-auto-deploy-${{ steps.set_stack.outputs.stack_name }}-dependencies"
 
           echo "🚀 Publishing Custom Lambda Layer: $LAYER_NAME"
           LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
@@ -451,12 +462,10 @@ print(' '.join(merged))
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
           CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
 
-          # Fallback: if custom_domain is empty, read directly from committed Pulumi YAML
+          # Fallback: if Pulumi output is empty, use committed config file value
           if [[ -z "$CUSTOM_DOMAIN" ]]; then
-            STACK_FILE="infrastructure/pulumi/aws/Pulumi.${{ steps.set_stack.outputs.stack_name }}.yaml"
-            CUSTOM_DOMAIN=$(grep -E "^\s+multicloud-auto-deploy-aws:customDomain:" "$STACK_FILE" 2>/dev/null \
-              | awk '{print $2}' | tr -d '"')
-            [[ -n "$CUSTOM_DOMAIN" ]] && echo "📄 CUSTOM_DOMAIN from YAML fallback: $CUSTOM_DOMAIN"
+            CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
+            [[ -n "$CUSTOM_DOMAIN" ]] && echo "📄 CUSTOM_DOMAIN from cloud config: $CUSTOM_DOMAIN"
           fi
 
           # Include custom domain in CORS if set
