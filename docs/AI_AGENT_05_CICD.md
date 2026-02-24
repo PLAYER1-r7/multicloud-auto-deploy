@@ -250,74 +250,85 @@ gh run watch <run-id>
 
 ## Version Management
 
-> Each artifact is tracked with a version in `X.Y.Z` format.  
-> Version definition file: [`versions.json`](../versions.json)
+> Each artifact is tracked with a version in **`A.B.C.D`** (4-digit) format.  
+> Version definition file: [`versions.json`](../versions.json)  
+> Changed from `X.Y.Z` to `A.B.C.D` (2026-02-24, commit `c2f6870`)
 
-### Component List and Initial Versions
+### Current Versions (2026-02-24)
 
-| Component           | Initial Version | Reason                                                |
-| ------------------- | --------------- | ----------------------------------------------------- |
-| `aws-static-site`   | `1.0.0`         | Stable and operational                                |
-| `azure-static-site` | `1.0.0`         | AFD 502 resolved (FC1 FlexConsumption, 2026-02-25)    |
-| `gcp-static-site`   | `1.0.0`         | Stable and operational (staging HTTPS not configured) |
-| `simple-sns`        | `1.0.0`         | React SNS app, deployed to all three clouds           |
+| Component           | Version       | Status |
+| ------------------- | ------------- | ------ |
+| `aws-static-site`   | `1.0.84.204`  | stable |
+| `azure-static-site` | `1.0.84.204`  | stable |
+| `gcp-static-site`   | `1.0.84.204`  | stable |
+| `simple-sns`        | `1.0.84.204`  | stable |
+
+初期値の根拠: C=84 (`git reflog show origin/develop | grep 'update by push'` 実測値) / D=203 (`git log develop --oneline` 実測値、次コミットで 204 に昇格)
 
 ### Version Increment Rules
 
-| Digit | Name  | Increment condition        | Method                                               |
-| ----- | ----- | -------------------------- | ---------------------------------------------------- |
-| X     | Major | Manual instruction only    | `make version-major`                                 |
-| Y     | Minor | Push to `develop` / `main` | GitHub Actions `version-bump.yml` runs automatically |
-| Z     | Patch | On every commit            | `pre-commit` git hook runs automatically             |
+| 桁 | 記号 | 意味       | インクリメント条件                 | 担当                                          |
+| -- | ---- | ---------- | ---------------------------------- | --------------------------------------------- |
+| 1  | A    | メジャー   | 手動指示のみ                       | `./scripts/bump-version.sh major all`         |
+| 2  | B    | マイナー   | 手動指示のみ                       | `./scripts/bump-version.sh minor all`         |
+| 3  | C    | プッシュ数 | `git push` のたびに +1 (リセットなし) | GitHub Actions `version-bump.yml` が自動実行 |
+| 4  | D    | コミット数 | `git commit` のたびに +1 (リセットなし) | `.githooks/pre-commit` が自動実行           |
+
+> **重要**: どの桁をインクリメントしても他の桁はリセットしない。  
+> パスフィルタ: `static-site/aws/**` → A のみ、`services/frontend_react/**` → SNS のみ、それ以外 → 全コンポーネント
 
 ### Implementation Files
 
-| File                                 | Role                                                         |
-| ------------------------------------ | ------------------------------------------------------------ |
-| `versions.json`                      | Stores the current version for each component                |
-| `scripts/bump-version.sh`            | Version manipulation script (supports patch / minor / major) |
-| `.githooks/pre-commit`               | Auto-increments patch (Z) before each commit                 |
-| `.github/workflows/version-bump.yml` | Auto-increments minor (Y) on push                            |
+| File                                 | Role                                                                 |
+| ------------------------------------ | -------------------------------------------------------------------- |
+| `versions.json`                      | 各コンポーネントの現在バージョンを保持                               |
+| `scripts/bump-version.sh`            | バージョン操作スクリプト (`commit` / `push` / `minor` / `major` / `set`) |
+| `.githooks/pre-commit`               | コミット前に D (コミット数) を自動インクリメント (パスフィルタあり)  |
+| `.github/workflows/version-bump.yml` | push 時に C (プッシュ数) を自動インクリメント                         |
 
 ### Setup (first time only)
 
 ```bash
 make hooks-install
 # → runs: git config core.hooksPath .githooks
-# → auto-increments Z on each commit
+# → auto-increments D on each commit
 ```
 
 ### Common Commands
 
 ```bash
-# Show all current versions
-make version
-
-# Bump major version manually (X+1)
-make version-major COMPONENT=all          # all components
-make version-major COMPONENT=simple-sns   # specific component only
-
-# Promote 0.9.x → 1.0.0 once Azure AFD issue is resolved
-make version-azure-afd-resolved
-
-# Call the script directly
+# 現在のバージョンを表示
 ./scripts/bump-version.sh show
-./scripts/bump-version.sh major simple-sns
-./scripts/bump-version.sh azure-afd-resolved
+
+# D (+1) — pre-commit hook が自動実行 (手動実行も可)
+./scripts/bump-version.sh commit all
+
+# C (+1) — GitHub Actions が自動実行 (手動実行も可)
+./scripts/bump-version.sh push all
+
+# B (+1) — 手動指示で実行
+./scripts/bump-version.sh minor all
+
+# A (+1) — 手動指示で実行
+./scripts/bump-version.sh major all
+./scripts/bump-version.sh major simple-sns   # コンポーネント個別指定
+
+# バージョンを直接設定 (移行・修正時)
+./scripts/bump-version.sh set all 1.0.84.204
 ```
 
 ### Skipping Version Bumps
 
-| Target                    | How to skip                                            |
-| ------------------------- | ------------------------------------------------------ |
-| pre-commit hook (patch Z) | Set env var: `SKIP_VERSION_BUMP=1 git commit -m "..."` |
-| GitHub Actions (minor Y)  | Include `[skip-version-bump]` in the commit message    |
+| 対象                         | スキップ方法                                                   |
+| ---------------------------- | -------------------------------------------------------------- |
+| pre-commit hook (D +=1)      | 環境変数: `SKIP_VERSION_BUMP=1 git commit -m "..."`            |
+| GitHub Actions (C +=1)       | コミットメッセージに `[skip-version-bump]` を含める            |
 
 ```bash
-# Commit while skipping the pre-commit hook
+# pre-commit フックをスキップしてコミット
 SKIP_VERSION_BUMP=1 git commit -m "docs: update readme"
 
-# Skip GitHub Actions minor bump (used to prevent bot commit loops)
+# GitHub Actions バンプをスキップ (bot コミットのループ防止に使用)
 git commit -m "chore: some change [skip-version-bump]"
 ```
 

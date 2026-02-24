@@ -1,7 +1,7 @@
 # 09 — Remaining Tasks
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
-> Last updated: 2026-02-24 (E2Eテストスクリプト大幅改良 + `test-sns-all.sh` 新規追加 — commit `73af560`)
+> Last updated: 2026-02-24 (バージョン番号を4桁スキーム A.B.C.D に変更 — commit `c2f6870`)
 > **AI Agent Note**: Update this file when a task is resolved.
 
 ---
@@ -14,6 +14,7 @@ AWS API (production):       ✅ {"status":"ok","provider":"aws","version":"3.0.0
 GCP API (production):       ✅ {"status":"ok","provider":"gcp","version":"3.0.0"}
 Azure API (production):     ✅ {"status":"ok","provider":"azure","version":"3.0.0"} (修復 2026-02-24)
 E2E test-sns-all.sh:        ✅ AWS 9/0/4, Azure 17/0/2, GCP 13/0/4 (PASS/FAIL/SKIP) — production read-only (2026-02-24 commit 73af560)
+Version scheme:             ✅ X.Y.Z → A.B.C.D に変更。現在値 1.0.84.204 (C=push数, D=commit数) (2026-02-24 commit c2f6870)
 AWS API (staging):          ✅ {"status":"ok","provider":"aws","version":"3.0.0"} (2026-02-24 #246)
 GCP API (staging):          ✅ {"status":"ok","provider":"gcp","version":"3.0.0"} (2026-02-24 #214)
 Azure API (staging):        ✅ {"status":"ok","provider":"azure","version":"3.0.0"} (2026-02-24 #273)
@@ -56,6 +57,7 @@ develop branch sync:        ✅ main v1.17.22 と同期済み
 | 0e  | **Azure staging FC1 deployment storage 修復** | `functionAppConfig.deployment.storage` が削除済みストレージアカウント `multicloudautodeploa752` を指しており、全zip deployが `InaccessibleStorageException: Name or service not known` で失敗。`deploy-azure.yml` に ARM GET → storage account 作成 → connection string 更新ロジック追加。`WEBSITE_RUN_FROM_PACKAGE` クリア・再起動・Verify Deployment 600s待機も追加。 | v1.20.1  |
 | 0f  | **Staging 全3クラウド再デプロイ完全成功** | AWS#246 ✅ / GCP#214 ✅ / Azure#273 ✅。3クラウドとも `/health` = `{"status":"ok","version":"3.0.0"}` 確認。 | v1.20.1  |
 | 0g  | **E2Eテストスクリプト大幅改良**          | `test-sns-aws.sh`: Cognito 自動認証・X-Amz-Signature 検証・binary PUT・imageUrl 確認追加。`test-sns-gcp.sh`: gcloud 自動認証・X-Goog-Signature 検証・binary PUT・imageUrl 確認追加。`test-sns-azure.sh`: binary PUT (BlockBlob)・SAS read URL 確認追加。`test-sns-all.sh` 新規作成 (3クラウド統合ラッパー)。production read-only: PASS 39 / FAIL 0 / SKIP 10。 | v1.22.1  |
+| 0h  | **バージョン番号を 4桁スキーム A.B.C.D に変更** | `X.Y.Z` → `A.B.C.D`。A/B: 手動指示で+1。C: `git push`のたび+1 (GitHub Actions)。D: `git commit`のたび+1 (pre-commit hook)。どの桁も他の桁をリセットしない。`.githooks/pre-commit` のパスフィルタを維持しつつ `patch all` → `commit` (対象コンポーネントのみ) に変更。`version-bump.yml` を `minor all` → `push all` に変更。初期値 `1.0.84.203` (C=84: push実測値, D=203: commit実測値)。 | v1.0.84.204 |
 
 ### 既存タスク
 
