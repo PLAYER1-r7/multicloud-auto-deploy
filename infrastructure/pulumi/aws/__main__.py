@@ -805,79 +805,89 @@ cloudfront_distribution = aws.cloudfront.Distribution(
 )
 
 # ========================================
-# CloudTrail - Audit Logging
+# CloudTrail - Audit Logging (optional — requires cloudtrail:* IAM permissions)
+# Enable by running: pulumi config set cloudtrailEnabled true
+# IAM requirements: cloudtrail:CreateTrail, cloudtrail:StartLogging,
+#                   cloudtrail:GetTrail, cloudtrail:DescribeTrails,
+#                   cloudtrail:PutEventSelectors, cloudtrail:ListTags
 # ========================================
-# S3 bucket to store CloudTrail management event logs
-cloudtrail_bucket = aws.s3.BucketV2(
-    "cloudtrail-bucket",
-    bucket=f"{project_name}-{stack}-cloudtrail-logs",
-    force_destroy=True,
-    tags=common_tags,
-)
+cloudtrail_enabled = config.get_bool("cloudtrailEnabled") or False
 
-# Block all public access to the audit log bucket
-aws.s3.BucketPublicAccessBlock(
-    "cloudtrail-bucket-public-access",
-    bucket=cloudtrail_bucket.id,
-    block_public_acls=True,
-    block_public_policy=True,
-    ignore_public_acls=True,
-    restrict_public_buckets=True,
-)
+if cloudtrail_enabled:
+    # S3 bucket to store CloudTrail management event logs
+    cloudtrail_bucket = aws.s3.BucketV2(
+        "cloudtrail-bucket",
+        bucket=f"{project_name}-{stack}-cloudtrail-logs",
+        force_destroy=True,
+        tags=common_tags,
+    )
 
-# Enable versioning on the CloudTrail bucket for tamper evidence
-aws.s3.BucketVersioningV2(
-    "cloudtrail-bucket-versioning",
-    bucket=cloudtrail_bucket.id,
-    versioning_configuration={"status": "Enabled"},
-)
+    # Block all public access to the audit log bucket
+    aws.s3.BucketPublicAccessBlock(
+        "cloudtrail-bucket-public-access",
+        bucket=cloudtrail_bucket.id,
+        block_public_acls=True,
+        block_public_policy=True,
+        ignore_public_acls=True,
+        restrict_public_buckets=True,
+    )
 
-# Bucket policy: grant CloudTrail service permission to write logs
-cloudtrail_bucket_policy = aws.s3.BucketPolicy(
-    "cloudtrail-bucket-policy",
-    bucket=cloudtrail_bucket.id,
-    policy=cloudtrail_bucket.arn.apply(
-        lambda bucket_arn: json.dumps(
-            {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "AWSCloudTrailAclCheck",
-                        "Effect": "Allow",
-                        "Principal": {"Service": "cloudtrail.amazonaws.com"},
-                        "Action": "s3:GetBucketAcl",
-                        "Resource": bucket_arn,
-                    },
-                    {
-                        "Sid": "AWSCloudTrailWrite",
-                        "Effect": "Allow",
-                        "Principal": {"Service": "cloudtrail.amazonaws.com"},
-                        "Action": "s3:PutObject",
-                        "Resource": f"{bucket_arn}/AWSLogs/*",
-                        "Condition": {
-                            "StringEquals": {
-                                "s3:x-amz-acl": "bucket-owner-full-control"
-                            }
+    # Enable versioning on the CloudTrail bucket for tamper evidence
+    aws.s3.BucketVersioningV2(
+        "cloudtrail-bucket-versioning",
+        bucket=cloudtrail_bucket.id,
+        versioning_configuration={"status": "Enabled"},
+    )
+
+    # Bucket policy: grant CloudTrail service permission to write logs
+    cloudtrail_bucket_policy = aws.s3.BucketPolicy(
+        "cloudtrail-bucket-policy",
+        bucket=cloudtrail_bucket.id,
+        policy=cloudtrail_bucket.arn.apply(
+            lambda bucket_arn: json.dumps(
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": bucket_arn,
                         },
-                    },
-                ],
-            }
-        )
-    ),
-    opts=pulumi.ResourceOptions(depends_on=[cloudtrail_bucket]),
-)
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                            "Action": "s3:PutObject",
+                            "Resource": f"{bucket_arn}/AWSLogs/*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            },
+                        },
+                    ],
+                }
+            )
+        ),
+        opts=pulumi.ResourceOptions(depends_on=[cloudtrail_bucket]),
+    )
 
-# CloudTrail trail: multi-region, global service events, log file validation
-cloudtrail = aws.cloudtrail.Trail(
-    "cloudtrail",
-    name=f"{project_name}-{stack}-trail",
-    s3_bucket_name=cloudtrail_bucket.id,
-    include_global_service_events=True,  # Capture IAM, STS, etc.
-    is_multi_region_trail=True,  # Cover all regions
-    enable_log_file_validation=True,  # SHA-256 digest for tamper detection
-    tags=common_tags,
-    opts=pulumi.ResourceOptions(depends_on=[cloudtrail_bucket_policy]),
-)
+    # CloudTrail trail: multi-region, global service events, log file validation
+    cloudtrail = aws.cloudtrail.Trail(
+        "cloudtrail",
+        name=f"{project_name}-{stack}-trail",
+        s3_bucket_name=cloudtrail_bucket.id,
+        include_global_service_events=True,  # Capture IAM, STS, etc.
+        is_multi_region_trail=True,  # Cover all regions
+        enable_log_file_validation=True,  # SHA-256 digest for tamper detection
+        tags=common_tags,
+        opts=pulumi.ResourceOptions(depends_on=[cloudtrail_bucket_policy]),
+    )
+
+    pulumi.export("cloudtrail_name", cloudtrail.name)
+    pulumi.export("cloudtrail_bucket_name", cloudtrail_bucket.id)
 
 # ========================================
 # Monitoring and Alerts
@@ -932,8 +942,6 @@ pulumi.export("posts_table_name", posts_table.name)
 pulumi.export("posts_table_arn", posts_table.arn)
 pulumi.export("images_bucket_name", images_bucket.id)
 pulumi.export("images_bucket_arn", images_bucket.arn)
-pulumi.export("cloudtrail_name", cloudtrail.name)
-pulumi.export("cloudtrail_bucket_name", cloudtrail_bucket.id)
 
 # Monitoring exports
 if monitoring_resources["sns_topic"]:

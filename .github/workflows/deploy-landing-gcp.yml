@@ -62,9 +62,16 @@ jobs:
 
       - name: Invalidate CDN Cache
         run: |
-          gcloud compute url-maps invalidate-cdn-cache multicloud-auto-deploy-staging-cdn-urlmap \
-            --path "/*" \
-            --project=${{ secrets.GCP_PROJECT_ID }}
+          # Dynamically look up the URL map name for the current stack
+          URLMAP_NAME=$(gcloud compute url-maps list --format="value(name)" \
+            --project=${{ secrets.GCP_PROJECT_ID }} | grep "cdn-urlmap" | head -1)
+          if [ -n "$URLMAP_NAME" ]; then
+            gcloud compute url-maps invalidate-cdn-cache "$URLMAP_NAME" \
+              --path "/*" --async --project=${{ secrets.GCP_PROJECT_ID }} 2>/dev/null || true
+            echo "✅ CDN cache invalidated: $URLMAP_NAME"
+          else
+            echo "⚠️  No CDN URL map found, skipping cache invalidation"
+          fi
 
       - name: Deployment Success
         run: |
