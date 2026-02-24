@@ -1,11 +1,16 @@
-name: Version Bump (Minor) on Push
+name: Version Bump (Push Count) on Push
 
-# プッシュのたびにマイナーバージョン (Y) を +1 し Z をリセット
-# 例: 1.0.5 → 1.1.0
+# プッシュのたびにプッシュカウント (C) を +1
+# 例: 1.0.84.203 → 1.0.85.203
+#
+# バージョン規則: A.B.C.D
+#   C: リモートプッシュのたびに+1 (このワークフローが担当)
+#   D: developコミットのたびに+1 (pre-commit hook が担当)
+#   ※ どの桁も他の桁をリセットしない
 #
 # スキップ条件:
 #   コミットメッセージに "[skip-version-bump]" を含む場合
-#   (このワークフロー自身が作るコミットがループしないための ガード)
+#   (このワークフロー自身が作るコミットがループしないためのガード)
 
 on:
   push:
@@ -21,7 +26,7 @@ permissions:
   contents: write # バージョンバンプコミットを push するために必要
 
 jobs:
-  version-bump-minor:
+  version-bump-push:
     runs-on: ubuntu-latest
 
     # [skip-version-bump] を含むコミットはスキップ
@@ -43,9 +48,9 @@ jobs:
       - name: バンプスクリプトに実行権限を付与
         run: chmod +x scripts/bump-version.sh
 
-      - name: マイナーバージョン (Y) をインクリメント
+      - name: プッシュカウント (C) をインクリメント
         run: |
-          SKIP_VERSION_BUMP=0 ./scripts/bump-version.sh minor all
+          SKIP_VERSION_BUMP=0 ./scripts/bump-version.sh push all
 
       - name: バージョン変更の確認
         run: |
@@ -65,7 +70,7 @@ jobs:
           else
             git add versions.json
             # [skip-version-bump] を含めることでこのワークフローの再実行を防ぐ
-            git commit -m "chore: bump minor version on push to ${{ github.ref_name }} [skip-version-bump]"
+            git commit -m "chore: bump push count (C) on push to ${{ github.ref_name }} [skip-version-bump]"
             git push
-            echo "✅ マイナーバージョンをプッシュしました"
+            echo "✅ プッシュカウントをプッシュしました"
           fi

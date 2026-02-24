@@ -1,30 +1,26 @@
 #!/usr/bin/env bash
 # ============================================================
-# bump-version.sh — バージョン管理スクリプト
+# bump-version.sh — バージョン管理スクリプト (4桁スキーム)
 #
 # 使用方法:
 #   ./scripts/bump-version.sh show                        # 現在のバージョン一覧を表示
-#   ./scripts/bump-version.sh patch  all                  # 全コンポーネントのパッチ(Z)を+1
-#   ./scripts/bump-version.sh patch  simple-sns           # 指定コンポーネントのみ
-#   ./scripts/bump-version.sh minor  all                  # マイナー(Y)を+1 → Zはリセット
-#   ./scripts/bump-version.sh major  all                  # メジャー(X)を+1 手動実行専用
-#   ./scripts/bump-version.sh major  aws-static-site      # 指定コンポーネントのみ
-#   ./scripts/bump-version.sh azure-afd-resolved          # Azure AFD 解消後: 0.9.x → 1.0.0
+#   ./scripts/bump-version.sh commit all                  # D (+1) ← pre-commit hook が自動実行
+#   ./scripts/bump-version.sh commit simple-sns           # 指定コンポーネントのみ
+#   ./scripts/bump-version.sh push   all                  # C (+1) ← GitHub Actions が push 時に自動実行
+#   ./scripts/bump-version.sh minor  all                  # B (+1) ← 手動指示で実行
+#   ./scripts/bump-version.sh major  all                  # A (+1) ← 手動指示で実行
+#   ./scripts/bump-version.sh set    all   1.0.84.203     # バージョンを直接設定
 #
 # コンポーネント名:
 #   aws-static-site   azure-static-site   gcp-static-site   simple-sns
 #
-# バージョン規則:
-#   X.Y.Z
-#   X: 手動指示で+1
-#   Y: プッシュ (GitHub Actions) で+1 → Zリセット
-#   Z: コミット (pre-commit hook) で+1
+# バージョン規則: A.B.C.D
+#   A: 手動指示で+1 (B/C/D は変化しない)
+#   B: 手動指示で+1 (A/C/D は変化しない)
+#   C: リモートプッシュのたびに+1 (GitHub Actions) (A/B/D は変化しない / リセットなし)
+#   D: developへのコミットのたびに+1 (pre-commit hook) (A/B/C は変化しない / リセットなし)
 #
-# 初期バージョン:
-#   aws-static-site   1.0.0
-#   azure-static-site 0.9.0  ← AFD 502 未解消のため
-#   gcp-static-site   1.0.0
-#   simple-sns        1.0.0
+# ※ すべての桁は他の桁が増えてもリセットしない
 # ============================================================
 
 set -euo pipefail
@@ -53,19 +49,22 @@ if component not in data:
 
 current = data[component]["version"]
 parts   = current.split(".")
-major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
+if len(parts) != 4:
+    print(f"ERROR: version '{current}' is not 4-digit format (A.B.C.D)", file=sys.stderr)
+    sys.exit(1)
 
-if bump_type == "major":
-    major += 1; minor = 0; patch = 0
-elif bump_type == "minor":
-    minor += 1; patch = 0
-elif bump_type == "patch":
-    patch += 1
+a, b, c, d = int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
+
+# ※ どの桁を上げても他の桁はリセットしない
+if   bump_type == "major":  a += 1
+elif bump_type == "minor":  b += 1
+elif bump_type == "push":   c += 1
+elif bump_type == "commit": d += 1
 else:
     print(f"ERROR: unknown bump type '{bump_type}'", file=sys.stderr)
     sys.exit(1)
 
-new_version = f"{major}.{minor}.{patch}"
+new_version = f"{a}.{b}.{c}.{d}"
 data[component]["version"] = new_version
 
 with open(versions_file, "w") as f:
@@ -112,12 +111,12 @@ import json
 with open(sys.argv[1], "r") as f:
     data = json.load(f)
 
-print("=" * 55)
-print(f"{'Component':<22} {'Version':<10} {'Status':<8}")
-print("-" * 55)
+print("=" * 60)
+print(f"{'Component':<22} {'Version (A.B.C.D)':<18} {'Status':<8}")
+print("-" * 60)
 for name, info in data.items():
-    print(f"  {name:<20} {info['version']:<10} {info.get('status','')}")
-print("=" * 55)
+    print(f"  {name:<20} {info['version']:<18} {info.get('status','')}")
+print("=" * 60)
 PYEOF
 }
 
@@ -131,7 +130,7 @@ case "$BUMP_TYPE" in
     python_show
     ;;
 
-  patch|minor|major)
+  commit|push|minor|major)
     if [[ -z "$TARGET" ]]; then
       echo "ERROR: コンポーネントを指定してください。例: $0 $BUMP_TYPE all"
       exit 1
@@ -147,17 +146,21 @@ case "$BUMP_TYPE" in
     python_show
     ;;
 
-  azure-afd-resolved)
-    # Azure AFD 502 問題解消後に呼び出す特別コマンド
-    # 現在の azure-static-site バージョンを 1.0.0 にリセット
-    echo "🎉 Azure AFD 解消: azure-static-site を 1.0.0 へ昇格"
-    python_set_version "azure-static-site" "1.0.0"
+  set)
+    if [[ -z "$TARGET" || -z "${3:-}" ]]; then
+      echo "ERROR: コンポーネントとバージョンを指定してください。例: $0 set all 1.0.84.203"
+      exit 1
+    fi
+    NEW_VER="${3}"
+    echo "🔖 set version: ${TARGET} → ${NEW_VER}"
+    if [[ "$TARGET" == "all" ]]; then
+      for comp in "${COMPONENTS[@]}"; do
+        python_set_version "$comp" "$NEW_VER"
+      done
+    else
+      python_set_version "$TARGET" "$NEW_VER"
+    fi
     python_show
-    echo ""
-    echo "⚠️  次の手順で反映してください:"
-    echo "   git add versions.json"
-    echo "   git commit -m 'chore: upgrade azure-static-site to 1.0.0 (AFD resolved) [skip-version-bump]'"
-    echo "   git push"
     ;;
 
   *)
@@ -166,19 +169,28 @@ case "$BUMP_TYPE" in
 
 コマンド:
   show                          現在のバージョン一覧
-  patch   <component|all>       Z を +1 (コミット時に自動実行)
-  minor   <component|all>       Y を +1、Z リセット (push 時に GitHub Actions が実行)
-  major   <component|all>       X を +1、Y/Z リセット (手動実行)
-  azure-afd-resolved            Azure AFD 解消時: 0.9.x → 1.0.0
+  commit  <component|all>       D (+1) ← pre-commit hook が自動実行
+  push    <component|all>       C (+1) ← GitHub Actions が push 時に自動実行
+  minor   <component|all>       B (+1) ← 手動指示で実行
+  major   <component|all>       A (+1) ← 手動指示で実行
+  set     <component|all> <ver> バージョンを直接設定 (A.B.C.D)
+
+バージョン規則: A.B.C.D
+  A: 手動指示で+1 (他はそのまま)
+  B: 手動指示で+1 (他はそのまま)
+  C: リモートプッシュのたびに+1 (他はそのまま / リセットなし)
+  D: developコミットのたびに+1 (他はそのまま / リセットなし)
 
 コンポーネント:
   aws-static-site   azure-static-site   gcp-static-site   simple-sns   all
 
 例:
   $0 show
-  $0 patch all
+  $0 commit all
+  $0 push all
+  $0 minor all
   $0 major aws-static-site
-  $0 azure-afd-resolved
+  $0 set all 1.0.84.203
 EOF
     exit 1
     ;;
