@@ -47,6 +47,61 @@ main     →  production  ⚠️ goes live immediately
 
 ---
 
+## Cloud Config Files (.github/config/)
+
+> **Single source of truth** for stable, per-environment values that were previously fragmented across GitHub Secrets, inline `case/esac` blocks, and gitignored `Pulumi.*.yaml` files.
+
+### Location
+
+```
+.github/config/
+  aws.production.env
+  aws.staging.env
+  azure.production.env
+  azure.staging.env
+  gcp.production.env
+  gcp.staging.env
+```
+
+### What is stored here
+
+| Cloud | Key                                | Example value                        |
+| ----- | ---------------------------------- | ------------------------------------ |
+| All   | `CLOUD_CUSTOM_DOMAIN`              | `www.gcp.ashnova.jp`                 |
+| Azure | `CLOUD_AZURE_CLIENT_ID`            | `0b926ff6-...` (AD app registration) |
+| Azure | `CLOUD_AZURE_TENANT_ID`            | `a3182bec-...`                       |
+| AWS   | `CLOUD_ACM_CERT_ARN`               | `arn:aws:acm:us-east-1:...`          |
+| AWS   | `CLOUD_CLOUDFRONT_DOMAIN`          | `d1qob7569mn5nw.cloudfront.net`      |
+| AWS   | `CLOUD_CLOUDFRONT_DISTRIBUTION_ID` | `E214XONKTXJEJD`                     |
+
+### How workflows use it
+
+Every main deploy workflow (`deploy-aws.yml`, `deploy-azure.yml`, `deploy-gcp.yml`) includes a **`Load Cloud Config`** step immediately after `Determine Pulumi Stack Name`:
+
+```bash
+CONFIG_FILE=".github/config/aws.${STACK_NAME}.env"
+source "$CONFIG_FILE"
+echo "custom_domain=$CLOUD_CUSTOM_DOMAIN" >> $GITHUB_OUTPUT
+# ... other outputs
+```
+
+All subsequent steps reference `${{ steps.cloud_config.outputs.custom_domain }}` etc. instead of any fallback logic.
+
+### When to update
+
+| Event                      | Action                                              |
+| -------------------------- | --------------------------------------------------- |
+| Custom domain changes      | Update `CLOUD_CUSTOM_DOMAIN` in the relevant `.env` |
+| ACM cert renewed (AWS)     | Update `CLOUD_ACM_CERT_ARN`                         |
+| Azure AD app re-registered | Update `CLOUD_AZURE_CLIENT_ID`                      |
+| New stack added            | Add a new `<cloud>.<stack>.env` file                |
+
+### Why NOT in GitHub Secrets
+
+Repo-level GitHub Secrets are **environment-agnostic**. Setting `AZURE_CUSTOM_DOMAIN=www.azure.ashnova.jp` at repo level means the staging deploy also receives the production domain. Environment-level Secrets solve this but must be configured in the GitHub UI and are invisible to code review. Config files in `.github/config/` are git-tracked, diff-visible, and require no GitHub UI maintenance.
+
+---
+
 ## Required GitHub Secrets
 
 ### AWS
@@ -57,6 +112,9 @@ main     →  production  ⚠️ goes live immediately
 | `AWS_SECRET_ACCESS_KEY` | IAM secret key          |
 | `PULUMI_ACCESS_TOKEN`   | Pulumi Cloud auth token |
 
+> ⚠️ `AWS_CUSTOM_DOMAIN`, `AWS_ACM_CERTIFICATE_ARN`, `AWS_CLOUDFRONT_DOMAIN` are **no longer used**.
+> These values are now read from `.github/config/aws.<stack>.env`.
+
 ### Azure
 
 | Secret                  | Purpose                                                        |
@@ -65,6 +123,9 @@ main     →  production  ⚠️ goes live immediately
 | `AZURE_SUBSCRIPTION_ID` | Subscription ID                                                |
 | `AZURE_RESOURCE_GROUP`  | Resource group name                                            |
 | `PULUMI_ACCESS_TOKEN`   | Pulumi Cloud auth token                                        |
+
+> ⚠️ `AZURE_CUSTOM_DOMAIN` is **no longer used** in `deploy-azure.yml`.
+> `CLOUD_CUSTOM_DOMAIN`, `CLOUD_AZURE_CLIENT_ID`, `CLOUD_AZURE_TENANT_ID` are read from `.github/config/azure.<stack>.env`.
 
 ### GCP
 
@@ -88,12 +149,16 @@ main     →  production  ⚠️ goes live immediately
 2. AWS auth (aws-actions/configure-aws-credentials)
 3. Set up Python 3.12
 4. Pulumi login (PULUMI_ACCESS_TOKEN)
-5. pulumi up --stack staging  # create/update infrastructure
-6. Build Lambda Layer (./scripts/build-lambda-layer.sh)
-7. Publish Lambda Layer
-8. Package app code as ZIP (app/ + index.py)
-9. Update Lambda function code
-10. Update Lambda environment variables
+5. Determine Pulumi Stack Name  →  STACK_NAME = staging | production
+6. Load Cloud Config  →  source .github/config/aws.${STACK_NAME}.env
+   # Outputs: custom_domain, acm_cert_arn, cloudfront_domain
+7. pulumi up --stack staging  # create/update infrastructure
+8. Get Pulumi Outputs  →  bucket name, CloudFront ID, Cognito IDs, etc.
+9. Build Lambda Layer (./scripts/build-lambda-layer.sh)
+10. Publish Lambda Layer  (name = multicloud-auto-deploy-${STACK_NAME}-dependencies)
+11. Package app code as ZIP (app/ + index.py)
+12. Update Lambda function code
+13. Update Lambda environment variables
     - CLOUD_PROVIDER=aws
     - AUTH_DISABLED=false
     - AUTH_PROVIDER=cognito
@@ -154,23 +219,27 @@ gh run watch <run-id>
 
 ## Past CI Bugs Fixed (watch for recurrence)
 
-| Bug                                           | Symptom                                                                | Fix                                                                                                   |
-| --------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Workflow file duplication                     | Editing subdirectory only → not reflected in CI                        | Edit root `.github/workflows/`                                                                        |
-| `deploy-landing-gcp.yml` auth method          | `workload_identity_provider` (secret not set)                          | Changed to `credentials_json: ${{ secrets.GCP_CREDENTIALS }}`                                         |
-| `deploy-landing-aws.yml` auth method          | `role-to-assume` (secret not set)                                      | Changed to `aws-access-key-id` + `aws-secret-access-key`                                              |
-| Frontend overwrote landing page               | `dist/` synced to bucket root                                          | Changed to sync `dist/` under `sns/` prefix                                                           |
-| AWS/Azure staging had `AUTH_DISABLED=true`    | Auth remained disabled on deployment                                   | Removed conditional; always set `AUTH_DISABLED=false`                                                 |
-| GCP URLMap `Error 412: Invalid fingerprint`   | Pulumi state out of sync with GCP resource                             | Added `pulumi refresh --yes --skip-preview` before `pulumi up` in `deploy-gcp.yml`                    |
-| GCP Cloud Build `missing main.py`             | Cloud Build rejects source even when `--entry-point` is specified      | Copy `services/api/function.py` as `main.py` inside the deployment ZIP                                |
-| Azure `ModuleNotFoundError: pulumi_azuread`   | `pulumi-azuread` accidentally deleted from `requirements.txt`          | Restore `pulumi-azuread>=6.0.0,<7.0.0` in `infrastructure/pulumi/azure/requirements.txt`              |
-| Azure `ModuleNotFoundError: monitoring`       | `monitoring.py` existed in `main` but not in `develop`                 | Add `infrastructure/pulumi/{aws,azure,gcp}/monitoring.py` to `develop`                                |
-| Azure FC1: wrong `az functionapp create`      | `--consumption-plan-location` creates Y1 Dynamic → stale TCP 502 AFD   | Use `--flexconsumption-location` to create FC1 FlexConsumption                                        |
-| GCP `Error 409: uploads-bucket exists`        | Pulumi tried to create a bucket that already existed in GCP            | Add `pulumi import` step for the pre-existing bucket before `pulumi up`                               |
-| GCP `ManagedSslCertificate Error 400: in use` | SSL cert name hash changed between branches; GCP refused deletion      | Add `ignore_changes=["name", "managed"]` to cert resource + `pulumi import` step                      |
-| Firebase Auth: new domain not authorized      | `signInWithPopup` fails — domain not in Firebase authorized domains    | `deploy-gcp.yml` runs `Update Firebase Authorized Domains` step after Pulumi outputs are read         |
-| Azure dead CI steps (SSR Lambda)              | Old `frontend_web` Lambda/S3 steps ran after React SPA migration       | Removed 168 dead lines from `deploy-aws.yml`, `deploy-azure.yml`, `deploy-gcp.yml` (commit `1ae65f5`) |
-| AWS `ResourceConflictException` race          | `update-function-code` issued while Pulumi's config update in progress | Add `aws lambda wait function-updated` before AND after code/config updates                           |
+| Bug                                           | Symptom                                                                                                                                                                  | Fix                                                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Workflow file duplication                     | Editing subdirectory only → not reflected in CI                                                                                                                          | Edit root `.github/workflows/`                                                                                         |
+| `deploy-landing-gcp.yml` auth method          | `workload_identity_provider` (secret not set)                                                                                                                            | Changed to `credentials_json: ${{ secrets.GCP_CREDENTIALS }}`                                                          |
+| `deploy-landing-aws.yml` auth method          | `role-to-assume` (secret not set)                                                                                                                                        | Changed to `aws-access-key-id` + `aws-secret-access-key`                                                               |
+| Frontend overwrote landing page               | `dist/` synced to bucket root                                                                                                                                            | Changed to sync `dist/` under `sns/` prefix                                                                            |
+| AWS/Azure staging had `AUTH_DISABLED=true`    | Auth remained disabled on deployment                                                                                                                                     | Removed conditional; always set `AUTH_DISABLED=false`                                                                  |
+| GCP URLMap `Error 412: Invalid fingerprint`   | Pulumi state out of sync with GCP resource                                                                                                                               | Added `pulumi refresh --yes --skip-preview` before `pulumi up` in `deploy-gcp.yml`                                     |
+| GCP Cloud Build `missing main.py`             | Cloud Build rejects source even when `--entry-point` is specified                                                                                                        | Copy `services/api/function.py` as `main.py` inside the deployment ZIP                                                 |
+| Azure `ModuleNotFoundError: pulumi_azuread`   | `pulumi-azuread` accidentally deleted from `requirements.txt`                                                                                                            | Restore `pulumi-azuread>=6.0.0,<7.0.0` in `infrastructure/pulumi/azure/requirements.txt`                               |
+| Azure `ModuleNotFoundError: monitoring`       | `monitoring.py` existed in `main` but not in `develop`                                                                                                                   | Add `infrastructure/pulumi/{aws,azure,gcp}/monitoring.py` to `develop`                                                 |
+| Azure FC1: wrong `az functionapp create`      | `--consumption-plan-location` creates Y1 Dynamic → stale TCP 502 AFD                                                                                                     | Use `--flexconsumption-location` to create FC1 FlexConsumption                                                         |
+| GCP `Error 409: uploads-bucket exists`        | Pulumi tried to create a bucket that already existed in GCP                                                                                                              | Add `pulumi import` step for the pre-existing bucket before `pulumi up`                                                |
+| GCP `ManagedSslCertificate Error 400: in use` | SSL cert name hash changed between branches; GCP refused deletion                                                                                                        | Add `ignore_changes=["name", "managed"]` to cert resource + `pulumi import` step                                       |
+| Firebase Auth: new domain not authorized      | `signInWithPopup` fails — domain not in Firebase authorized domains                                                                                                      | `deploy-gcp.yml` runs `Update Firebase Authorized Domains` step after Pulumi outputs are read                          |
+| Azure dead CI steps (SSR Lambda)              | Old `frontend_web` Lambda/S3 steps ran after React SPA migration                                                                                                         | Removed 168 dead lines from `deploy-aws.yml`, `deploy-azure.yml`, `deploy-gcp.yml` (commit `1ae65f5`)                  |
+| Lambda Layer name always `staging`            | `github.event.inputs.environment \|\| 'staging'` → push event has no `inputs` → production deploys created layer named `...-staging-dependencies`                        | Changed to `steps.set_stack.outputs.stack_name`                                                                        |
+| Env vars wiped / wrong env on each deploy     | `Pulumi.*.yaml` is gitignored → `grep` always fails → fallback to repo-level Secrets → Secrets are env-agnostic → staging and production share the same domain/client_id | Introduced `.github/config/<cloud>.<stack>.env` as committed single source of truth; removed all `case/esac` fallbacks |
+| Azure AD Client ID empty after CI deploy      | `pulumi stack output azure_ad_client_id` returned blank → `VITE_AZURE_CLIENT_ID=''` → auth provider became `'none'` → "認証設定が不完全" error on login page             | `AZURE_CLIENT_ID` now sourced from `cloud_config` step (config file), never from Pulumi output                         |
+| AWS/Azure/GCP wrong custom domain             | `secrets.AZURE_CUSTOM_DOMAIN` (repo-level) contained staging domain → production frontend built with `staging.azure.ashnova.jp` redirect URI                             | All custom domain references replaced with `steps.cloud_config.outputs.custom_domain`                                  |
+| AWS `ResourceConflictException` race          | `update-function-code` issued while Pulumi's config update in progress                                                                                                   | Add `aws lambda wait function-updated` before AND after code/config updates                                            |
 
 ---
 
