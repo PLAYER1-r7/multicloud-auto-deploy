@@ -250,8 +250,19 @@ run_test "API GET /posts returns 200 (unauthenticated)" \
 if echo "$LAST_BODY" | jq -e '.items' >/dev/null 2>&1; then
   POST_COUNT=$(echo "$LAST_BODY" | jq '.items | length')
   ok "  .items array present (${POST_COUNT} posts)"
+elif echo "$LAST_BODY" | jq -e '.posts' >/dev/null 2>&1; then
+  POST_COUNT=$(echo "$LAST_BODY" | jq '.posts | length')
+  ok "  .posts array present (${POST_COUNT} posts)"
 else
-  fail "  .items missing in /posts response"
+  fail "  .items/.posts missing in /posts response"
+fi
+
+# imageUrls に直接Blob URL (SASなし) が含まれていないことを確認
+DIRECT_BLOB_URLS=$(echo "$LAST_BODY" | jq -r '[.items // .posts // [] | .[] | .imageUrls // [] | .[] | select(startswith("https://") and (contains("blob.core.windows.net")) and (contains("?sv=") | not) and (contains("?se=") | not) and (contains("sig=") | not))] | length' 2>/dev/null || echo "0")
+if [[ "$DIRECT_BLOB_URLS" == "0" ]]; then
+  ok "  No direct Blob URLs (all image URLs have SAS token or no images) ✓"
+else
+  fail "  $DIRECT_BLOB_URLS direct Blob URL(s) without SAS found — 409 will occur on display!"
 fi
 
 # ════════════════════════════════════════════════════════════
@@ -361,10 +372,15 @@ else
     --header "$AUTHH" \
     --data '{"count":1,"contentTypes":["image/jpeg"]}'
 
-  if echo "$LAST_BODY" | jq -e '.urls[0].url' >/dev/null 2>&1; then
+  UPLOAD_URL_RAW=$(echo "$LAST_BODY" | jq -r '.urls[0].url // .[0].url // .[0].uploadUrl // ""' 2>/dev/null || echo "")
+  if [[ -n "$UPLOAD_URL_RAW" && "$UPLOAD_URL_RAW" != "null" ]]; then
     ok "  Presigned upload URL generated (Blob Storage SAS)"
-  elif echo "$LAST_BODY" | jq -e '.[0].url // .[0].uploadUrl' >/dev/null 2>&1; then
-    ok "  Presigned upload URL generated (legacy response format)"
+    # SAS write トークンが含まれているか確認
+    if echo "$UPLOAD_URL_RAW" | grep -qE 'sig=|sv='; then
+      ok "    Upload URL contains SAS token ✓"
+    else
+      warn "    Upload URL may lack SAS token: ${UPLOAD_URL_RAW:0:80}"
+    fi
   else
     fail "  Presigned URL missing in response"
   fi
@@ -385,11 +401,57 @@ print(json.dumps({'content': '[test] Azure E2E post with imageKeys', 'imageKeys'
     IMG_POST_ID=$(echo "$LAST_BODY" | jq -r '.id // .postId // ""')
     [[ -n "$IMG_POST_ID" && "$IMG_POST_ID" != "null" ]] && CREATED_POST_IDS+=("$IMG_POST_ID")
     ok "  Post with imageKeys created: id=$IMG_POST_ID"
+
+    # ── 5-5a. 作成レスポンスの imageUrls に SAS トークンが含まれているか検証 ──
+    IMG_URLS=$(echo "$LAST_BODY" | jq -r '.imageUrls // [] | .[]' 2>/dev/null || echo "")
+    IMG_URL_COUNT=$(echo "$LAST_BODY" | jq -r '.imageUrls // [] | length' 2>/dev/null || echo "0")
+    if [[ "$IMG_URL_COUNT" -gt 0 ]]; then
+      DIRECT=$(echo "$LAST_BODY" | jq -r '[.imageUrls // [] | .[] | select(startswith("https://") and (contains("blob.core.windows.net")) and (contains("?sv=") | not) and (contains("?se=") | not) and (contains("sig=") | not))] | length' 2>/dev/null || echo "0")
+      SAS_COUNT=$(echo "$LAST_BODY" | jq -r '[.imageUrls // [] | .[] | select(contains("sig=") or contains("sv="))] | length' 2>/dev/null || echo "0")
+      if [[ "$DIRECT" == "0" && "$SAS_COUNT" -gt 0 ]]; then
+        ok "    create_post response: $SAS_COUNT/$IMG_URL_COUNT image URL(s) have SAS token ✓ (no direct Blob URLs)"
+      elif [[ "$DIRECT" -gt 0 ]]; then
+        fail "    create_post response: $DIRECT direct Blob URL(s) without SAS — 409 on display!"
+        echo "$IMG_URLS" | head -3 | while read u; do echo "      URL: ${u:0:100}"; done
+      else
+        warn "    create_post response: $IMG_URL_COUNT URL(s) but SAS pattern not detected"
+      fi
+    else
+      ok "    create_post response: no imageUrls (expected — imageKeys stored, not validated against Blob)"
+    fi
+
+    # ── 5-5b. GET /posts/:id でも SAS URL が返るか確認 ──
+    if [[ -n "$IMG_POST_ID" && "$IMG_POST_ID" != "null" ]]; then
+      run_test "GET /posts/$IMG_POST_ID (with imageKeys) returns 200" \
+        GET "$API_URL/posts/$IMG_POST_ID" --header "$AUTHH"
+      GET_IMG_URLS=$(echo "$LAST_BODY" | jq -r '.imageUrls // [] | length' 2>/dev/null || echo "0")
+      if [[ "$GET_IMG_URLS" -gt 0 ]]; then
+        DIRECT_GET=$(echo "$LAST_BODY" | jq -r '[.imageUrls // [] | .[] | select(startswith("https://") and (contains("blob.core.windows.net")) and (contains("?sv=") | not) and (contains("?se=") | not) and (contains("sig=") | not))] | length' 2>/dev/null || echo "0")
+        SAS_GET=$(echo "$LAST_BODY" | jq -r '[.imageUrls // [] | .[] | select(contains("sig=") or contains("sv="))] | length' 2>/dev/null || echo "0")
+        if [[ "$DIRECT_GET" == "0" && "$SAS_GET" -gt 0 ]]; then
+          ok "    GET response: $SAS_GET/$GET_IMG_URLS image URL(s) have SAS token ✓"
+        elif [[ "$DIRECT_GET" -gt 0 ]]; then
+          fail "    GET response: $DIRECT_GET direct Blob URL(s) without SAS — 409 on display!"
+        else
+          warn "    GET response: $GET_IMG_URLS URL(s) but SAS pattern not detected"
+        fi
+      else
+        ok "    GET response: imageUrls empty (dummy imageKeys stored but not validated against Blob)"
+      fi
+    fi
   fi
 
   # 5-6. List posts — should include ours
   run_test "GET /posts returns list with test posts" \
     GET "$API_URL/posts?limit=20" --header "$AUTHH"
+
+  # imageUrls の SAS 検証 (一覧レスポンス)
+  DIRECT_LIST=$(echo "$LAST_BODY" | jq -r '[.items // .posts // [] | .[] | .imageUrls // [] | .[] | select(startswith("https://") and (contains("blob.core.windows.net")) and (contains("?sv=") | not) and (contains("?se=") | not) and (contains("sig=") | not))] | length' 2>/dev/null || echo "0")
+  if [[ "$DIRECT_LIST" == "0" ]]; then
+    ok "  /posts list: no direct Blob URL without SAS ✓"
+  else
+    fail "  /posts list: $DIRECT_LIST direct Blob URL(s) without SAS found!"
+  fi
 
   # ══════════════════════════════════════════════════════
   sep
