@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -23,8 +24,13 @@ class UserInfo:
         return self.groups is not None and "Admins" in self.groups
 
 
+@lru_cache(maxsize=1)
 def get_jwt_verifier():
-    """JWT verifierインスタンスを取得（設定に基づいて）"""
+    """JWT verifierインスタンスを取得（設定に基づいて）。
+
+    lru_cache により Lambda の同一ウォームインスタンス内でシングルトンとして
+    保持されるため、JWKS の外部 HTTP 取得がリクエストごとに発生しない。
+    """
     from app.config import settings
     from app.jwt_verifier import JWTVerifier
 

@@ -267,6 +267,12 @@ aws.s3.BucketPublicAccessBlock(
     restrict_public_buckets=True,
 )
 
+lambda_caller_identity = aws.get_caller_identity()
+lambda_function_arn_for_self_invoke = (
+    f"arn:aws:lambda:{region}:{lambda_caller_identity.account_id}:function:"
+    f"{project_name}-{stack}-api"
+)
+
 # Create inline policy for DynamoDB and S3 access
 lambda_policy = aws.iam.RolePolicy(
     "lambda-policy",
@@ -319,6 +325,13 @@ lambda_policy = aws.iam.RolePolicy(
                             "bedrock:InvokeModel",
                         ],
                         "Resource": "*",
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "lambda:InvokeFunction",
+                        ],
+                        "Resource": lambda_function_arn_for_self_invoke,
                     },
                 ],
             }
@@ -409,9 +422,10 @@ lambda_function = aws.lambda_.Function(
     runtime="python3.12",
     handler="app.main.handler",  # FastAPI application entry point with Mangum
     role=lambda_role.arn,
-    # 512MB for both staging and production (cold start performance)
-    memory_size=512,
-    timeout=30,
+    # 1769MB = 1 vCPU: コールドスタートを大幅短縮 (512MB は 0.3 vCPU で遅い)
+    memory_size=1769,
+    # OCR + Bedrock処理のため余裕を持たせる
+    timeout=60,
     # Use x86_64 for compatibility with custom layers
     architectures=["x86_64"],
     # Lambda Layer is automatically managed by Pulumi
@@ -444,7 +458,7 @@ lambda_function = aws.lambda_.Function(
             "TEXTRACT_REGION": "ap-northeast-2",
             "BEDROCK_REGION": "us-east-1",
             "BEDROCK_MODEL_ID": "amazon.nova-pro-v1:0",
-            "SOLVE_OCR_REVIEW_MIN_SCORE": "0.35",
+            "SOLVE_OCR_REVIEW_MIN_SCORE": "0.40",
             "SOLVE_OCR_REVIEW_MAX_REPLACEMENT_RATIO": "0.01",
             "CORS_ORIGINS": allowed_origins,
         }

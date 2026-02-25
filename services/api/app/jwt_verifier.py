@@ -76,7 +76,7 @@ class JWTVerifier:
         # Fetch from provider
         try:
             jwks_uri = self.get_jwks_uri()
-            response = requests.get(jwks_uri, timeout=10)
+            response = requests.get(jwks_uri, timeout=5)
             response.raise_for_status()
 
             self._jwks_cache = response.json()

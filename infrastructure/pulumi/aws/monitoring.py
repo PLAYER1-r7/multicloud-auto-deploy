@@ -8,9 +8,10 @@ CloudWatch Alarms for:
 - Cost anomalies
 """
 
+from typing import Optional
+
 import pulumi
 import pulumi_aws as aws
-from typing import Optional
 
 
 def create_sns_topic(
@@ -112,7 +113,7 @@ def create_lambda_alarms(
         namespace="AWS/Lambda",
         period=300,
         statistic="Average",
-        threshold=10000,  # 10 seconds in milliseconds
+        threshold=10000,  # 10 seconds in milliseconds (normal ops: <3s, cold start: <10s)
         alarm_description="Lambda function duration is too high",
         alarm_actions=[sns_topic_arn],
         dimensions={
@@ -301,5 +302,7 @@ def setup_monitoring(
         "api_gateway_alarms": api_alarms,
         "cloudfront_alarms": cloudfront_alarms,
     }
+
+
 # SNS:Unsubscribe permission added to satoshi user (2026-02-17)
 # SNS:GetSubscriptionAttributes permission added (2026-02-17)
