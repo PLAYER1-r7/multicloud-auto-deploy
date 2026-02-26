@@ -246,9 +246,7 @@ app_secret = azure.keyvault.Secret(
 # F0 free tier: 500 pages/month — upgrade to S0 for production workloads.
 document_intelligence = azure.cognitiveservices.Account(
     "document-intelligence",
-    account_name=storage_suffix.result.apply(
-        lambda suffix: f"mcad-di-{suffix}"
-    ),
+    account_name=storage_suffix.result.apply(lambda suffix: f"mcad-di-{suffix}"),
     resource_group_name=resource_group.name,
     location=location,
     kind="FormRecognizer",
@@ -280,9 +278,7 @@ document_intelligence_keys = pulumi.Output.all(
 # Uses GPT-4o model deployed in the same region as other resources.
 azure_openai_account = azure.cognitiveservices.Account(
     "azure-openai",
-    account_name=storage_suffix.result.apply(
-        lambda suffix: f"mcad-openai-{suffix}"
-    ),
+    account_name=storage_suffix.result.apply(lambda suffix: f"mcad-openai-{suffix}"),
     resource_group_name=resource_group.name,
     location=location,
     kind="OpenAI",
@@ -724,9 +720,7 @@ pulumi.export(
 )
 pulumi.export(
     "document_intelligence_key",
-    pulumi.Output.secret(
-        document_intelligence_keys.apply(lambda k: k.key1 or "")
-    ),
+    pulumi.Output.secret(document_intelligence_keys.apply(lambda k: k.key1 or "")),
 )
 pulumi.export(
     "ocr_config_instructions",
@@ -747,17 +741,18 @@ pulumi.export(
 
 # Azure OpenAI exports (LLM for university exam solver)
 pulumi.export("azure_openai_account_name", azure_openai_account.name)
+# For Azure OpenAI, the SDK endpoint format is https://{account_name}.openai.azure.com/
+# The generic cognitiveservices endpoint (japaneast.api.cognitive.microsoft.com)
+# does NOT work with the OpenAI Python SDK; the per-resource subdomain is required.
 pulumi.export(
     "azure_openai_endpoint",
-    azure_openai_account.properties.apply(
-        lambda p: p.endpoint if p and p.endpoint else ""
+    azure_openai_account.name.apply(
+        lambda name: f"https://{name}.openai.azure.com/"
     ),
 )
 pulumi.export(
     "azure_openai_key",
-    pulumi.Output.secret(
-        azure_openai_keys.apply(lambda k: k.key1 or "")
-    ),
+    pulumi.Output.secret(azure_openai_keys.apply(lambda k: k.key1 or "")),
 )
 pulumi.export("azure_openai_deployment_name", azure_openai_deployment.name)
 
