@@ -60,7 +60,7 @@ if ! /usr/bin/env python3 -c "import boto3" 2>/dev/null; then
     echo ""
     echo "   boto3 がインストールされていません。インストールしますか？ [y/N]"
     read -r answer
-    if [[ "${answer,,}" == "y" ]]; then
+    if [[ "$(echo "$answer" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
         pip3 install boto3 --quiet
         echo "✅ boto3 をインストールしました"
     else
