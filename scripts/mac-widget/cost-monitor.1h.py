@@ -68,6 +68,20 @@ def _this_month() -> tuple[str, str]:
 # ── 各クラウドのコスト取得 ────────────────────────────────────
 
 
+def _get_usd_jpy_rate() -> float:
+    """USD/JPY レートを open.er-api.com から取得。失敗時は 150.0 を返す。"""
+    try:
+        req = urllib.request.Request(
+            "https://open.er-api.com/v6/latest/USD",
+            headers={"User-Agent": "cost-monitor/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+        return float(data["rates"]["JPY"])
+    except Exception:
+        return 150.0  # フォールバック
+
+
 def _fetch_aws() -> dict[str, Any]:
     try:
         import boto3
@@ -79,10 +93,18 @@ def _fetch_aws() -> dict[str, Any]:
             Granularity="MONTHLY",
             Metrics=["UnblendedCost"],
         )
-        total = sum(
+        usd_total = sum(
             float(r["Total"]["UnblendedCost"]["Amount"]) for r in resp["ResultsByTime"]
         )
-        return {"cost": round(total, 2), "period": start[:7]}
+        rate = _get_usd_jpy_rate()
+        jpy_total = round(usd_total * rate)
+        return {
+            "cost": jpy_total,
+            "currency": "JPY",
+            "usd": round(usd_total, 2),
+            "rate": round(rate, 2),
+            "period": start[:7],
+        }
     except ImportError:
         return {"error": "boto3 not installed"}
     except Exception as e:
@@ -360,7 +382,9 @@ def main() -> None:
             cost_str = _fmt_cost(cost, currency)
             color = _color(cost)
             extra = ""
-            if name == "GitHub" and "minutes_used" in r:
+            if name == "AWS" and "usd" in r:
+                extra = f"  (${r['usd']:.2f} × ¥{r['rate']:.0f})"
+            elif name == "GitHub" and "minutes_used" in r:
                 extra = f"  ({r['minutes_used']} min / {r['minutes_included']} free)"
             elif name == "GitHub" and "run_count" in r:
                 # 旧 Billing API 廃止のため代替情報を表示

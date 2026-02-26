@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import sys
+import urllib.request
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -71,6 +72,25 @@ def _month_range(months_back: int) -> list[tuple[str, str]]:
 
 
 # ─────────────────────────────────────────────
+# 為替レート
+# ─────────────────────────────────────────────
+
+
+def _get_usd_jpy_rate() -> float:
+    """USD/JPY レートを open.er-api.com から取得。失敗時は 150.0 を返す。"""
+    try:
+        req = urllib.request.Request(
+            "https://open.er-api.com/v6/latest/USD",
+            headers={"User-Agent": "cost-monitor/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+        return float(data["rates"]["JPY"])
+    except Exception:
+        return 150.0  # フォールバック
+
+
+# ─────────────────────────────────────────────
 # AWS (Cost Explorer)
 # ─────────────────────────────────────────────
 
@@ -81,6 +101,7 @@ def _fetch_aws(months: int) -> list[dict[str, Any]]:
         import boto3
 
         ce = boto3.client("ce", region_name="us-east-1")
+        rate = _get_usd_jpy_rate()
         for start, end in _month_range(months):
             resp = ce.get_cost_and_usage(
                 TimePeriod={"Start": start, "End": end},
@@ -88,12 +109,15 @@ def _fetch_aws(months: int) -> list[dict[str, Any]]:
                 Metrics=["UnblendedCost"],
             )
             for item in resp["ResultsByTime"]:
-                amount = float(item["Total"]["UnblendedCost"]["Amount"])
+                usd = float(item["Total"]["UnblendedCost"]["Amount"])
                 results.append(
                     {
                         "provider": "AWS",
                         "period": item["TimePeriod"]["Start"][:7],
-                        "cost_usd": round(amount, 4),
+                        "cost_usd": round(usd, 4),
+                        "cost_local": round(usd * rate),
+                        "currency": "JPY",
+                        "note": f"${usd:.4f} × ¥{rate:.0f}",
                     }
                 )
     except ImportError:
