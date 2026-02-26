@@ -20,24 +20,18 @@ from fastapi import HTTPException
 
 from app.config import settings
 from app.models import SolveAnswer, SolveMeta, SolveRequest, SolveResponse
-from app.services.aws_math_solver import AwsMathSolver
+from app.services.base_math_solver import BaseMathSolver
 
 
-class AzureMathSolver(AwsMathSolver):
+class AzureMathSolver(BaseMathSolver):
     """Azure DI + OpenAI を使った数学ソルバー。
 
-    AWS クライアント（Bedrock）を使うメソッドを上書きし、
-    共通ロジック（スコアリング・プロンプト生成など）は継承で再利用する。
+    共通ロジック（スコアリング・プロンプト生成など）は BaseMathSolver から継承し、
+    Azure 固有の OCR (Document Intelligence) と LLM (OpenAI) を実装する。
     """
 
     def __init__(self) -> None:
-        # boto3 クライアントは使わないが親 __init__ は呼ばない
-        # （boto3 接続が失敗するため）
         self._sample_pdf_text_cache: dict[str, str] = {}
-        # 親クラスの except 節で参照される例外クラスを、Azure 環境でも安全に
-        # 定義しておく（boto3 のコードパスには実際にはヒットしない）
-        self._BotoCoreError = Exception
-        self._ClientError = Exception
         self._di_client = self._build_di_client()
         self._openai_client = self._build_openai_client()
 
@@ -186,15 +180,13 @@ class AzureMathSolver(AwsMathSolver):
             if di_text:
                 candidates.append((di_text, di_source))
 
-        # --- Bedrock Vision フォールバック（DI 未設定 or 全滅時）---
-        if not candidates:
-            vision_text = self._extract_with_bedrock_vision_ocr(image_bytes)
-            if vision_text:
-                candidates.append((vision_text, "bedrock_vision_ocr_fallback"))
-
         if not candidates:
             raise HTTPException(
-                status_code=502, detail="Azure DI returned no OCR candidates"
+                status_code=502,
+                detail=(
+                    "Azure Document Intelligence returned no OCR candidates. "
+                    "Set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY."
+                ),
             )
 
         # --- スコアリング ---
@@ -247,16 +239,17 @@ class AzureMathSolver(AwsMathSolver):
     # ------------------------------------------------------------------
 
     _OCR_DUMP_PATH = "/tmp/ocr_debug.jsonl"
+    _OCR_BLOB_CONTAINER = "ocr-debug"
+    _OCR_BLOB_NAME = "ocr_debug.jsonl"
 
     def _dump_ocr_to_file(self, image_bytes: bytes, scored: list[dict]) -> None:
-        """OCR 結果を JSONL ファイルに追記する（デバッグ用）。
+        """OCR 結果を stdout・Blob Storage・/tmp ファイルに出力する（デバッグ用）。
 
-        出力先: /tmp/ocr_debug.jsonl
-        形式  : 1 行 = 1 リクエスト分の JSON オブジェクト
-        フィールド:
-          ts         : ISO8601 タイムスタンプ (UTC)
-          image_sha  : 画像 SHA-256 先頭 16 文字
-          candidates : [{source, score, text}] — スコア降順
+        出力先:
+          1. stdout          — Azure Functions ログで確認可能
+          2. Blob Storage     — ocr-debug コンテナ / ocr_debug.jsonl (AppendBlob)
+          3. /tmp (フォールバック) — ローカル実行時のみ有効
+        形式: 1 行 = 1 リクエスト分の JSON オブジェクト (JSONL)
         """
         try:
             image_sha = hashlib.sha256(image_bytes).hexdigest()[:16]
@@ -273,8 +266,9 @@ class AzureMathSolver(AwsMathSolver):
                     for c in scored
                 ],
             }
+            line = json.dumps(record, ensure_ascii=False)
 
-            # --- stdout（Azure Functions ログで確認可能）---
+            # --- stdout ---
             best = scored[0] if scored else {}
             print(
                 f"[OCR] {ts} image={image_sha}"
@@ -286,11 +280,53 @@ class AzureMathSolver(AwsMathSolver):
                 preview = best.get("text", "")[:200].replace("\n", "\\n")
                 print(f"[OCR] text_preview: {preview}")
 
-            # --- ファイル（JSONL）---
-            with open(self._OCR_DUMP_PATH, "a", encoding="utf-8") as fh:
-                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+            # --- Blob Storage (AppendBlob) ---
+            self._append_ocr_to_blob(line)
+
+            # --- /tmp ファイル (ローカル用フォールバック) ---
+            try:
+                with open(self._OCR_DUMP_PATH, "a", encoding="utf-8") as fh:
+                    fh.write(line + "\n")
+            except Exception:
+                pass
+
         except Exception as _exc:
             print(f"[OCR] WARN: 出力失敗: {_exc}")
+
+    def _append_ocr_to_blob(self, line: str) -> None:
+        """OCR 1 行を Blob Storage の AppendBlob に追記する。"""
+        account = settings.azure_storage_account_name
+        key = settings.azure_storage_account_key
+        if not account or not key:
+            print(
+                "[OCR] WARN: AZURE_STORAGE_ACCOUNT_NAME/KEY 未設定のため Blob スキップ"
+            )
+            return
+        try:
+            from azure.storage.blob import BlobServiceClient
+
+            service = BlobServiceClient(
+                account_url=f"https://{account}.blob.core.windows.net",
+                credential=key,
+            )
+            container = service.get_container_client(self._OCR_BLOB_CONTAINER)
+            try:
+                container.create_container()
+            except Exception:
+                pass  # already exists
+
+            blob = container.get_blob_client(self._OCR_BLOB_NAME)
+            try:
+                blob.create_append_blob()
+            except Exception:
+                pass  # already exists
+
+            blob.append_block((line + "\n").encode("utf-8"))
+            print(
+                f"[OCR] Blob 書き込み完了: {self._OCR_BLOB_CONTAINER}/{self._OCR_BLOB_NAME}"
+            )
+        except Exception as exc:
+            print(f"[OCR] WARN: Blob 書き込み失敗: {exc}")
 
     def _call_azure_di(self, image_bytes: bytes) -> tuple[str, str]:
         """Azure DI で OCR してテキストとソース名のタプルを返す。
