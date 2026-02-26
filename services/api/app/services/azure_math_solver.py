@@ -273,14 +273,13 @@ class AzureMathSolver(AwsMathSolver):
         クライアント未設定の場合は親クラスの Bedrock 実装にフォールバック。
         """
         if self._openai_client is None:
-            # Bedrock フォールバック（_bedrock クライアントが必要なので一時生成）
-            import boto3
-
-            self._bedrock = boto3.client(
-                "bedrock-runtime", region_name=settings.bedrock_region
-            )
-            return self._generate_with_bedrock(
-                problem_text, request, structured_problem
+            # Azure 環境では Bedrock は利用不可。設定不備として 502 を返す。
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Azure OpenAI client is not configured. "
+                    "Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_KEY environment variables."
+                ),
             )
 
         prompt = self._build_prompt(problem_text, request, structured_problem)
