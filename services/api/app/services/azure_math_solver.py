@@ -260,8 +260,9 @@ class AzureMathSolver(AwsMathSolver):
         """
         try:
             image_sha = hashlib.sha256(image_bytes).hexdigest()[:16]
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             record = {
-                "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "ts": ts,
                 "image_sha": image_sha,
                 "candidates": [
                     {
@@ -272,10 +273,24 @@ class AzureMathSolver(AwsMathSolver):
                     for c in scored
                 ],
             }
+
+            # --- stdout（Azure Functions ログで確認可能）---
+            best = scored[0] if scored else {}
+            print(
+                f"[OCR] {ts} image={image_sha}"
+                f" source={best.get('source', '?')}"
+                f" score={round(float(best.get('score', 0)), 4)}"
+                f" candidates={len(scored)}"
+            )
+            if scored:
+                preview = best.get("text", "")[:200].replace("\n", "\\n")
+                print(f"[OCR] text_preview: {preview}")
+
+            # --- ファイル（JSONL）---
             with open(self._OCR_DUMP_PATH, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
         except Exception:
-            pass  # ファイル書き込み失敗は無視
+            pass  # 出力失敗は無視
 
     def _call_azure_di(self, image_bytes: bytes) -> tuple[str, str]:
         """Azure DI で OCR してテキストとソース名のタプルを返す。
