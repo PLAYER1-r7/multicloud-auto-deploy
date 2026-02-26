@@ -274,6 +274,61 @@ document_intelligence_keys = pulumi.Output.all(
 )
 
 # ========================================
+# Azure OpenAI (GPT-4o for university exam solver LLM)
+# ========================================
+# NOTE: Azure OpenAI Cognitive Services account for LLM-based answer generation.
+# Uses GPT-4o model deployed in the same region as other resources.
+azure_openai_account = azure.cognitiveservices.Account(
+    "azure-openai",
+    account_name=storage_suffix.result.apply(
+        lambda suffix: f"mcad-openai-{suffix}"
+    ),
+    resource_group_name=resource_group.name,
+    location=location,
+    kind="OpenAI",
+    sku=azure.cognitiveservices.SkuArgs(
+        name="S0",
+    ),
+    properties=azure.cognitiveservices.AccountPropertiesArgs(
+        public_network_access="Enabled",
+        restore=False,
+    ),
+    tags=common_tags,
+    opts=pulumi.ResourceOptions(depends_on=[resource_group]),
+)
+
+# GPT-4o model deployment
+azure_openai_deployment = azure.cognitiveservices.Deployment(
+    "gpt-4o-deploy",
+    account_name=azure_openai_account.name,
+    resource_group_name=resource_group.name,
+    deployment_name="gpt-4o",
+    properties=azure.cognitiveservices.DeploymentPropertiesArgs(
+        model=azure.cognitiveservices.DeploymentModelArgs(
+            format="OpenAI",
+            name="gpt-4o",
+            version="2024-11-20",
+        ),
+        version_upgrade_option="OnceNewDefaultVersionAvailable",
+    ),
+    sku=azure.cognitiveservices.SkuArgs(
+        name="GlobalStandard",
+        capacity=10,  # 10K tokens per minute
+    ),
+    opts=pulumi.ResourceOptions(depends_on=[azure_openai_account]),
+)
+
+# Retrieve Azure OpenAI keys
+azure_openai_keys = pulumi.Output.all(
+    resource_group.name, azure_openai_account.name
+).apply(
+    lambda args: azure.cognitiveservices.list_account_keys(
+        resource_group_name=args[0],
+        account_name=args[1],
+    )
+)
+
+# ========================================
 # Authentication Setup - Azure AD Application
 # ========================================
 # Azure AD Application for authentication (automated)
@@ -683,12 +738,28 @@ pulumi.export(
         ),
         "\\n",
         "  AZURE_DOCUMENT_INTELLIGENCE_KEY=<from pulumi stack output document_intelligence_key>\\n",
-        "  AZURE_OPENAI_ENDPOINT=<your-azure-openai-endpoint>\\n",
-        "  AZURE_OPENAI_KEY=<your-azure-openai-key>\\n",
+        "  AZURE_OPENAI_ENDPOINT=<from pulumi stack output azure_openai_endpoint>\\n",
+        "  AZURE_OPENAI_KEY=<from pulumi stack output azure_openai_key>\\n",
         "  AZURE_OPENAI_DEPLOYMENT=gpt-4o\\n",
         "  SOLVE_ENABLED=true\\n",
     ),
 )
+
+# Azure OpenAI exports (LLM for university exam solver)
+pulumi.export("azure_openai_account_name", azure_openai_account.name)
+pulumi.export(
+    "azure_openai_endpoint",
+    azure_openai_account.properties.apply(
+        lambda p: p.endpoint if p and p.endpoint else ""
+    ),
+)
+pulumi.export(
+    "azure_openai_key",
+    pulumi.Output.secret(
+        azure_openai_keys.apply(lambda k: k.key1 or "")
+    ),
+)
+pulumi.export("azure_openai_deployment_name", azure_openai_deployment.name)
 
 # Monitoring exports
 if monitoring_resources["action_group"]:

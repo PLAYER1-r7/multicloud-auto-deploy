@@ -204,6 +204,11 @@ jobs:
           echo "document_intelligence_endpoint=$(pulumi stack output document_intelligence_endpoint 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
           echo "document_intelligence_key=$(pulumi stack output --show-secrets document_intelligence_key 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
 
+          # Get Azure OpenAI outputs (LLM for university exam solver)
+          echo "azure_openai_endpoint=$(pulumi stack output azure_openai_endpoint 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+          echo "azure_openai_key=$(pulumi stack output --show-secrets azure_openai_key 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+          echo "azure_openai_deployment_name=$(pulumi stack output azure_openai_deployment_name 2>/dev/null || echo 'gpt-4o')" >> $GITHUB_OUTPUT
+
           # Get Front Door hostname for CORS
           echo "frontdoor_hostname=$(pulumi stack output frontdoor_hostname)" >> $GITHUB_OUTPUT
           echo "frontdoor_endpoint_name=$(pulumi stack output frontdoor_endpoint_name)" >> $GITHUB_OUTPUT
@@ -555,9 +560,13 @@ jobs:
           # These are optional: if not set, solve endpoints return 503 (SOLVE_ENABLED defaults to false).
           DI_ENDPOINT="${{ steps.pulumi_outputs.outputs.document_intelligence_endpoint }}"
           DI_KEY="${{ steps.pulumi_outputs.outputs.document_intelligence_key }}"
-          AOAI_ENDPOINT="${{ secrets.AZURE_OPENAI_ENDPOINT }}"
-          AOAI_KEY="${{ secrets.AZURE_OPENAI_KEY }}"
-          AOAI_DEPLOYMENT="${{ secrets.AZURE_OPENAI_DEPLOYMENT }}"
+          # Azure OpenAI: prefer Pulumi outputs (auto-provisioned), fall back to GitHub Secrets
+          AOAI_ENDPOINT="${{ steps.pulumi_outputs.outputs.azure_openai_endpoint }}"
+          AOAI_KEY="${{ steps.pulumi_outputs.outputs.azure_openai_key }}"
+          AOAI_DEPLOYMENT="${{ steps.pulumi_outputs.outputs.azure_openai_deployment_name }}"
+          if [ -z "$AOAI_ENDPOINT" ]; then AOAI_ENDPOINT="${{ secrets.AZURE_OPENAI_ENDPOINT }}"; fi
+          if [ -z "$AOAI_KEY" ]; then AOAI_KEY="${{ secrets.AZURE_OPENAI_KEY }}"; fi
+          if [ -z "$AOAI_DEPLOYMENT" ]; then AOAI_DEPLOYMENT="${{ secrets.AZURE_OPENAI_DEPLOYMENT }}"; fi
           SOLVE_ENABLED_VALUE="${{ secrets.AZURE_SOLVE_ENABLED }}"
 
           if [ -n "$DI_ENDPOINT" ] && [ -n "$DI_KEY" ]; then
