@@ -179,9 +179,9 @@ class AzureMathSolver(AwsMathSolver):
 
         # --- Azure DI ---
         if self._di_client is not None:
-            di_text = self._call_azure_di(image_bytes)
+            di_text, di_source = self._call_azure_di(image_bytes)
             if di_text:
-                candidates.append((di_text, "azure_di_read"))
+                candidates.append((di_text, di_source))
 
         # --- Bedrock Vision フォールバック（DI 未設定 or 全滅時）---
         if not candidates:
@@ -237,26 +237,82 @@ class AzureMathSolver(AwsMathSolver):
             debug_texts,
         )
 
-    def _call_azure_di(self, image_bytes: bytes) -> str:
-        """Azure DI prebuilt-read を呼び出してテキストを返す。"""
-        try:
-            from azure.ai.documentintelligence.models import AnalyzeDocumentRequest
+    def _call_azure_di(self, image_bytes: bytes) -> tuple[str, str]:
+        """Azure DI で OCR してテキストとソース名のタプルを返す。
 
+        Pass 1 (推奨): prebuilt-layout + FORMULAS feature + Markdown 出力
+          - result.content に構造を保持したマークダウンテキストが入る
+          - page.formulas  に数式の LaTeX 文字列が入る
+          -> 添字・指数・分数・積分記号が正確に復元される
+
+        Pass 2 (フォールバック): prebuilt-read + 行単位テキスト
+          - FORMULAS feature 非対応リージョン / エラー時に使用
+        """
+        try:
+            from azure.ai.documentintelligence.models import (
+                AnalyzeDocumentRequest,
+                DocumentAnalysisFeature,
+                DocumentContentFormat,
+            )
+        except ImportError:
+            return "", "azure_di_read"
+
+        # ---- Pass 1: prebuilt-layout + FORMULAS + Markdown ----
+        try:
+            poller = self._di_client.begin_analyze_document(
+                "prebuilt-layout",
+                AnalyzeDocumentRequest(bytes_source=image_bytes),
+                features=[DocumentAnalysisFeature.FORMULAS],
+                output_content_format=DocumentContentFormat.MARKDOWN,
+            )
+            result = poller.result()
+
+            parts: list[str] = []
+            # result.content は Markdown 形式のドキュメント全文
+            if result.content:
+                parts.append(result.content)
+
+            # ページごとの数式オブジェクト（LaTeX）を抽出
+            latex_formulas: list[str] = []
+            if result.pages:
+                for page in result.pages:
+                    formulas = getattr(page, "formulas", None) or []
+                    for formula in formulas:
+                        val = getattr(formula, "value", None)
+                        conf = getattr(formula, "confidence", 1.0)
+                        kind = getattr(formula, "kind", "")
+                        if val and (conf or 1.0) >= 0.5:
+                            tag = "display" if kind == "display" else "inline"
+                            latex_formulas.append(f"[{tag}] {val}")
+
+            if latex_formulas:
+                parts.append(
+                    "\n[検出された数式 (LaTeX)]\n" + "\n".join(latex_formulas)
+                )
+
+            text = "\n".join(parts).strip()
+            if len(text) > 20:
+                return text, "azure_di_layout_markdown"
+        except Exception:
+            pass  # フォールバックへ
+
+        # ---- Pass 2: prebuilt-read（従来の行ベース実装） ----
+        try:
             poller = self._di_client.begin_analyze_document(
                 "prebuilt-read",
                 AnalyzeDocumentRequest(bytes_source=image_bytes),
             )
             result = poller.result()
-        except Exception:
-            return ""
 
-        lines: list[str] = []
-        if result.pages:
-            for page in result.pages:
-                if page.lines:
-                    for line in page.lines:
-                        lines.append(line.content)
-        return "\n".join(lines)
+            lines: list[str] = []
+            if result.pages:
+                for page in result.pages:
+                    if page.lines:
+                        for line in page.lines:
+                            lines.append(line.content)
+            return "\n".join(lines), "azure_di_read"
+        except Exception:
+            return "", "azure_di_read"
 
     # ------------------------------------------------------------------
     # Azure OpenAI 解答生成

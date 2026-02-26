@@ -923,6 +923,10 @@ class AwsMathSolver:
             "pdf_direct": 0.34,
             "bedrock_vision_ocr": 0.30,
             "bedrock_repair": 0.16,
+            # Azure DI: layout+formulas+markdown は構造・数式精度が高いため加点
+            "azure_di_layout_markdown": 0.12,
+            # azure_di_read はフォールバックのため加点なし
+            "azure_di_read": 0.0,
         }
         source_bonus = source_bonus_map.get(source, 0.0)
 
