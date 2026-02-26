@@ -288,6 +288,9 @@ azure_openai_account = azure.cognitiveservices.Account(
     properties=azure.cognitiveservices.AccountPropertiesArgs(
         public_network_access="Enabled",
         restore=False,
+        custom_sub_domain_name=storage_suffix.result.apply(
+            lambda suffix: f"mcad-openai-{suffix}"
+        ),
     ),
     tags=common_tags,
     opts=pulumi.ResourceOptions(depends_on=[resource_group]),
@@ -741,14 +744,11 @@ pulumi.export(
 
 # Azure OpenAI exports (LLM for university exam solver)
 pulumi.export("azure_openai_account_name", azure_openai_account.name)
-# For Azure OpenAI, the SDK endpoint format is https://{account_name}.openai.azure.com/
-# The generic cognitiveservices endpoint (japaneast.api.cognitive.microsoft.com)
-# does NOT work with the OpenAI Python SDK; the per-resource subdomain is required.
+# customSubDomainName is set, so the per-resource endpoint https://{name}.openai.azure.com/
+# will resolve correctly for the OpenAI Python SDK.
 pulumi.export(
     "azure_openai_endpoint",
-    azure_openai_account.name.apply(
-        lambda name: f"https://{name}.openai.azure.com/"
-    ),
+    azure_openai_account.name.apply(lambda name: f"https://{name}.openai.azure.com/"),
 )
 pulumi.export(
     "azure_openai_key",
