@@ -53,22 +53,18 @@ else
     echo "✅ .env は既に存在します (上書きしません)"
 fi
 
-# ── Python 依存パッケージ ─────────────────────────────────────
+# ── Python 依存パッケージ (専用 venv) ───────────────────────
+VENV_DIR="${SCRIPT_DIR}/.venv"
 echo ""
 echo "📦 依存パッケージの確認..."
-if ! /usr/bin/env python3 -c "import boto3" 2>/dev/null; then
-    echo ""
-    echo "   boto3 がインストールされていません。インストールしますか？ [y/N]"
-    read -r answer
-    if [[ "$(echo "$answer" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
-        pip3 install --user boto3 --quiet
-        echo "✅ boto3 をインストールしました"
-    else
-        echo "⚠️  boto3 なしでも動作しますが、AWS コストは取得できません"
-    fi
-else
-    echo "✅ boto3 インストール済み"
+if [[ ! -d "${VENV_DIR}" ]]; then
+    echo "   専用 venv を作成します: ${VENV_DIR}"
+    python3 -m venv "${VENV_DIR}"
 fi
+# venv 内で boto3 / requests をインストール
+"${VENV_DIR}/bin/pip" install --quiet --upgrade pip
+"${VENV_DIR}/bin/pip" install --quiet boto3 requests
+echo "✅ boto3 / requests を venv にインストールしました: ${VENV_DIR}"
 
 # ── xbar リフレッシュ ─────────────────────────────────────────
 echo ""

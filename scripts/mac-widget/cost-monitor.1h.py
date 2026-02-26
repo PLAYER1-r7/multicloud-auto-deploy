@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # <xbar.title>Multi-Cloud Cost Monitor</xbar.title>
-# <xbar.version>1.1</xbar.version>
+# <xbar.version>1.2</xbar.version>
 # <xbar.author>multicloud-auto-deploy</xbar.author>
 # <xbar.author.github>PLAYER1-r7</xbar.author.github>
 # <xbar.desc>AWS / Azure / GCP / GitHub Actions のコスト当月分をメニューバーに表示</xbar.desc>
@@ -16,6 +16,20 @@
 #            ~/Library/Application\ Support/xbar/plugins/cost-monitor.1h.py
 # 3. 同じフォルダに .env を作成 (cost-monitor.env.sample を参考に)
 # 4. xbar > Preferences > Refresh All
+# ─────────────────────────────────────────────────────────────
+
+# ── venv ブートストラップ (install.sh が作成した .venv を sys.path に追加) ──
+import sys as _sys
+import os as _os
+
+_WIDGET_DIR = _os.path.dirname(_os.path.realpath(__file__))
+_VENV_LIB = _os.path.join(_WIDGET_DIR, ".venv", "lib")
+if _os.path.isdir(_VENV_LIB):
+    for _d in _os.listdir(_VENV_LIB):
+        _sp = _os.path.join(_VENV_LIB, _d, "site-packages")
+        if _os.path.isdir(_sp) and _sp not in _sys.path:
+            _sys.path.insert(0, _sp)
+            break
 # ─────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -346,11 +360,13 @@ def main() -> None:
 
     # メニューバータイトル — USD のみ合計、JPY は別途表示
     usd_total = sum(
-        r["cost"] for r in results.values()
+        r["cost"]
+        for r in results.values()
         if isinstance(r.get("cost"), (int, float)) and r.get("currency", "USD") == "USD"
     )
     jpy_total = sum(
-        r["cost"] for r in results.values()
+        r["cost"]
+        for r in results.values()
         if isinstance(r.get("cost"), (int, float)) and r.get("currency") == "JPY"
     )
     has_error = any("error" in r for r in results.values())
@@ -403,11 +419,13 @@ def main() -> None:
     gcp_url = gcp.get("url", CONSOLES["GCP"])
     # 通貨別に合計を計算
     usd_sum = sum(
-        r["cost"] for r in results.values()
+        r["cost"]
+        for r in results.values()
         if isinstance(r.get("cost"), (int, float)) and r.get("currency", "USD") == "USD"
     )
     jpy_sum = sum(
-        r["cost"] for r in results.values()
+        r["cost"]
+        for r in results.values()
         if isinstance(r.get("cost"), (int, float)) and r.get("currency") == "JPY"
     )
     total_parts = []
