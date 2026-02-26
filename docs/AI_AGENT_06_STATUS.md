@@ -1,7 +1,8 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> Last verified: 2026-02-24 (コスト削減クリーンアップ実行 ✅ — GCP Cloud Run `production-frontend-web` 削除 / GCP Cloud Function `mcad-staging-api` 削除 / GCP SSL旧証明書 `ashnova-production-cert-c41311` 削除 / AWS S3 `staging/production-landing` バケット削除 / Staging 再デプロイ完全成功 ✅ — AWS#246/GCP#214/Azure#273 全成功 / FC1 deployment storage 修復 (`multicloudautodeploa752` 再作成) ✅ / 全3クラウド health check OK (`status:ok, version:3.0.0`) ✅ / E2Eテストスクリプト大幅改良 + `test-sns-all.sh` 新規追加 ✅ (commit `73af560`))
+> Last verified: 2026-02-26 (コスト監視ツール追加 ✅ — `scripts/cost_report.py` + `scripts/mac-widget/cost-monitor.1h.py` (xbar) / AWS Bedrock OCR 2パス化 / GCP Vision+Gemini ソルバー新規追加 / Lambda メモリ 512MB→1769MB, JWKS `@lru_cache` 追加 (duration alarm 修正) ✅ (commit `5b72135`)  
+> Previous: 2026-02-24 (コスト削減クリーンアップ実行 ✅ — GCP Cloud Run `production-frontend-web` 削除 / GCP Cloud Function `mcad-staging-api` 削除 / GCP SSL旧証明書 `ashnova-production-cert-c41311` 削除 / AWS S3 `staging/production-landing` バケット削除 / Staging 再デプロイ完全成功 ✅ — AWS#246/GCP#214/Azure#273 全成功 / FC1 deployment storage 修復 (`multicloudautodeploa752` 再作成) ✅ / 全3クラウド health check OK (`status:ok, version:3.0.0`) ✅ / E2Eテストスクリプト大幅改良 + `test-sns-all.sh` 新規追加 ✅ (commit `73af560`))
 
 ---
 
@@ -28,7 +29,7 @@ API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 | CloudFront RHP        | `multicloud-auto-deploy-staging-security-headers` (HSTS + CSP + 4 headers) | ✅     |
 | S3 (frontend)         | `multicloud-auto-deploy-staging-frontend`                                  | ✅     |
 | S3 (images)           | `multicloud-auto-deploy-staging-images` (CORS: \*)                         | ✅     |
-| Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, 512MB)                  | ✅     |
+| Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, **1769MB** = 1 vCPU)    | ✅     |
 | Lambda (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (512MB, 30s)                 | ✅     |
 | API Gateway           | `z42qmqdqac` (HTTP API v2)                                                 | ✅     |
 | DynamoDB              | `multicloud-auto-deploy-staging-posts` (PAY_PER_REQUEST)                   | ✅     |
@@ -609,6 +610,58 @@ bash scripts/test-sns-all.sh --env production --write --gcp-auto-token
 | 5-2 | 署名URL検証           | presigned URL に `X-Amz-Signature=` / `X-Goog-Signature=` / SAS token が含まれることを確認 |
 | 5-3 | binary PUT            | 1×1 PNG を実際に presigned URL へ PUT し HTTP 200/201 を確認                               |
 | 5-4 | imageUrl アクセス確認 | PUT したキーで POST /posts → GET /posts/:id → imageUrls[0] に GET → HTTP 200 を確認        |
+
+---
+
+## Cost Monitoring Tools
+
+マルチクラウド + GitHub の費用を一元管理するツールが `scripts/` 配下に実装済みです。
+
+### CLI レポート (`scripts/cost_report.py`)
+
+```bash
+python3 scripts/cost_report.py                 # デフォルト: 過去3ヶ月
+python3 scripts/cost_report.py --months 6      # 過去6ヶ月
+python3 scripts/cost_report.py --json          # JSON 出力
+python3 scripts/cost_report.py --aws-only      # AWS のみ
+python3 scripts/cost_report.py --azure-only    # Azure のみ
+```
+
+### macOS メニューバーウィジェット (`scripts/mac-widget/`)
+
+[xbar](https://xbarapp.com) を使った 1 時間ごと自動更新ウィジェット。
+
+```bash
+brew install --cask xbar
+bash scripts/mac-widget/install.sh
+open -e scripts/mac-widget/.env    # 認証情報を設定
+```
+
+### 通貨処理
+
+| Provider | 方式 |
+|----------|------|
+| AWS | Cost Explorer は USD 固定 → [open.er-api.com](https://open.er-api.com) で リアルタイム USD/JPY 変換 (失敗時 ¥150 固定) |
+| Azure | Cost Management API の `rows[n][2]` から通貨コードを直接取得 (JPY) |
+| GCP | Billing API — サービスアカウント or `gcloud auth` |
+| GitHub | Billing API 廃止 (HTTP 410) → `actions/cache/usage` + runs 件数で代替 |
+
+### .env 設定ファイル
+
+`scripts/mac-widget/.env` (git 管理外) に認証情報を記載します。
+テンプレート: `scripts/mac-widget/cost-monitor.env.sample`
+
+| 変数 | 用途 |
+|------|------|
+| `AZURE_SUBSCRIPTION_ID` | Azure Cost Management |
+| `GCP_BILLING_ACCOUNT` | GCP Billing (`01XXXX-XXXXXX-XXXXXX` 形式) |
+| `GCP_PROJECT_ID` | GCP プロジェクト ID |
+| `GITHUB_TOKEN` | GitHub Actions 使用量取得 |
+| `GH_REPO` | `owner/repo` 形式 (個人リポジトリ用) |
+
+AWS は `~/.aws/credentials` の default プロファイルを使用（追加設定不要）。
+
+---
 
 ## Next Section
 
