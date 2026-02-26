@@ -23,7 +23,29 @@ import json
 import os
 import sys
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
+
+# ── .env ローダー ──────────────────────────────────────────────
+def _load_dotenv() -> None:
+    """scripts/mac-widget/.env または scripts/.env から認証情報を読み込む。"""
+    _here = Path(__file__).resolve().parent
+    candidates = [
+        _here / "mac-widget" / ".env",
+        _here / ".env",
+        Path.home() / ".config" / "multicloud-cost" / ".env",
+    ]
+    for env_path in candidates:
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                os.environ.setdefault(key.strip(), val.strip().strip("\"'"))
+            break
+
+_load_dotenv()
 
 
 def _month_range(months_back: int) -> list[tuple[str, str]]:
@@ -156,16 +178,20 @@ def _fetch_azure(months: int) -> list[dict[str, Any]]:
                 data = _json.loads(resp.read())
 
             rows = data.get("properties", {}).get("rows", [])
-            # rows: [[amount, date_int, currency], ...]
+            # rows: [[amount, '2026-02-01T00:00:00', 'JPY'], ...]
             for row in rows:
                 amount = float(row[0]) if row else 0.0
-                period_raw = str(row[1]) if len(row) > 1 else start[:7].replace("-", "")
-                period = f"{period_raw[:4]}-{period_raw[4:6]}"
+                # BillingMonth は ISO datetime 文字列
+                bm = str(row[1]) if len(row) > 1 else start
+                period = bm[:7]  # '2026-02'
+                currency = str(row[2]) if len(row) > 2 else "USD"
                 results.append(
                     {
                         "provider": "Azure",
                         "period": period,
-                        "cost_usd": round(amount, 4),
+                        "cost_usd": round(amount, 4) if currency == "USD" else None,
+                        "cost_local": round(amount, 4),
+                        "currency": currency,
                     }
                 )
     except Exception as exc:
@@ -300,12 +326,14 @@ def _fetch_github(months: int) -> list[dict[str, Any]]:
                     for i in items
                     if "Actions" in i.get("product", "")
                 )
-                results.append({
-                    "provider": "GitHub Actions",
-                    "period": today.strftime("%Y-%m"),
-                    "cost_usd": round(actions_cost, 4),
-                    "note": f"Enhanced Billing (org: {org})",
-                })
+                results.append(
+                    {
+                        "provider": "GitHub Actions",
+                        "period": today.strftime("%Y-%m"),
+                        "cost_usd": round(actions_cost, 4),
+                        "note": f"Enhanced Billing (org: {org})",
+                    }
+                )
             except Exception:
                 try:
                     data = _get(
@@ -314,20 +342,24 @@ def _fetch_github(months: int) -> list[dict[str, Any]]:
                     included = data.get("included_minutes", 0)
                     used = data.get("total_minutes_used", 0)
                     paid = data.get("total_paid_minutes_used", 0)
-                    results.append({
-                        "provider": "GitHub Actions",
-                        "period": today.strftime("%Y-%m"),
-                        "minutes_included": included,
-                        "minutes_used": used,
-                        "minutes_paid": paid,
-                        "cost_usd": round(paid * 0.008, 4),
-                        "note": "Linux rate ($0.008/min)",
-                    })
+                    results.append(
+                        {
+                            "provider": "GitHub Actions",
+                            "period": today.strftime("%Y-%m"),
+                            "minutes_included": included,
+                            "minutes_used": used,
+                            "minutes_paid": paid,
+                            "cost_usd": round(paid * 0.008, 4),
+                            "note": "Linux rate ($0.008/min)",
+                        }
+                    )
                 except Exception as exc2:
-                    results.append({
-                        "provider": "GitHub Actions",
-                        "error": f"billing unavailable: {exc2}",
-                    })
+                    results.append(
+                        {
+                            "provider": "GitHub Actions",
+                            "error": f"billing unavailable: {exc2}",
+                        }
+                    )
         elif repo and "/" in repo:
             # 個人リポジトリ: 旧 Billing API 廃止 → キャッシュ + ラン数
             today = date.today()
@@ -345,13 +377,15 @@ def _fetch_github(months: int) -> list[dict[str, Any]]:
                     f"?per_page=1&created=>={first_of_month}"
                 )
                 run_count = runs_data.get("total_count", 0)
-                results.append({
-                    "provider": "GitHub Actions",
-                    "period": today.strftime("%Y-%m"),
-                    "cost_usd": None,
-                    "note": f"{run_count} runs, cache {cache_gb} GB "
-                            "(billing API deprecated — check github.com/settings/billing)",
-                })
+                results.append(
+                    {
+                        "provider": "GitHub Actions",
+                        "period": today.strftime("%Y-%m"),
+                        "cost_usd": None,
+                        "note": f"{run_count} runs, cache {cache_gb} GB "
+                        "(billing API deprecated — check github.com/settings/billing)",
+                    }
+                )
             except Exception as exc2:
                 results.append({"provider": "GitHub Actions", "error": str(exc2)})
         else:
@@ -389,10 +423,11 @@ def _table(all_results: list[dict]) -> None:
     print()
     print(colored(" ★ Multi-Cloud Cost Report ", BOLD + CYAN))
     print(colored("─" * 60, CYAN))
-    print(colored(f"{'Provider':<22} {'Period':<10} {'Cost (USD)':>12}  Note", BOLD))
+    print(colored(f"{'Provider':<22} {'Period':<10} {'Cost':>14}  Note", BOLD))
     print(colored("─" * 60, CYAN))
 
     total = 0.0
+    jpy_total = 0.0
     for row in all_results:
         provider = row.get("provider", "")
         error = row.get("error")
@@ -403,20 +438,32 @@ def _table(all_results: list[dict]) -> None:
             continue
         period = row.get("period", "")
         cost = row.get("cost_usd")
+        currency = row.get("currency", "USD")
+        cost_local = row.get("cost_local")
         note = row.get("note", "")
         minutes = row.get("minutes_used")
-        if cost is None:
+        # 表示用コスト文字列
+        if cost_local is not None and currency != "USD":
+            sym = "¥" if currency == "JPY" else currency + " "
+            fmt = f"{int(cost_local):,}" if currency == "JPY" else f"{cost_local:.2f}"
+            cost_str = colored(f"{sym}{fmt} ({currency})", YELLOW)
+            if currency == "JPY":
+                jpy_total += cost_local
+        elif cost is None and cost_local is None:
             cost_str = colored("     N/A", YELLOW)
         else:
-            cost_str = colored(f"{cost:>12.4f}", GREEN if cost < 10 else YELLOW)
-            total += cost
+            val = cost if cost is not None else 0.0
+            cost_str = colored(f"{val:>12.4f}", GREEN if val < 10 else YELLOW)
+            total += val
         extra = ""
         if minutes is not None:
             extra = f"  {minutes} min used"
         print(f"{'  ' + provider:<22} {period:<10} {cost_str}  {note}{extra}")
 
     print(colored("─" * 60, CYAN))
-    print(colored(f"{'  TOTAL (USD)':<22} {'':10} {total:>12.4f}", BOLD + GREEN))
+    print(colored(f"{'  TOTAL USD':<22} {'':10} {total:>14.4f}", BOLD + GREEN))
+    if jpy_total > 0:
+        print(colored(f"{'  TOTAL JPY':<22} {'':10} {f'¥{int(jpy_total):,}':>14}  (円建ての請求)", BOLD + YELLOW))
     print()
 
 

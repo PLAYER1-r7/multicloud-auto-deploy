@@ -142,7 +142,8 @@ def _fetch_azure() -> dict[str, Any]:
 
         rows = data.get("properties", {}).get("rows", [])
         total = sum(float(row[0]) for row in rows if row)
-        return {"cost": round(total, 2), "period": start[:7]}
+        currency = rows[0][2] if rows and len(rows[0]) > 2 else "USD"
+        return {"cost": round(total, 2), "currency": currency, "period": start[:7]}
     except Exception as e:
         return {"error": str(e)[:80]}
 
@@ -246,7 +247,10 @@ def _fetch_github() -> dict[str, Any]:
                 }
             except Exception:
                 pass
-            return {"error": f"GitHub billing unavailable for org: {org}", "period": period}
+            return {
+                "error": f"GitHub billing unavailable for org: {org}",
+                "period": period,
+            }
 
         # ── リポジトリ / 個人: 旧 Billing API 廃止 → キャッシュ + ラン数で代替 ───
         if repo and "/" in repo:
@@ -302,9 +306,11 @@ def _color(cost: float | None) -> str:
     return "red"
 
 
-def _fmt_cost(cost: float | None) -> str:
+def _fmt_cost(cost: float | None, currency: str = "USD") -> str:
     if cost is None:
         return "N/A"
+    if currency == "JPY":
+        return f"¥{int(cost):,}"
     return f"${cost:.2f}"
 
 
@@ -316,14 +322,25 @@ def main() -> None:
 
     results = {"AWS": aws, "Azure": azure, "GCP": gcp, "GitHub": github}
 
-    # メニューバータイトル (数値コストの合計)
-    total = sum(
-        r["cost"] for r in results.values() if isinstance(r.get("cost"), (int, float))
+    # メニューバータイトル — USD のみ合計、JPY は別途表示
+    usd_total = sum(
+        r["cost"] for r in results.values()
+        if isinstance(r.get("cost"), (int, float)) and r.get("currency", "USD") == "USD"
+    )
+    jpy_total = sum(
+        r["cost"] for r in results.values()
+        if isinstance(r.get("cost"), (int, float)) and r.get("currency") == "JPY"
     )
     has_error = any("error" in r for r in results.values())
     bar_icon = "☁" if not has_error else "☁⚠"
-    bar_color = _color(total)
-    print(f"{bar_icon} ${total:.2f} | color={bar_color} font=Menlo size=13")
+    bar_parts = []
+    if usd_total:
+        bar_parts.append(f"${usd_total:.2f}")
+    if jpy_total:
+        bar_parts.append(f"¥{int(jpy_total):,}")
+    bar_label = " + ".join(bar_parts) if bar_parts else "$0.00"
+    bar_color = _color(usd_total + jpy_total / 150)  # JPY→USD 概算で色判定
+    print(f"{bar_icon} {bar_label} | color={bar_color} font=Menlo size=13")
     print("---")
 
     # 当月
@@ -339,7 +356,8 @@ def main() -> None:
             print(f"  → コンソールを開く | href={console_url} color=gray size=11")
         else:
             cost = r.get("cost")
-            cost_str = _fmt_cost(cost)
+            currency = r.get("currency", "USD")
+            cost_str = _fmt_cost(cost, currency)
             color = _color(cost)
             extra = ""
             if name == "GitHub" and "minutes_used" in r:
@@ -359,14 +377,22 @@ def main() -> None:
 
     print("---")
     gcp_url = gcp.get("url", CONSOLES["GCP"])
-    aws_cost = aws.get("cost")
-    azure_cost = azure.get("cost")
-    gcp_cost = gcp.get("cost")
-    gh_cost = github.get("cost")
-    total_known = sum(
-        c for c in [aws_cost, azure_cost, gcp_cost, gh_cost] if c is not None
+    # 通貨別に合計を計算
+    usd_sum = sum(
+        r["cost"] for r in results.values()
+        if isinstance(r.get("cost"), (int, float)) and r.get("currency", "USD") == "USD"
     )
-    print(f"TOTAL  ${total_known:.2f} | color=white font=Menlo size=14")
+    jpy_sum = sum(
+        r["cost"] for r in results.values()
+        if isinstance(r.get("cost"), (int, float)) and r.get("currency") == "JPY"
+    )
+    total_parts = []
+    if usd_sum:
+        total_parts.append(f"${usd_sum:.2f}")
+    if jpy_sum:
+        total_parts.append(f"¥{int(jpy_sum):,}")
+    total_label = "  +  ".join(total_parts) if total_parts else "$0.00"
+    print(f"TOTAL  {total_label} | color=white font=Menlo size=14")
     print("---")
 
     # クイックリンク
