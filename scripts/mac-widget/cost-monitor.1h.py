@@ -18,9 +18,11 @@
 # 4. xbar > Preferences > Refresh All
 # ─────────────────────────────────────────────────────────────
 
+from __future__ import annotations
+
 # ── venv ブートストラップ (install.sh が作成した .venv を sys.path に追加) ──
-import sys as _sys
 import os as _os
+import sys as _sys
 
 _WIDGET_DIR = _os.path.dirname(_os.path.realpath(__file__))
 _VENV_LIB = _os.path.join(_WIDGET_DIR, ".venv", "lib")
@@ -31,8 +33,6 @@ if _os.path.isdir(_VENV_LIB):
             _sys.path.insert(0, _sp)
             break
 # ─────────────────────────────────────────────────────────────
-
-from __future__ import annotations
 
 import json
 import os
