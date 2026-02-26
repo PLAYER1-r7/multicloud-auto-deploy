@@ -537,12 +537,15 @@ class BaseMathSolver:
             "local_reference_pdf": 0.44,
             "pdf_direct": 0.34,
             "gcp_vision_api": 0.30,
-            # Azure DI: read+formulas は日本語テキスト + LaTeX 数式の両方を保持するため最高加点
-            # layout_markdown より inline LaTeX の math_integrity_score が低い分を補正
+            # azure_di_merged: positional merge — display formulas replaced in-place with
+            # accurate LaTeX while Japanese text is preserved; highest quality candidate
+            "azure_di_merged": 0.30,
+            # azure_di_read+formulas: fallback append — Japanese text preserved but formulas
+            # are only listed at the bottom, not placed in context
             "azure_di_read+formulas": 0.26,
-            # Azure DI: layout+formulas+markdown は構造・数式精度が高いため加点
+            # azure_di_layout_markdown: accurate LaTeX but Japanese text sometimes lost
             "azure_di_layout_markdown": 0.12,
-            # azure_di_read はフォールバックのため加点なし
+            # azure_di_read: plain text fallback — no LaTeX bonus
             "azure_di_read": 0.0,
         }
         source_bonus = source_bonus_map.get(source, 0.0)

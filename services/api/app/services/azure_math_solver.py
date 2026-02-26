@@ -13,7 +13,7 @@ import hashlib
 import json
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -315,12 +315,15 @@ class AzureMathSolver(BaseMathSolver):
             print(f"[OCR] WARN: Blob write failed: {exc}")
 
     def _call_azure_di(self, image_bytes: bytes) -> list[tuple[str, str]]:
-        """Run both Azure DI passes in parallel and return up to 3 (text, source) pairs.
+        """Run both Azure DI passes in parallel and return up to 4 (text, source) pairs.
 
-        Candidates:
-          1. ``azure_di_read``           — prebuilt-read: preserves Japanese text
+        Candidates (in evaluation order):
+          1. ``azure_di_read``           — prebuilt-read: preserves Japanese text verbatim
           2. ``azure_di_layout_markdown``— prebuilt-layout + FORMULAS + Markdown: accurate LaTeX
-          3. ``azure_di_read+formulas``  — combination: Japanese base + LaTeX formulas appended
+          3. ``azure_di_merged``         — positional merge: display formula lines replaced
+                                           in-place with accurate LaTeX; Japanese text preserved
+          4. ``azure_di_read+formulas``  — fallback: Japanese base + LaTeX appended at bottom,
+                                           used when polygon data is unavailable for merging
         """
         if self._di_client is None:
             return []
@@ -346,39 +349,56 @@ class AzureMathSolver(BaseMathSolver):
                 DocumentAnalysisFeature,
                 DocumentContentFormat,
             )
-            read_text: str = future_read.result()
-            latex_formulas, markdown_text = future_layout.result()
+            read_text, read_lines = future_read.result()
+            rich_formulas, latex_strings, markdown_text = future_layout.result()
 
         results: list[tuple[str, str]] = []
         if read_text:
             results.append((read_text, "azure_di_read"))
         if markdown_text:
             results.append((markdown_text, "azure_di_layout_markdown"))
-        # Combined candidate: Japanese text base + accurate LaTeX formulas
-        if read_text and latex_formulas:
+
+        if read_lines and rich_formulas:
+            # Preferred: positional merge — replace display formula lines with LaTeX in-place
+            merged = self._merge_read_with_formulas(read_lines, rich_formulas)
+            if merged:
+                results.append((merged, "azure_di_merged"))
+        elif read_text and latex_strings:
+            # Fallback when polygon data is unavailable: append at bottom
             combined = (
                 read_text
                 + "\n\n[検出された数式 (LaTeX)]\n"
-                + "\n".join(latex_formulas)
+                + "\n".join(latex_strings)
             )
             results.append((combined, "azure_di_read+formulas"))
+
         return results
 
-    def _ocr_read_pass(self, image_bytes: bytes, RequestModel: Any) -> str:
-        """prebuilt-read pass — returns plain line-joined text (preserves Japanese)."""
+    def _ocr_read_pass(
+        self, image_bytes: bytes, RequestModel: Any
+    ) -> tuple[str, list[dict]]:
+        """prebuilt-read pass.
+
+        Returns ``(plain_text, rich_lines)`` where each element of ``rich_lines`` is
+        ``{"content": str, "polygon": list[float] | None}``.
+        The polygon is a flat list of page-unit coordinates [x0,y0,x1,y1,x2,y2,x3,y3].
+        """
         try:
             result = self._di_client.begin_analyze_document(
                 "prebuilt-read",
                 RequestModel(bytes_source=image_bytes),
             ).result()
-            lines: list[str] = [
-                line.content
+            rich_lines: list[dict] = [
+                {
+                    "content": line.content,
+                    "polygon": getattr(line, "polygon", None),
+                }
                 for page in (result.pages or [])
                 for line in (page.lines or [])
             ]
-            return "\n".join(lines)
+            return "\n".join(l["content"] for l in rich_lines), rich_lines
         except Exception:
-            return ""
+            return "", []
 
     def _ocr_layout_formulas_pass(
         self,
@@ -386,12 +406,17 @@ class AzureMathSolver(BaseMathSolver):
         RequestModel: Any,
         AnalysisFeature: Any,
         ContentFormat: Any,
-    ) -> tuple[list[str], str]:
+    ) -> tuple[list[dict], list[str], str]:
         """prebuilt-layout + FORMULAS + Markdown pass.
 
-        Returns ``(latex_formulas, markdown_text)``.
-        ``latex_formulas`` is a list of ``"[display] ..."`` / ``"[inline] ..."`` strings.
-        ``markdown_text`` is the full Markdown content with the formula list appended.
+        Returns ``(rich_formulas, latex_strings, markdown_text)``.
+
+        ``rich_formulas`` — list of dicts::
+
+            {"value": str, "kind": "display"|"inline", "polygon": list[float] | None}
+
+        ``latex_strings`` — ``["[display] ...", "[inline] ...", ...]`` (for legacy append).
+        ``markdown_text`` — full Markdown content with formula list appended.
         """
         try:
             result = self._di_client.begin_analyze_document(
@@ -405,19 +430,115 @@ class AzureMathSolver(BaseMathSolver):
             if result.content:
                 parts.append(result.content)
 
-            latex_formulas: list[str] = [
-                f"[{'display' if getattr(f, 'kind', '') == 'display' else 'inline'}] {getattr(f, 'value', '')}"
-                for page in (result.pages or [])
-                for f in (getattr(page, "formulas", None) or [])
-                if getattr(f, "value", None) and (getattr(f, "confidence", 1.0) or 1.0) >= 0.5
-            ]
-            if latex_formulas:
-                parts.append("\n[検出された数式 (LaTeX)]\n" + "\n".join(latex_formulas))
+            rich_formulas: list[dict] = []
+            latex_strings: list[str] = []
+            for page in (result.pages or []):
+                for f in getattr(page, "formulas", None) or []:
+                    val = getattr(f, "value", None)
+                    conf = getattr(f, "confidence", 1.0) or 1.0
+                    kind = getattr(f, "kind", "") or ""
+                    if not val or conf < 0.5:
+                        continue
+                    # Polygon lives inside bounding_regions[0].polygon
+                    polygon: list[float] | None = None
+                    brs = getattr(f, "bounding_regions", None)
+                    if brs:
+                        polygon = getattr(brs[0], "polygon", None)
+                    rich_formulas.append({"value": val, "kind": kind, "polygon": polygon})
+                    tag = "display" if kind == "display" else "inline"
+                    latex_strings.append(f"[{tag}] {val}")
+
+            if latex_strings:
+                parts.append("\n[検出された数式 (LaTeX)]\n" + "\n".join(latex_strings))
 
             markdown_text = "\n".join(parts).strip()
-            return latex_formulas, (markdown_text if len(markdown_text) > 20 else "")
+            return rich_formulas, latex_strings, (markdown_text if len(markdown_text) > 20 else "")
         except Exception:
-            return [], ""
+            return [], [], ""
+
+    # ------------------------------------------------------------------
+    # Positional OCR merge helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _poly_y_range(polygon: list[float] | None) -> tuple[float, float] | None:
+        """Return (y_min, y_max) from a flat polygon [x0,y0,x1,y1,...], or None."""
+        if not polygon or len(polygon) < 4:
+            return None
+        y_vals = polygon[1::2]  # indices 1, 3, 5, 7
+        return min(y_vals), max(y_vals)
+
+    @staticmethod
+    def _y_overlap_ratio(a_min: float, a_max: float, b_min: float, b_max: float) -> float:
+        """Fraction of the smaller vertical span that overlaps with the other span."""
+        overlap = min(a_max, b_max) - max(a_min, b_min)
+        if overlap <= 0:
+            return 0.0
+        smaller = min(a_max - a_min, b_max - b_min)
+        return overlap / max(smaller, 1e-9)
+
+    def _merge_read_with_formulas(
+        self,
+        read_lines: list[dict],
+        rich_formulas: list[dict],
+    ) -> str:
+        """Replace display-formula lines in prebuilt-read output with accurate LaTeX.
+
+        Algorithm:
+          1. For each *display* formula with a bounding-box polygon, find all read
+             lines whose Y-range overlaps the formula's Y-range by ≥50 %.
+          2. Replace every such group of lines with a single ``$$latex$$`` block.
+          3. Lines that don't overlap any display formula are kept as-is
+             (preserving Japanese problem text).
+          4. *Inline* formulas (no dedicated line) are appended at the bottom so
+             the LLM still has the accurate LaTeX for in-text symbols.
+        """
+        if not rich_formulas:
+            return "\n".join(l["content"] for l in read_lines)
+
+        display_formulas = [
+            (f, self._poly_y_range(f.get("polygon")))
+            for f in rich_formulas
+            if f.get("kind") == "display"
+        ]
+        inline_latex = [
+            f["value"]
+            for f in rich_formulas
+            if f.get("kind") != "display"
+        ]
+
+        # Map each read line to the display formula that covers it.
+        line_formula: list[dict | None] = [None] * len(read_lines)
+        for f, f_yr in display_formulas:
+            if f_yr is None:
+                continue
+            for li, line in enumerate(read_lines):
+                if line_formula[li] is not None:
+                    continue  # already claimed
+                l_yr = self._poly_y_range(line.get("polygon"))
+                if l_yr and self._y_overlap_ratio(l_yr[0], l_yr[1], f_yr[0], f_yr[1]) >= 0.5:
+                    line_formula[li] = f
+
+        # Build output preserving document order.
+        parts: list[str] = []
+        emitted: set[int] = set()
+        for li, line in enumerate(read_lines):
+            f = line_formula[li]
+            if f is None:
+                parts.append(line["content"])
+            else:
+                fid = id(f)
+                if fid not in emitted:
+                    emitted.add(fid)
+                    parts.append(f"$${f['value']}$$")
+                # else: duplicate line mapping to the same formula — skip
+
+        if inline_latex:
+            parts.append("\n[検出された数式 (LaTeX)]")
+            for val in inline_latex:
+                parts.append(f"[inline] {val}")
+
+        return "\n".join(parts)
 
     # ------------------------------------------------------------------
     # Azure OpenAI 解答生成
