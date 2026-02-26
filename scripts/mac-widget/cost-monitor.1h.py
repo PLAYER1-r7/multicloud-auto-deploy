@@ -192,49 +192,80 @@ def _fetch_azure() -> dict[str, Any]:
 
 
 def _fetch_gcp() -> dict[str, Any]:
-    """GCP Cloud Billing — BigQuery export なしでの概算取得。"""
-    billing_account = os.getenv("GCP_BILLING_ACCOUNT")
+    """GCP Cloud Billing — BigQuery billing export を REST API で照会。"""
     project_id = os.getenv("GCP_PROJECT_ID")
-    if not billing_account and not project_id:
-        return {"error": "GCP_BILLING_ACCOUNT or GCP_PROJECT_ID not set"}
+    billing_account = os.getenv("GCP_BILLING_ACCOUNT", "")
+    bq_dataset = os.getenv("GCP_BQ_DATASET")
+    bq_location = os.getenv("GCP_BQ_LOCATION", "US")
+
+    if not project_id:
+        return {"error": "GCP_PROJECT_ID not set"}
+    if not bq_dataset:
+        return {"error": "GCP_BQ_DATASET not set (.env に設定してください)"}
+
+    # テーブル名: 明示指定がなければ billing_account から自動推定
+    bq_table = os.getenv("GCP_BQ_TABLE")
+    if not bq_table:
+        if billing_account:
+            sanitized = billing_account.replace("-", "_")
+            bq_table = f"gcp_billing_export_v1_{sanitized}"
+        else:
+            return {"error": "GCP_BQ_TABLE or GCP_BILLING_ACCOUNT not set"}
+
     try:
         start, _end = _this_month()
-        # Cloud Billing v1 で当月の SKU コストを集計
+        year_month = start[:7]  # YYYY-MM
+
+        # gcloud で Bearer トークン取得
         token_r = subprocess.run(
             ["gcloud", "auth", "print-access-token"],
-            capture_output=True,
-            text=True,
-            timeout=10,
+            capture_output=True, text=True, timeout=10,
         )
         if token_r.returncode != 0:
             return {"error": "gcloud auth login required"}
         token = token_r.stdout.strip()
 
-        if billing_account:
-            # Billing Account Budget API (コスト取得にはBigQuery exportが正式)
-            # → budgets describe で threshold alerts から概算を拾う
-            cmd = subprocess.run(
-                [
-                    "gcloud",
-                    "billing",
-                    "accounts",
-                    "describe",
-                    billing_account,
-                    "--format=json",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=15,
-            )
-            if cmd.returncode == 0:
-                info = json.loads(cmd.stdout)
-                return {
-                    "cost": None,
-                    "period": start[:7],
-                    "note": info.get("displayName", billing_account),
-                    "url": f"https://console.cloud.google.com/billing/{billing_account}",
-                }
-        return {"error": "Use GCP Console for exact cost", "period": start[:7]}
+        # BigQuery synchronous query API
+        table_ref = f"`{project_id}.{bq_dataset}.{bq_table}`"
+        query = (
+            f"SELECT ROUND(SUM(cost), 2) AS total, currency "
+            f"FROM {table_ref} "
+            f"WHERE FORMAT_DATE('%Y-%m', DATE(usage_start_time)) = '{year_month}' "
+            f"GROUP BY currency"
+        )
+        payload = json.dumps({
+            "query": query,
+            "useLegacySql": False,
+            "location": bq_location,
+            "timeoutMs": 15000,
+        }).encode()
+        url = f"https://bigquery.googleapis.com/bigquery/v2/projects/{project_id}/queries"
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            result = json.loads(resp.read())
+
+        if not result.get("jobComplete"):
+            return {"error": "BQ query timeout", "period": year_month}
+
+        rows = result.get("rows", [])
+        if not rows:
+            return {"cost": 0.0, "currency": "JPY", "period": year_month}
+
+        total = sum(float(r["f"][0]["v"]) for r in rows if r["f"][0]["v"])
+        currency = rows[0]["f"][1]["v"] if rows else "JPY"
+        return {
+            "cost": round(total, 2),
+            "currency": currency,
+            "period": year_month,
+        }
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}"}
 

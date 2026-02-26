@@ -8,7 +8,8 @@ cost_report.py — AWS / Azure / GCP / GitHub のコスト月次レポート
 必要な認証情報:
   AWS:    AWS_PROFILE または aws configure 済み環境 (Cost Explorer API)
   Azure:  az login 済み & AZURE_SUBSCRIPTION_ID 環境変数
-  GCP:    gcloud auth login 済み & GCP_BILLING_ACCOUNT 環境変数
+  GCP:    gcloud auth login 済み & GCP_PROJECT_ID + GCP_BQ_DATASET 環境変数
+          (GCP Console > Billing > Billing export > BigQuery export で事前有効化が必要)
   GitHub: GITHUB_TOKEN 環境変数 & GH_ORG / GH_REPO 環境変数
 
 オプション:
@@ -26,6 +27,7 @@ import urllib.request
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
+
 
 # ── .env ローダー ──────────────────────────────────────────────
 def _load_dotenv() -> None:
@@ -45,6 +47,7 @@ def _load_dotenv() -> None:
                 key, _, val = line.partition("=")
                 os.environ.setdefault(key.strip(), val.strip().strip("\"'"))
             break
+
 
 _load_dotenv()
 
@@ -229,82 +232,88 @@ def _fetch_azure(months: int) -> list[dict[str, Any]]:
 
 
 def _fetch_gcp(months: int) -> list[dict[str, Any]]:
-    results = []
-    billing_account = os.getenv("GCP_BILLING_ACCOUNT")
-    if not billing_account:
-        return [
-            {
-                "provider": "GCP",
-                "error": "GCP_BILLING_ACCOUNT not set (e.g. 012345-ABCDEF-GHIJKL)",
-            }
-        ]
+    """GCP Cloud Billing — BigQuery billing export を REST API で照会。"""
+    project_id = os.getenv("GCP_PROJECT_ID")
+    billing_account = os.getenv("GCP_BILLING_ACCOUNT", "")
+    bq_dataset = os.getenv("GCP_BQ_DATASET")
+    bq_location = os.getenv("GCP_BQ_LOCATION", "US")
+
+    if not project_id:
+        return [{"provider": "GCP", "error": "GCP_PROJECT_ID not set"}]
+    if not bq_dataset:
+        return [{"provider": "GCP", "error": "GCP_BQ_DATASET not set (.env に設定してください)"}]
+
+    bq_table = os.getenv("GCP_BQ_TABLE")
+    if not bq_table:
+        if billing_account:
+            sanitized = billing_account.replace("-", "_")
+            bq_table = f"gcp_billing_export_v1_{sanitized}"
+        else:
+            return [{"provider": "GCP", "error": "GCP_BQ_TABLE or GCP_BILLING_ACCOUNT not set"}]
+
     try:
         import json as _json
-        import subprocess
+        import urllib.request as _urllib
 
-        token_result = subprocess.run(
+        token_r = subprocess.run(
             ["gcloud", "auth", "print-access-token"],
-            capture_output=True,
-            text=True,
-            timeout=30,
+            capture_output=True, text=True, timeout=30,
         )
-        if token_result.returncode != 0:
+        if token_r.returncode != 0:
             return [{"provider": "GCP", "error": "gcloud auth login required"}]
-        token = token_result.stdout.strip()
+        token = token_r.stdout.strip()
 
-        for start, end in _month_range(months):
-            url = (
-                f"https://cloudbilling.googleapis.com/v1/billingAccounts/{billing_account}/skus"
-                f"?pageSize=1"
-            )
-            # Cloud Billing v1 に直接コスト照会がないため gcloud billing を利用
-            # gcloud beta billing accounts describe で概算取得
-            # 詳細は BigQuery billing export が必要 → ここは describe のみ
-            cmd = subprocess.run(
-                [
-                    "gcloud",
-                    "billing",
-                    "accounts",
-                    "describe",
-                    billing_account,
-                    "--format=json",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if cmd.returncode == 0:
-                info = _json.loads(cmd.stdout)
-                results.append(
-                    {
-                        "provider": "GCP",
-                        "period": start[:7],
-                        "cost_usd": None,
-                        "note": f"账単アカウント: {info.get('displayName', billing_account)} (詳細は BigQuery billing export を参照)",
-                    }
-                )
-            else:
-                results.append({"provider": "GCP", "error": cmd.stderr.strip()})
-            break  # GCP Billing Account describe は月次内訳を返さないので1回のみ
+        # 対象月のリスト (YYYY-MM)
+        month_list = [s[:7] for s, _ in _month_range(months)]
+        months_str = ", ".join(f"'{m}'" for m in month_list)
 
-        # gcloud projects list で各プロジェクトの概算を試みる
-        projects_cmd = subprocess.run(
-            ["gcloud", "projects", "list", "--format=value(projectId)"],
-            capture_output=True,
-            text=True,
-            timeout=30,
+        table_ref = f"`{project_id}.{bq_dataset}.{bq_table}`"
+        query = (
+            f"SELECT FORMAT_DATE('%Y-%m', DATE(usage_start_time)) AS month, "
+            f"ROUND(SUM(cost), 2) AS total, currency "
+            f"FROM {table_ref} "
+            f"WHERE FORMAT_DATE('%Y-%m', DATE(usage_start_time)) IN ({months_str}) "
+            f"GROUP BY month, currency "
+            f"ORDER BY month DESC"
         )
-        if projects_cmd.returncode == 0:
-            project_ids = projects_cmd.stdout.strip().splitlines()
-            results.append(
-                {
-                    "provider": "GCP",
-                    "note": f"プロジェクト数: {len(project_ids)} (コスト詳細は https://console.cloud.google.com/billing を参照)",
-                }
-            )
+        payload = _json.dumps({
+            "query": query,
+            "useLegacySql": False,
+            "location": bq_location,
+            "timeoutMs": 30000,
+        }).encode()
+        url = f"https://bigquery.googleapis.com/bigquery/v2/projects/{project_id}/queries"
+        req = _urllib.Request(
+            url, data=payload,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with _urllib.urlopen(req, timeout=40) as resp:
+            result = _json.loads(resp.read())
+
+        if not result.get("jobComplete"):
+            return [{"provider": "GCP", "error": "BQ query timeout"}]
+
+        rows = result.get("rows", [])
+        results = []
+        seen = set()
+        for row in rows:
+            f = row["f"]
+            month, total, currency = f[0]["v"], f[1]["v"], f[2]["v"]
+            seen.add(month)
+            results.append({
+                "provider": "GCP",
+                "period": month,
+                "cost_local": float(total) if total else 0.0,
+                "currency": currency,
+            })
+        # データなし月を補完
+        for month in month_list:
+            if month not in seen:
+                results.append({"provider": "GCP", "period": month, "cost_local": 0.0, "currency": "JPY"})
+        return results
     except Exception as exc:
-        results.append({"provider": "GCP", "error": str(exc)})
-    return results
+        return [{"provider": "GCP", "error": f"{type(exc).__name__}: {exc}"}]
 
 
 # ─────────────────────────────────────────────
@@ -487,7 +496,12 @@ def _table(all_results: list[dict]) -> None:
     print(colored("─" * 60, CYAN))
     print(colored(f"{'  TOTAL USD':<22} {'':10} {total:>14.4f}", BOLD + GREEN))
     if jpy_total > 0:
-        print(colored(f"{'  TOTAL JPY':<22} {'':10} {f'¥{int(jpy_total):,}':>14}  (円建ての請求)", BOLD + YELLOW))
+        print(
+            colored(
+                f"{'  TOTAL JPY':<22} {'':10} {f'¥{int(jpy_total):,}':>14}  (円建ての請求)",
+                BOLD + YELLOW,
+            )
+        )
     print()
 
 
