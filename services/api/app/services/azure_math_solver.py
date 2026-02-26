@@ -289,8 +289,8 @@ class AzureMathSolver(AwsMathSolver):
             # --- ファイル（JSONL）---
             with open(self._OCR_DUMP_PATH, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-        except Exception:
-            pass  # 出力失敗は無視
+        except Exception as _exc:
+            print(f"[OCR] WARN: 出力失敗: {_exc}")
 
     def _call_azure_di(self, image_bytes: bytes) -> tuple[str, str]:
         """Azure DI で OCR してテキストとソース名のタプルを返す。
@@ -341,9 +341,7 @@ class AzureMathSolver(AwsMathSolver):
                             latex_formulas.append(f"[{tag}] {val}")
 
             if latex_formulas:
-                parts.append(
-                    "\n[検出された数式 (LaTeX)]\n" + "\n".join(latex_formulas)
-                )
+                parts.append("\n[検出された数式 (LaTeX)]\n" + "\n".join(latex_formulas))
 
             text = "\n".join(parts).strip()
             if len(text) > 20:

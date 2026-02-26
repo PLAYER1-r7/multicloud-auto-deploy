@@ -109,7 +109,9 @@ def get_ocr_debug(limit: int = 20) -> JSONResponse:
     import os
 
     if not os.path.exists(_OCR_DEBUG_PATH):
-        return JSONResponse({"entries": [], "total": 0, "message": "ログファイルが存在しません"})
+        return JSONResponse(
+            {"entries": [], "total": 0, "message": "ログファイルが存在しません"}
+        )
 
     try:
         with open(_OCR_DEBUG_PATH, encoding="utf-8") as fh:
@@ -126,3 +128,43 @@ def get_ocr_debug(limit: int = 20) -> JSONResponse:
             entries.append({"raw": line})
 
     return JSONResponse({"entries": entries, "total": len(lines)})
+
+
+@router.get("/ocr-debug/diag")
+def get_ocr_debug_diag() -> JSONResponse:
+    """/tmp への書き込み・stdout の動作を診断する。"""
+    import os
+
+    results: dict = {}
+
+    # stdout テスト
+    try:
+        print("[OCR-DIAG] stdout test from /v1/ocr-debug/diag", flush=True)
+        results["stdout"] = "ok"
+    except Exception as e:
+        results["stdout"] = f"error: {e}"
+
+    # /tmp 書き込みテスト
+    test_path = "/tmp/_diag_test.txt"
+    try:
+        with open(test_path, "w") as fh:
+            fh.write("diag\n")
+        results["tmp_write"] = "ok"
+    except Exception as e:
+        results["tmp_write"] = f"error: {e}"
+
+    # ocr_debug.jsonl 状態
+    try:
+        exists = os.path.exists(_OCR_DEBUG_PATH)
+        size = os.path.getsize(_OCR_DEBUG_PATH) if exists else -1
+        results["ocr_debug_jsonl"] = {"exists": exists, "size_bytes": size}
+    except Exception as e:
+        results["ocr_debug_jsonl"] = f"error: {e}"
+
+    # /tmp ファイル一覧
+    try:
+        results["tmp_listdir"] = os.listdir("/tmp")
+    except Exception as e:
+        results["tmp_listdir"] = f"error: {e}"
+
+    return JSONResponse(results)
