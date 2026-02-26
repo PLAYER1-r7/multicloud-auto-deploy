@@ -100,7 +100,14 @@ def _fetch_aws() -> dict[str, Any]:
     try:
         import boto3
 
-        ce = boto3.client("ce", region_name="us-east-1")
+        # xbar の制限環境でもプロファイルを明示指定
+        profile = os.getenv("AWS_PROFILE", "default")
+        # HOME が未設定の場合に備え ~/.aws を明示設定
+        if not os.getenv("HOME"):
+            import pathlib
+            os.environ["HOME"] = str(pathlib.Path.home())
+        session = boto3.Session(profile_name=profile)
+        ce = session.client("ce", region_name="us-east-1")
         start, end = _this_month()
         resp = ce.get_cost_and_usage(
             TimePeriod={"Start": start, "End": end},
@@ -122,7 +129,7 @@ def _fetch_aws() -> dict[str, Any]:
     except ImportError:
         return {"error": "boto3 not installed"}
     except Exception as e:
-        return {"error": str(e)[:80]}
+        return {"error": f"{type(e).__name__}: {e}"}
 
 
 def _fetch_azure() -> dict[str, Any]:
@@ -181,7 +188,7 @@ def _fetch_azure() -> dict[str, Any]:
         currency = rows[0][2] if rows and len(rows[0]) > 2 else "USD"
         return {"cost": round(total, 2), "currency": currency, "period": start[:7]}
     except Exception as e:
-        return {"error": str(e)[:80]}
+        return {"error": f"{type(e).__name__}: {e}"}
 
 
 def _fetch_gcp() -> dict[str, Any]:
@@ -229,7 +236,7 @@ def _fetch_gcp() -> dict[str, Any]:
                 }
         return {"error": "Use GCP Console for exact cost", "period": start[:7]}
     except Exception as e:
-        return {"error": str(e)[:80]}
+        return {"error": f"{type(e).__name__}: {e}"}
 
 
 def _fetch_github() -> dict[str, Any]:
@@ -312,7 +319,7 @@ def _fetch_github() -> dict[str, Any]:
 
         return {"error": "Set GH_ORG or GH_REPO env var"}
     except Exception as e:
-        return {"error": str(e)[:80]}
+        return {"error": f"{type(e).__name__}: {e}"}
 
 
 # ── xbar 出力フォーマット ─────────────────────────────────────
