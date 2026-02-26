@@ -1,8 +1,6 @@
 import base64
 import json
 import re
-import time
-import uuid
 from collections import Counter
 from io import BytesIO
 from pathlib import Path
@@ -12,174 +10,13 @@ from fastapi import HTTPException
 from pypdf import PdfReader
 
 from app.config import settings
-from app.models import SolveAnswer, SolveMeta, SolveRequest, SolveResponse
+from app.models import SolveRequest
 
 
-class AwsMathSolver:
-    def __init__(self):
-        try:
-            import boto3
-            from botocore.exceptions import BotoCoreError, ClientError  # noqa: PLC0415
-        except ImportError as exc:
-            raise RuntimeError(
-                "boto3 is required for AwsMathSolver but is not installed"
-            ) from exc
-
-        # Store exception classes for use in exception handlers throughout this class.
-        # This avoids module-level boto3/botocore imports that crash non-AWS runtimes.
-        self._BotoCoreError = BotoCoreError
-        self._ClientError = ClientError
-
-        self._bedrock = boto3.client(
-            "bedrock-runtime", region_name=settings.bedrock_region
-        )
+class BaseMathSolver:
+    def __init__(self) -> None:
+        # Shared utilities only — no AWS/Bedrock clients
         self._sample_pdf_text_cache: dict[str, str] = {}
-
-    def solve(self, request: SolveRequest) -> SolveResponse:
-        start = time.time()
-        image_bytes = self._resolve_image(request)
-        local_reference_text = self._load_local_reference_problem_text(request)
-        if local_reference_text:
-            local_reference_clean = self._cleanup_ocr_text(local_reference_text)
-            local_reference_score = self._score_ocr_text(
-                local_reference_clean, "local_reference_pdf"
-            )
-
-            problem_text = local_reference_clean
-            ocr_source = "local_reference_pdf"
-            ocr_score = round(local_reference_score, 4)
-            ocr_candidates = 1
-            ocr_top_candidates = [
-                {
-                    "source": "local_reference_pdf",
-                    "score": round(local_reference_score, 4),
-                    "textPreview": self._preview_text(local_reference_clean),
-                }
-            ]
-            ocr_debug_texts = [
-                {
-                    "source": "local_reference_pdf",
-                    "score": round(local_reference_score, 4),
-                    "text": self._limit_debug_text(local_reference_clean),
-                }
-            ]
-
-            if local_reference_score < 0.55:
-                fallback_image_bytes = self._load_reference_problem_image_bytes(request)
-                if fallback_image_bytes:
-                    (
-                        _fallback_text,
-                        _fallback_source,
-                        _fallback_score,
-                        fallback_candidates,
-                        fallback_top_candidates,
-                        fallback_debug_texts,
-                    ) = self._extract_text_with_ocr(
-                        fallback_image_bytes,
-                        request=request,
-                    )
-
-                    selected_fallback = self._select_fallback_ocr_candidate(
-                        fallback_debug_texts,
-                        local_reference_score,
-                    )
-                    if selected_fallback:
-                        selected_text, selected_source, selected_score = (
-                            selected_fallback
-                        )
-                        problem_text = selected_text
-                        ocr_source = selected_source
-                        ocr_score = selected_score
-                        ocr_candidates = fallback_candidates
-                        ocr_top_candidates = fallback_top_candidates
-                        ocr_debug_texts = fallback_debug_texts
-        else:
-            (
-                problem_text,
-                ocr_source,
-                ocr_score,
-                ocr_candidates,
-                ocr_top_candidates,
-                ocr_debug_texts,
-            ) = self._extract_text_with_ocr(
-                image_bytes,
-                request.input.image_url,
-                request,
-            )
-        ocr_replacement_ratio, ocr_non_ascii_ratio = self._compute_ocr_quality_metrics(
-            problem_text
-        )
-        structured_problem = self._build_structured_problem(problem_text, request)
-        answer_payload = self._generate_with_bedrock(
-            problem_text, request, structured_problem
-        )
-        answer_payload = self._verify_and_refine_answer_with_bedrock(
-            problem_text=problem_text,
-            structured_problem=structured_problem,
-            answer_payload=answer_payload,
-            request=request,
-        )
-        answer_payload["diagramGuide"] = self._resolve_diagram_guide(
-            answer_payload, structured_problem
-        )
-        answer_payload["final"] = self._refine_final_text_for_geometry(
-            str(answer_payload.get("final", "")), structured_problem
-        )
-        answer_payload["steps"] = self._refine_steps_for_geometry(
-            answer_payload.get("steps", []),
-            structured_problem,
-            str(answer_payload.get("final", "")),
-        )
-        ocr_needs_review = self._should_flag_ocr_review(
-            ocr_score, ocr_replacement_ratio, ocr_candidates
-        )
-        if ocr_needs_review:
-            answer_payload = self._apply_ocr_review_warning(answer_payload)
-
-        problem_type = str(structured_problem.get("problemType", "algebra"))
-        answer_payload["confidence"] = self._calibrate_answer_confidence(
-            raw_confidence=answer_payload.get("confidence", 0.5),
-            ocr_score=ocr_score,
-            replacement_ratio=ocr_replacement_ratio,
-            ocr_source=ocr_source,
-            problem_type=problem_type,
-            ocr_needs_review=ocr_needs_review,
-        )
-        answer_payload = self._enforce_output_options(answer_payload, request)
-
-        latency_ms = int((time.time() - start) * 1000)
-
-        answer = SolveAnswer(
-            final=answer_payload.get("final", ""),
-            latex=answer_payload.get("latex"),
-            steps=answer_payload.get("steps", []),
-            diagramGuide=answer_payload.get("diagramGuide"),
-            confidence=float(answer_payload.get("confidence", 0.5)),
-        )
-
-        return SolveResponse(
-            requestId=f"req_{uuid.uuid4().hex[:16]}",
-            status="completed",
-            problemText=problem_text,
-            answer=answer,
-            meta=SolveMeta(
-                ocrProvider="bedrock",
-                ocrSource=ocr_source,
-                ocrScore=ocr_score,
-                ocrCandidates=ocr_candidates,
-                ocrTopCandidates=ocr_top_candidates,
-                ocrDebugTexts=ocr_debug_texts if request.options.debug_ocr else None,
-                structuredProblem=structured_problem
-                if request.options.debug_ocr
-                else None,
-                ocrReplacementRatio=ocr_replacement_ratio,
-                ocrNonAsciiRatio=ocr_non_ascii_ratio,
-                ocrNeedsReview=ocr_needs_review,
-                model=settings.bedrock_model_id,
-                latencyMs=latency_ms,
-                costUsd=0.0,
-            ),
-        )
 
     def _resolve_image(self, request: SolveRequest) -> bytes:
         if request.input.image_base64:
@@ -230,118 +67,6 @@ class AwsMathSolver:
                 status_code=400,
                 detail=f"image size exceeds limit ({settings.solve_max_image_bytes} bytes)",
             )
-
-    def _extract_text_with_ocr(
-        self,
-        image_bytes: bytes,
-        image_url: str | None = None,
-        request: SolveRequest | None = None,
-    ) -> tuple[
-        str,
-        str,
-        float,
-        int,
-        list[dict[str, float | str]],
-        list[dict[str, float | str]],
-    ]:
-        """Bedrock マルチモーダル OCR + PDF テキスト抽出で候補を収集してスコアリングする。"""
-        candidates: list[tuple[str, str]] = []
-
-        # Bedrock Vision OCR（メイン OCR パス）
-        vision_text = self._extract_with_bedrock_vision_ocr(image_bytes)
-        if vision_text:
-            candidates.append((vision_text, "bedrock_vision_ocr"))
-
-        # URL から PDF を取得できる場合は直接テキスト抽出を試みる
-        pdf_bytes = self._download_pdf_from_image_url(image_url)
-        if pdf_bytes:
-            pdf_text = self._extract_text_from_pdf_bytes(pdf_bytes)
-            if pdf_text:
-                candidates.append((pdf_text, "pdf_direct"))
-
-        if not candidates:
-            raise HTTPException(status_code=502, detail="OCR returned no candidates")
-
-        filtered_candidates: list[tuple[str, str]] = []
-        for text, source in candidates:
-            cleaned = self._cleanup_ocr_text(text)
-            if not cleaned:
-                continue
-            if self._is_low_quality_ocr_candidate(cleaned, source):
-                continue
-            filtered_candidates.append((cleaned, source))
-
-        effective_candidates = (
-            filtered_candidates if filtered_candidates else candidates
-        )
-
-        scored_candidates = [
-            {
-                "text": text,
-                "source": source,
-                "score": self._score_ocr_text(text, source),
-            }
-            for text, source in effective_candidates
-        ]
-
-        best_raw = max(scored_candidates, key=lambda item: float(item["score"]))
-        best_raw_text = str(best_raw["text"])
-        fidelity_mode = self._is_ocr_fidelity_mode(request)
-        if (not fidelity_mode) and self._needs_ocr_repair(best_raw_text):
-            repaired_text = self._repair_ocr_text_with_bedrock(best_raw_text)
-            if repaired_text and not self._is_unusable_ocr_repair_text(repaired_text):
-                repaired_score = self._score_ocr_text(repaired_text, "bedrock_repair")
-                japanese_gain = self._estimate_japanese_score(
-                    repaired_text
-                ) - self._estimate_japanese_score(best_raw_text)
-                if japanese_gain >= 0.18:
-                    repaired_score += 0.20
-                scored_candidates.append(
-                    {
-                        "text": repaired_text,
-                        "source": "bedrock_repair",
-                        "score": repaired_score,
-                    }
-                )
-
-        scored_candidates.sort(key=lambda item: item["score"], reverse=True)
-
-        top_candidates = [
-            {
-                "source": str(item["source"]),
-                "score": round(float(item["score"]), 4),
-                "textPreview": self._preview_text(str(item["text"])),
-            }
-            for item in scored_candidates[:3]
-        ]
-        debug_texts = [
-            {
-                "source": str(item["source"]),
-                "score": round(float(item["score"]), 4),
-                "text": self._limit_debug_text(
-                    self._cleanup_ocr_text(str(item["text"]))
-                ),
-            }
-            for item in scored_candidates[:5]
-        ]
-
-        best = scored_candidates[0]
-        best_text = str(best["text"])
-        best_source = str(best["source"])
-        best_score = float(best["score"])
-        problem_text = self._cleanup_ocr_text(best_text)
-        if not problem_text:
-            raise HTTPException(
-                status_code=422, detail="No readable text found in image"
-            )
-        return (
-            problem_text,
-            best_source,
-            round(best_score, 4),
-            len(scored_candidates),
-            top_candidates,
-            debug_texts,
-        )
 
     def _is_ocr_fidelity_mode(self, request: SolveRequest | None) -> bool:
         if request is None:
@@ -569,8 +294,6 @@ class AwsMathSolver:
             except (TypeError, ValueError):
                 score = 0.0
 
-            if source == "bedrock_repair":
-                continue
             if not text or len(text) < 80:
                 continue
             if any(
@@ -700,114 +423,6 @@ class AwsMathSolver:
 
         return ""
 
-    def _extract_with_bedrock_vision_ocr(self, image_bytes: bytes) -> str:
-        """Bedrock マルチモーダルモデルで画像から日本語テキストを直接 OCR する。
-
-        品質向上のため 2 パスOCRを実施する。
-        - Pass 1: temperature=0.0（決定論、安定した転写）
-        - Pass 2: temperature=0.2（わずかな確率性で員った箇所を補完）
-        2パスの結果をスコアリングして優秀な方を返す。
-        """
-        pass1 = self._run_bedrock_ocr_pass(image_bytes, temperature=0.0)
-        pass2 = self._run_bedrock_ocr_pass(image_bytes, temperature=0.2)
-
-        # 両パスが有効な場合はスコアの高い方を採用
-        if pass1 and pass2:
-            score1 = self._score_ocr_text(pass1, "bedrock_vision_ocr")
-            score2 = self._score_ocr_text(pass2, "bedrock_vision_ocr")
-            return pass1 if score1 >= score2 else pass2
-        return pass1 or pass2
-
-    def _run_bedrock_ocr_pass(self, image_bytes: bytes, temperature: float) -> str:
-        """Bedrock に OCR パスを 1 回実行する。temperature によって振る舞いを変える。"""
-        system_prompt = (
-            "あなたは光学文字認識（OCR）専用ツールです。"
-            "画像に写っている文字を一字一句そのまま転写するだけです。"
-            "要約・言い換え・補足・推測・説明は絶対に行いません。"
-            "数式・数学記号はすべてLaTeX記法で統一します。"
-        )
-        prompt = (
-            "以下のルールを厳守して、画像内のテキストを転写してください。\n"
-            "【絶対ルール】\n"
-            "1. 画像に印刷されている文字を一字一句そのまま書き写す。\n"
-            "2. 自分の言葉への言い換え・要約・補足・推測は一切禁止。\n"
-            "3. 画像にない文字・単語・句読点を追加しない。\n"
-            "4. ひらがな・カタカナ・漢字・英字・数字・数式記号・括弧・不等号をすべてそのまま出力する。\n"
-            "5. 数式・数学記号は必ずLaTeX記法で書き写す。\n"
-            "   - インライン数式: $...$ （例: $f_{a}(x)=x^{2}+x-a$）\n"
-            "   - 分数: \\frac{分子}{分母}、指数: x^{2}、下付き: f_{a}、ギリシャ文字: \\gamma\n"
-            "   - 不等号: \\leq \\geq \\neq、絶対値: |x|、根号: \\sqrt{}\n"
-            "6. 改行は画像の段落構造に合わせる。\n"
-            "7. 前置き・後書き・説明文は出力しない。転写テキストのみを出力する。"
-        )
-        fmt = "png" if image_bytes[:8] == b"\x89PNG\r\n\x1a\n" else "jpeg"
-        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-        model_id = settings.bedrock_model_id.lower()
-
-        if model_id.startswith("amazon.nova"):
-            body: dict = {
-                "system": [{"text": system_prompt}],
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "image": {
-                                    "format": fmt,
-                                    "source": {"bytes": image_b64},
-                                }
-                            },
-                            {"text": prompt},
-                        ],
-                    }
-                ],
-                "inferenceConfig": {
-                    "maxTokens": 1200,
-                    "temperature": temperature,
-                    "topP": 1.0,
-                },
-            }
-        else:
-            body = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1200,
-                "temperature": temperature,
-                "top_p": 1.0,
-                "system": system_prompt,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": f"image/{fmt}",
-                                    "data": image_b64,
-                                },
-                            },
-                            {"type": "text", "text": prompt},
-                        ],
-                    }
-                ],
-            }
-
-        try:
-            response = self._bedrock.invoke_model(
-                modelId=settings.bedrock_model_id,
-                body=json.dumps(body).encode("utf-8"),
-                contentType="application/json",
-                accept="application/json",
-            )
-        except (self._BotoCoreError, self._ClientError):
-            return ""
-
-        raw_body = response.get("body")
-        payload = json.loads(raw_body.read()) if raw_body else {}
-        text = self._extract_bedrock_text(payload)
-        text = self._strip_code_fences(text)
-        return self._cleanup_ocr_text(text)
-
     def _cleanup_ocr_text(self, text: str) -> str:
         normalized = text.replace("\r", "\n")
         normalized = self._normalize_math_notation_tokens(normalized)
@@ -921,8 +536,7 @@ class AwsMathSolver:
         source_bonus_map = {
             "local_reference_pdf": 0.44,
             "pdf_direct": 0.34,
-            "bedrock_vision_ocr": 0.30,
-            "bedrock_repair": 0.16,
+            "gcp_vision_api": 0.30,
             # Azure DI: layout+formulas+markdown は構造・数式精度が高いため加点
             "azure_di_layout_markdown": 0.12,
             # azure_di_read はフォールバックのため加点なし
@@ -1025,8 +639,7 @@ class AwsMathSolver:
         if source in {
             "local_reference_pdf",
             "pdf_direct",
-            # Bedrock ビジョン OCR は日本語を正しく認識するため除外しない
-            "bedrock_vision_ocr",
+            "gcp_vision_api",
         }:
             return False
 
@@ -1148,75 +761,6 @@ class AwsMathSolver:
         mojibake_penalty = self._estimate_mojibake_penalty(text)
         return japanese_score < 0.22 or mojibake_penalty >= 0.08
 
-    def _repair_ocr_text_with_bedrock(self, text: str) -> str:
-        prompt = (
-            "次のOCR文字列を、元の日本語の数学問題文として読みやすく復元してください。"
-            "解答や説明は不要で、復元した問題文のみを返してください。"
-            "推測しすぎず、読める範囲を優先してください。\n\n"
-            f"OCR入力:\n{text}"
-        )
-        body = self._build_bedrock_text_request(prompt, max_tokens=1200)
-
-        try:
-            response = self._bedrock.invoke_model(
-                modelId=settings.bedrock_model_id,
-                body=json.dumps(body).encode("utf-8"),
-                contentType="application/json",
-                accept="application/json",
-            )
-        except (self._BotoCoreError, self._ClientError):
-            return ""
-
-        raw_body = response.get("body")
-        payload = json.loads(raw_body.read()) if raw_body else {}
-        repaired = self._extract_bedrock_text(payload)
-        repaired = self._strip_code_fences(repaired)
-        repaired = self._normalize_repaired_problem_text(repaired)
-        repaired = self._cleanup_ocr_text(repaired)
-        if self._is_unusable_ocr_repair_text(repaired):
-            return ""
-        if self._estimate_text_overlap_ratio(text, repaired) < 0.12:
-            return ""
-
-        polished = self._polish_repaired_text_with_bedrock(repaired)
-        if polished:
-            if self._is_unusable_ocr_repair_text(polished):
-                return repaired
-            if self._estimate_text_overlap_ratio(text, polished) < 0.12:
-                return repaired
-            repaired_score = self._score_ocr_text(repaired, "bedrock_repair")
-            polished_score = self._score_ocr_text(polished, "bedrock_repair")
-            if polished_score >= repaired_score + 0.02:
-                return polished
-
-        return repaired
-
-    def _polish_repaired_text_with_bedrock(self, repaired_text: str) -> str:
-        prompt = (
-            "次の数学問題文を、意味を変えずに日本語として自然な表現へ整形してください。"
-            "説明文・前置き・区切り線は出さず、問題本文のみを返してください。"
-            "LaTeX制御記号は最小限にし、読みやすさを優先してください。\n\n"
-            f"入力:\n{repaired_text}"
-        )
-        body = self._build_bedrock_text_request(prompt, max_tokens=900)
-
-        try:
-            response = self._bedrock.invoke_model(
-                modelId=settings.bedrock_model_id,
-                body=json.dumps(body).encode("utf-8"),
-                contentType="application/json",
-                accept="application/json",
-            )
-        except (self._BotoCoreError, self._ClientError):
-            return ""
-
-        raw_body = response.get("body")
-        payload = json.loads(raw_body.read()) if raw_body else {}
-        polished = self._extract_bedrock_text(payload)
-        polished = self._strip_code_fences(polished)
-        polished = self._normalize_repaired_problem_text(polished)
-        return self._cleanup_ocr_text(polished)
-
     def _normalize_repaired_problem_text(self, text: str) -> str:
         normalized = text.replace("\r", "\n")
         normalized = self._humanize_math_notation(normalized)
@@ -1267,153 +811,6 @@ class AwsMathSolver:
         normalized = re.sub(r"\s+([,.;:])", r"\1", normalized)
         return normalized
 
-    def _verify_and_refine_answer_with_bedrock(
-        self,
-        problem_text: str,
-        structured_problem: dict[str, object],
-        answer_payload: dict,
-        request: SolveRequest,
-    ) -> dict:
-        problem_type = str(structured_problem.get("problemType", "algebra"))
-        if problem_type != "vector_geometry":
-            return answer_payload
-
-        verification_prompt = (
-            "あなたは数学解答の検証者です。"
-            "与えられた問題条件と回答案が整合しているかを厳密に検証してください。"
-            "回答案に誤りや飛躍があれば、条件を満たす形に修正してください。"
-            "必ず、条件式を明示的に抽出し、候補点を代入して各条件を検算してください。"
-            "図そのものは描かず、diagramGuideは図示手順の文章で返してください。"
-            "出力は必ずJSONオブジェクトのみで返してください。\n"
-            "JSON形式:"
-            '{"isConsistent":true/false,"final":"最終答案","latex":"LaTeXまたはnull",'
-            '"steps":["手順"],"diagramGuide":"図示手順またはnull",'
-            '"constraints":["条件式1","条件式2"],'
-            '"candidateChecks":[{"point":"(x,y,z)","checks":[{"constraint":"条件式1","ok":true,"note":"代入結果"}]}],'
-            '"allChecksPass":true/false,'
-            '"confidence":0.0から1.0,"confidenceDelta":-0.4から0.1,"issues":["指摘"]}\n\n'
-            "重要規則: allChecksPass=false の場合、finalは必ず修正後の結論にすること。"
-            "矛盾が残るままの回答は禁止。\n\n"
-            "問題文:\n"
-            f"{problem_text}\n\n"
-            "構造化問題データ:\n"
-            f"{json.dumps(structured_problem, ensure_ascii=False)}\n\n"
-            "回答案:\n"
-            f"{json.dumps(answer_payload, ensure_ascii=False)}"
-        )
-
-        body = self._build_bedrock_text_request(
-            verification_prompt,
-            max_tokens=min(max(request.options.max_tokens, 512), 1200),
-        )
-
-        try:
-            response = self._bedrock.invoke_model(
-                modelId=settings.bedrock_model_id,
-                body=json.dumps(body).encode("utf-8"),
-                contentType="application/json",
-                accept="application/json",
-            )
-        except (self._BotoCoreError, self._ClientError):
-            return answer_payload
-
-        raw_body = response.get("body")
-        payload = json.loads(raw_body.read()) if raw_body else {}
-        text = self._extract_bedrock_text(payload)
-        parsed = self._parse_json_answer(text)
-        if not isinstance(parsed, dict):
-            return answer_payload
-
-        refined_normalized = self._normalize_answer_payload(parsed)
-        refined = dict(answer_payload)
-        for field in ["final", "latex", "steps", "diagramGuide", "confidence"]:
-            if field in parsed:
-                refined[field] = refined_normalized[field]
-
-        is_consistent = bool(parsed.get("isConsistent", True))
-        all_checks_pass = bool(parsed.get("allChecksPass", is_consistent))
-        issues = parsed.get("issues", [])
-        if not isinstance(issues, list):
-            issues = [str(issues)] if issues else []
-
-        candidate_checks = parsed.get("candidateChecks", [])
-        if not isinstance(candidate_checks, list):
-            candidate_checks = []
-
-        constraints = parsed.get("constraints", [])
-        if not isinstance(constraints, list):
-            constraints = []
-
-        try:
-            confidence_delta = float(parsed.get("confidenceDelta", 0.0))
-        except (TypeError, ValueError):
-            confidence_delta = 0.0
-
-        current_confidence = refined.get("confidence", 0.5)
-        try:
-            current_confidence = float(current_confidence)
-        except (TypeError, ValueError):
-            current_confidence = 0.5
-
-        if confidence_delta != 0.0:
-            current_confidence += max(-0.4, min(0.1, confidence_delta))
-        elif (not is_consistent) or (not all_checks_pass):
-            current_confidence -= 0.12
-
-        if not all_checks_pass:
-            current_confidence = min(current_confidence, 0.62)
-        refined["confidence"] = max(0.0, min(1.0, current_confidence))
-
-        if (not is_consistent) or (not all_checks_pass):
-            if constraints:
-                constraints_text = " / ".join(
-                    str(item).strip() for item in constraints if str(item).strip()
-                )
-                if constraints_text:
-                    existing_steps = refined.get("steps")
-                    if isinstance(existing_steps, list):
-                        refined["steps"] = [
-                            *existing_steps,
-                            f"検算条件: {constraints_text}",
-                        ]
-
-            if candidate_checks:
-                check_summaries: list[str] = []
-                for item in candidate_checks[:3]:
-                    if not isinstance(item, dict):
-                        continue
-                    point = str(item.get("point", "候補点")).strip() or "候補点"
-                    checks = item.get("checks", [])
-                    if not isinstance(checks, list):
-                        continue
-                    failed = [
-                        str(ch.get("constraint", "条件")).strip()
-                        for ch in checks
-                        if isinstance(ch, dict) and not bool(ch.get("ok", False))
-                    ]
-                    if failed:
-                        check_summaries.append(f"{point}: {', '.join(failed)} が不一致")
-                if check_summaries:
-                    existing_steps = refined.get("steps")
-                    if isinstance(existing_steps, list):
-                        refined["steps"] = [
-                            *existing_steps,
-                            f"検算結果: {' / '.join(check_summaries)}",
-                        ]
-
-        if not is_consistent and issues:
-            issue_text = " / ".join(
-                str(item).strip() for item in issues if str(item).strip()
-            )
-            if issue_text:
-                existing_steps = refined.get("steps")
-                if isinstance(existing_steps, list):
-                    refined["steps"] = [*existing_steps, f"検算注記: {issue_text}"]
-                else:
-                    refined["steps"] = [f"検算注記: {issue_text}"]
-
-        return refined
-
     def _enforce_output_options(
         self, answer_payload: dict, request: SolveRequest
     ) -> dict:
@@ -1432,82 +829,6 @@ class AwsMathSolver:
             diagram_text = str(diagram).strip()
             normalized["diagramGuide"] = diagram_text or None
 
-        return normalized
-
-    def _build_bedrock_text_request(self, prompt: str, max_tokens: int) -> dict:
-        model_id = settings.bedrock_model_id.lower()
-
-        if model_id.startswith("amazon.nova"):
-            return {
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [{"text": prompt}],
-                    }
-                ],
-                "inferenceConfig": {
-                    "maxTokens": max_tokens,
-                    "temperature": 0.0,
-                },
-            }
-
-        return {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": max_tokens,
-            "temperature": 0.0,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt,
-                        }
-                    ],
-                }
-            ],
-        }
-
-    def _generate_with_bedrock(
-        self,
-        problem_text: str,
-        request: SolveRequest,
-        structured_problem: dict[str, object] | None = None,
-    ) -> dict:
-        prompt = self._build_prompt(problem_text, request, structured_problem)
-        body = self._build_bedrock_request_body(prompt, request)
-
-        try:
-            response = self._bedrock.invoke_model(
-                modelId=settings.bedrock_model_id,
-                body=json.dumps(body).encode("utf-8"),
-                contentType="application/json",
-                accept="application/json",
-            )
-        except (self._BotoCoreError, self._ClientError) as exc:
-            raise HTTPException(
-                status_code=502,
-                detail=f"Bedrock invocation failed: {exc.__class__.__name__}: {str(exc)}",
-            ) from exc
-
-        raw_body = response.get("body")
-        payload = json.loads(raw_body.read()) if raw_body else {}
-        text = self._extract_bedrock_text(payload)
-
-        parsed = self._parse_json_answer(text)
-        if parsed is None:
-            parsed = {
-                "final": text.strip()[:2000] or "解答を生成できませんでした。",
-                "latex": None,
-                "steps": [],
-                "confidence": 0.3,
-            }
-
-        normalized = self._normalize_answer_payload(parsed)
-        if not request.options.need_steps:
-            normalized["steps"] = []
-        if not request.options.need_latex:
-            normalized["latex"] = None
         return normalized
 
     def _resolve_diagram_guide(
@@ -1991,54 +1312,6 @@ class AwsMathSolver:
                 unique_clauses.append(clause)
         return unique_clauses
 
-    def _build_bedrock_request_body(self, prompt: str, request: SolveRequest) -> dict:
-        model_id = settings.bedrock_model_id.lower()
-
-        if model_id.startswith("amazon.nova"):
-            return {
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [{"text": prompt}],
-                    }
-                ],
-                "inferenceConfig": {
-                    "maxTokens": request.options.max_tokens,
-                    "temperature": 0.0,
-                },
-            }
-
-        return {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": request.options.max_tokens,
-            "temperature": 0.0,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt,
-                        }
-                    ],
-                }
-            ],
-        }
-
-    def _extract_bedrock_text(self, payload: dict) -> str:
-        model_id = settings.bedrock_model_id.lower()
-
-        if model_id.startswith("amazon.nova"):
-            content = payload.get("output", {}).get("message", {}).get("content", [])
-            if content and isinstance(content[0], dict):
-                return content[0].get("text", "")
-            return ""
-
-        content = payload.get("content", [])
-        if content and isinstance(content[0], dict):
-            return content[0].get("text", "")
-        return ""
-
     def _parse_json_answer(self, text: str) -> dict | None:
         text = text.strip()
         if not text:
@@ -2295,7 +1568,6 @@ class AwsMathSolver:
             cap = min(cap, 0.93)
 
         source_caps = {
-            "bedrock_repair": 0.90,
             "pdf_direct": 0.95,
         }
         cap = min(cap, source_caps.get(ocr_source, 0.90))

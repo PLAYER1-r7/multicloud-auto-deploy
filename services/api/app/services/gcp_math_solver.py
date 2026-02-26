@@ -20,14 +20,13 @@ from fastapi import HTTPException
 
 from app.config import settings
 from app.models import SolveAnswer, SolveMeta, SolveRequest, SolveResponse
-from app.services.aws_math_solver import AwsMathSolver
+from app.services.base_math_solver import BaseMathSolver
 
 
-class GcpMathSolver(AwsMathSolver):
+class GcpMathSolver(BaseMathSolver):
     """GCP Vision API + Vertex AI Gemini を使った数学ソルバー。"""
 
     def __init__(self) -> None:
-        # boto3 クライアントは使わないが親 __init__ は呼ばない
         self._sample_pdf_text_cache: dict[str, str] = {}
         self._vision_client = self._build_vision_client()
         self._vertex_model = self._build_vertex_model()
@@ -246,15 +245,13 @@ class GcpMathSolver(AwsMathSolver):
             if pdf_text:
                 candidates.append((pdf_text, "pdf_direct"))
 
-        # Vision API 未設定 or 全滅時 → Bedrock Vision OCR フォールバック
-        if not candidates:
-            bedrock_text = self._extract_with_bedrock_vision_ocr(image_bytes)
-            if bedrock_text:
-                candidates.append((bedrock_text, "bedrock_vision_ocr_fallback"))
-
         if not candidates:
             raise HTTPException(
-                status_code=502, detail="GCP Vision API returned no OCR candidates"
+                status_code=502,
+                detail=(
+                    "GCP Vision API returned no OCR candidates. "
+                    "Ensure Cloud Vision API is enabled and credentials are configured."
+                ),
             )
 
         # スコアリング
@@ -344,19 +341,14 @@ class GcpMathSolver(AwsMathSolver):
         request: SolveRequest,
         structured_problem: dict[str, object] | None = None,
     ) -> dict:
-        """Vertex AI Gemini で解答を生成する。
-
-        モデル未設定の場合は Bedrock にフォールバック。
-        """
+        """Vertex AI Gemini で解答を生成する。"""
         if self._vertex_model is None:
-            # Bedrock フォールバック（_bedrock クライアントを一時生成）
-            import boto3
-
-            self._bedrock = boto3.client(
-                "bedrock-runtime", region_name=settings.bedrock_region
-            )
-            return self._generate_with_bedrock(
-                problem_text, request, structured_problem
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Vertex AI Gemini model is not configured. "
+                    "Set GCP_PROJECT_ID and ensure Vertex AI API is enabled."
+                ),
             )
 
         prompt = self._build_prompt(problem_text, request, structured_problem)

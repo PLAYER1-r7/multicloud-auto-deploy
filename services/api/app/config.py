@@ -34,11 +34,9 @@ class Settings(BaseSettings):
 
     # AWS設定
     aws_region: str = "ap-northeast-1"
-    bedrock_region: str = "us-east-1"
     posts_table_name: str | None = None
     images_bucket_name: str | None = None
     images_cdn_url: str | None = None
-    bedrock_model_id: str = "amazon.nova-pro-v1:0"
     # 入試問題解答機能の有効/無効 (コスト管理用: false でエンドポイントを停止)
     solve_enabled: bool = False
     solve_allow_remote_image_url: bool = True

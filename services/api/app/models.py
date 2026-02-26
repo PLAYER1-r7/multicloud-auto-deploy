@@ -238,34 +238,3 @@ class SolveResponse(BaseModel):
     meta: SolveMeta
 
     model_config = {"populate_by_name": True}
-
-
-# ---------------------------------------------------------------------------
-# Async solve-job models (AWS only — not available on Azure/GCP)
-# ---------------------------------------------------------------------------
-
-
-class SolveJobCreateResponse(BaseModel):
-    """非同期 solve ジョブ作成レスポンス"""
-
-    job_id: str = Field(alias="jobId")
-    status: str
-    poll_url: str = Field(alias="pollUrl")
-    created_at: str = Field(alias="createdAt")
-
-    model_config = {"populate_by_name": True}
-
-
-class SolveJobStatusResponse(BaseModel):
-    """非同期 solve ジョブ状態レスポンス"""
-
-    job_id: str = Field(alias="jobId")
-    status: str  # queued | running | succeeded | failed
-    created_at: str = Field(alias="createdAt")
-    updated_at: str | None = Field(None, alias="updatedAt")
-    started_at: str | None = Field(None, alias="startedAt")
-    completed_at: str | None = Field(None, alias="completedAt")
-    result: SolveResponse | None = None
-    error: str | None = None
-
-    model_config = {"populate_by_name": True}
