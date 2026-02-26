@@ -179,6 +179,7 @@ class SolveOptions(BaseModel):
     need_steps: bool = Field(True, alias="needSteps")
     need_latex: bool = Field(True, alias="needLatex")
     max_tokens: int = Field(2000, alias="maxTokens", ge=256, le=4096)
+    debug_ocr: bool = Field(False, alias="debugOcr")
 
     model_config = {"populate_by_name": True}
 
@@ -197,7 +198,10 @@ class SolveAnswer(BaseModel):
     final: str
     latex: str | None = None
     steps: list[str] = Field(default_factory=list)
+    diagram_guide: str | None = Field(None, alias="diagramGuide")
     confidence: float = Field(ge=0.0, le=1.0)
+
+    model_config = {"populate_by_name": True}
 
 
 class SolveMeta(BaseModel):
@@ -210,6 +214,8 @@ class SolveMeta(BaseModel):
     ocr_top_candidates: list[dict[str, float | str]] | None = Field(
         default=None, alias="ocrTopCandidates"
     )
+    ocr_debug_texts: list[dict] | None = Field(default=None, alias="ocrDebugTexts")
+    structured_problem: dict | None = Field(default=None, alias="structuredProblem")
     ocr_replacement_ratio: float | None = Field(
         default=None, alias="ocrReplacementRatio"
     )
@@ -230,5 +236,36 @@ class SolveResponse(BaseModel):
     problem_text: str = Field(alias="problemText")
     answer: SolveAnswer
     meta: SolveMeta
+
+    model_config = {"populate_by_name": True}
+
+
+# ---------------------------------------------------------------------------
+# Async solve-job models (AWS only — not available on Azure/GCP)
+# ---------------------------------------------------------------------------
+
+
+class SolveJobCreateResponse(BaseModel):
+    """非同期 solve ジョブ作成レスポンス"""
+
+    job_id: str = Field(alias="jobId")
+    status: str
+    poll_url: str = Field(alias="pollUrl")
+    created_at: str = Field(alias="createdAt")
+
+    model_config = {"populate_by_name": True}
+
+
+class SolveJobStatusResponse(BaseModel):
+    """非同期 solve ジョブ状態レスポンス"""
+
+    job_id: str = Field(alias="jobId")
+    status: str  # queued | running | succeeded | failed
+    created_at: str = Field(alias="createdAt")
+    updated_at: str | None = Field(None, alias="updatedAt")
+    started_at: str | None = Field(None, alias="startedAt")
+    completed_at: str | None = Field(None, alias="completedAt")
+    result: SolveResponse | None = None
+    error: str | None = None
 
     model_config = {"populate_by_name": True}

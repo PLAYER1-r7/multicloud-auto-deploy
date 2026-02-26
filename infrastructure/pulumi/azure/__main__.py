@@ -239,6 +239,41 @@ app_secret = azure.keyvault.Secret(
 )
 
 # ========================================
+# Azure AI Document Intelligence (OCR for university exam images)
+# ========================================
+# Uses the prebuilt-read model to extract text from exam problem images.
+# Kind "FormRecognizer" = Azure AI Document Intelligence (rebranded service name).
+# F0 free tier: 500 pages/month — upgrade to S0 for production workloads.
+document_intelligence = azure.cognitiveservices.Account(
+    "document-intelligence",
+    account_name=storage_suffix.result.apply(
+        lambda suffix: f"mcad-di-{suffix}"
+    ),
+    resource_group_name=resource_group.name,
+    location=location,
+    kind="FormRecognizer",
+    sku=azure.cognitiveservices.SkuArgs(
+        name="S0",  # Standard tier: pay-per-page OCR
+    ),
+    properties=azure.cognitiveservices.AccountPropertiesArgs(
+        public_network_access="Enabled",
+        restore=False,
+    ),
+    tags=common_tags,
+    opts=pulumi.ResourceOptions(depends_on=[resource_group]),
+)
+
+# Retrieve Document Intelligence keys for Function App configuration
+document_intelligence_keys = pulumi.Output.all(
+    resource_group.name, document_intelligence.name
+).apply(
+    lambda args: azure.cognitiveservices.list_account_keys(
+        resource_group_name=args[0],
+        account_name=args[1],
+    )
+)
+
+# ========================================
 # Authentication Setup - Azure AD Application
 # ========================================
 # Azure AD Application for authentication (automated)
@@ -621,6 +656,37 @@ pulumi.export(
         "  COSMOS_DB_CONTAINER=",
         cosmos_container.name,
         "\\n",
+    ),
+)
+
+# Azure AI Document Intelligence exports (OCR for university exam problems)
+pulumi.export("document_intelligence_name", document_intelligence.name)
+pulumi.export(
+    "document_intelligence_endpoint",
+    document_intelligence.properties.apply(
+        lambda p: p.endpoint if p and p.endpoint else ""
+    ),
+)
+pulumi.export(
+    "document_intelligence_key",
+    pulumi.Output.secret(
+        document_intelligence_keys.apply(lambda k: k.key1 or "")
+    ),
+)
+pulumi.export(
+    "ocr_config_instructions",
+    pulumi.Output.concat(
+        "Configure Function App with these environment variables for OCR/LLM:\\n",
+        "  AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=",
+        document_intelligence.properties.apply(
+            lambda p: p.endpoint if p and p.endpoint else "<endpoint>"
+        ),
+        "\\n",
+        "  AZURE_DOCUMENT_INTELLIGENCE_KEY=<from pulumi stack output document_intelligence_key>\\n",
+        "  AZURE_OPENAI_ENDPOINT=<your-azure-openai-endpoint>\\n",
+        "  AZURE_OPENAI_KEY=<your-azure-openai-key>\\n",
+        "  AZURE_OPENAI_DEPLOYMENT=gpt-4o\\n",
+        "  SOLVE_ENABLED=true\\n",
     ),
 )
 

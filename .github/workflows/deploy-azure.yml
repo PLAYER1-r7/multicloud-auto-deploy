@@ -200,6 +200,10 @@ jobs:
           echo "cosmos_database_name=$(pulumi stack output cosmos_database_name)" >> $GITHUB_OUTPUT
           echo "cosmos_container_name=$(pulumi stack output cosmos_container_name)" >> $GITHUB_OUTPUT
 
+          # Get Azure AI Document Intelligence outputs (OCR for university exam problems)
+          echo "document_intelligence_endpoint=$(pulumi stack output document_intelligence_endpoint 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+          echo "document_intelligence_key=$(pulumi stack output --show-secrets document_intelligence_key 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+
           # Get Front Door hostname for CORS
           echo "frontdoor_hostname=$(pulumi stack output frontdoor_hostname)" >> $GITHUB_OUTPUT
           echo "frontdoor_endpoint_name=$(pulumi stack output frontdoor_endpoint_name)" >> $GITHUB_OUTPUT
@@ -544,6 +548,51 @@ jobs:
               CORS_ORIGINS="${CORS_ORIGINS}" \
               WEBSITE_WARMUP_PATH="/sns/health" \
               WEBSITE_KEEPALIVE_TIMEOUT="30" \
+            > /dev/null
+
+          # Configure Azure AI Document Intelligence (OCR) and Azure OpenAI settings.
+          # DI endpoint/key come from Pulumi outputs; OpenAI comes from GitHub Secrets.
+          # These are optional: if not set, solve endpoints return 503 (SOLVE_ENABLED defaults to false).
+          DI_ENDPOINT="${{ steps.pulumi_outputs.outputs.document_intelligence_endpoint }}"
+          DI_KEY="${{ steps.pulumi_outputs.outputs.document_intelligence_key }}"
+          AOAI_ENDPOINT="${{ secrets.AZURE_OPENAI_ENDPOINT }}"
+          AOAI_KEY="${{ secrets.AZURE_OPENAI_KEY }}"
+          AOAI_DEPLOYMENT="${{ secrets.AZURE_OPENAI_DEPLOYMENT }}"
+          SOLVE_ENABLED_VALUE="${{ secrets.AZURE_SOLVE_ENABLED }}"
+
+          if [ -n "$DI_ENDPOINT" ] && [ -n "$DI_KEY" ]; then
+            echo "🔍 Configuring Azure Document Intelligence (OCR) settings..."
+            az functionapp config appsettings set \
+              --name $FUNCTION_APP \
+              --resource-group $RESOURCE_GROUP \
+              --settings \
+                AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="${DI_ENDPOINT}" \
+                AZURE_DOCUMENT_INTELLIGENCE_KEY="${DI_KEY}" \
+              > /dev/null
+          else
+            echo "⚠️  Document Intelligence endpoint/key not available — OCR feature will use fallback"
+          fi
+
+          if [ -n "$AOAI_ENDPOINT" ] && [ -n "$AOAI_KEY" ]; then
+            echo "🤖 Configuring Azure OpenAI settings..."
+            az functionapp config appsettings set \
+              --name $FUNCTION_APP \
+              --resource-group $RESOURCE_GROUP \
+              --settings \
+                AZURE_OPENAI_ENDPOINT="${AOAI_ENDPOINT}" \
+                AZURE_OPENAI_KEY="${AOAI_KEY}" \
+                AZURE_OPENAI_DEPLOYMENT="${AOAI_DEPLOYMENT:-gpt-4o}" \
+              > /dev/null
+          else
+            echo "ℹ️  AZURE_OPENAI_ENDPOINT/KEY not set — LLM answer generation will use fallback"
+          fi
+
+          # Enable or disable solve endpoints based on AZURE_SOLVE_ENABLED secret
+          az functionapp config appsettings set \
+            --name $FUNCTION_APP \
+            --resource-group $RESOURCE_GROUP \
+            --settings \
+              SOLVE_ENABLED="${SOLVE_ENABLED_VALUE:-false}" \
             > /dev/null
 
           # Disable HTTP/2 on Function App to prevent AFD stale TCP connection pool issue
