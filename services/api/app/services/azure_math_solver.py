@@ -174,11 +174,11 @@ class AzureMathSolver(BaseMathSolver):
         """
         candidates: list[tuple[str, str]] = []
 
-        # --- Azure DI ---
+        # --- Azure DI (returns multiple candidates: read / layout+formulas / combined) ---
         if self._di_client is not None:
-            di_text, di_source = self._call_azure_di(image_bytes)
-            if di_text:
-                candidates.append((di_text, di_source))
+            for di_text, di_source in self._call_azure_di(image_bytes):
+                if di_text:
+                    candidates.append((di_text, di_source))
 
         if not candidates:
             raise HTTPException(
@@ -328,16 +328,14 @@ class AzureMathSolver(BaseMathSolver):
         except Exception as exc:
             print(f"[OCR] WARN: Blob 書き込み失敗: {exc}")
 
-    def _call_azure_di(self, image_bytes: bytes) -> tuple[str, str]:
-        """Azure DI で OCR してテキストとソース名のタプルを返す。
+    def _call_azure_di(self, image_bytes: bytes) -> list[tuple[str, str]]:
+        """Azure DI で OCR して (text, source) タプルのリストを返す。
 
-        Pass 1 (推奨): prebuilt-layout + FORMULAS feature + Markdown 出力
-          - result.content に構造を保持したマークダウンテキストが入る
-          - page.formulas  に数式の LaTeX 文字列が入る
-          -> 添字・指数・分数・積分記号が正確に復元される
-
-        Pass 2 (フォールバック): prebuilt-read + 行単位テキスト
-          - FORMULAS feature 非対応リージョン / エラー時に使用
+        3 つの候補を生成してスコアリングに委ねる:
+          1. azure_di_read          : prebuilt-read — 日本語を含む全テキスト
+          2. azure_di_layout_markdown: prebuilt-layout + FORMULAS + Markdown — LaTeX 数式
+          3. azure_di_read+formulas : 1 のテキストに 2 の LaTeX 数式を付記した合成結果
+                                      日本語文脈と正確な数式の両方を保持する
         """
         try:
             from azure.ai.documentintelligence.models import (
@@ -346,9 +344,33 @@ class AzureMathSolver(BaseMathSolver):
                 DocumentContentFormat,
             )
         except ImportError:
-            return "", "azure_di_read"
+            return [("" , "azure_di_read")]
 
-        # ---- Pass 1: prebuilt-layout + FORMULAS + Markdown ----
+        results: list[tuple[str, str]] = []
+
+        # ---- Pass A: prebuilt-read — 日本語テキストを確実に取得 ----
+        read_text = ""
+        try:
+            poller = self._di_client.begin_analyze_document(
+                "prebuilt-read",
+                AnalyzeDocumentRequest(bytes_source=image_bytes),
+            )
+            result = poller.result()
+            lines: list[str] = []
+            if result.pages:
+                for page in result.pages:
+                    if page.lines:
+                        for line in page.lines:
+                            lines.append(line.content)
+            read_text = "\n".join(lines)
+            if read_text:
+                results.append((read_text, "azure_di_read"))
+        except Exception:
+            pass
+
+        # ---- Pass B: prebuilt-layout + FORMULAS + Markdown — LaTeX 数式を正確に取得 ----
+        latex_formulas: list[str] = []
+        markdown_text = ""
         try:
             poller = self._di_client.begin_analyze_document(
                 "prebuilt-layout",
@@ -359,12 +381,9 @@ class AzureMathSolver(BaseMathSolver):
             result = poller.result()
 
             parts: list[str] = []
-            # result.content は Markdown 形式のドキュメント全文
             if result.content:
                 parts.append(result.content)
 
-            # ページごとの数式オブジェクト（LaTeX）を抽出
-            latex_formulas: list[str] = []
             if result.pages:
                 for page in result.pages:
                     formulas = getattr(page, "formulas", None) or []
@@ -379,29 +398,19 @@ class AzureMathSolver(BaseMathSolver):
             if latex_formulas:
                 parts.append("\n[検出された数式 (LaTeX)]\n" + "\n".join(latex_formulas))
 
-            text = "\n".join(parts).strip()
-            if len(text) > 20:
-                return text, "azure_di_layout_markdown"
+            markdown_text = "\n".join(parts).strip()
+            if len(markdown_text) > 20:
+                results.append((markdown_text, "azure_di_layout_markdown"))
         except Exception:
-            pass  # フォールバックへ
+            pass
 
-        # ---- Pass 2: prebuilt-read（従来の行ベース実装） ----
-        try:
-            poller = self._di_client.begin_analyze_document(
-                "prebuilt-read",
-                AnalyzeDocumentRequest(bytes_source=image_bytes),
-            )
-            result = poller.result()
+        # ---- 合成候補: Pass A のテキスト + Pass B の LaTeX 数式 ----
+        # 日本語問題文と正確な LaTeX 両方を含む最良の候補
+        if read_text and latex_formulas:
+            combined = read_text + "\n\n[検出された数式 (LaTeX)]\n" + "\n".join(latex_formulas)
+            results.append((combined, "azure_di_read+formulas"))
 
-            lines: list[str] = []
-            if result.pages:
-                for page in result.pages:
-                    if page.lines:
-                        for line in page.lines:
-                            lines.append(line.content)
-            return "\n".join(lines), "azure_di_read"
-        except Exception:
-            return "", "azure_di_read"
+        return results if results else [("", "azure_di_read")]
 
     # ------------------------------------------------------------------
     # Azure OpenAI 解答生成

@@ -537,6 +537,8 @@ class BaseMathSolver:
             "local_reference_pdf": 0.44,
             "pdf_direct": 0.34,
             "gcp_vision_api": 0.30,
+            # Azure DI: read+formulas は日本語テキスト + LaTeX 数式の両方を保持するため最高加点
+            "azure_di_read+formulas": 0.20,
             # Azure DI: layout+formulas+markdown は構造・数式精度が高いため加点
             "azure_di_layout_markdown": 0.12,
             # azure_di_read はフォールバックのため加点なし
