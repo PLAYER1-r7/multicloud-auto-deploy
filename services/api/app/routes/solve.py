@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.models import (
@@ -89,3 +90,39 @@ def get_solve_job(job_id: str) -> SolveJobStatusResponse:
         raise HTTPException(status_code=404, detail="job not found")
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"failed to get solve job: {exc}")
+
+
+# ------------------------------------------------------------------ #
+# OCR デバッグログ取得                                                  #
+# ------------------------------------------------------------------ #
+
+_OCR_DEBUG_PATH = "/tmp/ocr_debug.jsonl"
+
+
+@router.get("/ocr-debug")
+def get_ocr_debug(limit: int = 20) -> JSONResponse:
+    """OCR デバッグログ（/tmp/ocr_debug.jsonl）の末尾 N 件を返す。
+
+    limit: 返す最大行数（デフォルト 20）
+    """
+    import json as _json
+    import os
+
+    if not os.path.exists(_OCR_DEBUG_PATH):
+        return JSONResponse({"entries": [], "total": 0, "message": "ログファイルが存在しません"})
+
+    try:
+        with open(_OCR_DEBUG_PATH, encoding="utf-8") as fh:
+            lines = [l for l in fh.read().splitlines() if l.strip()]
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"ログ読み取りエラー: {exc}")
+
+    tail = lines[-limit:]
+    entries = []
+    for line in tail:
+        try:
+            entries.append(_json.loads(line))
+        except Exception:
+            entries.append({"raw": line})
+
+    return JSONResponse({"entries": entries, "total": len(lines)})
