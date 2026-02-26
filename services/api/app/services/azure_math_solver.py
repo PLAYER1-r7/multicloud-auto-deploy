@@ -314,4 +314,3 @@ class AzureMathSolver(AwsMathSolver):
                 "confidence": 0.3,
             }
         return self._normalize_answer_payload(parsed)
-

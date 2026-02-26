@@ -45,6 +45,7 @@ class GcpMathSolver(AwsMathSolver):
             api_key = settings.gcp_vision_api_key
             if api_key:
                 import google.auth.credentials  # type: ignore[import]
+
                 client_options = {"api_key": api_key}
                 return vision.ImageAnnotatorClient(client_options=client_options)
             # Application Default Credentials (ADC) を利用
@@ -60,7 +61,9 @@ class GcpMathSolver(AwsMathSolver):
             return None
         try:
             import vertexai  # type: ignore[import]
-            from vertexai.generative_models import GenerativeModel  # type: ignore[import]
+            from vertexai.generative_models import (
+                GenerativeModel,  # type: ignore[import]
+            )
 
             vertexai.init(
                 project=settings.gcp_project_id,
@@ -348,6 +351,7 @@ class GcpMathSolver(AwsMathSolver):
         if self._vertex_model is None:
             # Bedrock フォールバック（_bedrock クライアントを一時生成）
             import boto3
+
             self._bedrock = boto3.client(
                 "bedrock-runtime", region_name=settings.bedrock_region
             )
@@ -363,7 +367,9 @@ class GcpMathSolver(AwsMathSolver):
         )
 
         try:
-            from vertexai.generative_models import GenerationConfig  # type: ignore[import]
+            from vertexai.generative_models import (
+                GenerationConfig,  # type: ignore[import]
+            )
 
             generation_config = GenerationConfig(
                 temperature=0.0,
