@@ -61,7 +61,7 @@ if ! /usr/bin/env python3 -c "import boto3" 2>/dev/null; then
     echo "   boto3 がインストールされていません。インストールしますか？ [y/N]"
     read -r answer
     if [[ "$(echo "$answer" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
-        pip3 install boto3 --quiet
+        pip3 install --user boto3 --quiet
         echo "✅ boto3 をインストールしました"
     else
         echo "⚠️  boto3 なしでも動作しますが、AWS コストは取得できません"
