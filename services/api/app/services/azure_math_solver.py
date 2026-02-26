@@ -9,8 +9,11 @@ AWS 依存のメソッドだけを上書きする。
 
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
@@ -228,6 +231,8 @@ class AzureMathSolver(AwsMathSolver):
             for c in scored[:5]
         ]
 
+        self._dump_ocr_to_file(image_bytes, scored)
+
         return (
             str(best["text"]),
             str(best["source"]),
@@ -236,6 +241,41 @@ class AzureMathSolver(AwsMathSolver):
             top_candidates,
             debug_texts,
         )
+
+    # ------------------------------------------------------------------
+    # OCR デバッグ出力
+    # ------------------------------------------------------------------
+
+    _OCR_DUMP_PATH = "/tmp/ocr_debug.jsonl"
+
+    def _dump_ocr_to_file(self, image_bytes: bytes, scored: list[dict]) -> None:
+        """OCR 結果を JSONL ファイルに追記する（デバッグ用）。
+
+        出力先: /tmp/ocr_debug.jsonl
+        形式  : 1 行 = 1 リクエスト分の JSON オブジェクト
+        フィールド:
+          ts         : ISO8601 タイムスタンプ (UTC)
+          image_sha  : 画像 SHA-256 先頭 16 文字
+          candidates : [{source, score, text}] — スコア降順
+        """
+        try:
+            image_sha = hashlib.sha256(image_bytes).hexdigest()[:16]
+            record = {
+                "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "image_sha": image_sha,
+                "candidates": [
+                    {
+                        "source": c["source"],
+                        "score": round(float(c["score"]), 4),
+                        "text": c["text"],
+                    }
+                    for c in scored
+                ],
+            }
+            with open(self._OCR_DUMP_PATH, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception:
+            pass  # ファイル書き込み失敗は無視
 
     def _call_azure_di(self, image_bytes: bytes) -> tuple[str, str]:
         """Azure DI で OCR してテキストとソース名のタプルを返す。
