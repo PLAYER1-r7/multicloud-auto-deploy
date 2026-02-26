@@ -1,10 +1,10 @@
-"""Azure バックエンドを使った数学問題ソルバー。
+"""Azure backend math problem solver.
 
-OCR: Azure AI Document Intelligence (prebuilt-read)
+OCR: Azure AI Document Intelligence (prebuilt-read + prebuilt-layout w/ FORMULAS)
 LLM: Azure OpenAI (GPT-4o)
 
-AWS ソルバーの共通ロジック（OCR スコアリング・プロンプト構築など）を継承し、
-AWS 依存のメソッドだけを上書きする。
+Inherits common logic (OCR scoring, prompt construction, etc.) from BaseMathSolver
+and overrides only Azure-specific methods.
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ import hashlib
 import json
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -21,6 +23,18 @@ from fastapi import HTTPException
 from app.config import settings
 from app.models import SolveAnswer, SolveMeta, SolveRequest, SolveResponse
 from app.services.base_math_solver import BaseMathSolver
+
+
+@dataclass
+class OcrResult:
+    """Structured result from OCR pipeline, replacing the unwieldy 6-tuple."""
+
+    text: str
+    source: str
+    score: float
+    candidate_count: int
+    top_candidates: list[dict] = field(default_factory=list)
+    debug_texts: list[dict] = field(default_factory=list)
 
 
 class AzureMathSolver(BaseMathSolver):
@@ -81,22 +95,13 @@ class AzureMathSolver(BaseMathSolver):
         start = time.time()
         image_bytes = self._resolve_image(request)
 
-        (
-            problem_text,
-            ocr_source,
-            ocr_score,
-            ocr_candidates,
-            ocr_top_candidates,
-            ocr_debug_texts,
-        ) = self._extract_text_with_azure_di(image_bytes, request)
+        ocr = self._extract_text_with_azure_di(image_bytes, request)
 
         ocr_replacement_ratio, ocr_non_ascii_ratio = self._compute_ocr_quality_metrics(
-            problem_text
+            ocr.text
         )
-        structured_problem = self._build_structured_problem(problem_text, request)
-        answer_payload = self._generate_with_openai(
-            problem_text, request, structured_problem
-        )
+        structured_problem = self._build_structured_problem(ocr.text, request)
+        answer_payload = self._generate_with_openai(ocr.text, request, structured_problem)
         answer_payload["diagramGuide"] = self._resolve_diagram_guide(
             answer_payload, structured_problem
         )
@@ -109,7 +114,7 @@ class AzureMathSolver(BaseMathSolver):
             str(answer_payload.get("final", "")),
         )
         ocr_needs_review = self._should_flag_ocr_review(
-            ocr_score, ocr_replacement_ratio, ocr_candidates
+            ocr.score, ocr_replacement_ratio, ocr.candidate_count
         )
         if ocr_needs_review:
             answer_payload = self._apply_ocr_review_warning(answer_payload)
@@ -117,9 +122,9 @@ class AzureMathSolver(BaseMathSolver):
         problem_type = str(structured_problem.get("problemType", "algebra"))
         answer_payload["confidence"] = self._calibrate_answer_confidence(
             raw_confidence=answer_payload.get("confidence", 0.5),
-            ocr_score=ocr_score,
+            ocr_score=ocr.score,
             replacement_ratio=ocr_replacement_ratio,
-            ocr_source=ocr_source,
+            ocr_source=ocr.source,
             problem_type=problem_type,
             ocr_needs_review=ocr_needs_review,
         )
@@ -138,18 +143,16 @@ class AzureMathSolver(BaseMathSolver):
         return SolveResponse(
             requestId=f"req_{uuid.uuid4().hex[:16]}",
             status="completed",
-            problemText=problem_text,
+            problemText=ocr.text,
             answer=answer,
             meta=SolveMeta(
                 ocrProvider="azure_document_intelligence",
-                ocrSource=ocr_source,
-                ocrScore=ocr_score,
-                ocrCandidates=ocr_candidates,
-                ocrTopCandidates=ocr_top_candidates,
-                ocrDebugTexts=ocr_debug_texts if request.options.debug_ocr else None,
-                structuredProblem=structured_problem
-                if request.options.debug_ocr
-                else None,
+                ocrSource=ocr.source,
+                ocrScore=ocr.score,
+                ocrCandidates=ocr.candidate_count,
+                ocrTopCandidates=ocr.top_candidates,
+                ocrDebugTexts=ocr.debug_texts if request.options.debug_ocr else None,
+                structuredProblem=structured_problem if request.options.debug_ocr else None,
                 ocrReplacementRatio=ocr_replacement_ratio,
                 ocrNonAsciiRatio=ocr_non_ascii_ratio,
                 ocrNeedsReview=ocr_needs_review,
@@ -167,20 +170,10 @@ class AzureMathSolver(BaseMathSolver):
         self,
         image_bytes: bytes,
         request: SolveRequest,
-    ) -> tuple[str, str, float, int, list[dict], list[dict]]:
-        """Azure DI prebuilt-read で OCR し、候補をスコアリングして返す。
-
-        DI クライアントが設定されていない場合は Bedrock Vision OCR にフォールバック。
-        """
-        candidates: list[tuple[str, str]] = []
-
-        # --- Azure DI (returns multiple candidates: read / layout+formulas / combined) ---
-        if self._di_client is not None:
-            for di_text, di_source in self._call_azure_di(image_bytes):
-                if di_text:
-                    candidates.append((di_text, di_source))
-
-        if not candidates:
+    ) -> OcrResult:
+        """Run Azure DI OCR, score all candidates, return the best as OcrResult."""
+        raw_candidates = self._call_azure_di(image_bytes)
+        if not raw_candidates:
             raise HTTPException(
                 status_code=502,
                 detail=(
@@ -189,9 +182,8 @@ class AzureMathSolver(BaseMathSolver):
                 ),
             )
 
-        # --- スコアリング ---
         scored: list[dict] = []
-        for text, source in candidates:
+        for text, source in raw_candidates:
             cleaned = self._cleanup_ocr_text(text)
             if not cleaned:
                 continue
@@ -206,32 +198,29 @@ class AzureMathSolver(BaseMathSolver):
         scored.sort(key=lambda x: x["score"], reverse=True)
         best = scored[0]
 
-        top_candidates = [
-            {
-                "source": str(c["source"]),
-                "score": round(float(c["score"]), 4),
-                "textPreview": self._preview_text(str(c["text"])),
-            }
-            for c in scored[:3]
-        ]
-        debug_texts = [
-            {
-                "source": str(c["source"]),
-                "score": round(float(c["score"]), 4),
-                "text": self._limit_debug_text(str(c["text"])),
-            }
-            for c in scored[:5]
-        ]
-
         self._dump_ocr_to_file(image_bytes, scored)
 
-        return (
-            str(best["text"]),
-            str(best["source"]),
-            round(float(best["score"]), 4),
-            len(scored),
-            top_candidates,
-            debug_texts,
+        return OcrResult(
+            text=str(best["text"]),
+            source=str(best["source"]),
+            score=round(float(best["score"]), 4),
+            candidate_count=len(scored),
+            top_candidates=[
+                {
+                    "source": str(c["source"]),
+                    "score": round(float(c["score"]), 4),
+                    "textPreview": self._preview_text(str(c["text"])),
+                }
+                for c in scored[:3]
+            ],
+            debug_texts=[
+                {
+                    "source": str(c["source"]),
+                    "score": round(float(c["score"]), 4),
+                    "text": self._limit_debug_text(str(c["text"])),
+                }
+                for c in scored[:5]
+            ],
         )
 
     # ------------------------------------------------------------------
@@ -294,15 +283,14 @@ class AzureMathSolver(BaseMathSolver):
             print(f"[OCR] WARN: 出力失敗: {_exc}")
 
     def _append_ocr_to_blob(self, line: str) -> None:
-        """OCR 1 行を Blob Storage の AppendBlob に追記する。"""
+        """Append one JSONL line to the AppendBlob in Azure Blob Storage."""
         account = settings.azure_storage_account_name
         key = settings.azure_storage_account_key
         if not account or not key:
-            print(
-                "[OCR] WARN: AZURE_STORAGE_ACCOUNT_NAME/KEY 未設定のため Blob スキップ"
-            )
+            print("[OCR] WARN: AZURE_STORAGE_ACCOUNT_NAME/KEY not set — Blob skipped")
             return
         try:
+            from azure.core.exceptions import ResourceExistsError
             from azure.storage.blob import BlobServiceClient
 
             service = BlobServiceClient(
@@ -312,31 +300,31 @@ class AzureMathSolver(BaseMathSolver):
             container = service.get_container_client(self._OCR_BLOB_CONTAINER)
             try:
                 container.create_container()
-            except Exception:
-                pass  # already exists
+            except ResourceExistsError:
+                pass
 
             blob = container.get_blob_client(self._OCR_BLOB_NAME)
             try:
                 blob.create_append_blob()
-            except Exception:
-                pass  # already exists
+            except ResourceExistsError:
+                pass
 
             blob.append_block((line + "\n").encode("utf-8"))
-            print(
-                f"[OCR] Blob 書き込み完了: {self._OCR_BLOB_CONTAINER}/{self._OCR_BLOB_NAME}"
-            )
+            print(f"[OCR] Blob write OK: {self._OCR_BLOB_CONTAINER}/{self._OCR_BLOB_NAME}")
         except Exception as exc:
-            print(f"[OCR] WARN: Blob 書き込み失敗: {exc}")
+            print(f"[OCR] WARN: Blob write failed: {exc}")
 
     def _call_azure_di(self, image_bytes: bytes) -> list[tuple[str, str]]:
-        """Azure DI で OCR して (text, source) タプルのリストを返す。
+        """Run both Azure DI passes in parallel and return up to 3 (text, source) pairs.
 
-        3 つの候補を生成してスコアリングに委ねる:
-          1. azure_di_read          : prebuilt-read — 日本語を含む全テキスト
-          2. azure_di_layout_markdown: prebuilt-layout + FORMULAS + Markdown — LaTeX 数式
-          3. azure_di_read+formulas : 1 のテキストに 2 の LaTeX 数式を付記した合成結果
-                                      日本語文脈と正確な数式の両方を保持する
+        Candidates:
+          1. ``azure_di_read``           — prebuilt-read: preserves Japanese text
+          2. ``azure_di_layout_markdown``— prebuilt-layout + FORMULAS + Markdown: accurate LaTeX
+          3. ``azure_di_read+formulas``  — combination: Japanese base + LaTeX formulas appended
         """
+        if self._di_client is None:
+            return []
+
         try:
             from azure.ai.documentintelligence.models import (
                 AnalyzeDocumentRequest,
@@ -344,73 +332,92 @@ class AzureMathSolver(BaseMathSolver):
                 DocumentContentFormat,
             )
         except ImportError:
-            return [("" , "azure_di_read")]
+            return []
+
+        # Run both DI passes in parallel to halve OCR latency.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            future_read = pool.submit(
+                self._ocr_read_pass, image_bytes, AnalyzeDocumentRequest
+            )
+            future_layout = pool.submit(
+                self._ocr_layout_formulas_pass,
+                image_bytes,
+                AnalyzeDocumentRequest,
+                DocumentAnalysisFeature,
+                DocumentContentFormat,
+            )
+            read_text: str = future_read.result()
+            latex_formulas, markdown_text = future_layout.result()
 
         results: list[tuple[str, str]] = []
+        if read_text:
+            results.append((read_text, "azure_di_read"))
+        if markdown_text:
+            results.append((markdown_text, "azure_di_layout_markdown"))
+        # Combined candidate: Japanese text base + accurate LaTeX formulas
+        if read_text and latex_formulas:
+            combined = (
+                read_text
+                + "\n\n[検出された数式 (LaTeX)]\n"
+                + "\n".join(latex_formulas)
+            )
+            results.append((combined, "azure_di_read+formulas"))
+        return results
 
-        # ---- Pass A: prebuilt-read — 日本語テキストを確実に取得 ----
-        read_text = ""
+    def _ocr_read_pass(self, image_bytes: bytes, RequestModel: Any) -> str:
+        """prebuilt-read pass — returns plain line-joined text (preserves Japanese)."""
         try:
-            poller = self._di_client.begin_analyze_document(
+            result = self._di_client.begin_analyze_document(
                 "prebuilt-read",
-                AnalyzeDocumentRequest(bytes_source=image_bytes),
-            )
-            result = poller.result()
-            lines: list[str] = []
-            if result.pages:
-                for page in result.pages:
-                    if page.lines:
-                        for line in page.lines:
-                            lines.append(line.content)
-            read_text = "\n".join(lines)
-            if read_text:
-                results.append((read_text, "azure_di_read"))
+                RequestModel(bytes_source=image_bytes),
+            ).result()
+            lines: list[str] = [
+                line.content
+                for page in (result.pages or [])
+                for line in (page.lines or [])
+            ]
+            return "\n".join(lines)
         except Exception:
-            pass
+            return ""
 
-        # ---- Pass B: prebuilt-layout + FORMULAS + Markdown — LaTeX 数式を正確に取得 ----
-        latex_formulas: list[str] = []
-        markdown_text = ""
+    def _ocr_layout_formulas_pass(
+        self,
+        image_bytes: bytes,
+        RequestModel: Any,
+        AnalysisFeature: Any,
+        ContentFormat: Any,
+    ) -> tuple[list[str], str]:
+        """prebuilt-layout + FORMULAS + Markdown pass.
+
+        Returns ``(latex_formulas, markdown_text)``.
+        ``latex_formulas`` is a list of ``"[display] ..."`` / ``"[inline] ..."`` strings.
+        ``markdown_text`` is the full Markdown content with the formula list appended.
+        """
         try:
-            poller = self._di_client.begin_analyze_document(
+            result = self._di_client.begin_analyze_document(
                 "prebuilt-layout",
-                AnalyzeDocumentRequest(bytes_source=image_bytes),
-                features=[DocumentAnalysisFeature.FORMULAS],
-                output_content_format=DocumentContentFormat.MARKDOWN,
-            )
-            result = poller.result()
+                RequestModel(bytes_source=image_bytes),
+                features=[AnalysisFeature.FORMULAS],
+                output_content_format=ContentFormat.MARKDOWN,
+            ).result()
 
             parts: list[str] = []
             if result.content:
                 parts.append(result.content)
 
-            if result.pages:
-                for page in result.pages:
-                    formulas = getattr(page, "formulas", None) or []
-                    for formula in formulas:
-                        val = getattr(formula, "value", None)
-                        conf = getattr(formula, "confidence", 1.0)
-                        kind = getattr(formula, "kind", "")
-                        if val and (conf or 1.0) >= 0.5:
-                            tag = "display" if kind == "display" else "inline"
-                            latex_formulas.append(f"[{tag}] {val}")
-
+            latex_formulas: list[str] = [
+                f"[{'display' if getattr(f, 'kind', '') == 'display' else 'inline'}] {getattr(f, 'value', '')}"
+                for page in (result.pages or [])
+                for f in (getattr(page, "formulas", None) or [])
+                if getattr(f, "value", None) and (getattr(f, "confidence", 1.0) or 1.0) >= 0.5
+            ]
             if latex_formulas:
                 parts.append("\n[検出された数式 (LaTeX)]\n" + "\n".join(latex_formulas))
 
             markdown_text = "\n".join(parts).strip()
-            if len(markdown_text) > 20:
-                results.append((markdown_text, "azure_di_layout_markdown"))
+            return latex_formulas, (markdown_text if len(markdown_text) > 20 else "")
         except Exception:
-            pass
-
-        # ---- 合成候補: Pass A のテキスト + Pass B の LaTeX 数式 ----
-        # 日本語問題文と正確な LaTeX 両方を含む最良の候補
-        if read_text and latex_formulas:
-            combined = read_text + "\n\n[検出された数式 (LaTeX)]\n" + "\n".join(latex_formulas)
-            results.append((combined, "azure_di_read+formulas"))
-
-        return results if results else [("", "azure_di_read")]
+            return [], ""
 
     # ------------------------------------------------------------------
     # Azure OpenAI 解答生成
