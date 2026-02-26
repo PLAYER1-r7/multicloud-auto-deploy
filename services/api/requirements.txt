@@ -26,13 +26,16 @@ pypdf==5.3.0
 # AWS
 boto3==1.35.0
 mangum==0.17.0
-Pillow==10.4.0
 
 # Azure
 azure-cosmos==4.8.0
 azure-storage-blob==12.23.0
 azure-identity==1.18.0
 azure-functions==1.20.0  # Azure Functions runtime
+azure-ai-documentintelligence==1.0.0  # Document Intelligence OCR
+
+# Azure / OpenAI (Azure OpenAI経由でGPT-4o呼び出し)
+openai==1.63.2
 
 # GCP
 google-cloud-firestore==2.19.0
