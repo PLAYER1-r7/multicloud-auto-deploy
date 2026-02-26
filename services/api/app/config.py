@@ -103,6 +103,14 @@ class Settings(BaseSettings):
     gcp_posts_collection: str = "posts"
     gcp_profiles_collection: str = "profiles"
 
+    # GCP Vision API (OCR)
+    # キー不要の場合は Application Default Credentials (ADC) を使用
+    gcp_vision_api_key: str | None = None
+
+    # GCP Vertex AI (Gemini LLM)
+    gcp_vertex_location: str = "us-central1"
+    gcp_vertex_model: str = "gemini-2.0-flash-001"
+
     # 共通設定
     presigned_url_expiry: int = 300
     cors_origins: str = "*"

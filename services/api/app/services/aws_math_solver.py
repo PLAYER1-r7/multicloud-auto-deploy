@@ -248,9 +248,7 @@ class AwsMathSolver:
                 candidates.append((pdf_text, "pdf_direct"))
 
         if not candidates:
-            raise HTTPException(
-                status_code=502, detail="OCR returned no candidates"
-            )
+            raise HTTPException(status_code=502, detail="OCR returned no candidates")
 
         filtered_candidates: list[tuple[str, str]] = []
         for text, source in candidates:
@@ -691,7 +689,25 @@ class AwsMathSolver:
         return ""
 
     def _extract_with_bedrock_vision_ocr(self, image_bytes: bytes) -> str:
-        """Bedrock マルチモーダルモデルで画像から日本語テキストを直接 OCR する。"""
+        """Bedrock マルチモーダルモデルで画像から日本語テキストを直接 OCR する。
+
+        品質向上のため 2 パスOCRを実施する。
+        - Pass 1: temperature=0.0（決定論、安定した転写）
+        - Pass 2: temperature=0.2（わずかな確率性で員った箇所を補完）
+        2パスの結果をスコアリングして優秀な方を返す。
+        """
+        pass1 = self._run_bedrock_ocr_pass(image_bytes, temperature=0.0)
+        pass2 = self._run_bedrock_ocr_pass(image_bytes, temperature=0.2)
+
+        # 両パスが有効な場合はスコアの高い方を採用
+        if pass1 and pass2:
+            score1 = self._score_ocr_text(pass1, "bedrock_vision_ocr")
+            score2 = self._score_ocr_text(pass2, "bedrock_vision_ocr")
+            return pass1 if score1 >= score2 else pass2
+        return pass1 or pass2
+
+    def _run_bedrock_ocr_pass(self, image_bytes: bytes, temperature: float) -> str:
+        """Bedrock に OCR パスを 1 回実行する。temperature によって振る舞いを変える。"""
         system_prompt = (
             "あなたは光学文字認識（OCR）専用ツールです。"
             "画像に写っている文字を一字一句そのまま転写するだけです。"
@@ -735,7 +751,7 @@ class AwsMathSolver:
                 ],
                 "inferenceConfig": {
                     "maxTokens": 1200,
-                    "temperature": 0.0,
+                    "temperature": temperature,
                     "topP": 1.0,
                 },
             }
@@ -743,7 +759,7 @@ class AwsMathSolver:
             body = {
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 1200,
-                "temperature": 0.0,
+                "temperature": temperature,
                 "top_p": 1.0,
                 "system": system_prompt,
                 "messages": [
