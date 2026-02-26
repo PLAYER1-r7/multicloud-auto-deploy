@@ -7,7 +7,6 @@ from collections import Counter
 from io import BytesIO
 from pathlib import Path
 
-import boto3
 import requests
 from fastapi import HTTPException
 from pypdf import PdfReader
@@ -18,6 +17,13 @@ from app.models import SolveAnswer, SolveMeta, SolveRequest, SolveResponse
 
 class AwsMathSolver:
     def __init__(self):
+        try:
+            import boto3
+        except ImportError as exc:
+            raise RuntimeError(
+                "boto3 is required for AwsMathSolver but is not installed"
+            ) from exc
+
         self._bedrock = boto3.client(
             "bedrock-runtime", region_name=settings.bedrock_region
         )
