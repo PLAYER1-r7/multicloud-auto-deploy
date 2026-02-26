@@ -4,9 +4,6 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-import boto3
-from botocore.exceptions import ClientError
-
 from app.config import settings
 from app.models import SolveRequest
 from app.services.aws_math_solver import AwsMathSolver
@@ -14,6 +11,14 @@ from app.services.aws_math_solver import AwsMathSolver
 
 class SolveJobService:
     def __init__(self) -> None:
+        try:
+            import boto3  # noqa: PLC0415 — AWS-only; lazy import for non-AWS environments
+            from botocore.exceptions import ClientError as _ClientError  # noqa: F401
+        except ImportError as exc:
+            raise RuntimeError(
+                "boto3 is required for SolveJobService but is not installed"
+            ) from exc
+
         bucket = settings.images_bucket_name
         if not bucket:
             raise RuntimeError("IMAGES_BUCKET_NAME is required for async solve jobs")
@@ -83,6 +88,8 @@ class SolveJobService:
         }
 
     def get_job(self, job_id: str) -> dict[str, Any]:
+        from botocore.exceptions import ClientError  # noqa: PLC0415
+
         key = self._key(job_id)
         try:
             job = self._get_job(key)
