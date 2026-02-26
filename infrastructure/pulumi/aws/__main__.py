@@ -314,14 +314,6 @@ lambda_policy = aws.iam.RolePolicy(
                     {
                         "Effect": "Allow",
                         "Action": [
-                            "textract:DetectDocumentText",
-                            "textract:AnalyzeDocument",
-                        ],
-                        "Resource": "*",
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
                             "bedrock:InvokeModel",
                         ],
                         "Resource": "*",
@@ -455,7 +447,6 @@ lambda_function = aws.lambda_.Function(
             "COGNITO_REGION": region,
             "POSTS_TABLE_NAME": posts_table.name,
             "IMAGES_BUCKET_NAME": images_bucket.id,
-            "TEXTRACT_REGION": "ap-northeast-2",
             "BEDROCK_REGION": "us-east-1",
             "BEDROCK_MODEL_ID": "amazon.nova-pro-v1:0",
             "SOLVE_OCR_REVIEW_MIN_SCORE": "0.40",

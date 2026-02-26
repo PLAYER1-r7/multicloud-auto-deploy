@@ -34,15 +34,16 @@ class Settings(BaseSettings):
 
     # AWS設定
     aws_region: str = "ap-northeast-1"
-    textract_region: str = "ap-northeast-2"
     bedrock_region: str = "us-east-1"
     posts_table_name: str | None = None
     images_bucket_name: str | None = None
     images_cdn_url: str | None = None
     bedrock_model_id: str = "amazon.nova-pro-v1:0"
+    # 入試問題解答機能の有効/無効 (コスト管理用: false でエンドポイントを停止)
+    solve_enabled: bool = False
     solve_allow_remote_image_url: bool = True
     solve_max_image_bytes: int = 5 * 1024 * 1024
-    solve_ocr_review_min_score: float = 0.35
+    solve_ocr_review_min_score: float = 0.40
     solve_ocr_review_max_replacement_ratio: float = 0.01
     # Accepts both COGNITO_USER_POOL_ID and AWS_COGNITO_USER_POOL_ID
     cognito_user_pool_id: str | None = Field(
@@ -63,6 +64,16 @@ class Settings(BaseSettings):
     azure_storage_account_name: str | None = None
     azure_storage_account_key: str | None = None
     azure_storage_container: str = "images"
+
+    # Azure AI Document Intelligence (OCR)
+    azure_document_intelligence_endpoint: str | None = None
+    azure_document_intelligence_key: str | None = None
+
+    # Azure OpenAI (数学解答生成)
+    azure_openai_endpoint: str | None = None
+    azure_openai_key: str | None = None
+    azure_openai_deployment: str = "gpt-4o"
+    azure_openai_api_version: str = "2024-12-01-preview"
 
     # Cosmos DB設定
     # NOTE: AZURE_COSMOS_DATABASE/CONTAINER names are reserved by Azure CLI/Function App
