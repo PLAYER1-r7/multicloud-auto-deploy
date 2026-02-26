@@ -31,6 +31,10 @@ class AzureMathSolver(AwsMathSolver):
         # boto3 クライアントは使わないが親 __init__ は呼ばない
         # （boto3 接続が失敗するため）
         self._sample_pdf_text_cache: dict[str, str] = {}
+        # 親クラスの except 節で参照される例外クラスを、Azure 環境でも安全に
+        # 定義しておく（boto3 のコードパスには実際にはヒットしない）
+        self._BotoCoreError = Exception
+        self._ClientError = Exception
         self._di_client = self._build_di_client()
         self._openai_client = self._build_openai_client()
 

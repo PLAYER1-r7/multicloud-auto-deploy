@@ -19,10 +19,16 @@ class AwsMathSolver:
     def __init__(self):
         try:
             import boto3
+            from botocore.exceptions import BotoCoreError, ClientError  # noqa: PLC0415
         except ImportError as exc:
             raise RuntimeError(
                 "boto3 is required for AwsMathSolver but is not installed"
             ) from exc
+
+        # Store exception classes for use in exception handlers throughout this class.
+        # This avoids module-level boto3/botocore imports that crash non-AWS runtimes.
+        self._BotoCoreError = BotoCoreError
+        self._ClientError = ClientError
 
         self._bedrock = boto3.client(
             "bedrock-runtime", region_name=settings.bedrock_region
@@ -793,7 +799,7 @@ class AwsMathSolver:
                 contentType="application/json",
                 accept="application/json",
             )
-        except (BotoCoreError, ClientError):
+        except (self._BotoCoreError, self._ClientError):
             return ""
 
         raw_body = response.get("body")
@@ -1154,7 +1160,7 @@ class AwsMathSolver:
                 contentType="application/json",
                 accept="application/json",
             )
-        except (BotoCoreError, ClientError):
+        except (self._BotoCoreError, self._ClientError):
             return ""
 
         raw_body = response.get("body")
@@ -1197,7 +1203,7 @@ class AwsMathSolver:
                 contentType="application/json",
                 accept="application/json",
             )
-        except (BotoCoreError, ClientError):
+        except (self._BotoCoreError, self._ClientError):
             return ""
 
         raw_body = response.get("body")
@@ -1304,7 +1310,7 @@ class AwsMathSolver:
                 contentType="application/json",
                 accept="application/json",
             )
-        except (BotoCoreError, ClientError):
+        except (self._BotoCoreError, self._ClientError):
             return answer_payload
 
         raw_body = response.get("body")
@@ -1474,7 +1480,7 @@ class AwsMathSolver:
                 contentType="application/json",
                 accept="application/json",
             )
-        except (BotoCoreError, ClientError) as exc:
+        except (self._BotoCoreError, self._ClientError) as exc:
             raise HTTPException(
                 status_code=502,
                 detail=f"Bedrock invocation failed: {exc.__class__.__name__}: {str(exc)}",
