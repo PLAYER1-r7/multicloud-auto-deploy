@@ -23,7 +23,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import urllib.request
 from datetime import date, timedelta
 from pathlib import Path
@@ -81,8 +80,7 @@ def _fetch_aws() -> dict[str, Any]:
             Metrics=["UnblendedCost"],
         )
         total = sum(
-            float(r["Total"]["UnblendedCost"]["Amount"])
-            for r in resp["ResultsByTime"]
+            float(r["Total"]["UnblendedCost"]["Amount"]) for r in resp["ResultsByTime"]
         )
         return {"cost": round(total, 2), "period": start[:7]}
     except ImportError:
@@ -97,9 +95,18 @@ def _fetch_azure() -> dict[str, Any]:
         return {"error": "AZURE_SUBSCRIPTION_ID not set"}
     try:
         r = subprocess.run(
-            ["az", "account", "get-access-token",
-             "--resource", "https://management.azure.com/", "--output", "json"],
-            capture_output=True, text=True, timeout=20,
+            [
+                "az",
+                "account",
+                "get-access-token",
+                "--resource",
+                "https://management.azure.com/",
+                "--output",
+                "json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
         )
         if r.returncode != 0:
             return {"error": "az login required"}
@@ -110,18 +117,25 @@ def _fetch_azure() -> dict[str, Any]:
             f"https://management.azure.com/subscriptions/{sub}"
             f"/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
         )
-        body = json.dumps({
-            "type": "ActualCost",
-            "dataSet": {
-                "granularity": "Monthly",
-                "aggregation": {"totalCost": {"name": "Cost", "function": "Sum"}},
-            },
-            "timeframe": "Custom",
-            "timePeriod": {"from": start + "T00:00:00Z", "to": end + "T23:59:59Z"},
-        }).encode()
+        body = json.dumps(
+            {
+                "type": "ActualCost",
+                "dataSet": {
+                    "granularity": "Monthly",
+                    "aggregation": {"totalCost": {"name": "Cost", "function": "Sum"}},
+                },
+                "timeframe": "Custom",
+                "timePeriod": {"from": start + "T00:00:00Z", "to": end + "T23:59:59Z"},
+            }
+        ).encode()
         req = urllib.request.Request(
-            url, data=body, method="POST",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            url,
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
         )
         with urllib.request.urlopen(req, timeout=20) as resp:
             data = json.loads(resp.read())
@@ -144,7 +158,9 @@ def _fetch_gcp() -> dict[str, Any]:
         # Cloud Billing v1 で当月の SKU コストを集計
         token_r = subprocess.run(
             ["gcloud", "auth", "print-access-token"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if token_r.returncode != 0:
             return {"error": "gcloud auth login required"}
@@ -154,8 +170,17 @@ def _fetch_gcp() -> dict[str, Any]:
             # Billing Account Budget API (コスト取得にはBigQuery exportが正式)
             # → budgets describe で threshold alerts から概算を拾う
             cmd = subprocess.run(
-                ["gcloud", "billing", "accounts", "describe", billing_account, "--format=json"],
-                capture_output=True, text=True, timeout=15,
+                [
+                    "gcloud",
+                    "billing",
+                    "accounts",
+                    "describe",
+                    billing_account,
+                    "--format=json",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
             if cmd.returncode == 0:
                 info = json.loads(cmd.stdout)
@@ -188,23 +213,64 @@ def _fetch_github() -> dict[str, Any]:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 return json.loads(resp.read())
 
-        if org:
-            data = _get(f"https://api.github.com/orgs/{org}/settings/billing/actions")
-        elif repo and "/" in repo:
-            owner, repo_name = repo.split("/", 1)
-            data = _get(f"https://api.github.com/repos/{owner}/{repo_name}/actions/billing")
-        else:
-            return {"error": "Set GH_ORG or GH_REPO env var"}
+        period = date.today().strftime("%Y-%m")
+        today = date.today()
 
-        included = data.get("included_minutes", 0)
-        used = data.get("total_minutes_used", 0)
-        paid_min = max(0, used - included)
-        return {
-            "cost": round(paid_min * 0.008, 4),
-            "minutes_used": used,
-            "minutes_included": included,
-            "period": date.today().strftime("%Y-%m"),
-        }
+        # ── Organization: Enhanced Billing API → 旧 API フォールバック ───
+        if org:
+            try:
+                data = _get(
+                    f"https://api.github.com/orgs/{org}/billing/usage"
+                    f"?year={today.year}&month={today.month:02d}"
+                )
+                items = data.get("usageItems", [])
+                actions_cost = sum(
+                    float(i.get("totalCost", 0))
+                    for i in items
+                    if "Actions" in i.get("product", "")
+                )
+                return {"cost": round(actions_cost, 4), "period": period}
+            except Exception:
+                pass
+            try:
+                data = _get(
+                    f"https://api.github.com/orgs/{org}/settings/billing/actions"
+                )
+                included = data.get("included_minutes", 0)
+                used = data.get("total_minutes_used", 0)
+                return {
+                    "cost": round(max(0, used - included) * 0.008, 4),
+                    "minutes_used": used,
+                    "minutes_included": included,
+                    "period": period,
+                }
+            except Exception:
+                pass
+            return {"error": f"GitHub billing unavailable for org: {org}", "period": period}
+
+        # ── リポジトリ / 個人: 旧 Billing API 廃止 → キャッシュ + ラン数で代替 ───
+        if repo and "/" in repo:
+            owner, repo_name = repo.split("/", 1)
+            cache_data = _get(
+                f"https://api.github.com/repos/{owner}/{repo_name}/actions/cache/usage"
+            )
+            cache_gb = round(
+                cache_data.get("active_caches_size_in_bytes", 0) / 1_073_741_824, 2
+            )
+            first_of_month = today.replace(day=1).isoformat()
+            runs_data = _get(
+                f"https://api.github.com/repos/{owner}/{repo_name}/actions/runs"
+                f"?per_page=1&created=>={first_of_month}"
+            )
+            run_count = runs_data.get("total_count", 0)
+            return {
+                "cost": None,
+                "period": period,
+                "cache_gb": cache_gb,
+                "run_count": run_count,
+            }
+
+        return {"error": "Set GH_ORG or GH_REPO env var"}
     except Exception as e:
         return {"error": str(e)[:80]}
 
@@ -212,16 +278,16 @@ def _fetch_github() -> dict[str, Any]:
 # ── xbar 出力フォーマット ─────────────────────────────────────
 
 ICONS = {
-    "AWS":    "🟠",
-    "Azure":  "🔵",
-    "GCP":    "🟡",
+    "AWS": "🟠",
+    "Azure": "🔵",
+    "GCP": "🟡",
     "GitHub": "⚫",
 }
 
 CONSOLES = {
-    "AWS":    "https://console.aws.amazon.com/cost-management/home#/dashboard",
-    "Azure":  "https://portal.azure.com/#view/Microsoft_Azure_CostManagement/Menu/~/overview",
-    "GCP":    "https://console.cloud.google.com/billing",
+    "AWS": "https://console.aws.amazon.com/cost-management/home#/dashboard",
+    "Azure": "https://portal.azure.com/#view/Microsoft_Azure_CostManagement/Menu/~/overview",
+    "GCP": "https://console.cloud.google.com/billing",
     "GitHub": "https://github.com/settings/billing",
 }
 
@@ -243,17 +309,16 @@ def _fmt_cost(cost: float | None) -> str:
 
 
 def main() -> None:
-    aws    = _fetch_aws()
-    azure  = _fetch_azure()
-    gcp    = _fetch_gcp()
+    aws = _fetch_aws()
+    azure = _fetch_azure()
+    gcp = _fetch_gcp()
     github = _fetch_github()
 
     results = {"AWS": aws, "Azure": azure, "GCP": gcp, "GitHub": github}
 
     # メニューバータイトル (数値コストの合計)
     total = sum(
-        r["cost"] for r in results.values()
-        if isinstance(r.get("cost"), (int, float))
+        r["cost"] for r in results.values() if isinstance(r.get("cost"), (int, float))
     )
     has_error = any("error" in r for r in results.values())
     bar_icon = "☁" if not has_error else "☁⚠"
@@ -279,17 +344,28 @@ def main() -> None:
             extra = ""
             if name == "GitHub" and "minutes_used" in r:
                 extra = f"  ({r['minutes_used']} min / {r['minutes_included']} free)"
+            elif name == "GitHub" and "run_count" in r:
+                # 旧 Billing API 廃止のため代替情報を表示
+                cache_gb = r.get("cache_gb", 0)
+                run_count = r.get("run_count", 0)
+                extra = f"  {run_count} runs / cache {cache_gb} GB"
+                cost_str = "  N/A"
+                color = "gray"
             if name == "GCP" and r.get("note"):
                 extra = f"  [{r['note']}]"
-            print(f"{icon} {name}  {cost_str}{extra} | color={color} size=13 font=Menlo href={console_url}")
+            print(
+                f"{icon} {name}  {cost_str}{extra} | color={color} size=13 font=Menlo href={console_url}"
+            )
 
     print("---")
     gcp_url = gcp.get("url", CONSOLES["GCP"])
-    aws_cost  = aws.get("cost")
+    aws_cost = aws.get("cost")
     azure_cost = azure.get("cost")
-    gcp_cost  = gcp.get("cost")
-    gh_cost   = github.get("cost")
-    total_known = sum(c for c in [aws_cost, azure_cost, gcp_cost, gh_cost] if c is not None)
+    gcp_cost = gcp.get("cost")
+    gh_cost = github.get("cost")
+    total_known = sum(
+        c for c in [aws_cost, azure_cost, gcp_cost, gh_cost] if c is not None
+    )
     print(f"TOTAL  ${total_known:.2f} | color=white font=Menlo size=14")
     print("---")
 
@@ -303,9 +379,13 @@ def main() -> None:
 
     # アクション
     script = str(_HERE / "cost-monitor.1h.py")
-    print(f"🔄 今すぐ更新 | refresh=true size=12")
-    print(f"💻 ターミナルでフルレポート | bash=python3 param1={script} terminal=true size=12")
-    print(f"⚙️ .env を編集 | bash=open param1=-e param2={str(_HERE / '.env')} terminal=false size=12")
+    print("🔄 今すぐ更新 | refresh=true size=12")
+    print(
+        f"💻 ターミナルでフルレポート | bash=python3 param1={script} terminal=true size=12"
+    )
+    print(
+        f"⚙️ .env を編集 | bash=open param1=-e param2={str(_HERE / '.env')} terminal=false size=12"
+    )
 
     now = date.today().strftime("%Y-%m-%d")
     print("---")

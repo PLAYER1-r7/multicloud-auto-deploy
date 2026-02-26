@@ -52,10 +52,12 @@ def _month_range(months_back: int) -> list[tuple[str, str]]:
 # AWS (Cost Explorer)
 # ─────────────────────────────────────────────
 
+
 def _fetch_aws(months: int) -> list[dict[str, Any]]:
     results = []
     try:
         import boto3
+
         ce = boto3.client("ce", region_name="us-east-1")
         for start, end in _month_range(months):
             resp = ce.get_cost_and_usage(
@@ -83,41 +85,68 @@ def _fetch_aws(months: int) -> list[dict[str, Any]]:
 # Azure (Azure Cost Management REST API via CLI token)
 # ─────────────────────────────────────────────
 
+
 def _fetch_azure(months: int) -> list[dict[str, Any]]:
     results = []
     subscription_id = os.getenv("AZURE_SUBSCRIPTION_ID")
     if not subscription_id:
         return [{"provider": "Azure", "error": "AZURE_SUBSCRIPTION_ID not set"}]
     try:
-        import subprocess
         import json as _json
+        import subprocess
+
         # az CLI でアクセストークンを取得
         token_result = subprocess.run(
-            ["az", "account", "get-access-token", "--resource", "https://management.azure.com/", "--output", "json"],
-            capture_output=True, text=True, timeout=30,
+            [
+                "az",
+                "account",
+                "get-access-token",
+                "--resource",
+                "https://management.azure.com/",
+                "--output",
+                "json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if token_result.returncode != 0:
-            return [{"provider": "Azure", "error": "az login required: " + token_result.stderr.strip()}]
+            return [
+                {
+                    "provider": "Azure",
+                    "error": "az login required: " + token_result.stderr.strip(),
+                }
+            ]
         token = _json.loads(token_result.stdout)["accessToken"]
 
         import urllib.request
+
         for start, end in _month_range(months):
             url = (
                 f"https://management.azure.com/subscriptions/{subscription_id}"
                 f"/providers/Microsoft.CostManagement/query"
                 f"?api-version=2023-11-01"
             )
-            body = _json.dumps({
-                "type": "ActualCost",
-                "dataSet": {
-                    "granularity": "Monthly",
-                    "aggregation": {"totalCost": {"name": "Cost", "function": "Sum"}},
-                },
-                "timeframe": "Custom",
-                "timePeriod": {"from": start + "T00:00:00Z", "to": end + "T23:59:59Z"},
-            }).encode()
+            body = _json.dumps(
+                {
+                    "type": "ActualCost",
+                    "dataSet": {
+                        "granularity": "Monthly",
+                        "aggregation": {
+                            "totalCost": {"name": "Cost", "function": "Sum"}
+                        },
+                    },
+                    "timeframe": "Custom",
+                    "timePeriod": {
+                        "from": start + "T00:00:00Z",
+                        "to": end + "T23:59:59Z",
+                    },
+                }
+            ).encode()
             req = urllib.request.Request(
-                url, data=body, method="POST",
+                url,
+                data=body,
+                method="POST",
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
@@ -133,7 +162,11 @@ def _fetch_azure(months: int) -> list[dict[str, Any]]:
                 period_raw = str(row[1]) if len(row) > 1 else start[:7].replace("-", "")
                 period = f"{period_raw[:4]}-{period_raw[4:6]}"
                 results.append(
-                    {"provider": "Azure", "period": period, "cost_usd": round(amount, 4)}
+                    {
+                        "provider": "Azure",
+                        "period": period,
+                        "cost_usd": round(amount, 4),
+                    }
                 )
     except Exception as exc:
         results.append({"provider": "Azure", "error": str(exc)})
@@ -144,23 +177,31 @@ def _fetch_azure(months: int) -> list[dict[str, Any]]:
 # GCP (Cloud Billing API via gcloud token)
 # ─────────────────────────────────────────────
 
+
 def _fetch_gcp(months: int) -> list[dict[str, Any]]:
     results = []
     billing_account = os.getenv("GCP_BILLING_ACCOUNT")
     if not billing_account:
-        return [{"provider": "GCP", "error": "GCP_BILLING_ACCOUNT not set (e.g. 012345-ABCDEF-GHIJKL)"}]
+        return [
+            {
+                "provider": "GCP",
+                "error": "GCP_BILLING_ACCOUNT not set (e.g. 012345-ABCDEF-GHIJKL)",
+            }
+        ]
     try:
-        import subprocess
         import json as _json
+        import subprocess
+
         token_result = subprocess.run(
             ["gcloud", "auth", "print-access-token"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if token_result.returncode != 0:
             return [{"provider": "GCP", "error": "gcloud auth login required"}]
         token = token_result.stdout.strip()
 
-        import urllib.request
         for start, end in _month_range(months):
             url = (
                 f"https://cloudbilling.googleapis.com/v1/billingAccounts/{billing_account}/skus"
@@ -171,19 +212,27 @@ def _fetch_gcp(months: int) -> list[dict[str, Any]]:
             # 詳細は BigQuery billing export が必要 → ここは describe のみ
             cmd = subprocess.run(
                 [
-                    "gcloud", "billing", "accounts", "describe", billing_account,
+                    "gcloud",
+                    "billing",
+                    "accounts",
+                    "describe",
+                    billing_account,
                     "--format=json",
                 ],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             if cmd.returncode == 0:
                 info = _json.loads(cmd.stdout)
-                results.append({
-                    "provider": "GCP",
-                    "period": start[:7],
-                    "cost_usd": None,
-                    "note": f"账単アカウント: {info.get('displayName', billing_account)} (詳細は BigQuery billing export を参照)",
-                })
+                results.append(
+                    {
+                        "provider": "GCP",
+                        "period": start[:7],
+                        "cost_usd": None,
+                        "note": f"账単アカウント: {info.get('displayName', billing_account)} (詳細は BigQuery billing export を参照)",
+                    }
+                )
             else:
                 results.append({"provider": "GCP", "error": cmd.stderr.strip()})
             break  # GCP Billing Account describe は月次内訳を返さないので1回のみ
@@ -191,14 +240,18 @@ def _fetch_gcp(months: int) -> list[dict[str, Any]]:
         # gcloud projects list で各プロジェクトの概算を試みる
         projects_cmd = subprocess.run(
             ["gcloud", "projects", "list", "--format=value(projectId)"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if projects_cmd.returncode == 0:
             project_ids = projects_cmd.stdout.strip().splitlines()
-            results.append({
-                "provider": "GCP",
-                "note": f"プロジェクト数: {len(project_ids)} (コスト詳細は https://console.cloud.google.com/billing を参照)",
-            })
+            results.append(
+                {
+                    "provider": "GCP",
+                    "note": f"プロジェクト数: {len(project_ids)} (コスト詳細は https://console.cloud.google.com/billing を参照)",
+                }
+            )
     except Exception as exc:
         results.append({"provider": "GCP", "error": str(exc)})
     return results
@@ -207,6 +260,7 @@ def _fetch_gcp(months: int) -> list[dict[str, Any]]:
 # ─────────────────────────────────────────────
 # GitHub Actions (Billing API)
 # ─────────────────────────────────────────────
+
 
 def _fetch_github(months: int) -> list[dict[str, Any]]:
     results = []
@@ -218,8 +272,8 @@ def _fetch_github(months: int) -> list[dict[str, Any]]:
         return [{"provider": "GitHub", "error": "GITHUB_TOKEN not set"}]
 
     try:
-        import urllib.request
         import json as _json
+        import urllib.request
 
         headers = {
             "Authorization": f"Bearer {token}",
@@ -233,46 +287,80 @@ def _fetch_github(months: int) -> list[dict[str, Any]]:
                 return _json.loads(resp.read())
 
         if org:
-            # Organization billing
-            data = _get(f"https://api.github.com/orgs/{org}/settings/billing/actions")
-            included = data.get("included_minutes", 0)
-            used = data.get("total_minutes_used", 0)
-            paid = data.get("total_paid_minutes_used", 0)
-            results.append({
-                "provider": "GitHub Actions",
-                "period": date.today().strftime("%Y-%m"),
-                "minutes_included": included,
-                "minutes_used": used,
-                "minutes_paid": paid,
-                "cost_usd": round(paid * 0.008, 4),  # Linux: $0.008/min
-                "note": "Linux rate ($0.008/min). Windows/macOS rates differ.",
-            })
-            # Storage
-            storage_data = _get(f"https://api.github.com/orgs/{org}/settings/billing/packages")
-            gb_bandwidth = storage_data.get("total_gb_bandwidth_used", 0)
-            results.append({
-                "provider": "GitHub Packages",
-                "period": date.today().strftime("%Y-%m"),
-                "gb_bandwidth_used": gb_bandwidth,
-            })
+            # Organization: Enhanced Billing API → 旧 API フォールバック
+            today = date.today()
+            try:
+                data = _get(
+                    f"https://api.github.com/orgs/{org}/billing/usage"
+                    f"?year={today.year}&month={today.month:02d}"
+                )
+                items = data.get("usageItems", [])
+                actions_cost = sum(
+                    float(i.get("totalCost", 0))
+                    for i in items
+                    if "Actions" in i.get("product", "")
+                )
+                results.append({
+                    "provider": "GitHub Actions",
+                    "period": today.strftime("%Y-%m"),
+                    "cost_usd": round(actions_cost, 4),
+                    "note": f"Enhanced Billing (org: {org})",
+                })
+            except Exception:
+                try:
+                    data = _get(
+                        f"https://api.github.com/orgs/{org}/settings/billing/actions"
+                    )
+                    included = data.get("included_minutes", 0)
+                    used = data.get("total_minutes_used", 0)
+                    paid = data.get("total_paid_minutes_used", 0)
+                    results.append({
+                        "provider": "GitHub Actions",
+                        "period": today.strftime("%Y-%m"),
+                        "minutes_included": included,
+                        "minutes_used": used,
+                        "minutes_paid": paid,
+                        "cost_usd": round(paid * 0.008, 4),
+                        "note": "Linux rate ($0.008/min)",
+                    })
+                except Exception as exc2:
+                    results.append({
+                        "provider": "GitHub Actions",
+                        "error": f"billing unavailable: {exc2}",
+                    })
         elif repo and "/" in repo:
+            # 個人リポジトリ: 旧 Billing API 廃止 → キャッシュ + ラン数
+            today = date.today()
             owner, repo_name = repo.split("/", 1)
-            data = _get(f"https://api.github.com/repos/{owner}/{repo_name}/actions/billing")
-            included = data.get("included_minutes", 0)
-            used = data.get("total_minutes_used", 0)
-            results.append({
-                "provider": "GitHub Actions",
-                "period": date.today().strftime("%Y-%m"),
-                "minutes_included": included,
-                "minutes_used": used,
-                "cost_usd": round(max(0, used - included) * 0.008, 4),
-                "note": "Linux rate ($0.008/min). Windows/macOS rates differ.",
-            })
+            try:
+                cache_data = _get(
+                    f"https://api.github.com/repos/{owner}/{repo_name}/actions/cache/usage"
+                )
+                cache_gb = round(
+                    cache_data.get("active_caches_size_in_bytes", 0) / 1_073_741_824, 2
+                )
+                first_of_month = today.replace(day=1).isoformat()
+                runs_data = _get(
+                    f"https://api.github.com/repos/{owner}/{repo_name}/actions/runs"
+                    f"?per_page=1&created=>={first_of_month}"
+                )
+                run_count = runs_data.get("total_count", 0)
+                results.append({
+                    "provider": "GitHub Actions",
+                    "period": today.strftime("%Y-%m"),
+                    "cost_usd": None,
+                    "note": f"{run_count} runs, cache {cache_gb} GB "
+                            "(billing API deprecated — check github.com/settings/billing)",
+                })
+            except Exception as exc2:
+                results.append({"provider": "GitHub Actions", "error": str(exc2)})
         else:
-            results.append({
-                "provider": "GitHub",
-                "error": "Set GH_ORG or GH_REPO (owner/repo) env var",
-            })
+            results.append(
+                {
+                    "provider": "GitHub",
+                    "error": "Set GH_ORG or GH_REPO (owner/repo) env var",
+                }
+            )
     except Exception as exc:
         results.append({"provider": "GitHub", "error": str(exc)})
     return results
@@ -282,14 +370,15 @@ def _fetch_github(months: int) -> list[dict[str, Any]]:
 # 表示
 # ─────────────────────────────────────────────
 
+
 def _table(all_results: list[dict]) -> None:
     """結果をターミナル向けテーブルで出力する。"""
-    RESET  = "\033[0m"
-    BOLD   = "\033[1m"
-    CYAN   = "\033[36m"
-    GREEN  = "\033[32m"
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    CYAN = "\033[36m"
+    GREEN = "\033[32m"
     YELLOW = "\033[33m"
-    RED    = "\033[31m"
+    RED = "\033[31m"
 
     def colored(text: str, color: str) -> str:
         if sys.stdout.isatty():
@@ -300,9 +389,7 @@ def _table(all_results: list[dict]) -> None:
     print()
     print(colored(" ★ Multi-Cloud Cost Report ", BOLD + CYAN))
     print(colored("─" * 60, CYAN))
-    print(
-        colored(f"{'Provider':<22} {'Period':<10} {'Cost (USD)':>12}  Note", BOLD)
-    )
+    print(colored(f"{'Provider':<22} {'Period':<10} {'Cost (USD)':>12}  Note", BOLD))
     print(colored("─" * 60, CYAN))
 
     total = 0.0
@@ -310,7 +397,9 @@ def _table(all_results: list[dict]) -> None:
         provider = row.get("provider", "")
         error = row.get("error")
         if error:
-            print(f"{'  ' + provider:<22} {'':10} {'':12}  {colored('ERROR: ' + error, RED)}")
+            print(
+                f"{'  ' + provider:<22} {'':10} {'':12}  {colored('ERROR: ' + error, RED)}"
+            )
             continue
         period = row.get("period", "")
         cost = row.get("cost_usd")
@@ -341,18 +430,10 @@ def main() -> None:
     parser.add_argument(
         "--json", action="store_true", dest="output_json", help="JSON 形式で出力"
     )
-    parser.add_argument(
-        "--aws-only",  action="store_true", help="AWS のみ取得"
-    )
-    parser.add_argument(
-        "--azure-only", action="store_true", help="Azure のみ取得"
-    )
-    parser.add_argument(
-        "--gcp-only",  action="store_true", help="GCP のみ取得"
-    )
-    parser.add_argument(
-        "--github-only", action="store_true", help="GitHub のみ取得"
-    )
+    parser.add_argument("--aws-only", action="store_true", help="AWS のみ取得")
+    parser.add_argument("--azure-only", action="store_true", help="Azure のみ取得")
+    parser.add_argument("--gcp-only", action="store_true", help="GCP のみ取得")
+    parser.add_argument("--github-only", action="store_true", help="GitHub のみ取得")
     args = parser.parse_args()
 
     only_flags = [args.aws_only, args.azure_only, args.gcp_only, args.github_only]
