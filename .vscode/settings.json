@@ -41,6 +41,9 @@
   "[markdown]": {
     "editor.wordWrap": "on"
   },
+  "files.associations": {
+    "*.mmd": "markdown"
+  },
   "terminal.integrated.defaultProfile.linux": "bash",
   // ─── Terminal stability (dev container) ─────────────────────────────────────
   // Disable GPU acceleration to prevent rendering crashes inside dev containers

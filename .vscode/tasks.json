@@ -2,6 +2,24 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "architecture: refresh (staging)",
+			"type": "shell",
+			"command": "${workspaceFolder}/scripts/refresh-architecture.sh staging",
+			"problemMatcher": [],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		},
+		{
+			"label": "architecture: validate (render)",
+			"type": "shell",
+			"command": "${workspaceFolder}/.venv/bin/python ${workspaceFolder}/scripts/cloud_architecture_mapper.py render --input ${workspaceFolder}/docs/generated/architecture/snapshot.json --output ${workspaceFolder}/docs/generated/architecture/architecture.mmd --validate",
+			"problemMatcher": [],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		},
+		{
 			"type": "func",
 			"label": "func: host start",
 			"command": "host start",
@@ -16,13 +34,13 @@
 			"label": "pip install (functions)",
 			"type": "shell",
 			"osx": {
-				"command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+				"command": "${workspaceFolder}/${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
 			},
 			"windows": {
-				"command": "${config:azureFunctions.pythonVenv}\\Scripts\\python -m pip install -r requirements.txt"
+				"command": "${workspaceFolder}\\${config:azureFunctions.pythonVenv}\\Scripts\\python -m pip install -r requirements.txt"
 			},
 			"linux": {
-				"command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+				"command": "${workspaceFolder}/${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
 			},
 			"problemMatcher": [],
 			"options": {

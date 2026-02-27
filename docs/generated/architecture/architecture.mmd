@@ -1,0 +1,47 @@
+flowchart LR
+  User((User))
+  subgraph AWS[AWS]
+    aws_cdn-E17ZFSUVHSJDWV["CDN: E17ZFSUVHSJDWV"]
+    aws_cdn-E136K9W5899F4H["CDN: E136K9W5899F4H"]
+    aws_cdn-E1TBH4R432SZBZ["CDN: E1TBH4R432SZBZ"]
+    aws_cdn-E214XONKTXJEJD["CDN: E214XONKTXJEJD"]
+    aws_object_storage-multicloud-auto-deploy-staging-frontend["ObjectStorage: multicloud-auto-deploy-staging-frontend"]
+    aws_object_storage-multicloud-auto-deploy-staging-images["ObjectStorage: multicloud-auto-deploy-staging-images"]
+    aws_api_gateway-multicloud-auto-deploy-staging-api["ApiGateway: multicloud-auto-deploy-staging-api"]
+    aws_compute-multicloud-auto-deploy-staging-api["Compute: multicloud-auto-deploy-staging-api"]
+    aws_database-multicloud-auto-deploy-staging-messages["Database: multicloud-auto-deploy-staging-messages"]
+    aws_database-multicloud-auto-deploy-staging-posts["Database: multicloud-auto-deploy-staging-posts"]
+    aws_cdn-E17ZFSUVHSJDWV --> aws_object_storage-multicloud-auto-deploy-staging-frontend
+    aws_api_gateway-multicloud-auto-deploy-staging-api --> aws_compute-multicloud-auto-deploy-staging-api
+    aws_compute-multicloud-auto-deploy-staging-api --> aws_database-multicloud-auto-deploy-staging-messages
+  end
+  subgraph AZURE[AZURE]
+    azure_cdn-multicloud-auto-deploy-staging-fd["CDN: multicloud-auto-deploy-staging-fd"]
+    azure_object_storage-mcadfuncd45ihd["ObjectStorage: mcadfuncd45ihd"]
+    azure_object_storage-mcadfuncdiev0w["ObjectStorage: mcadfuncdiev0w"]
+    azure_object_storage-mcadwebd45ihd["ObjectStorage: mcadwebd45ihd"]
+    azure_object_storage-mcadwebdiev0w["ObjectStorage: mcadwebdiev0w"]
+    azure_object_storage-multicloudautodeploa752["ObjectStorage: multicloudautodeploa752"]
+    azure_compute-multicloud-auto-deploy-staging-func["Compute: multicloud-auto-deploy-staging-func"]
+    azure_database-mcad-cosmos-d45ihd["Database: mcad-cosmos-d45ihd"]
+    azure_cdn-multicloud-auto-deploy-staging-fd --> azure_object_storage-mcadfuncd45ihd
+    azure_compute-multicloud-auto-deploy-staging-func --> azure_database-mcad-cosmos-d45ihd
+  end
+  subgraph GCP[GCP]
+    gcp_cdn-multicloud-auto-deploy-staging-cdn-backend["CDN: multicloud-auto-deploy-staging-cdn-backend"]
+    gcp_load_balancer-multicloud-auto-deploy-staging-cdn-redirect["LoadBalancer: multicloud-auto-deploy-staging-cdn-redirect"]
+    gcp_load_balancer-multicloud-auto-deploy-staging-cdn-urlmap-v2["LoadBalancer: multicloud-auto-deploy-staging-cdn-urlmap-v2"]
+    gcp_compute-multicloud-auto-deploy-production-api["Compute: multicloud-auto-deploy-production-api"]
+    gcp_compute-multicloud-auto-deploy-staging-api["Compute: multicloud-auto-deploy-staging-api"]
+    gcp_object_storage-ashnova-multicloud-auto-deploy-staging-frontend["ObjectStorage: ashnova-multicloud-auto-deploy-staging-frontend"]
+    gcp_object_storage-ashnova-multicloud-auto-deploy-staging-function-source["ObjectStorage: ashnova-multicloud-auto-deploy-staging-function-source"]
+    gcp_object_storage-ashnova-multicloud-auto-deploy-staging-landing["ObjectStorage: ashnova-multicloud-auto-deploy-staging-landing"]
+    gcp_object_storage-ashnova-multicloud-auto-deploy-staging-uploads["ObjectStorage: ashnova-multicloud-auto-deploy-staging-uploads"]
+    gcp_database-default["Database: (default)"]
+    gcp_load_balancer-multicloud-auto-deploy-staging-cdn-redirect --> gcp_object_storage-ashnova-multicloud-auto-deploy-staging-frontend
+    gcp_cdn-multicloud-auto-deploy-staging-cdn-backend --> gcp_object_storage-ashnova-multicloud-auto-deploy-staging-frontend
+    gcp_compute-multicloud-auto-deploy-production-api --> gcp_database-default
+  end
+  User --> aws_cdn-E17ZFSUVHSJDWV
+  User --> azure_cdn-multicloud-auto-deploy-staging-fd
+  User --> gcp_cdn-multicloud-auto-deploy-staging-cdn-backend

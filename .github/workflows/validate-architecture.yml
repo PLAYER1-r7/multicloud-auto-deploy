@@ -1,0 +1,29 @@
+name: Validate Architecture Mermaid
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Mermaid output
+        run: |
+          if [ ! -f docs/generated/architecture/snapshot.json ]; then
+            echo "Snapshot not found. Skipping validation."
+            exit 0
+          fi
+          python scripts/cloud_architecture_mapper.py render \
+            --input docs/generated/architecture/snapshot.json \
+            --output docs/generated/architecture/architecture.mmd \
+            --validate
