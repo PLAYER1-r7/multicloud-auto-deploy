@@ -6,14 +6,14 @@
 
 ## Current Security Configuration Status
 
-> Last updated: 2026-02-27 (Azure Function App セキュリティミドルウェア実装完了)
+> Last updated: 2026-02-24 (Defender for Cloud セキュアスコア分析・新規タスク追加)
 
 | Feature                   | AWS                      | Azure                          | GCP                          | Notes                                                                                   |
 | ------------------------- | ------------------------ | ------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------- |
 | HTTPS enforced            | ✅                       | ✅                             | ✅ Pulumi済 (要 pulumi up)   | GCP: HTTP→HTTPS リダイレクト用 URLMap を分離。ポート80は301 redirect のみ               |
-| WAF                       | ✅ WebACL (CloudFront)   | ✅ Function App ミドルウェア   | ✅ Cloud Armor               | Azure: Function App middleware で SQL injection/XSS/Path Traversal 検出（2026-02-27）   |
+| WAF                       | ✅ WebACL (CloudFront)   | ❌                             | ✅ Cloud Armor               | Azure: Front Door Standard SKU では WAF Policy 未設定 (要 Premium SKU or WAF Policy)    |
 | Rate limiting             | ❌                       | ❌                             | ✅ 100req/min/IP             |                                                                                         |
-| SQLi / XSS protection     | ❌                       | ✅                             | ✅                           | Azure: ミドルウェアで SQL injection/XSS/Path Traversal/Suspicious file 検出済み          |
+| SQLi / XSS protection     | ❌                       | ❌                             | ✅                           |                                                                                         |
 | Data encryption (at rest) | ✅ SSE-S3                | ✅ Azure SSE                   | ✅ Google-managed            |                                                                                         |
 | Versioning                | ✅                       | ✅                             | ✅                           |                                                                                         |
 | Access logs (CDN)         | ✅ CloudFront            | ✅ Front Door → Log Analytics  | ✅ Cloud CDN                 | Azure: DiagnosticSetting 追加 (2026-02-24, 要 pulumi up)                                |
@@ -462,6 +462,10 @@ Cloud Logging のログエクスプローラ (`https://console.cloud.google.com/
 
 ## Identity & Access Management (IAM/RBAC)
 
+> **⚠️ CRITICAL:** This section describes security-critical rules that must never be violated.
+> See [AI_AGENT_00_CRITICAL_RULES.md — Rule 16](AI_AGENT_00_CRITICAL_RULES.md#rule-16--iamrbac-principle-of-least-privilege--deploy-users-never-get-admin-rights)
+> for the mandatory enforcement policy.
+
 ### 基本原則 — Principle of Least Privilege (最小権限の法則)
 
 すべてのユーザーおよびサービスアカウントには、その職務を遂行するために**最小限の権限のみ**を付与します。
@@ -488,13 +492,14 @@ Cloud Logging のログエクスプローラ (`https://console.cloud.google.com/
 
 **付与済みポリシー:**
 
-1. **GitHubActionsDeploymentPolicy** （カスタムポリシー）
+1. **GitHubActionsDeploymentPolicy** （カスタムポリシー, v5 — 2026-02-27 更新）
    - Lambda 関数の更新コード・設定変更
    - Lambda レイヤーの公開・削除
    - S3 バケット（フロントエンド）へのオブジェクトアップロード
    - CloudFront キャッシュ無効化・オリジンアクセスコントロール管理
    - API Gateway 操作（GET / POST のみ）
    - CloudFront 関数の作成・更新・削除・公開
+   - **IAM ロールインラインポリシー管理**（`multicloud-auto-deploy-*` ロール限定）
 
 2. **SNSUnsubscribePermission** （インラインポリシー、ユーザーポリシー）
    - SNS トピック管理（作成・削除・属性取得・タグ付与）
@@ -611,6 +616,7 @@ S3:             arn:aws:s3:::multicloud-auto-deploy-*
 S3 Objects:     arn:aws:s3:::multicloud-auto-deploy-*/*
 API Gateway:    arn:aws:apigateway:ap-northeast-1::/apis/*
 CloudFront:     * (リソースベースの制限なし)
+IAM Role:       arn:aws:iam::278280499340:role/multicloud-auto-deploy-*
 ```
 
 **アクション:**
@@ -651,7 +657,12 @@ CloudFront:     * (リソースベースの制限なし)
     "cloudfront:DescribeFunction",
     "cloudfront:ListFunctions"
   ],
-  "APIGateway": ["apigateway:GET", "apigateway:POST"]
+  "APIGateway": ["apigateway:GET", "apigateway:POST"],
+  "IAMRolePolicy": [
+    "iam:PutRolePolicy",
+    "iam:GetRolePolicy",
+    "iam:DeleteRolePolicy"
+  ]
 }
 ```
 
