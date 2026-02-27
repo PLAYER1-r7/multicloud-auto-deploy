@@ -1,0 +1,43 @@
+flowchart LR
+  User((User))
+  subgraph AWS[AWS]
+    aws_cdn-E17ZFSUVHSJDWV["CDN: E17ZFSUVHSJDWV"]
+    aws_cdn-E136K9W5899F4H["CDN: E136K9W5899F4H"]
+    aws_cdn-E1TBH4R432SZBZ["CDN: E1TBH4R432SZBZ"]
+    aws_cdn-E214XONKTXJEJD["CDN: E214XONKTXJEJD"]
+    aws_object_storage-multicloud-auto-deploy-production-frontend["ObjectStorage: multicloud-auto-deploy-production-frontend"]
+    aws_object_storage-multicloud-auto-deploy-production-images["ObjectStorage: multicloud-auto-deploy-production-images"]
+    aws_api_gateway-multicloud-auto-deploy-production-api["ApiGateway: multicloud-auto-deploy-production-api"]
+    aws_compute-multicloud-auto-deploy-production-api["Compute: multicloud-auto-deploy-production-api"]
+    aws_database-multicloud-auto-deploy-production-posts["Database: multicloud-auto-deploy-production-posts"]
+    aws_cdn-E17ZFSUVHSJDWV --> aws_object_storage-multicloud-auto-deploy-production-frontend
+    aws_api_gateway-multicloud-auto-deploy-production-api --> aws_compute-multicloud-auto-deploy-production-api
+    aws_compute-multicloud-auto-deploy-production-api --> aws_database-multicloud-auto-deploy-production-posts
+  end
+  subgraph AZURE[AZURE]
+    azure_cdn-multicloud-auto-deploy-production-fd["CDN: multicloud-auto-deploy-production-fd"]
+    azure_object_storage-mcadfuncd45ihd["ObjectStorage: mcadfuncd45ihd"]
+    azure_object_storage-mcadfuncdiev0w["ObjectStorage: mcadfuncdiev0w"]
+    azure_object_storage-mcadwebd45ihd["ObjectStorage: mcadwebd45ihd"]
+    azure_object_storage-mcadwebdiev0w["ObjectStorage: mcadwebdiev0w"]
+    azure_compute-multicloud-auto-deploy-production-func["Compute: multicloud-auto-deploy-production-func"]
+    azure_database-mcad-cosmos-diev0w["Database: mcad-cosmos-diev0w"]
+    azure_cdn-multicloud-auto-deploy-production-fd --> azure_object_storage-mcadfuncd45ihd
+    azure_compute-multicloud-auto-deploy-production-func --> azure_database-mcad-cosmos-diev0w
+  end
+  subgraph GCP[GCP]
+    gcp_cdn-multicloud-auto-deploy-production-cdn-backend["CDN: multicloud-auto-deploy-production-cdn-backend"]
+    gcp_load_balancer-multicloud-auto-deploy-production-cdn-redirect["LoadBalancer: multicloud-auto-deploy-production-cdn-redirect"]
+    gcp_load_balancer-multicloud-auto-deploy-production-cdn-urlmap["LoadBalancer: multicloud-auto-deploy-production-cdn-urlmap"]
+    gcp_compute-multicloud-auto-deploy-production-api["Compute: multicloud-auto-deploy-production-api"]
+    gcp_object_storage-ashnova-multicloud-auto-deploy-production-frontend["ObjectStorage: ashnova-multicloud-auto-deploy-production-frontend"]
+    gcp_object_storage-ashnova-multicloud-auto-deploy-production-function-source["ObjectStorage: ashnova-multicloud-auto-deploy-production-function-source"]
+    gcp_object_storage-ashnova-multicloud-auto-deploy-production-uploads["ObjectStorage: ashnova-multicloud-auto-deploy-production-uploads"]
+    gcp_database-default["Database: (default)"]
+    gcp_load_balancer-multicloud-auto-deploy-production-cdn-redirect --> gcp_object_storage-ashnova-multicloud-auto-deploy-production-frontend
+    gcp_cdn-multicloud-auto-deploy-production-cdn-backend --> gcp_object_storage-ashnova-multicloud-auto-deploy-production-frontend
+    gcp_compute-multicloud-auto-deploy-production-api --> gcp_database-default
+  end
+  User --> aws_cdn-E17ZFSUVHSJDWV
+  User --> azure_cdn-multicloud-auto-deploy-production-fd
+  User --> gcp_cdn-multicloud-auto-deploy-production-cdn-backend

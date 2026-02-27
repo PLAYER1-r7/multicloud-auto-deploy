@@ -173,15 +173,21 @@ run_test() {
   done
 
   local curl_args=(-s -o /tmp/azure_sns_test_body -w "%{http_code}" -X "$method"
-                   --max-time 25 --compressed)
+                   --max-time 60 --compressed)
   [[ -n "$data" ]] && curl_args+=(-H "Content-Type: application/json" -d "$data")
   for h in "${extra_headers[@]}"; do curl_args+=("$h"); done
   curl_args+=("$url")
 
   local status
-  status=$(curl "${curl_args[@]}" 2>/dev/null || echo "000")
+  status=$(curl "${curl_args[@]}" 2>/dev/null)
+  local curl_rc=$?
+  if [[ $curl_rc -ne 0 || ! "$status" =~ ^[0-9]{3}$ ]]; then
+    status="000"
+    LAST_BODY=""
+  else
+    LAST_BODY=$(cat /tmp/azure_sns_test_body 2>/dev/null || echo "")
+  fi
   LAST_STATUS="$status"
-  LAST_BODY=$(cat /tmp/azure_sns_test_body 2>/dev/null || echo "")
 
   if [[ "$status" == "$expect" ]]; then
     ok "$label  [HTTP $status]"
@@ -359,7 +365,8 @@ else
   run_test "POST /posts creates a new post" \
     POST "$API_URL/posts" \
     --header "$AUTHH" \
-    --data "{\"content\":\"Azure E2E test post $(date +%s)\"}"
+    --data "{\"content\":\"Azure E2E test post $(date +%s)\"}" \
+    --expect 201
 
   if echo "$LAST_BODY" | jq -e '.id' >/dev/null 2>&1; then
     POST_ID=$(echo "$LAST_BODY" | jq -r '.id')

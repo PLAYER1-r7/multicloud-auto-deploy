@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "description": "Cloud service icon mapping for architecture diagrams",
+  "icons": {
+    "aws": {
+      "cdn": "https://d1.awsstatic.com/webteam/architecture-icons/q3-2021/Arch_Networking-Content-Delivery/48/Arch_Amazon-CloudFront_48.svg",
+      "compute": "https://d1.awsstatic.com/webteam/architecture-icons/q3-2021/Arch_Compute/48/Arch_AWS-Lambda_48.svg",
+      "object_storage": "https://d1.awsstatic.com/webteam/architecture-icons/q3-2021/Arch_Storage/48/Arch_Amazon-Simple-Storage-Service_48.svg",
+      "database": "https://d1.awsstatic.com/webteam/architecture-icons/q3-2021/Arch_Database/48/Arch_Amazon-DynamoDB_48.svg",
+      "api_gateway": "https://d1.awsstatic.com/webteam/architecture-icons/q3-2021/Arch_App-Integration/48/Arch_Amazon-API-Gateway_48.svg"
+    },
+    "azure": {
+      "cdn": "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/cdn.svg",
+      "compute": "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/function.svg",
+      "object_storage": "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/storage-accounts.svg",
+      "database": "https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/cosmos-db.svg"
+    },
+    "gcp": {
+      "cdn": "https://www.gstatic.com/images/branding/productlogos/cloud_cdn/v1/web-48dp/logo_cloud_cdn_color_1x_web_48dp.png",
+      "compute": "https://www.gstatic.com/images/branding/productlogos/cloud_run/v1/web-48dp/logo_cloud_run_color_1x_web_48dp.png",
+      "object_storage": "https://www.gstatic.com/images/branding/productlogos/cloud_storage/v1/web-48dp/logo_cloud_storage_color_1x_web_48dp.png",
+      "database": "https://www.gstatic.com/images/branding/productlogos/firestore/v1/web-48dp/logo_firestore_color_1x_web_48dp.png"
+    }
+  }
+}

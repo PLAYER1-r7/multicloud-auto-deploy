@@ -121,14 +121,14 @@ class BaseMathSolver:
 
     # CID → Unicode mapping for common Japanese math PDF fonts (Computer Modern)
     _CID_MAP: dict[str, str] = {
-        "(cid:53)": "≦",   # \leqq (CMSY)
-        "(cid:54)": "≧",   # \geqq
-        "(cid:90)": "∫",   # integral (CMEX)
-        "(cid:88)": "∑",   # summation
-        "(cid:81)": "∏",   # product
+        "(cid:53)": "≦",  # \leqq (CMSY)
+        "(cid:54)": "≧",  # \geqq
+        "(cid:90)": "∫",  # integral (CMEX)
+        "(cid:88)": "∑",  # summation
+        "(cid:81)": "∏",  # product
         "(cid:112)": "∞",  # infinity
-        "(cid:195)": "",   # large left-paren bracket (display artifact)
-        "(cid:33)": "",    # large right-paren bracket (display artifact)
+        "(cid:195)": "",  # large left-paren bracket (display artifact)
+        "(cid:33)": "",  # large right-paren bracket (display artifact)
     }
 
     def _fix_pdfminer_cid_chars(self, text: str) -> str:
@@ -185,7 +185,9 @@ class BaseMathSolver:
         """
         # --- pdfminer.six (優先) ---
         try:
-            from pdfminer.high_level import extract_text as pdfminer_extract  # type: ignore[import]
+            from pdfminer.high_level import (
+                extract_text as pdfminer_extract,  # type: ignore[import]
+            )
 
             text = pdfminer_extract(BytesIO(pdf_bytes))
             text = self._fix_pdfminer_cid_chars(text)

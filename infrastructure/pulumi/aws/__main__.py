@@ -44,6 +44,11 @@ common_tags = {
     "Environment": stack,
 }
 
+
+def unique_urls(urls: list[str]) -> list[str]:
+    return list(dict.fromkeys(urls))
+
+
 # ========================================
 # IAM Role for Lambda
 # ========================================
@@ -145,11 +150,11 @@ user_pool_client = aws.cognito.UserPoolClient(
     allowed_oauth_flows=["code"],
     allowed_oauth_scopes=["openid", "email", "profile"],
     allowed_oauth_flows_user_pool_client=True,
-    callback_urls=(
+    callback_urls=unique_urls(
         ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else [])
         + ([f"https://{custom_domain}/sns/auth/callback"] if custom_domain else [])
     ),
-    logout_urls=(
+    logout_urls=unique_urls(
         ([f"https://{cf_domain}/sns/"] if cf_domain else [])
         + ([f"https://{custom_domain}/sns/"] if custom_domain else [])
     ),
@@ -324,6 +329,15 @@ lambda_policy = aws.iam.RolePolicy(
                             "lambda:InvokeFunction",
                         ],
                         "Resource": lambda_function_arn_for_self_invoke,
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "sns:Subscribe",
+                            "sns:Unsubscribe",
+                            "sns:ListSubscriptionsByTopic",
+                        ],
+                        "Resource": f"arn:aws:sns:{region}:{lambda_caller_identity.account_id}:*",
                     },
                 ],
             }

@@ -36,6 +36,11 @@ github_actions_sa = config.get("github_actions_sa") or os.getenv("GITHUB_ACTIONS
 allowed_origins = config.get("allowedOrigins") or "*"
 allowed_origins_list = allowed_origins.split(",") if allowed_origins != "*" else ["*"]
 
+# Audit logs toggle (requires project IAM policy edit permission)
+enable_audit_logs = config.get_bool("enableAuditLogs")
+if enable_audit_logs is None:
+    enable_audit_logs = True
+
 # Common labels
 common_labels = {
     "project": project_name,
@@ -73,17 +78,21 @@ for service in services:
 # Enable Admin Read, Data Read, and Data Write audit logs project-wide.
 # Covers Firestore, Cloud Storage, Secret Manager, Cloud Run, and IAM.
 # Admin Read logs are free; Data Read/Write logs incur minimal ingestion cost.
-audit_config = gcp.projects.IAMAuditConfig(
-    "audit-config",
-    project=project,
-    service="allServices",
-    audit_log_configs=[
-        gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="ADMIN_READ"),
-        gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="DATA_READ"),
-        gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="DATA_WRITE"),
-    ],
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
-)
+audit_config = None
+if enable_audit_logs:
+    audit_config = gcp.projects.IAMAuditConfig(
+        "audit-config",
+        project=project,
+        service="allServices",
+        audit_log_configs=[
+            gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="ADMIN_READ"),
+            gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="DATA_READ"),
+            gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="DATA_WRITE"),
+        ],
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    )
+else:
+    pulumi.log.warn("GCP audit logs disabled (enableAuditLogs=false).")
 
 # ========================================
 # Authentication Setup - Firebase Project
@@ -348,7 +357,7 @@ url_map = gcp.compute.URLMap(
     name=f"{project_name}-{stack}-cdn-urlmap",
     project=project,
     default_service=backend_bucket.self_link,
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
 )
 
 # Target HTTPS Proxy with SSL (managed certificate)
@@ -370,6 +379,8 @@ managed_ssl_cert = gcp.compute.ManagedSslCertificate(
     ),
     opts=pulumi.ResourceOptions(
         depends_on=enabled_services,
+        # Avoid forced replacement when domain hash changes; update manually if needed.
+        ignore_changes=["name", "managed"],
         # No delete_before_replace: Pulumi creates new cert first, updates the
         # HTTPS proxy, then deletes the old cert (avoids "in use" errors).
     ),
@@ -381,7 +392,7 @@ https_proxy = gcp.compute.TargetHttpsProxy(
     project=project,
     url_map=url_map.self_link,
     ssl_certificates=[managed_ssl_cert.self_link],
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
 )
 
 # URL Map for HTTP → HTTPS redirect (301 Moved Permanently)
@@ -395,7 +406,7 @@ redirect_url_map = gcp.compute.URLMap(
         redirect_response_code="MOVED_PERMANENTLY_DEFAULT",
         strip_query=False,
     ),
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
 )
 
 # Target HTTP Proxy — redirects HTTP → HTTPS (not serving content directly)
@@ -404,7 +415,7 @@ http_proxy = gcp.compute.TargetHttpProxy(
     name=f"{project_name}-{stack}-cdn-http-proxy",
     project=project,
     url_map=redirect_url_map.self_link,
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
 )
 
 # Global Forwarding Rule for HTTPS (443)
@@ -417,7 +428,7 @@ https_forwarding_rule = gcp.compute.GlobalForwardingRule(
     port_range="443",
     target=https_proxy.self_link,
     load_balancing_scheme="EXTERNAL",
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
 )
 
 # Global Forwarding Rule for HTTP (80) - redirect to HTTPS
@@ -430,7 +441,7 @@ forwarding_rule = gcp.compute.GlobalForwardingRule(
     port_range="80",
     target=http_proxy.self_link,
     load_balancing_scheme="EXTERNAL",
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
 )
 
 # ========================================
@@ -506,7 +517,8 @@ pulumi.export("cdn_https_url", cdn_ip_address.address.apply(lambda ip: f"https:/
 pulumi.export("backend_bucket_name", backend_bucket.name)
 pulumi.export("url_map_name", url_map.name)
 pulumi.export("redirect_url_map_name", redirect_url_map.name)
-pulumi.export("audit_config_service", audit_config.service)
+if audit_config is not None:
+    pulumi.export("audit_config_service", audit_config.service)
 # Cloud Armor exports only for production
 if stack == "production":
     pulumi.export("cloud_armor_policy_name", armor_security_policy.name)
@@ -516,6 +528,9 @@ pulumi.export("ssl_certificate_name", managed_ssl_cert.name)
 # Monitoring and Alerts
 # ========================================
 alarm_email = config.get("alarmEmail")
+billing_account_id = config.get("billingAccountId")
+# Billing budget disabled by default due to API authentication issues
+enable_billing_budget = False
 function_name = f"{project_name}-{stack}-api"
 
 # Cloud Function memory setting (must match --memory in GitHub Actions deploy workflow)
@@ -529,6 +544,7 @@ monitoring_resources = monitoring.setup_monitoring(
     region=region,
     project_id=project,
     alarm_email=alarm_email,
+    billing_account_id=None,
     monthly_budget_usd=config.get_int("monthlyBudgetUsd") or 50,
     function_memory_mb=function_memory_mb,
 )

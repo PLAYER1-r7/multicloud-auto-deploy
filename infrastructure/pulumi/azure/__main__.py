@@ -215,6 +215,7 @@ key_vault = azure.keyvault.Vault(
         enable_rbac_authorization=True,  # Use RBAC instead of access policies
         enable_soft_delete=True,
         soft_delete_retention_in_days=7,
+        enable_purge_protection=True,  # Defender for Cloud 推奨: purge protection有効化
         enabled_for_deployment=False,
         enabled_for_disk_encryption=False,
         enabled_for_template_deployment=True,
@@ -566,6 +567,24 @@ spa_rewrite_rule = azure.cdn.Rule(
 )
 
 # Front Door Route (/* → Blob Storage with SPA rule set attached)
+# ========================================
+# Front Door: Security Rule Set (Free Custom Rules)
+# Purpose: Implement security patterns without WAF Premium SKU
+# Note: Azure Front Door Standard SKU rule engine has limited action types.
+#       Security headers and advanced WAF rules are best implemented via:
+#       1. Azure Application Gateway WAF (if used)
+#       2. React application headers configuration
+#       3. Azure Defender for Cloud (already enabled)
+# Current Setup: Basic rule set for future expansion
+# ========================================
+security_rule_set = azure.cdn.RuleSet(
+    "security-rule-set",
+    rule_set_name="SecurityRules",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+)
+
+# Update Front Door Route to include both SPA and Security rule sets
 frontdoor_route = azure.cdn.Route(
     "frontdoor-route",
     route_name=f"{project_name}-{stack}-route",
@@ -580,9 +599,21 @@ frontdoor_route = azure.cdn.Route(
     forwarding_protocol="HttpsOnly",
     link_to_default_domain="Enabled",
     https_redirect="Enabled",
-    rule_sets=[azure.cdn.ResourceReferenceArgs(id=spa_rule_set.id)],
-    opts=pulumi.ResourceOptions(depends_on=[frontdoor_origin, spa_rewrite_rule]),
+    rule_sets=[
+        azure.cdn.ResourceReferenceArgs(id=spa_rule_set.id),
+        azure.cdn.ResourceReferenceArgs(id=security_rule_set.id),
+    ],
+    opts=pulumi.ResourceOptions(
+        depends_on=[
+            frontdoor_origin,
+            spa_rewrite_rule,
+            security_rule_set,
+        ]
+    ),
 )
+
+# Export security rule set ID for reference
+pulumi.export("security_rule_set_id", security_rule_set.id)
 
 # ========================================
 # Front Door Diagnostic Settings (Access Logs → Log Analytics)

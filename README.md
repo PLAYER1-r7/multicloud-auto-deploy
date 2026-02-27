@@ -18,27 +18,29 @@
 
 ## 🌐 Live Demos
 
-### 本番環境（手動構築）
+### 本番環境（Pulumi管理）✅ 2026-02-27 セキュリティ本番反映完了
 
-| Cloud Provider            | API Endpoint                                                                                                             | Frontend (CDN)                                                                | Direct Storage                                                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **AWS** (ap-northeast-1)  | [API Gateway](https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com)                                               | [CloudFront](https://d1tf3uumcm4bo1.cloudfront.net) ✅                        | [S3 Static](http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com)        |
-| **Azure** (japaneast)     | [Functions](https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger) | [Front Door](https://multicloud-frontend-f9cvamfnauexasd8.z01.azurefd.net) 🆕 | [Blob Storage](https://mcadwebd45ihd.z11.web.core.windows.net)                                             |
-| **GCP** (asia-northeast1) | [Cloud Functions](https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app)                                    | [Cloud CDN](http://34.117.111.182) 🆕                                         | [Cloud Storage](https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html) |
+| Cloud Provider            | API Endpoint                                                                                                    | Frontend (CDN)                                                                   | Direct Storage                                                                                                |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **AWS** (ap-northeast-1)  | [API Gateway](https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com)                                      | [CloudFront](https://d1qob7569mn5nw.cloudfront.net) ✅                           | [S3 Static](http://multicloud-auto-deploy-production-frontend.s3-website-ap-northeast-1.amazonaws.com)        |
+| **Azure** (japaneast)     | [Functions](https://multicloud-auto-deploy-production-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api) | [Front Door](https://mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net) ✅ | [Blob Storage](https://mcadwebdiev0w.z11.web.core.windows.net)                                                |
+| **GCP** (asia-northeast1) | [Cloud Functions](https://multicloud-auto-deploy-production-api-***-an.a.run.app)                               | [Cloud CDN](https://www.gcp.ashnova.jp) ✅                                       | [Cloud Storage](https://storage.googleapis.com/ashnova-multicloud-auto-deploy-production-frontend/index.html) |
 
-### Pulumi管理環境 🎉
+### セキュリティ本番反映（2026-02-27） 🔐
 
-| Cloud Provider | CDN URL                                                                    | Distribution ID     | 管理方法 |
-| -------------- | -------------------------------------------------------------------------- | ------------------- | -------- |
-| **AWS**        | [CloudFront](https://d1tf3uumcm4bo1.cloudfront.net)                        | E1TBH4R432SZBZ      | Pulumi   |
-| **Azure**      | [Front Door](https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net) | mcad-staging-d45ihd | Pulumi   |
-| **GCP**        | [Cloud CDN](http://34.117.111.182)                                         | 34.117.111.182      | Pulumi   |
+| Cloud Provider | Resource              | セキュリティ実装                               | 状態        |
+| -------------- | --------------------- | ---------------------------------------------- | ----------- |
+| **AWS**        | CloudFront + Lambda   | CORS 絞り込み + CloudTrail                     | ✅ 本番反映 |
+| **Azure**      | Key Vault + Functions | Purge Protection + Managed Identity + 診断ログ | ✅ 本番反映 |
+| **GCP**        | Cloud Functions       | HTTPS redirect + Audit Logs + Cloud Armor      | ✅ 本番反映 |
 
 > 🌐 **全クラウドでCDN配信を実装！** CloudFront, Front Door, Cloud CDNによる高速・安全なコンテンツ配信
 >
 > 🛠️ **Infrastructure as Code**: Pulumiで全CDNリソースを管理（詳細: [CDNセットアップガイド](docs/CDN_SETUP.md)）
 >
 > 📋 詳細情報: [エンドポイント一覧](docs/ENDPOINTS.md)
+>
+> 📝 **2026-02-27 更新**: S1 セキュリティ全本番反映完了 / S2 Managed Identity 有効化 / Task 20/21 Key Vault & Defender 実装済み
 >
 > 📝 **2026-02-22 Refactoring**: [Infra & CI/CD Refactoring Report](docs/REFACTORING_REPORT_20260222.md) — Azure AFD SPA fix, workflow cleanup, Pulumi dead code removal, staging validation
 
@@ -190,9 +192,10 @@ git push origin main
 - ✅ [CI/CDテスト結果](docs/CICD_TEST_RESULTS.md) - パイプライン検証レポート
 - 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策
 - 🌐 [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のエンドポイント情報
-- 🌍 [CDNセットアップガイド](docs/CDN_SETUP.md) - CloudFront/Front Door/Cloud CDN設定 🆕
-- � [関数サイズ最適化](docs/FUNCTION_SIZE_OPTIMIZATION.md) - デプロイパッケージサイズ削減（AWS 97%削減！） 🆕
-- �📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
+- 🌍 [CDNセットアップガイド](docs/CDN_SETUP.md) - CloudFront/Front Door/Cloud CDN設定
+- 📦 [関数サイズ最適化](docs/FUNCTION_SIZE_OPTIMIZATION.md) - デプロイパッケージサイズ削減（AWS 97%削減！）
+- 📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
+- 🔐 [セキュリティ実装](docs/AI_AGENT_08_SECURITY.md) - Key Vault / Managed Identity / WAF / CloudTrail / Audit Logs
 
 ### プロバイダー別デプロイ
 
@@ -203,14 +206,26 @@ git push origin main
 ### アーキテクチャ
 
 - [システムアーキテクチャ](docs/ARCHITECTURE.md) - 完全版システム設計
+- [クラウドアーキテクチャ可視化](docs/CLOUD_ARCHITECTURE_MAPPER.md) - 公式アイコン付きインタラクティブHTML図生成
+  - 📊 [Staging環境](docs/generated/architecture/architecture.staging.html) - AWS/Azure/GCP公式アイコン統合版
+  - 📊 [Production環境](docs/generated/architecture/architecture.production.html) - 本番環境構成図
+  - 📊 [統合ビュー](docs/generated/architecture/architecture-combined.html) - Staging + Production比較図
 
 ## 🔄 GitHub Actions 自動デプロイ
 
 プッシュやPRで自動的にビルド・デプロイが実行されます：
 
-- `main`ブランチへのプッシュ → ステージング環境へ自動デプロイ
+- `main`ブランチへのプッシュ → 全3クラウド本番デプロイ（AWS/Azure/GCP）
+- `develop`ブランチへのプッシュ → ステージング環境へデプロイ
 - PRの作成/更新 → ビルド検証
 - 手動トリガー → 任意の環境へデプロイ
+
+**2026-02-27 デプロイ状況**:
+
+- ✅ AWS production: 9/0 SNS E2E test PASS
+- ✅ Azure production: 17/0 SNS E2E test PASS
+- ✅ GCP production: 13/0 SNS E2E test PASS
+- ✅ 全環境セキュリティ実装完了（Pulumi反映）
 
 ### ワークフロー
 
@@ -246,7 +261,16 @@ git push origin main
 
 ### デプロイ状況
 
-最新のデプロイ状況は[GitHub Actions](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions)で確認できます。
+最新のデプロイ状況は[GitHub Actions](https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions)で確認でき、[詳細タスク進捗](docs/AI_AGENT_09_TASKS.md)も公開中です。
+
+**最新ステータス（2026-02-27）:**
+| タイプ | 対象 | 状態 |
+|------|------|------|
+| インフラ整備 | AWS/Azure/GCP Pulumi本番 | ✅ デプロイ完了 |
+| セキュリティ実装 | CORS / CloudTrail / Key Vault / Managed Identity / Audit Logs | ✅ 本番反映完了 |
+| E2E テスト | 全クラウド SNS 統合テスト | ✅ 39/39 PASS |
+| 認証 | AWS Cognito / Azure AD / Firebase | ✅ 全完了 |
+| CDN | CloudFront / Front Door / Cloud CDN | ✅ 全完了 |
 
 ### 手動デプロイ
 
@@ -431,25 +455,34 @@ PROJECT_NAME=myproject ENVIRONMENT=production ./deploy-lambda-aws.sh
 - エラーハンドリング
 - バリデーション
 
-### E2Eテストスイート
+### E2EテストスイートとセキュリティフローE2E
 
 全環境（AWS/GCP/Azure）のエンドツーエンドCRUD動作を検証:
 
 ```bash
-# E2Eテスト実行
-./scripts/test-e2e.sh
+# SNS/Messaging E2Eテスト（全環境統合）
+./scripts/test-sns-all.sh
+
+# 個別クラウドテスト
+./scripts/test-sns-aws.sh
+./scripts/test-sns-azure.sh
+./scripts/test-sns-gcp.sh
 ```
 
-**テストカバレッジ**:
+**テストカバレッジ（2026-02-27 実績）**:
 
-- **Total**: 18テスト（3環境 × 6テスト）
-- **Health Checks**: 各環境のヘルスエンドポイント検証
-- **CRUD Operations**:
-  - ✅ Create: メッセージ作成
-  - ✅ List: 全メッセージ取得
-  - ✅ Get: 特定メッセージ取得
-  - ✅ Update: メッセージ更新
-  - ✅ Delete: メッセージ削除
+- **AWS**: 9 PASS / 0 FAIL
+- **Azure**: 17 PASS / 0 FAIL
+- **GCP**: 13 PASS / 0 FAIL
+- **Total**: 39 PASS / 0 FAIL ✅
+
+**テスト項目**:
+
+- ✅ Health Checks: 各環境のヘルスエンドポイント検証
+- ✅ CRUD Operations: Create/List/Get/Update/Delete
+- ✅ Authentication: Cloud-native認証（Cognito/Azure AD/Firebase）
+- ✅ Image Upload: PUT /posts with images（AWS S3/Azure Blob/GCP GCS）
+- ✅ Error Handling: 404/403/500エラー処理検証
 
 **クラウド固有のパス処理**:
 

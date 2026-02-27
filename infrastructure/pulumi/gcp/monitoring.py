@@ -10,9 +10,10 @@ Cloud Monitoring Alerts for:
 - Billing alerts
 """
 
+from typing import List, Optional
+
 import pulumi
 import pulumi_gcp as gcp
-from typing import Optional, List
 
 
 def calculate_memory_threshold_bytes(function_memory_mb: int) -> int:
@@ -88,7 +89,9 @@ def create_cloud_function_alerts(
                 display_name="Error rate > 10%",
                 condition_threshold=gcp.monitoring.AlertPolicyConditionConditionThresholdArgs(
                     filter=pulumi.Output.all(function_name).apply(
-                        lambda args: f'resource.type="cloud_function" AND resource.labels.function_name="{args[0]}" AND metric.type="cloudfunctions.googleapis.com/function/execution_count" AND metric.labels.status!="ok"'
+                        lambda args: (
+                            f'resource.type="cloud_function" AND resource.labels.function_name="{args[0]}" AND metric.type="cloudfunctions.googleapis.com/function/execution_count" AND metric.labels.status!="ok"'
+                        )
                     ),
                     duration="300s",  # 5 minutes
                     comparison="COMPARISON_GT",
@@ -124,7 +127,9 @@ def create_cloud_function_alerts(
                 display_name="Execution time > 10 seconds",
                 condition_threshold=gcp.monitoring.AlertPolicyConditionConditionThresholdArgs(
                     filter=pulumi.Output.all(function_name).apply(
-                        lambda args: f'resource.type="cloud_function" AND resource.labels.function_name="{args[0]}" AND metric.type="cloudfunctions.googleapis.com/function/execution_times"'
+                        lambda args: (
+                            f'resource.type="cloud_function" AND resource.labels.function_name="{args[0]}" AND metric.type="cloudfunctions.googleapis.com/function/execution_times"'
+                        )
                     ),
                     duration="300s",
                     comparison="COMPARISON_GT",
@@ -157,8 +162,7 @@ def create_cloud_function_alerts(
     # e.g. 512MB × 0.9 = 483,183,820 bytes (~460MB)
     # Bug history: was incorrectly set to 0.9 (bytes), causing alerts to fire
     # unconditionally since any real usage (e.g. 171MB) always exceeds 0.9 bytes.
-    memory_threshold_bytes = calculate_memory_threshold_bytes(
-        function_memory_mb)
+    memory_threshold_bytes = calculate_memory_threshold_bytes(function_memory_mb)
     alerts["memory_usage"] = gcp.monitoring.AlertPolicy(
         "function-memory-alert",
         display_name=f"{project_name}-{stack}-function-memory",
@@ -168,7 +172,9 @@ def create_cloud_function_alerts(
                 display_name=f"Memory usage > 90% ({function_memory_mb}MB allocated)",
                 condition_threshold=gcp.monitoring.AlertPolicyConditionConditionThresholdArgs(
                     filter=pulumi.Output.all(function_name).apply(
-                        lambda args: f'resource.type="cloud_function" AND resource.labels.function_name="{args[0]}" AND metric.type="cloudfunctions.googleapis.com/function/user_memory_bytes"'
+                        lambda args: (
+                            f'resource.type="cloud_function" AND resource.labels.function_name="{args[0]}" AND metric.type="cloudfunctions.googleapis.com/function/user_memory_bytes"'
+                        )
                     ),
                     duration="300s",
                     comparison="COMPARISON_GT",
@@ -250,6 +256,7 @@ def create_billing_budget(
     project_name: str,
     stack: str,
     project_id: str,
+    billing_account_id: str,
     monthly_budget_usd: int = 50,
     notification_channels: List[pulumi.Output[str]] = None,
 ) -> gcp.billing.Budget:
@@ -257,14 +264,13 @@ def create_billing_budget(
     Create billing budget with alerts
 
     Args:
+        billing_account_id: GCP billing account ID (e.g., "01F139-282A95-9BBA25")
         monthly_budget_usd: Monthly budget in USD (default: $50)
     """
 
-    # Get billing account (requires permission)
-    # Note: This might fail if the service account doesn't have billing.accounts.list permission
-
     budget = gcp.billing.Budget(
         "billing-budget",
+        billing_account=billing_account_id,
         display_name=f"{project_name}-{stack}-budget",
         amount=gcp.billing.BudgetAmountArgs(
             specified_amount=gcp.billing.BudgetAmountSpecifiedAmountArgs(
@@ -308,6 +314,7 @@ def setup_monitoring(
     region: str,
     project_id: str,
     alarm_email: Optional[str] = None,
+    billing_account_id: Optional[str] = None,
     monthly_budget_usd: int = 50,
     function_memory_mb: int = 512,
 ) -> dict:
@@ -325,8 +332,7 @@ def setup_monitoring(
         alarm_email,
     )
 
-    notification_channels = [
-        notification_channel.id] if notification_channel else []
+    notification_channels = [notification_channel.id] if notification_channel else []
 
     # Create Cloud Function alerts
     function_alerts = create_cloud_function_alerts(
@@ -349,12 +355,13 @@ def setup_monitoring(
 
     # Create billing budget (production only)
     billing_budget = None
-    if stack == "production":
+    if stack == "production" and billing_account_id:
         try:
             billing_budget = create_billing_budget(
                 project_name,
                 stack,
                 project_id,
+                billing_account_id,
                 monthly_budget_usd,
                 notification_channels,
             )

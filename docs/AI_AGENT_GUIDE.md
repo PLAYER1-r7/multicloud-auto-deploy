@@ -1,6 +1,6 @@
 # AI Agent Guide — multicloud-auto-deploy
 
-> **Purpose**: Single entry point for AI agents working on this repository.  
+> **Purpose**: Single entry point for AI agents working on this repository.
 > Start here every session. All numbered documents are cross-linked from this guide.
 
 ---
@@ -9,11 +9,11 @@
 
 > Read these first. Together they give you enough context to start working.
 
-| No. | Document | Contents |
-| --- | -------- | -------- |
-| 00 ★ **read first** | [AI_AGENT_00_CRITICAL_RULES.md](AI_AGENT_00_CRITICAL_RULES.md) | 14 rules distilled from past incidents |
-| 01 | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md) | Project overview, live endpoints, directory tree, dev env |
-| 02 | [AI_AGENT_02_ARCHITECTURE.md](AI_AGENT_02_ARCHITECTURE.md) | System topology, per-cloud architecture, storage paths |
+| No.                 | Document                                                       | Contents                                                  |
+| ------------------- | -------------------------------------------------------------- | --------------------------------------------------------- |
+| 00 ★ **read first** | [AI_AGENT_00_CRITICAL_RULES.md](AI_AGENT_00_CRITICAL_RULES.md) | 14 rules distilled from past incidents                    |
+| 01                  | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)               | Project overview, live endpoints, directory tree, dev env |
+| 02                  | [AI_AGENT_02_ARCHITECTURE.md](AI_AGENT_02_ARCHITECTURE.md)     | System topology, per-cloud architecture, storage paths    |
 
 ---
 
@@ -21,11 +21,11 @@
 
 > Look up when you need to understand or change a specific area.
 
-| No. | Document | Contents |
-| --- | -------- | -------- |
-| 03 | [AI_AGENT_03_API.md](AI_AGENT_03_API.md) | API endpoints, request/response schema, data model |
-| 04 | [AI_AGENT_04_INFRA.md](AI_AGENT_04_INFRA.md) | Pulumi stacks, resource names, config keys, outputs |
-| 05 | [AI_AGENT_05_CICD.md](AI_AGENT_05_CICD.md) | GitHub Actions workflows, required secrets, trigger conditions |
+| No. | Document                                     | Contents                                                       |
+| --- | -------------------------------------------- | -------------------------------------------------------------- |
+| 03  | [AI_AGENT_03_API.md](AI_AGENT_03_API.md)     | API endpoints, request/response schema, data model             |
+| 04  | [AI_AGENT_04_INFRA.md](AI_AGENT_04_INFRA.md) | Pulumi stacks, resource names, config keys, outputs            |
+| 05  | [AI_AGENT_05_CICD.md](AI_AGENT_05_CICD.md)   | GitHub Actions workflows, required secrets, trigger conditions |
 
 ---
 
@@ -33,33 +33,43 @@
 
 > Check these during ongoing work, debugging, and task planning.
 
-| No. | Document | Contents |
-| --- | -------- | -------- |
-| 06 | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md) | Current health of all 3 cloud environments |
-| 07 | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md) | Step-by-step: deploy, rollback, check logs |
-| 08 | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md) | Auth config per cloud, known security gaps |
-| 09 | [AI_AGENT_09_TASKS.md](AI_AGENT_09_TASKS.md) | Prioritised backlog — what to work on next |
+| No. | Document                                                         | Contents                                                                     |
+| --- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 06  | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)                   | Current health of all 3 cloud environments                                   |
+| 07  | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)               | Step-by-step: deploy, rollback, check logs                                   |
+| 08  | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)               | Auth config per cloud, known security gaps                                   |
+| 09  | [AI_AGENT_09_TASKS.md](AI_AGENT_09_TASKS.md)                     | Prioritised backlog — what to work on next                                   |
+| 10  | [AI_AGENT_10_DOMAINS.md](AI_AGENT_10_DOMAINS.md)                 | Custom domain setup, DNS records, SSL certs                                  |
+| 11  | [AI_AGENT_11_BUG_FIX_REPORTS.md](AI_AGENT_11_BUG_FIX_REPORTS.md) | Consolidated bug & fix reports (all clouds, 2026-02-20 →)                    |
+| 12  | [AI_AGENT_12_OCR_MATH.md](AI_AGENT_12_OCR_MATH.md)               | `/v1/solve` OCR+math solving service — Azure DI, GCP Vision, Gemini, scoring |
+| 13  | [AI_AGENT_13_TESTING.md](AI_AGENT_13_TESTING.md)                 | Test scripts, pytest suite, auth token acquisition, CI/CD integration        |
 
 ---
 
 ## Archive
 
-| Document | Contents |
-| -------- | -------- |
+| Document                                                                                 | Contents                             |
+| ---------------------------------------------------------------------------------------- | ------------------------------------ |
 | [archive/AI_AGENT_11_WORKSPACE_MIGRATION.md](archive/AI_AGENT_11_WORKSPACE_MIGRATION.md) | 2026-02-21 repository cleanup record |
 
 ---
 
 ## Fix Reports
 
-| Report | File | Summary |
-| ------ | ---- | ------- |
-| AWS Simple-SNS Fix (2026-02-20)       | [AWS_SNS_FIX_REPORT.md](AWS_SNS_FIX_REPORT.md)                       | Fixed Lambda env vars / CI/CD race condition / logout 404 |
-| AWS Production SNS Fix (2026-02-21)   | [AWS_PRODUCTION_SNS_FIX_REPORT.md](AWS_PRODUCTION_SNS_FIX_REPORT.md) | Fixed `localhost:8000` fallback — empty `API_BASE_URL` caused by unset GitHub Secret in prod |
-| Azure Simple-SNS Fix (2026-02-21)     | [AZURE_SNS_FIX_REPORT.md](AZURE_SNS_FIX_REPORT.md)                   | Investigation and fix for intermittent AFD `/sns/*` 502 errors |
-| AWS Production HTTPS Fix (2026-02-21) | [AWS_HTTPS_FIX_REPORT.md](AWS_HTTPS_FIX_REPORT.md)                   | Fixed `ERR_CERT_COMMON_NAME_INVALID` caused by missing CloudFront alias / ACM certificate |
-| AWS Simple-SNS Fix (2026-02-22)       | [AWS_SNS_FIX_REPORT_20260222.md](AWS_SNS_FIX_REPORT_20260222.md)     | Fixed 12 bugs: auth/JWT, profile, images, nickname, presigned URLs, MIME, VITE_BASE_PATH |
-| GCP Simple-SNS Fix (2026-02-23)       | [GCP_SNS_FIX_REPORT_20260223.md](GCP_SNS_FIX_REPORT_20260223.md)     | Fixed 6 bugs: CORS origins, Firebase domain, /limits 404, COOP header, signed URLs, IndentationError |
+> All bug and fix reports are consolidated in **[AI_AGENT_11_BUG_FIX_REPORTS.md](AI_AGENT_11_BUG_FIX_REPORTS.md)**.
+
+| #   | Date       | Summary                                                                                                                                                                          |
+| --- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §1  | 2026-02-20 | [AWS SNS Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#1-aws-sns-fix-report-2026-02-20) — Lambda env vars, CI/CD race condition, logout 404, image upload 502                              |
+| §2  | 2026-02-21 | [AWS HTTPS Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#2-aws-production-https-fix-2026-02-21) — `ERR_CERT_COMMON_NAME_INVALID` (missing CloudFront alias + ACM cert)                     |
+| §3  | 2026-02-21 | [AWS Production SNS Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#3-aws-production-sns-fix-2026-02-21) — empty `API_BASE_URL` from unset GitHub Secret; Cognito redirect URI wrong domain  |
+| §4  | 2026-02-21 | [React SPA & CDN Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#4-react-spa-migration--cdn-routing-fix-2026-02-21) — all 3 CDNs still routing `/sns*` to old SSR origin after SPA migration |
+| §5  | 2026-02-21 | [Azure SNS Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#5-azure-sns-fix-2026-02-21) — 503/404 initial setup + AFD 502 stale TCP (Dynamic Y1 → FlexConsumption)                            |
+| §6  | 2026-02-22 | [AWS SNS 12-bug Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#6-aws-sns-fix-report-2026-02-22) — 12 bugs: auth, profile, images, nickname, presigned URLs, MIME, VITE_BASE_PATH            |
+| §7  | 2026-02-22 | [AWS+Azure Combined Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#7-aws--azure-combined-sns-fix-2026-02-22) — Cognito unauthorized_client, Azure CORS, routePrefix, AD redirect_uris       |
+| §8  | 2026-02-22 | [Refactoring & Infra Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#8-refactoring--infrastructure-fix-2026-02-22) — AFD SPA rewrite rule, CI/CD cleanup, Pulumi dead code, staging bugs     |
+| §9  | 2026-02-23 | [GCP SNS Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#9-gcp-sns-fix-report-2026-02-23) — CORS, Firebase domain, /limits 404, COOP header, signed URLs, IndentationError                   |
+| §10 | 2026-02-27 | [OCR Formula Merge Bugs](AI_AGENT_11_BUG_FIX_REPORTS.md#10-ocr-formula-merge-bugs-2026-02-27) — display formula discarded, bytes serialization, polygon=None fallback            |
 
 ---
 
@@ -123,22 +133,22 @@ Q: What should I work on next?
 
 Full details: [AI_AGENT_00_CRITICAL_RULES.md](AI_AGENT_00_CRITICAL_RULES.md)
 
-| Rule | Topic | One-line summary |
-| ---- | ----- | ---------------- |
-| 0  | Language        | All docs, code, and commits must be written in English |
-| 1  | File operations | Edit a few files at a time — large batches risk network timeout / silent corruption |
-| 2  | ARM vs x86      | Dev container is aarch64; always use `--platform linux/amd64` Docker for deploy builds |
-| 3  | main branch     | Push to `main` = immediate production deployment |
-| 4  | AUTH_DISABLED   | Must always be `false` — was accidentally `true` in a past incident |
-| 5  | Env vars source | Lambda/Cloud Run env vars from `pulumi stack output`, never from GitHub Secrets |
-| 6  | Vite base path  | AWS frontend must be built with `VITE_BASE_PATH=/sns/` |
-| 7  | S3 images       | Images bucket is private — always return presigned GET URLs, never raw S3 keys |
-| 8  | CloudFront cert | Set `customDomain` + `acmCertificateArn` in Pulumi config before `pulumi up` on prod-AWS |
-| 9  | Cognito JWT     | Call `jwt_verifier.py` with `verify_at_hash=False` when only `id_token` is sent |
-| 10 | GCP main.py     | Always include `main.py` (copy of `function.py`) in the GCP deployment ZIP |
-| 11 | GCP signed URLs | Pass `service_account_email` + `access_token` to `generate_signed_url()` |
-| 12 | Firebase domains| Register new domains via Identity Toolkit API with `x-goog-user-project` header |
-| 13 | GCP COOP header | CDN must send `Cross-Origin-Opener-Policy: same-origin-allow-popups` |
+| Rule | Topic            | One-line summary                                                                         |
+| ---- | ---------------- | ---------------------------------------------------------------------------------------- |
+| 0    | Language         | All docs, code, and commits must be written in English                                   |
+| 1    | File operations  | Edit a few files at a time — large batches risk network timeout / silent corruption      |
+| 2    | ARM vs x86       | Dev container is aarch64; always use `--platform linux/amd64` Docker for deploy builds   |
+| 3    | main branch      | Push to `main` = immediate production deployment                                         |
+| 4    | AUTH_DISABLED    | Must always be `false` — was accidentally `true` in a past incident                      |
+| 5    | Env vars source  | Lambda/Cloud Run env vars from `pulumi stack output`, never from GitHub Secrets          |
+| 6    | Vite base path   | AWS frontend must be built with `VITE_BASE_PATH=/sns/`                                   |
+| 7    | S3 images        | Images bucket is private — always return presigned GET URLs, never raw S3 keys           |
+| 8    | CloudFront cert  | Set `customDomain` + `acmCertificateArn` in Pulumi config before `pulumi up` on prod-AWS |
+| 9    | Cognito JWT      | Call `jwt_verifier.py` with `verify_at_hash=False` when only `id_token` is sent          |
+| 10   | GCP main.py      | Always include `main.py` (copy of `function.py`) in the GCP deployment ZIP               |
+| 11   | GCP signed URLs  | Pass `service_account_email` + `access_token` to `generate_signed_url()`                 |
+| 12   | Firebase domains | Register new domains via Identity Toolkit API with `x-goog-user-project` header          |
+| 13   | GCP COOP header  | CDN must send `Cross-Origin-Opener-Policy: same-origin-allow-popups`                     |
 
 ---
 

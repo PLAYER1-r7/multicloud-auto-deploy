@@ -1,49 +1,8 @@
 {
-  "generatedAt": "2026-02-27T14:51:24.703115+00:00",
-  "environment": "staging",
+  "generatedAt": "2026-02-27T14:51:44.642469+00:00",
+  "environment": "combined",
   "clouds": {
     "aws": {
-      "pulumiOutputs": {
-        "acm_certificate_arn": "arn:aws:acm:us-east-1:278280499340:certificate/9110a7f2-324c-4b45-9ffc-133c1e154c90",
-        "api_gateway_endpoint": "https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com",
-        "api_gateway_id": "z42qmqdqac",
-        "api_url": "https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com",
-        "cloudfront_distribution_id": "E1TBH4R432SZBZ",
-        "cloudfront_domain": "d1tf3uumcm4bo1.cloudfront.net",
-        "cloudfront_url": "https://d1tf3uumcm4bo1.cloudfront.net",
-        "cognito_client_id": "1k41lqkds4oah55ns8iod30dv2",
-        "cognito_domain": "multicloud-auto-deploy-staging",
-        "cognito_user_pool_arn": "arn:aws:cognito-idp:ap-northeast-1:278280499340:userpool/ap-northeast-1_AoDxOvCib",
-        "cognito_user_pool_id": "ap-northeast-1_AoDxOvCib",
-        "cost_estimate": "AWS Lambda: 1M free requests/month, then $0.20 per 1M requests. API Gateway: $1 per million requests. S3: $0.023/GB/month. CloudFront: $0.085/GB for first 10TB/month (free tier: 1TB/month for 12 months). AWS WAF: $5/month per web ACL + $1/month per rule + $0.60 per 1M requests. Secrets Manager: $0.40/month per secret + $0.05 per 10,000 API calls. DynamoDB: Pay-per-request pricing (25 WCU and 25 RCU free tier). Cognito: 50,000 MAU free for first 12 months, then $0.0055 per MAU. Estimated: $10-25/month for low traffic with WAF and security features.",
-        "custom_domain": "staging.aws.ashnova.jp",
-        "custom_domain_url": "https://staging.aws.ashnova.jp",
-        "frontend_bucket_name": "multicloud-auto-deploy-staging-frontend",
-        "frontend_url": "http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com",
-        "images_bucket_arn": "arn:aws:s3:::multicloud-auto-deploy-staging-images",
-        "images_bucket_name": "multicloud-auto-deploy-staging-images",
-        "lambda_function_arn": "arn:aws:lambda:ap-northeast-1:278280499340:function:multicloud-auto-deploy-staging-api",
-        "lambda_function_name": "multicloud-auto-deploy-staging-api",
-        "lambda_function_url": "https://cbayvejauctjk6s2ynxqgvyxm40kryre.lambda-url.ap-northeast-1.on.aws/",
-        "monitoring_api_alarms": [
-          "5xx_errors",
-          "4xx_errors",
-          "latency"
-        ],
-        "monitoring_cloudfront_alarms": [
-          "error_rate"
-        ],
-        "monitoring_lambda_alarms": [
-          "error_rate",
-          "throttles",
-          "duration"
-        ],
-        "monitoring_sns_topic_arn": "arn:aws:sns:ap-northeast-1:278280499340:multicloud-auto-deploy-staging-alarms",
-        "posts_table_arn": "arn:aws:dynamodb:ap-northeast-1:278280499340:table/multicloud-auto-deploy-staging-posts",
-        "posts_table_name": "multicloud-auto-deploy-staging-posts",
-        "secret_arn": "arn:aws:secretsmanager:ap-northeast-1:278280499340:secret:multicloud-auto-deploy/staging/app-config-NbB20n",
-        "secret_name": "multicloud-auto-deploy/staging/app-config"
-      },
       "resources": [
         {
           "provider": "aws",
@@ -157,58 +116,116 @@
           "region": "ap-northeast-1",
           "source": "aws-cli",
           "metadata": {}
+        },
+        {
+          "provider": "aws",
+          "resource_type": "cdn",
+          "name": "E17ZFSUVHSJDWV",
+          "resource_id": "arn:aws:cloudfront::278280499340:distribution/E17ZFSUVHSJDWV",
+          "region": "global",
+          "source": "aws-cli",
+          "metadata": {
+            "domain": "d9ww50cxv2sjg.cloudfront.net",
+            "aliases": [
+              "sns.aws.ashnova.jp"
+            ]
+          }
+        },
+        {
+          "provider": "aws",
+          "resource_type": "cdn",
+          "name": "E136K9W5899F4H",
+          "resource_id": "arn:aws:cloudfront::278280499340:distribution/E136K9W5899F4H",
+          "region": "global",
+          "source": "aws-cli",
+          "metadata": {
+            "domain": "d2lro6miml5efp.cloudfront.net",
+            "aliases": [
+              "ashnova.jp",
+              "www.ashnova.jp"
+            ]
+          }
+        },
+        {
+          "provider": "aws",
+          "resource_type": "cdn",
+          "name": "E1TBH4R432SZBZ",
+          "resource_id": "arn:aws:cloudfront::278280499340:distribution/E1TBH4R432SZBZ",
+          "region": "global",
+          "source": "aws-cli",
+          "metadata": {
+            "domain": "d1tf3uumcm4bo1.cloudfront.net",
+            "aliases": [
+              "staging.aws.ashnova.jp"
+            ]
+          }
+        },
+        {
+          "provider": "aws",
+          "resource_type": "cdn",
+          "name": "E214XONKTXJEJD",
+          "resource_id": "arn:aws:cloudfront::278280499340:distribution/E214XONKTXJEJD",
+          "region": "global",
+          "source": "aws-cli",
+          "metadata": {
+            "domain": "d1qob7569mn5nw.cloudfront.net",
+            "aliases": [
+              "www.aws.ashnova.jp"
+            ]
+          }
+        },
+        {
+          "provider": "aws",
+          "resource_type": "object_storage",
+          "name": "multicloud-auto-deploy-production-frontend",
+          "resource_id": "multicloud-auto-deploy-production-frontend",
+          "region": "ap-northeast-1",
+          "source": "aws-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "aws",
+          "resource_type": "object_storage",
+          "name": "multicloud-auto-deploy-production-images",
+          "resource_id": "multicloud-auto-deploy-production-images",
+          "region": "ap-northeast-1",
+          "source": "aws-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "aws",
+          "resource_type": "api_gateway",
+          "name": "multicloud-auto-deploy-production-api",
+          "resource_id": "qkzypr32af",
+          "region": "ap-northeast-1",
+          "source": "aws-cli",
+          "metadata": {
+            "apiEndpoint": "https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com"
+          }
+        },
+        {
+          "provider": "aws",
+          "resource_type": "compute",
+          "name": "multicloud-auto-deploy-production-api",
+          "resource_id": "arn:aws:lambda:ap-northeast-1:278280499340:function:multicloud-auto-deploy-production-api",
+          "region": "ap-northeast-1",
+          "source": "aws-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "aws",
+          "resource_type": "database",
+          "name": "multicloud-auto-deploy-production-posts",
+          "resource_id": "multicloud-auto-deploy-production-posts",
+          "region": "ap-northeast-1",
+          "source": "aws-cli",
+          "metadata": {}
         }
       ],
+      "pulumiOutputs": {},
       "errors": []
     },
     "azure": {
-      "pulumiOutputs": {
-        "api_url": "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net",
-        "app_insights_instrumentation_key": "27972e56-8950-455d-a8f4-1dbf87eb4362",
-        "auth_config_instructions": "Configure Function App with these environment variables:\\n  AUTH_PROVIDER=azure\\n  AZURE_TENANT_ID=<your-tenant-id>\\n  AZURE_CLIENT_ID=03a168ac-7de3-4e5c-8fb1-99fa6dcbfe77\\n",
-        "azure_ad_client_id": "03a168ac-7de3-4e5c-8fb1-99fa6dcbfe77",
-        "azure_ad_object_id": "/applications/4604c27e-8ce5-4be3-81ef-f465263d31b1",
-        "azure_openai_account_name": "mcad-openai-d45ihd",
-        "azure_openai_deployment_name": "gpt-4o",
-        "azure_openai_endpoint": "https://mcad-openai-d45ihd.openai.azure.com/",
-        "azure_openai_key": "[secret]",
-        "cosmos_account_name": "mcad-cosmos-d45ihd",
-        "cosmos_connection_instructions": "Configure Function App with these environment variables:\\n  COSMOS_DB_ENDPOINT=https://mcad-cosmos-d45ihd.documents.azure.com:443/\\n  COSMOS_DB_KEY=<from-pulumi-output>\\n  COSMOS_DB_DATABASE=messages\\n  COSMOS_DB_CONTAINER=messages\\n",
-        "cosmos_container_name": "messages",
-        "cosmos_database_name": "messages",
-        "cosmos_db_endpoint": "https://mcad-cosmos-d45ihd.documents.azure.com:443/",
-        "cosmos_db_key": "[secret]",
-        "cost_estimate": "Azure Functions FlexConsumption: Pay-as-you-go. Storage: $0.02/GB/month. Application Insights: 5GB free/month. Azure Front Door Standard: $35/month + $0.01/GB. Key Vault: $0.03 per 10,000 operations (secrets are free). Estimated: $35-50/month with Front Door Standard.",
-        "document_intelligence_endpoint": "https://japaneast.api.cognitive.microsoft.com/",
-        "document_intelligence_key": "[secret]",
-        "document_intelligence_name": "mcad-di-d45ihd",
-        "frontdoor_endpoint_name": "mcad-staging-d45ihd",
-        "frontdoor_hostname": "mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net",
-        "frontdoor_url": "https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net",
-        "frontend_storage_name": "mcadwebd45ihd",
-        "frontend_url": "https://mcadwebd45ihd.z11.web.core.windows.net/",
-        "function_app_name": "multicloud-auto-deploy-staging-func",
-        "functions_storage_name": "mcadfuncd45ihd",
-        "key_vault_name": "mcad-kv-d45ihd",
-        "key_vault_uri": "https://mcad-kv-d45ihd.vault.azure.net/",
-        "log_analytics_workspace_id": "/subscriptions/29031d24-d41a-4f97-8362-46b40129a7e8/resourceGroups/multicloud-auto-deploy-staging-rg/providers/Microsoft.OperationalInsights/workspaces/mcad-logs-d45ihd",
-        "log_analytics_workspace_name": "mcad-logs-d45ihd",
-        "monitoring_action_group_id": "/subscriptions/29031D24-D41A-4F97-8362-46B40129A7E8/resourceGroups/multicloud-auto-deploy-staging-rg/providers/microsoft.insights/actionGroups/multicloud-auto-deploy-staging-alerts",
-        "monitoring_cosmos_alerts": [
-          "throttled_requests",
-          "latency"
-        ],
-        "monitoring_frontdoor_alerts": [
-          "error_percentage"
-        ],
-        "monitoring_function_alerts": [
-          "cpu_usage",
-          "execution_count",
-          "memory"
-        ],
-        "ocr_config_instructions": "Configure Function App with these environment variables for OCR/LLM:\\n  AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://japaneast.api.cognitive.microsoft.com/\\n  AZURE_DOCUMENT_INTELLIGENCE_KEY=<from pulumi stack output document_intelligence_key>\\n  AZURE_OPENAI_ENDPOINT=<from pulumi stack output azure_openai_endpoint>\\n  AZURE_OPENAI_KEY=<from pulumi stack output azure_openai_key>\\n  AZURE_OPENAI_DEPLOYMENT=gpt-4o\\n  SOLVE_ENABLED=true\\n",
-        "resource_group_name": "multicloud-auto-deploy-staging-rg"
-      },
       "resources": [
         {
           "provider": "azure",
@@ -281,49 +298,75 @@
           "region": "Japan East",
           "source": "az-cli",
           "metadata": {}
+        },
+        {
+          "provider": "azure",
+          "resource_type": "cdn",
+          "name": "multicloud-auto-deploy-production-fd",
+          "resource_id": "/subscriptions/29031d24-d41a-4f97-8362-46b40129a7e8/resourcegroups/multicloud-auto-deploy-production-rg/providers/Microsoft.Cdn/profiles/multicloud-auto-deploy-production-fd",
+          "region": "global",
+          "source": "az-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "azure",
+          "resource_type": "object_storage",
+          "name": "mcadfuncd45ihd",
+          "resource_id": "/subscriptions/29031d24-d41a-4f97-8362-46b40129a7e8/resourceGroups/multicloud-auto-deploy-staging-rg/providers/Microsoft.Storage/storageAccounts/mcadfuncd45ihd",
+          "region": "japaneast",
+          "source": "az-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "azure",
+          "resource_type": "object_storage",
+          "name": "mcadfuncdiev0w",
+          "resource_id": "/subscriptions/29031d24-d41a-4f97-8362-46b40129a7e8/resourceGroups/multicloud-auto-deploy-production-rg/providers/Microsoft.Storage/storageAccounts/mcadfuncdiev0w",
+          "region": "japaneast",
+          "source": "az-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "azure",
+          "resource_type": "object_storage",
+          "name": "mcadwebd45ihd",
+          "resource_id": "/subscriptions/29031d24-d41a-4f97-8362-46b40129a7e8/resourceGroups/multicloud-auto-deploy-staging-rg/providers/Microsoft.Storage/storageAccounts/mcadwebd45ihd",
+          "region": "japaneast",
+          "source": "az-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "azure",
+          "resource_type": "object_storage",
+          "name": "mcadwebdiev0w",
+          "resource_id": "/subscriptions/29031d24-d41a-4f97-8362-46b40129a7e8/resourceGroups/multicloud-auto-deploy-production-rg/providers/Microsoft.Storage/storageAccounts/mcadwebdiev0w",
+          "region": "japaneast",
+          "source": "az-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "azure",
+          "resource_type": "compute",
+          "name": "multicloud-auto-deploy-production-func",
+          "resource_id": "/subscriptions/29031d24-d41a-4f97-8362-46b40129a7e8/resourceGroups/multicloud-auto-deploy-production-rg/providers/Microsoft.Web/sites/multicloud-auto-deploy-production-func",
+          "region": "Japan East",
+          "source": "az-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "azure",
+          "resource_type": "database",
+          "name": "mcad-cosmos-diev0w",
+          "resource_id": "/subscriptions/29031d24-d41a-4f97-8362-46b40129a7e8/resourceGroups/multicloud-auto-deploy-production-rg/providers/Microsoft.DocumentDB/databaseAccounts/mcad-cosmos-diev0w",
+          "region": "Japan East",
+          "source": "az-cli",
+          "metadata": {}
         }
       ],
+      "pulumiOutputs": {},
       "errors": []
     },
     "gcp": {
-      "pulumiOutputs": {
-        "audit_config_service": "allServices",
-        "auth_config_instructions": "Firebase Web App created successfully!\\n\\nTo get Firebase configuration (API Key, Auth Domain):\\n1. Visit: https://console.firebase.google.com/project/ashnova/settings/general\\n2. Scroll to 'Your apps' section\\n3. Find your web app: multicloud-auto-deploy-staging-web\\n4. Copy the Firebase SDK configuration\\n\\nTo enable authentication:\\n1. Visit: https://console.firebase.google.com/project/ashnova/authentication\\n2. Enable Google Sign-In provider\\n3. Configure OAuth consent screen\\n\\nCloud Functions environment variables:\\n  AUTH_PROVIDER=firebase\\n  GCP_PROJECT_ID=ashnova\\n",
-        "backend_bucket_name": "multicloud-auto-deploy-staging-cdn-backend",
-        "cdn_https_url": "https://34.117.111.182",
-        "cdn_ip_address": "34.117.111.182",
-        "cdn_url": "http://34.117.111.182",
-        "compute_sa_email": "899621454670-compute@developer.gserviceaccount.com",
-        "cost_estimate": "Cloud Functions: 2M free invocations/month, then $0.40 per 1M. Cloud Storage: $0.02/GB/month. Cloud CDN: $0.02-0.08/GB depending on region. Managed SSL Certificate: Free. Secret Manager: $0.06 per month per secret + $0.03 per 10,000 access operations. External IP: $0.01/hour (~$7.30/month). Cloud Armor: Disabled for staging (saves ~$6-7/month). Estimated: $8-15/month for low traffic without Cloud Armor.",
-        "custom_domain": "staging.gcp.ashnova.jp",
-        "custom_domain_url": "https://staging.gcp.ashnova.jp",
-        "firebase_project_id": "ashnova",
-        "firebase_web_app_id": "1:899621454670:web:a79c2afa58661918fd941f",
-        "firebase_web_app_name": "projects/ashnova/webApps/1:899621454670:web:a79c2afa58661918fd941f",
-        "frontend_bucket": "ashnova-multicloud-auto-deploy-staging-frontend",
-        "frontend_url": "https://storage.googleapis.com/ashnova-multicloud-auto-deploy-staging-frontend/index.html",
-        "function_name": "multicloud-auto-deploy-staging-api",
-        "function_source_bucket": "ashnova-multicloud-auto-deploy-staging-function-source",
-        "monitoring_firestore_alerts": [
-          "operations"
-        ],
-        "monitoring_function_alerts": [
-          "error_rate",
-          "execution_time",
-          "memory_usage"
-        ],
-        "monitoring_notification_channel_id": "projects/ashnova/notificationChannels/4532947482326349236",
-        "project_id": "ashnova",
-        "redirect_url_map_name": "multicloud-auto-deploy-staging-cdn-redirect",
-        "region": "asia-northeast1",
-        "secret_name": "multicloud-auto-deploy-staging-app-config",
-        "ssl_certificate_domains": [
-          "staging.gcp.ashnova.jp"
-        ],
-        "ssl_certificate_name": "multicloud-auto-deploy-staging-ssl-cert-v2",
-        "uploads_bucket": "ashnova-multicloud-auto-deploy-staging-uploads",
-        "url_map_name": "multicloud-auto-deploy-staging-cdn-urlmap-v2"
-      },
       "resources": [
         {
           "provider": "gcp",
@@ -407,8 +450,83 @@
           "region": "asia-northeast1",
           "source": "gcloud-cli",
           "metadata": {}
+        },
+        {
+          "provider": "gcp",
+          "resource_type": "cdn",
+          "name": "multicloud-auto-deploy-production-cdn-backend",
+          "resource_id": "multicloud-auto-deploy-production-cdn-backend",
+          "region": "global",
+          "source": "gcloud-cli",
+          "metadata": {
+            "bucketName": "ashnova-multicloud-auto-deploy-production-frontend"
+          }
+        },
+        {
+          "provider": "gcp",
+          "resource_type": "load_balancer",
+          "name": "multicloud-auto-deploy-production-cdn-redirect",
+          "resource_id": "multicloud-auto-deploy-production-cdn-redirect",
+          "region": "global",
+          "source": "gcloud-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "gcp",
+          "resource_type": "load_balancer",
+          "name": "multicloud-auto-deploy-production-cdn-urlmap",
+          "resource_id": "multicloud-auto-deploy-production-cdn-urlmap",
+          "region": "global",
+          "source": "gcloud-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "gcp",
+          "resource_type": "compute",
+          "name": "multicloud-auto-deploy-production-api",
+          "resource_id": "multicloud-auto-deploy-production-api",
+          "region": "asia-northeast1",
+          "source": "gcloud-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "gcp",
+          "resource_type": "object_storage",
+          "name": "ashnova-multicloud-auto-deploy-production-frontend",
+          "resource_id": "ashnova-multicloud-auto-deploy-production-frontend",
+          "region": "ASIA-NORTHEAST1",
+          "source": "gcloud-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "gcp",
+          "resource_type": "object_storage",
+          "name": "ashnova-multicloud-auto-deploy-production-function-source",
+          "resource_id": "ashnova-multicloud-auto-deploy-production-function-source",
+          "region": "ASIA-NORTHEAST1",
+          "source": "gcloud-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "gcp",
+          "resource_type": "object_storage",
+          "name": "ashnova-multicloud-auto-deploy-production-uploads",
+          "resource_id": "ashnova-multicloud-auto-deploy-production-uploads",
+          "region": "ASIA-NORTHEAST1",
+          "source": "gcloud-cli",
+          "metadata": {}
+        },
+        {
+          "provider": "gcp",
+          "resource_type": "database",
+          "name": "(default)",
+          "resource_id": "projects/ashnova/databases/(default)",
+          "region": "asia-northeast1",
+          "source": "gcloud-cli",
+          "metadata": {}
         }
       ],
+      "pulumiOutputs": {},
       "errors": []
     }
   }

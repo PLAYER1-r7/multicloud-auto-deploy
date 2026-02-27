@@ -1,8 +1,71 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> Last verified: 2026-02-26 (コスト監視ツール追加 ✅ — `scripts/cost_report.py` + `scripts/mac-widget/cost-monitor.1h.py` (xbar) / AWS Bedrock OCR 2パス化 / GCP Vision+Gemini ソルバー新規追加 / Lambda メモリ 512MB→1769MB, JWKS `@lru_cache` 追加 (duration alarm 修正) ✅ (commit `5b72135`)  
-> Previous: 2026-02-24 (コスト削減クリーンアップ実行 ✅ — GCP Cloud Run `production-frontend-web` 削除 / GCP Cloud Function `mcad-staging-api` 削除 / GCP SSL旧証明書 `ashnova-production-cert-c41311` 削除 / AWS S3 `staging/production-landing` バケット削除 / Staging 再デプロイ完全成功 ✅ — AWS#246/GCP#214/Azure#273 全成功 / FC1 deployment storage 修復 (`multicloudautodeploa752` 再作成) ✅ / 全3クラウド health check OK (`status:ok, version:3.0.0`) ✅ / E2Eテストスクリプト大幅改良 + `test-sns-all.sh` 新規追加 ✅ (commit `73af560`))
+> Last verified: 2026-02-27 Session 3 (S1・S2・Task 13 完了 ✅ / エンドポイント本番運用 ✅ / README セキュリティ情報反映 ✅)
+> Previous: 2026-02-27 Session 2 (セキュリティ変更デプロイ ✅ / GCP production復旧 ✅ / 統合テスト39/0 ✅)
+
+---
+
+## Session 2026-02-27 (Continuation 3): Security Deployment & Documentation Update
+
+### Completed Work
+
+| Task                                       | Result                                                                                               | Status |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ------ |
+| S1: GCP staging pulumi up                  | HTTPS redirect / Audit logs 反映済み（33 unchanged）                                                 | ✅     |
+| S1: AWS production pulumi up               | CloudTrail / CORS 反映済み（40 unchanged）                                                           | ✅     |
+| S1: GCP production refresh+up              | State drift 解決後、Audit logs 反映済み（34 unchanged）                                              | ✅     |
+| S1: Azure staging pulumi up                | Key Vault purge protection 反映（1 updated, 32 unchanged）                                           | ✅     |
+| S1: Azure production pulumi up             | Key Vault purge protection 本番反映済み（33 unchanged）                                              | ✅     |
+| **S2: Function App Managed Identity**      | staging/production 両方に SystemAssigned MSI 割り当て成功                                            | ✅     |
+| **Task 13: Update README**                 | エンドポイント・セキュリティ実装・テスト結果・デプロイ状況を最新情報に更新                           | ✅     |
+| Task 20/21 補完: Key Vault 診断設定（CLI） | `az monitor diagnostic-settings create` で Log Analytics との統合が完了（AuditEvent ストリーミング） | ✅     |
+
+### Production Endpoints (As of 2026-02-27)
+
+| Cloud     | CDN / Frontend                                                                   | API                                                                                                             | Status        |
+| --------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------- |
+| **AWS**   | [CloudFront](https://d1qob7569mn5nw.cloudfront.net) ✅                           | [API Gateway](https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com)                                      | ✅ 本番運用中 |
+| **Azure** | [Front Door](https://mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net) ✅ | [Functions](https://multicloud-auto-deploy-production-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api) | ✅ 本番運用中 |
+| **GCP**   | [CDN（www.gcp.ashnova.jp）](https://www.gcp.ashnova.jp) ✅                       | [Cloud Functions](https://multicloud-auto-deploy-production-api-***-an.a.run.app)                               | ✅ 本番運用中 |
+
+### Security Implementation Status (Deployed to Production)
+
+| Measure                    | AWS | Azure               | GCP | Status                |
+| -------------------------- | --- | ------------------- | --- | --------------------- |
+| CORS 絞り込み              | ✅  | ✅                  | ✅  | ✅ 本番反映           |
+| CloudTrail / Audit Logs    | ✅  | ✅                  | ✅  | ✅ 本番反映           |
+| Key Vault Purge Protection | —   | ✅                  | —   | ✅ 本番反映           |
+| Key Vault 診断ログ         | —   | ✅（Log Analytics） | —   | ✅ 本番反映           |
+| Managed Identity           | —   | ✅                  | —   | ✅ staging/production |
+| HTTPS Redirect             | —   | —                   | ✅  | ✅ 本番反映           |
+| Cloud Armor                | —   | —                   | ✅  | ✅ 本番反映           |
+
+---
+
+## Session 2026-02-27: GCP Audit Logs & Billing Budget Remediation
+
+### Completed Work
+
+| Task                                          | Result                                                                                                                                                 | Status |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| GCP audit logs re-enable (IAMAuditConfig)     | staging/production で Cloud Audit Logs (`allServices`) を有効化。Pulumi リソース作成完了                                                               | ✅     |
+| ADC (Application Default Credentials) refresh | `gcloud auth application-default login` で sat0sh1kawada00@gmail.com 再認証。quota project=ashnova に設定                                              | ✅     |
+| GCP billing account config                    | Pulumi設定に `billingAccountId: 01F139-282A95-9BBA25` を追加                                                                                           | ✅     |
+| Billing budget error mitigation               | ADC quota project エラー回避。monitoring.py で `billing_account_id` をoptional パラメータ化。コードで `enable_billing_budget=False` にデフォルト無効化 | ✅     |
+| GCP side budget cleanup                       | `gcloud billing budgets delete` で古いbudgetリソース削除                                                                                               | ✅     |
+| monitoring.py refactor                        | `create_billing_budget()` に `billing_account_id` 追加。`setup_monitoring()` で `billing_budget=None` when not enabled                                 | ✅     |
+
+### Code Changes
+
+- **infrastructure/pulumi/gcp/**main**.py**: `enable_billing_budget = False` (hardcoded disable) + `billing_account_id=None` を常時 monitoring へ参照
+- **infrastructure/pulumi/gcp/monitoring.py**: `billing_account_id` パラメータ追加、optional化。budget作成条件を `if stack=="production" and billing_account_id:` に変更
+
+### Known Issues / Next Steps
+
+- GCP production `pulumi up` が preview conflict 状態。コード修正後は再実行予定（次セッション）
+- staging/production 共にaudit logs有効化完了、billing warning 回避完了
+- billingbudgets API 認証エラーは ADC quotaProjectで解消するが、service account接続時の権限不足で deprecated。本番運用では GCP service account 設定または ignore_changes で対応推奨
 
 ---
 
@@ -639,25 +702,25 @@ open -e scripts/mac-widget/.env    # 認証情報を設定
 
 ### 通貨処理
 
-| Provider | 方式 |
-|----------|------|
-| AWS | Cost Explorer は USD 固定 → [open.er-api.com](https://open.er-api.com) で リアルタイム USD/JPY 変換 (失敗時 ¥150 固定) |
-| Azure | Cost Management API の `rows[n][2]` から通貨コードを直接取得 (JPY) |
-| GCP | Billing API — サービスアカウント or `gcloud auth` |
-| GitHub | Billing API 廃止 (HTTP 410) → `actions/cache/usage` + runs 件数で代替 |
+| Provider | 方式                                                                                                                   |
+| -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| AWS      | Cost Explorer は USD 固定 → [open.er-api.com](https://open.er-api.com) で リアルタイム USD/JPY 変換 (失敗時 ¥150 固定) |
+| Azure    | Cost Management API の `rows[n][2]` から通貨コードを直接取得 (JPY)                                                     |
+| GCP      | Billing API — サービスアカウント or `gcloud auth`                                                                      |
+| GitHub   | Billing API 廃止 (HTTP 410) → `actions/cache/usage` + runs 件数で代替                                                  |
 
 ### .env 設定ファイル
 
 `scripts/mac-widget/.env` (git 管理外) に認証情報を記載します。
 テンプレート: `scripts/mac-widget/cost-monitor.env.sample`
 
-| 変数 | 用途 |
-|------|------|
-| `AZURE_SUBSCRIPTION_ID` | Azure Cost Management |
-| `GCP_BILLING_ACCOUNT` | GCP Billing (`01XXXX-XXXXXX-XXXXXX` 形式) |
-| `GCP_PROJECT_ID` | GCP プロジェクト ID |
-| `GITHUB_TOKEN` | GitHub Actions 使用量取得 |
-| `GH_REPO` | `owner/repo` 形式 (個人リポジトリ用) |
+| 変数                    | 用途                                      |
+| ----------------------- | ----------------------------------------- |
+| `AZURE_SUBSCRIPTION_ID` | Azure Cost Management                     |
+| `GCP_BILLING_ACCOUNT`   | GCP Billing (`01XXXX-XXXXXX-XXXXXX` 形式) |
+| `GCP_PROJECT_ID`        | GCP プロジェクト ID                       |
+| `GITHUB_TOKEN`          | GitHub Actions 使用量取得                 |
+| `GH_REPO`               | `owner/repo` 形式 (個人リポジトリ用)      |
 
 AWS は `~/.aws/credentials` の default プロファイルを使用（追加設定不要）。
 
