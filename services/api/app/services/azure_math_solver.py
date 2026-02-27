@@ -500,6 +500,59 @@ class AzureMathSolver(BaseMathSolver):
         smaller = min(a_max - a_min, b_max - b_min)
         return overlap / max(smaller, 1e-9)
 
+    @staticmethod
+    def _is_formula_candidate(content: str) -> bool:
+        """Return True if this line *could* be part of a formula region.
+
+        Weak criterion: no CJK characters, not a problem-number label, short enough.
+        Used to group consecutive candidate lines; the group is only treated as a
+        formula region when it contains at least one strong math signal.
+        """
+        s = content.strip()
+        if not s:
+            return False
+        # Problem-number labels like "(1)", "(2)" are not formula parts
+        import re as _re
+        if _re.fullmatch(r"\(\d+\)", s):
+            return False
+        # Lines with CJK characters are Japanese problem text
+        cjk = sum(1 for c in s if "\u3040" <= c <= "\u9fff" or "\uff00" <= c <= "\uffef")
+        if cjk > 0:
+            return False
+        return len(s) <= 80
+
+    @staticmethod
+    def _has_formula_signal(lines: list[str]) -> bool:
+        """Return True if at least one line in the group contains a strong math signal."""
+        import re as _re
+        pattern = _re.compile(
+            r"[\\∞∫∑∏√]|lim|log|sin|cos|tan|rightarrow|\bint\b|d[a-z]\b"
+            r"|[+\-*/^=<>]{2,}|[+\-*/^].*[+\-*/^]",
+            _re.IGNORECASE,
+        )
+        return any(pattern.search(l) for l in lines)
+
+    def _find_formula_regions(self, read_lines: list[dict]) -> list[tuple[int, int]]:
+        """Find contiguous runs of formula-candidate lines that contain a math signal.
+
+        Returns a list of (start_idx, end_idx_exclusive) ranges.
+        """
+        regions: list[tuple[int, int]] = []
+        i = 0
+        n = len(read_lines)
+        while i < n:
+            if self._is_formula_candidate(read_lines[i]["content"]):
+                j = i
+                while j < n and self._is_formula_candidate(read_lines[j]["content"]):
+                    j += 1
+                group_texts = [read_lines[k]["content"] for k in range(i, j)]
+                if self._has_formula_signal(group_texts):
+                    regions.append((i, j))
+                i = j
+            else:
+                i += 1
+        return regions
+
     def _merge_read_with_formulas(
         self,
         read_lines: list[dict],
@@ -507,15 +560,14 @@ class AzureMathSolver(BaseMathSolver):
     ) -> str:
         """Replace display-formula lines in prebuilt-read output with accurate LaTeX.
 
-        Algorithm:
-          1. For each *display* formula with a bounding-box polygon, find all read
-             lines whose Y-range overlaps the formula's Y-range by ≥30 %.
-          2. Replace every such group of lines with a single ``$$latex$$`` block.
-          3. Lines that don't overlap any display formula are kept as-is
-             (preserving Japanese problem text).
-          4. *Display* formulas whose polygon was missing or unmatched are appended
-             at the bottom as ``[display] latex`` so they are never silently dropped.
-          5. *Inline* formulas are always appended at the bottom for LLM context.
+        Strategy (two-pass):
+          1. Polygon overlap (≥30 % Y-overlap) — preferred when polygon data exists.
+          2. Heuristic region matching — fallback when polygons are None.
+             Detects consecutive runs of formula-fragment lines and replaces each
+             run with the next available display formula in document order.
+          3. Display formulas with no polygon AND no heuristic match are appended
+             at the bottom so they are never silently dropped.
+          4. Inline formulas are always appended at the bottom for LLM context.
         """
         if not rich_formulas:
             return "\n".join(l["content"] for l in read_lines)
@@ -531,56 +583,59 @@ class AzureMathSolver(BaseMathSolver):
             if f.get("kind") != "display"
         ]
 
-        # Diagnostic logging for polygon data availability
-        print(f"[OCR-MERGE] read_lines={len(read_lines)}, "
-              f"display_formulas={len(display_formulas)}, "
-              f"inline_latex={len(inline_latex)}")
-        for i, (f, f_yr) in enumerate(display_formulas):
-            raw_poly = f.get("polygon")
-            poly_type = type(raw_poly).__name__ if raw_poly is not None else "None"
-            print(f"[OCR-MERGE] display[{i}] kind={f.get('kind')} "
-                  f"poly_type={poly_type} poly_len={len(raw_poly) if raw_poly else 0} "
-                  f"y_range={f_yr} val_prefix={f.get('value','')[:40]!r}")
-        if read_lines:
-            for i, line in enumerate(read_lines[:5]):
-                l_poly = line.get("polygon")
-                l_yr = self._poly_y_range(l_poly)
-                poly_type = type(l_poly).__name__ if l_poly is not None else "None"
-                print(f"[OCR-MERGE] line[{i}] poly_type={poly_type} "
-                      f"poly_len={len(l_poly) if l_poly else 0} "
-                      f"y_range={l_yr} content={line.get('content','')[:40]!r}")
-
-        # Map each read line to the display formula that covers it.
+        # --- Pass 1: polygon-based matching ---
         line_formula: list[dict | None] = [None] * len(read_lines)
         for f, f_yr in display_formulas:
             if f_yr is None:
-                continue  # no polygon — will fall back to bottom
+                continue
             for li, line in enumerate(read_lines):
                 if line_formula[li] is not None:
-                    continue  # already claimed
+                    continue
                 l_yr = self._poly_y_range(line.get("polygon"))
                 if l_yr and self._y_overlap_ratio(l_yr[0], l_yr[1], f_yr[0], f_yr[1]) >= 0.3:
                     line_formula[li] = f
 
-        # Build output preserving document order.
+        # Determine which display formulas are matched via polygons
+        poly_emitted: set[int] = set()
+        for f_on_line in line_formula:
+            if f_on_line is not None:
+                poly_emitted.add(id(f_on_line))
+
+        # --- Pass 2: heuristic matching for unmatched display formulas ---
+        unmatched_display = [f for f, _ in display_formulas if id(f) not in poly_emitted]
+        if unmatched_display:
+            regions = self._find_formula_regions(read_lines)
+            print(f"[OCR-MERGE] heuristic regions={regions}, "
+                  f"unmatched_display={len(unmatched_display)}")
+            for region, fm in zip(regions, unmatched_display):
+                start, end = region
+                for li in range(start, end):
+                    line_formula[li] = fm  # mark entire region as this formula
+                poly_emitted.add(id(fm))  # now considered matched
+
+        # --- Build output ---
         parts: list[str] = []
         emitted: set[int] = set()
-        for li, line in enumerate(read_lines):
+        li = 0
+        while li < len(read_lines):
             f = line_formula[li]
             if f is None:
-                parts.append(line["content"])
+                parts.append(read_lines[li]["content"])
+                li += 1
             else:
                 fid = id(f)
                 if fid not in emitted:
                     emitted.add(fid)
                     parts.append(f"$${f['value']}$$")
-                # else: duplicate line mapping to the same formula — skip
+                # Skip all read lines sthat belong to this formula's region
+                while li < len(read_lines) and line_formula[li] is f:
+                    li += 1
 
-        # Safety net: display formulas with no polygon OR unmatched → append at bottom
-        unmatched_display = [f["value"] for f, _ in display_formulas if id(f) not in emitted]
-        if unmatched_display or inline_latex:
+        # Safety net: display formulas still not emitted → append at bottom
+        still_unmatched = [f["value"] for f, _ in display_formulas if id(f) not in emitted]
+        if still_unmatched or inline_latex:
             parts.append("\n[検出された数式 (LaTeX)]")
-            for val in unmatched_display:
+            for val in still_unmatched:
                 parts.append(f"[display] {val}")
             for val in inline_latex:
                 parts.append(f"[inline] {val}")
