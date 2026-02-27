@@ -531,6 +531,25 @@ class AzureMathSolver(BaseMathSolver):
             if f.get("kind") != "display"
         ]
 
+        # Diagnostic logging for polygon data availability
+        print(f"[OCR-MERGE] read_lines={len(read_lines)}, "
+              f"display_formulas={len(display_formulas)}, "
+              f"inline_latex={len(inline_latex)}")
+        for i, (f, f_yr) in enumerate(display_formulas):
+            raw_poly = f.get("polygon")
+            poly_type = type(raw_poly).__name__ if raw_poly is not None else "None"
+            print(f"[OCR-MERGE] display[{i}] kind={f.get('kind')} "
+                  f"poly_type={poly_type} poly_len={len(raw_poly) if raw_poly else 0} "
+                  f"y_range={f_yr} val_prefix={f.get('value','')[:40]!r}")
+        if read_lines:
+            for i, line in enumerate(read_lines[:5]):
+                l_poly = line.get("polygon")
+                l_yr = self._poly_y_range(l_poly)
+                poly_type = type(l_poly).__name__ if l_poly is not None else "None"
+                print(f"[OCR-MERGE] line[{i}] poly_type={poly_type} "
+                      f"poly_len={len(l_poly) if l_poly else 0} "
+                      f"y_range={l_yr} content={line.get('content','')[:40]!r}")
+
         # Map each read line to the display formula that covers it.
         line_formula: list[dict | None] = [None] * len(read_lines)
         for f, f_yr in display_formulas:
