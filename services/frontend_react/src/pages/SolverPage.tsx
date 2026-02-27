@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { solveMath } from "../api/solve";
 import type { SolveResponse } from "../types/solve";
+import MathText from "../components/MathText";
 
 // ═══════════════════════════════════════════
 // 東大 2025 数学 第1問 固定デモ
@@ -12,8 +13,20 @@ const DEMO_EXAM = {
   questionNo: "1",
 } as const;
 
-const PROBLEM_IMAGE_URL =
-  "http://server-test.net/math/tokyo/q_jpg/2025_1.jpg";
+const PROBLEM_IMAGE_URL = "http://server-test.net/math/tokyo/q_jpg/2025_1.jpg";
+
+// 東大 2025 数学 第1問 LaTeX 問題文
+const PROBLEM_LATEX = `座標平面上の点 $A(0, 0)$，$B(0, 1)$，$C(1, 1)$，$D(1, 0)$ を考える。\
+実数 $0 < t < 1$ に対して，線分 $AB$，$BC$，$CD$ を $t : (1-t)$ に内分する点をそれぞれ $P_t$，$Q_t$，$R_t$ とし，\
+線分 $P_tQ_t$，$Q_tR_t$ を $t : (1-t)$ に内分する点をそれぞれ $S_t$，$T_t$ とする。\
+さらに，線分 $S_tT_t$ を $t : (1-t)$ に内分する点を $U_t$ とする。\
+また，点 $A$ を $U_0$，点 $D$ を $U_1$ とする。
+
+(1) 点 $U_t$ の座標を求めよ。
+
+(2) $t$ が $0 \\leqq t \\leqq 1$ の範囲を動くときに点 $U_t$ が描く曲線と，線分 $AD$ で囲まれた部分の面積を求��よ。
+
+(3) $a$ を $0 < a < 1$ を満たす実数とする。$t$ が $0 \\leqq t \\leqq a$ の範囲を動くときに点 $U_t$ が描く曲線の長さを，$a$ の多項式の形で求めよ。`;
 
 // ─────────────────────────────────────────
 export default function SolverPage() {
@@ -31,7 +44,7 @@ export default function SolverPage() {
       const res = await solveMath({
         input: { source: "url", imageUrl: PROBLEM_IMAGE_URL },
         exam: DEMO_EXAM,
-        options: { mode: "fast", needSteps: true, needLatex: false },
+        options: { mode: "fast", needSteps: true, needLatex: true },
       });
       setResult(res);
     } catch (e: unknown) {
@@ -61,38 +74,35 @@ export default function SolverPage() {
         {/* 左: 問題画像 */}
         <div className="solver-panel">
           <h3 className="panel-title">問題文</h3>
+          {/* LaTeX 問題文（常に表示） */}
+          <div className="problem-latex">
+            <MathText text={PROBLEM_LATEX} />
+          </div>
+
+          {/* 問題画像（読み込み成功時のみ表示） */}
           {!imgError ? (
-            <img
-              src={PROBLEM_IMAGE_URL}
-              alt="東京大学 2025年度 数学 第1問"
-              className="problem-image"
-              onError={() => setImgError(true)}
-            />
+            <details className="problem-image-details">
+              <summary className="problem-image-summary">問題画像を見る</summary>
+              <img
+                src={PROBLEM_IMAGE_URL}
+                alt="東京大学 2025年度 数学 第1問"
+                className="problem-image"
+                onError={() => setImgError(true)}
+              />
+            </details>
           ) : (
-            <div className="image-fallback">
-              <svg
-                className="icon"
-                viewBox="0 0 24 24"
-                width="40"
-                height="40"
-                aria-hidden="true"
-              >
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M3 9l5 5 4-4 4 4 5-5" />
-              </svg>
-              <p>画像を読み込めませんでした</p>
-              <p className="muted" style={{ fontSize: "0.8rem" }}>
-                (HTTP mixed-content ブロックの可能性があります)
-              </p>
+            <p className="muted" style={{ fontSize: "0.8rem", marginTop: "0.5rem" }}>
+              ※ 画像は mixed-content のためブロックされました。
               <a
                 href="http://server-test.net/math/tokyo/q_pdf/2025_1.pdf"
                 target="_blank"
                 rel="noreferrer"
                 className="link"
+                style={{ marginLeft: "0.3em" }}
               >
                 PDF を開く →
               </a>
-            </div>
+            </p>
           )}
         </div>
 
@@ -184,7 +194,9 @@ export default function SolverPage() {
                     確信度 {Math.round(result.answer.confidence * 100)}%
                   </span>
                 </div>
-                <div className="answer-final">{result.answer.final}</div>
+                <div className="answer-final">
+                  <MathText text={result.answer.final} />
+                </div>
 
                 {result.answer.steps.length > 0 && (
                   <div className="answer-steps">
@@ -192,7 +204,7 @@ export default function SolverPage() {
                     <ol className="steps-list">
                       {result.answer.steps.map((step, i) => (
                         <li key={i} className="step-item">
-                          {step}
+                          <MathText text={step} />
                         </li>
                       ))}
                     </ol>

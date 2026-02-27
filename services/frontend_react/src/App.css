@@ -893,6 +893,35 @@ code {
   border-bottom: 1px solid var(--border);
 }
 
+/* ── LaTeX 問題文 ────────────────────────────────────── */
+.problem-latex {
+  font-size: 0.95rem;
+  line-height: 1.9;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+}
+
+/* ── 問題画像（折りたたみ）─────────────────────────── */
+.problem-image-details {
+  margin-top: 0.5rem;
+}
+
+.problem-image-details[open] .problem-image {
+  margin-top: 0.5rem;
+}
+
+.problem-image-summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--accent, #4f8ef7);
+  user-select: none;
+  padding: 0.25rem 0;
+}
+
+.problem-image-summary:hover {
+  text-decoration: underline;
+}
+
 /* ── 問題画像 ────────────────────────────────────────── */
 .problem-image {
   width: 100%;

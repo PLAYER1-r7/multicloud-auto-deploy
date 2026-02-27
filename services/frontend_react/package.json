@@ -15,8 +15,10 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
+    "@types/katex": "^0.16.8",
     "@types/react-router-dom": "^5.3.3",
     "axios": "^1.13.5",
+    "katex": "^0.16.33",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0"
