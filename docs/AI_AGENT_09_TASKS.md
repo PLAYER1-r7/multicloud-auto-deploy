@@ -21,6 +21,7 @@ Azure API (staging):        ✅ {"status":"ok","provider":"azure","version":"3.0
 Security hardening (S1):    ✅ CORS・CloudTrail・HTTPS redirect・AuditLogs・Log Analytics本番反映完了 (2026-02-27 Session 3)
 Managed Identity (S2):      ✅ Azure Function App に SystemAssigned MSI 有効化（staging/production）(2026-02-27 Session 3)
 Azure WAF (Task 6):         ✅ Function App ミドルウェアで SQL injection/XSS/Path Traversal/Suspicious file 検出（2026-02-27 Session 5）
+DynamoDB GSI (Task 3):      ✅ PostIdIndex & UserPostsIndex 検証済み（staging 47件・production 6件、クエリ動作確認）(2026-02-27 Session 5)
 GCP production state (0c):  ✅ 409 Conflict 解除 → 34 unchanged で正常復旧 (2026-02-27)
 deploy-azure v Python:      ✅ Python 3.12-slim --platform linux/amd64 設定済み
 Audit logs (0a/0b):         ✅ GCP staging/production IAMAuditConfig 作成完了・billing budget対応完了
@@ -135,7 +136,7 @@ S3 → [担当者要確認] サブスクリプション所有者を追加
 21 → az security contact create — セキュリティ連絡先メール設定
 1 → Run integration tests (establish current baseline)
 2 → Verify Azure PUT /posts
-3 → Confirm DynamoDB GSI
+✅3 → Confirm DynamoDB GSI (DONE 2026-02-27 — PostIdIndex & UserPostsIndex verified in staging/production)
 4 → Fix SNS:Unsubscribe (restore DELETE flow)
 ✅5 → GCP HTTPS redirect (Pulumi code done 2026-02-24 — applied by S1)
 ✅6 → Azure WAF (DONE 2026-02-27 — Function App middleware, staging/production deployed)
