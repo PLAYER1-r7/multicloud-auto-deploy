@@ -139,6 +139,44 @@ class BaseMathSolver:
         text = re.sub(r"\(cid:\d+\)", " ", text)
         return text
 
+    def _normalize_pdf_math_text(self, text: str) -> str:
+        """PDF テキスト抽出後の数式表記を正規化する。
+
+        pdfminer.six は縦組み数式（分数・積分上下限）を行分割するため、
+        以下のパターンを修復する:
+
+        - 積分上下限: "∫ 2\\n\\n1\\n" → "∫_{1}^{2} "
+        - lim 添字:   "lim\\nn→∞"   → "lim_{n→∞}"
+        - 縦分割分数: "π\\n6\\n"     → "π/6"
+        - 1/変数:     "1\\nz"         → "1/z"
+        - 上付き文字（小文字変数のみ）: "x2" → "x²", "α2" → "α²"
+          ※ 大文字ラベル (A2, T2) は変換しない
+        """
+        # Rule 1: 積分の上下限
+        text = re.sub(r"∫ (\S+)\n+(\S+)\n", r"∫_{\2}^{\1} ", text)
+
+        # Rule 2: lim の添字
+        text = re.sub(r"\blim\n+([a-zA-Zα-ωΑ-Ω]→\S*)", r"lim_{\1}", text)
+
+        # Rule 3a: 縦分割の分数 — 短いトークン単独行 + 直後の数字行
+        text = re.sub(
+            r"(?<=\n)\n([πθα-ωΑ-Ω∞\da-zA-Z]{1,8})\n(\d{1,4})(?=\n)",
+            r" \1/\2",
+            text,
+        )
+
+        # Rule 3b: "1\n単一変数" → "1/変数"  (1/z, 1/γ 等)
+        text = re.sub(r"\b(1)\n([a-zA-Zα-ωΑ-Ω])([^a-zA-Zα-ωΑ-Ω])", r"\1/\2\3", text)
+
+        # Rule 4: 上付き文字の復元 — 小文字ラテン・ギリシャのみ (大文字ラベルは除外)
+        text = re.sub(r"([a-zα-ωφψ])2\b", r"\1²", text)
+        text = re.sub(r"([a-zα-ωφψ])3\b", r"\1³", text)
+
+        # Rule 5: 余分な連続空行を最大 2 行に圧縮
+        text = re.sub(r"\n{3,}", "\n\n", text)
+
+        return text.strip()
+
     def _extract_text_from_pdf_bytes(self, pdf_bytes: bytes) -> str:
         """PDF bytes からテキストを抽出する。
 
@@ -150,7 +188,8 @@ class BaseMathSolver:
             from pdfminer.high_level import extract_text as pdfminer_extract  # type: ignore[import]
 
             text = pdfminer_extract(BytesIO(pdf_bytes))
-            text = self._fix_pdfminer_cid_chars(text).strip()
+            text = self._fix_pdfminer_cid_chars(text)
+            text = self._normalize_pdf_math_text(text)
             if text:
                 return text
         except Exception:
