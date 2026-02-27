@@ -73,6 +73,129 @@ app.add_middleware(
 # Gzip圧縮
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+
+# ── Security Validation Middleware ──────────────────────────────────────────
+# Detect and block common attack patterns:
+#   1. SQL Injection (query strings)
+#   2. Path Traversal (URL paths)
+#   3. XSS (User-Agent headers)
+#   4. Suspicious file extensions
+# This provides WAF-like protection without Azure Front Door Premium SKU.
+@app.middleware("http")
+async def security_validation_middleware(request: Request, call_next):
+    """Block requests matching common attack patterns."""
+    
+    # Check 1: SQL Injection patterns in query string
+    query_string = str(request.url.query).lower()
+    sql_patterns = [
+        "union select",
+        "union+select",
+        "' or '1'='1",
+        "' or 1=1",
+        "; drop table",
+        "; delete from",
+        "exec(",
+        "execute(",
+        "<script>",
+        "javascript:",
+    ]
+    
+    for pattern in sql_patterns:
+        if pattern in query_string:
+            logger.warning(
+                f"SQL Injection attempt detected: {pattern}",
+                extra={
+                    "path": request.url.path,
+                    "query": query_string[:200],
+                    "client_ip": request.client.host if request.client else "unknown",
+                    "user_agent": request.headers.get("user-agent", "unknown")[:100],
+                },
+            )
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": "Request blocked by security policy",
+                    "rule": "SQL Injection Detection",
+                },
+            )
+    
+    # Check 2: Path Traversal patterns in URL path
+    path = request.url.path.lower()
+    path_traversal_patterns = ["../", "..\\", "%2e%2e%2f", "%2e%2e/", "..%2f", "%2e%2e%5c"]
+    
+    for pattern in path_traversal_patterns:
+        if pattern in path:
+            logger.warning(
+                f"Path Traversal attempt detected: {pattern}",
+                extra={
+                    "path": request.url.path,
+                    "client_ip": request.client.host if request.client else "unknown",
+                },
+            )
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": "Request blocked by security policy",
+                    "rule": "Path Traversal Detection",
+                },
+            )
+    
+    # Check 3: Suspicious file extensions
+    suspicious_extensions = [
+        ".env",
+        ".git",
+        ".config",
+        ".sql",
+        ".bak",
+        ".old",
+        ".log",
+        "web.config",
+        ".htaccess",
+    ]
+    
+    for ext in suspicious_extensions:
+        if path.endswith(ext):
+            logger.warning(
+                f"Suspicious file extension requested: {ext}",
+                extra={
+                    "path": request.url.path,
+                    "client_ip": request.client.host if request.client else "unknown",
+                },
+            )
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": "Request blocked by security policy",
+                    "rule": "Suspicious File Detection",
+                },
+            )
+    
+    # Check 4: XSS patterns in User-Agent header
+    user_agent = request.headers.get("user-agent", "").lower()
+    xss_patterns = ["<script", "javascript:", "onerror=", "onload=", "eval(", "alert("]
+    
+    for pattern in xss_patterns:
+        if pattern in user_agent:
+            logger.warning(
+                f"XSS attempt detected in User-Agent: {pattern}",
+                extra={
+                    "user_agent": user_agent[:200],
+                    "client_ip": request.client.host if request.client else "unknown",
+                },
+            )
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": "Request blocked by security policy",
+                    "rule": "XSS Detection",
+                },
+            )
+    
+    # All checks passed - proceed with request
+    response = await call_next(request)
+    return response
+
+
 # ルーター登録
 app.include_router(limits.router)
 app.include_router(posts.router)

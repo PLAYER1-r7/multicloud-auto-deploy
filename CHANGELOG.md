@@ -10,6 +10,59 @@ This changelog includes commit bodies, file changes, and statistics for full tra
 
 ---
 
+## 📅 2026-02-27
+
+### ✨ **feat** (docs): add official cloud service icons to architecture diagrams
+
+**Manual Entry** | **Files Changed**: 19
+
+**Summary**: Integrated official AWS, Azure, and GCP service icons into interactive HTML architecture diagrams. Icons are embedded as Base64 data URIs (no external CDN dependencies) and injected into Mermaid flowchart nodes via JavaScript DOM manipulation.
+
+**Changes**:
+
+> **`scripts/generate_icon_diagram.py`**
+>
+> - Added `load_official_icon()` function with provider-specific icon mappings
+> - Icon assets: AWS (5 types), Azure (4 types), GCP (5 types)
+> - Base64 encoding for SVG → data URI conversion
+> - JavaScript injection code for Mermaid node icon placement (28x28px at top-left)
+> - Pattern matching: `flowchart-{provider}_{resource_type}-{name}`
+
+> **`assets/icons/`** (new directory)
+>
+> - `aws/`: cloudfront.svg, lambda.svg, s3.svg, dynamodb.svg, api-gateway.svg (14KB total)
+> - `azure/`: cdn.svg, function.svg, storage.svg, cosmos-db.svg (16KB total)
+> - `gcp/`: cdn.svg, run.svg, storage.svg, firestore.svg, load-balancer.svg (20KB total)
+
+> **`docs/generated/architecture/`**
+>
+> - `architecture.staging.html` (85KB) - Staging environment with official icons
+> - `architecture.production.html` (85KB) - Production environment with official icons
+> - `architecture-combined.html` (91KB) - Staging + Production overlay diagram
+
+> **`docs/CLOUD_ARCHITECTURE_MAPPER.md`**
+>
+> - Added "Interactive HTML Diagram Generator" section
+> - Documented icon assets, usage, technical details, and known limitations
+> - Noted 13 isolated resources identified (resource cleanup postponed)
+
+> **`README.md`**
+>
+> - Updated Architecture section with links to interactive HTML diagrams
+
+**Icon Sources**:
+- AWS Architecture Icons Asset Package (Q3-2021, 13.6MB from d1.awsstatic.com)
+- Azure Public Service Icons V14 (856KB from arch-center.azureedge.net)
+- Google Cloud Icons (2.2MB from cloud.google.com)
+
+**Technical Highlights**:
+- Zero external dependencies (all icons Base64-embedded)
+- Mermaid.js v10 ESM module integration
+- Responsive sidebar legend with resource counts
+- Pattern-based node ID matching for icon injection
+
+---
+
 ## 📅 2026-02-20
 
 ### 🐛 **fix** (api): raise imageKeys max_length from 10 to 16 to match frontend limit

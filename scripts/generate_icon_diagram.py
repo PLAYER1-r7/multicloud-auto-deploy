@@ -248,22 +248,69 @@ def generate_html_diagram(
                     const rect = node.querySelector('rect');
                     if (!rect) return;
 
-                    const x = parseFloat(rect.getAttribute('x') || 0);
-                    const y = parseFloat(rect.getAttribute('y') || 0);
+                    const rectX = parseFloat(rect.getAttribute('x') || 0);
+                    const rectY = parseFloat(rect.getAttribute('y') || 0);
+                    const rectWidth = parseFloat(rect.getAttribute('width') || 0);
+                    const rectHeight = parseFloat(rect.getAttribute('height') || 0);
 
-                    // アイコンをSVG imageとして追加（左上に配置）
-                    const iconSize = 28;
+                    // テキスト要素を取得（ラベル）
+                    const labelGroup = node.querySelector('.label');
+                    const textElement = node.querySelector('text, foreignObject');
+
+                    // アイコンサイズとパディング
+                    const iconSize = 24;
+                    const textIconSize = 20;  // テキスト横のアイコンサイズ
                     const padding = 6;
-                    const image = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-                    image.setAttributeNS('http://www.w3.org/1999/xlink', 'href', iconUrl);
-                    image.setAttribute('x', x + padding);
-                    image.setAttribute('y', y + padding);
-                    image.setAttribute('width', iconSize);
-                    image.setAttribute('height', iconSize);
-                    image.style.pointerEvents = 'none';
 
-                    // ノードグループの最後に挿入（テキストの上に表示）
-                    node.appendChild(image);
+                    // 1. 左上にアイコンを配置（既存動作）
+                    const topIcon = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+                    topIcon.setAttributeNS('http://www.w3.org/1999/xlink', 'href', iconUrl);
+                    topIcon.setAttribute('x', rectX + padding);
+                    topIcon.setAttribute('y', rectY + padding);
+                    topIcon.setAttribute('width', iconSize);
+                    topIcon.setAttribute('height', iconSize);
+                    topIcon.style.pointerEvents = 'none';
+                    node.appendChild(topIcon);
+
+                    // 2. テキストの左側にもアイコンを追加
+                    if (textElement) {{
+                        let textX, textY;
+
+                        if (textElement.tagName === 'foreignObject') {{
+                            // foreignObjectの場合
+                            textX = parseFloat(textElement.getAttribute('x') || 0);
+                            textY = parseFloat(textElement.getAttribute('y') || 0);
+                            const fHeight = parseFloat(textElement.getAttribute('height') || 0);
+                            textY = textY + fHeight / 2 - textIconSize / 2;
+                        }} else {{
+                            // text要素の場合
+                            const tspan = textElement.querySelector('tspan');
+                            if (tspan) {{
+                                textX = parseFloat(tspan.getAttribute('x') || textElement.getAttribute('x') || 0);
+                                textY = parseFloat(tspan.getAttribute('y') || textElement.getAttribute('y') || 0);
+                            }} else {{
+                                textX = parseFloat(textElement.getAttribute('x') || 0);
+                                textY = parseFloat(textElement.getAttribute('y') || 0);
+                            }}
+                            textY = textY - textIconSize / 2;
+                        }}
+
+                        // テキスト横のアイコン（テキストの左側に配置）
+                        const textIcon = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+                        textIcon.setAttributeNS('http://www.w3.org/1999/xlink', 'href', iconUrl);
+                        textIcon.setAttribute('x', textX - textIconSize - 4);  // テキストの4px左
+                        textIcon.setAttribute('y', textY);
+                        textIcon.setAttribute('width', textIconSize);
+                        textIcon.setAttribute('height', textIconSize);
+                        textIcon.style.pointerEvents = 'none';
+
+                        // テキスト要素の前に挿入
+                        if (labelGroup) {{
+                            labelGroup.insertBefore(textIcon, labelGroup.firstChild);
+                        }} else {{
+                            node.appendChild(textIcon);
+                        }}
+                    }}
                 }});
             }}, 800);  // Mermaidのレンダリング完了を待つ
         }});
