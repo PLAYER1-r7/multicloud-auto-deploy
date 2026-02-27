@@ -18,7 +18,7 @@ function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<CallbackPage />} />
-          <Route path="/solver" element={<SolverPage />} />
+          <Route path="/exam" element={<SolverPage />} />
           {/* Fallback: send everything else to home */}
           <Route path="*" element={<HomePage />} />
         </Routes>

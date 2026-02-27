@@ -80,20 +80,20 @@
     <div class="container">
         <h1>🚀 Ashnova v3</h1>
         <p>マルチクラウド対応の静的サイト & SNS プラットフォーム</p>
-        
+
         <div class="cloud-badges">
             <div class="badge">AWS</div>
             <div class="badge">Azure</div>
             <div class="badge">GCP</div>
         </div>
-        
+
         <div class="links">
             <a href="#" id="snsLink" class="link">SNS アプリ</a>
             <a href="#" id="solverLink" class="link">🎓 入試 AI 解答</a>
             <a href="https://github.com" class="link">GitHub</a>
             <a href="#" id="apiDocsLink" class="link">API ドキュメント</a>
         </div>
-        
+
         <div class="footer">
             <p>Powered by Python + Pulumi</p>
         </div>
@@ -112,18 +112,18 @@
                 const snsHostname = hostname.replace(/-\d+\./, '-8080.');
                 const apiHostname = hostname.replace(/-\d+\./, '-8000.');
                 document.getElementById('snsLink').href = `${protocol}//${snsHostname}/sns`;
-                document.getElementById('solverLink').href = `${protocol}//${snsHostname}/sns/solver`;
+                document.getElementById('solverLink').href = `${protocol}//${snsHostname}/sns/exam`;
                 document.getElementById('apiDocsLink').href = `${protocol}//${apiHostname}/docs`;
             } else {
                 document.getElementById('snsLink').href = `${protocol}//${hostname}:8080/sns`;
-                document.getElementById('solverLink').href = `${protocol}//${hostname}:8080/sns/solver`;
+                document.getElementById('solverLink').href = `${protocol}//${hostname}:8080/sns/exam`;
                 document.getElementById('apiDocsLink').href = `${protocol}//${hostname}:8000/docs`;
             }
         } else {
             // 本番環境 (AWS CloudFront / GCP CDN / Azure Front Door):
             // /sns* → frontend_web (Simple SNS) へのパスルーティング
             document.getElementById('snsLink').href = '/sns';
-            document.getElementById('solverLink').href = '/sns/solver';
+            document.getElementById('solverLink').href = '/sns/exam';
             document.getElementById('apiDocsLink').href = '/sns/docs';
         }
     </script>
