@@ -187,7 +187,13 @@ class BaseMathSolver:
         if not university:
             return None
 
-        repo_root = Path(__file__).resolve().parents[4]
+        # parents[4] = repo root when running locally (workspaces/…/services/api/app/services/).
+        # In Cloud Functions the deployment path is shallower (/workspace/app/services/),
+        # so parents[4] raises IndexError. Catch it and return None gracefully.
+        try:
+            repo_root = Path(__file__).resolve().parents[4]
+        except IndexError:
+            return None
         docs_dir = repo_root / "docs"
         candidate_names = [
             f"{year}_{university}_q_{question_digits}.pdf",
@@ -320,7 +326,10 @@ class BaseMathSolver:
         if not university:
             return ""
 
-        repo_root = Path(__file__).resolve().parents[4]
+        try:
+            repo_root = Path(__file__).resolve().parents[4]
+        except IndexError:
+            return ""
         sample_files = sorted((repo_root / "docs").glob(f"2025_{university}_q_*.pdf"))
         if not sample_files:
             sample_files = sorted(
