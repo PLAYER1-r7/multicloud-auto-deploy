@@ -461,12 +461,25 @@ class AzureMathSolver(BaseMathSolver):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _poly_y_range(polygon: list[float] | None) -> tuple[float, float] | None:
-        """Return (y_min, y_max) from a flat polygon [x0,y0,x1,y1,...], or None."""
-        if not polygon or len(polygon) < 4:
+    def _poly_y_range(polygon: list | None) -> tuple[float, float] | None:
+        """Return (y_min, y_max) from a polygon, or None if unavailable.
+
+        Handles two formats returned by different Azure DI SDK builds:
+          - Flat float list: ``[x0, y0, x1, y1, x2, y2, x3, y3]``
+          - Point-object list: ``[Point(x=..., y=...), ...]``
+        """
+        if not polygon or len(polygon) < 2:
             return None
-        y_vals = polygon[1::2]  # indices 1, 3, 5, 7
-        return min(y_vals), max(y_vals)
+        try:
+            if hasattr(polygon[0], "y"):
+                y_vals = [p.y for p in polygon]
+            else:
+                y_vals = polygon[1::2]  # flat list: y at odd indices
+            if not y_vals:
+                return None
+            return float(min(y_vals)), float(max(y_vals))
+        except Exception:
+            return None
 
     @staticmethod
     def _y_overlap_ratio(a_min: float, a_max: float, b_min: float, b_max: float) -> float:
@@ -486,12 +499,13 @@ class AzureMathSolver(BaseMathSolver):
 
         Algorithm:
           1. For each *display* formula with a bounding-box polygon, find all read
-             lines whose Y-range overlaps the formula's Y-range by ≥50 %.
+             lines whose Y-range overlaps the formula's Y-range by ≥30 %.
           2. Replace every such group of lines with a single ``$$latex$$`` block.
           3. Lines that don't overlap any display formula are kept as-is
              (preserving Japanese problem text).
-          4. *Inline* formulas (no dedicated line) are appended at the bottom so
-             the LLM still has the accurate LaTeX for in-text symbols.
+          4. *Display* formulas whose polygon was missing or unmatched are appended
+             at the bottom as ``[display] latex`` so they are never silently dropped.
+          5. *Inline* formulas are always appended at the bottom for LLM context.
         """
         if not rich_formulas:
             return "\n".join(l["content"] for l in read_lines)
@@ -511,12 +525,12 @@ class AzureMathSolver(BaseMathSolver):
         line_formula: list[dict | None] = [None] * len(read_lines)
         for f, f_yr in display_formulas:
             if f_yr is None:
-                continue
+                continue  # no polygon — will fall back to bottom
             for li, line in enumerate(read_lines):
                 if line_formula[li] is not None:
                     continue  # already claimed
                 l_yr = self._poly_y_range(line.get("polygon"))
-                if l_yr and self._y_overlap_ratio(l_yr[0], l_yr[1], f_yr[0], f_yr[1]) >= 0.5:
+                if l_yr and self._y_overlap_ratio(l_yr[0], l_yr[1], f_yr[0], f_yr[1]) >= 0.3:
                     line_formula[li] = f
 
         # Build output preserving document order.
@@ -533,8 +547,12 @@ class AzureMathSolver(BaseMathSolver):
                     parts.append(f"$${f['value']}$$")
                 # else: duplicate line mapping to the same formula — skip
 
-        if inline_latex:
+        # Safety net: display formulas with no polygon OR unmatched → append at bottom
+        unmatched_display = [f["value"] for f, _ in display_formulas if id(f) not in emitted]
+        if unmatched_display or inline_latex:
             parts.append("\n[検出された数式 (LaTeX)]")
+            for val in unmatched_display:
+                parts.append(f"[display] {val}")
             for val in inline_latex:
                 parts.append(f"[inline] {val}")
 
