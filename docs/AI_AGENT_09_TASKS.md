@@ -134,15 +134,15 @@ S2 → [IMMEDIATE] az functionapp identity assign (staging + production) — Man
 S3 → [担当者要確認] サブスクリプション所有者を追加
 20 → S2完了後、Azure Key Vault強化 (Pulumi: 消去保護 + ファイアウォール + 診断ログ)
 21 → az security contact create — セキュリティ連絡先メール設定
-1 → Run integration tests (establish current baseline)
-2 → Verify Azure PUT /posts
+✅1 → Run integration tests (establish current baseline) (DONE 2026-02-27 — AWS 9/0, Azure 17/0, GCP 13/0 = 39 PASS/0 FAIL)
+✅2 → Verify Azure PUT /posts (DONE 2026-02-27 — PUT /{postId} implemented in routes/posts.py, Cosmos DB replace_item)
 ✅3 → Confirm DynamoDB GSI (DONE 2026-02-27 — PostIdIndex & UserPostsIndex verified in staging/production)
-4 → Fix SNS:Unsubscribe (restore DELETE flow)
+✅4 → Fix SNS:Unsubscribe (DONE — IAM permissions added in 2026-02-17, Lambda can now unsubscribe)
 ✅5 → GCP HTTPS redirect (Pulumi code done 2026-02-24 — applied by S1)
 ✅6 → Azure WAF (DONE 2026-02-27 — Function App middleware, staging/production deployed)
 ✅7 → Release unused GCP static IPs (DONE 2026-02-24)
 ✅8 → Delete unused GCP Cloud Storage buckets (DONE 2026-02-24)
-9 → Monitoring & alerts
+✅9 → Monitoring & alerts (DONE 2026-02-27 — AWS/Azure/GCP monitoring.py implemented, CloudWatch/Monitor/Monitoring alarms configured)
 ✅10 → Security hardening (Pulumi code done 2026-02-24 — applied by S1)
 11-14 → Operational polish
 15-19 → Low priority
