@@ -1,6 +1,7 @@
 """GCP バックエンドを使った数学問題ソルバー。
 
 OCR : Google Cloud Vision API (DOCUMENT_TEXT_DETECTION)
+      + Gemini Vision による数式抽出 (2パスマージ)
 LLM : Vertex AI Gemini (gemini-2.0-flash-001 など)
 
 AWS ソルバーの共通ロジック（OCR スコアリング・プロンプト構築など）を継承し、
@@ -8,12 +9,20 @@ GCP 依存のメソッドだけを上書きする。
 フォールバック設計:
   - Vision API 未設定 → Bedrock マルチモーダル OCR (親クラス)
   - Vertex AI 未設定  → Bedrock LLM (親クラス)
+
+OCR マージ戦略 (Azure DI の 2パスマージに対応する GCP 実装):
+  Pass 1: Vision API で純テキスト取得 (日本語忠実)
+  Pass 2: Gemini Vision で画像から LaTeX 数式を JSON 抽出
+  Merge : _merge_read_with_formulas() (BaseMathSolver 共通) でヒューリスティックに in-place 置換
+  → candidate: gcp_vision_merged
 """
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from fastapi import HTTPException
@@ -232,11 +241,32 @@ class GcpMathSolver(BaseMathSolver):
         """
         candidates: list[tuple[str, str]] = []
 
-        # Vision API (メイン OCR パス)
+        # Vision API + Gemini Vision を並列実行
+        vision_text: str = ""
+        rich_lines: list[dict] = []
+        rich_formulas: list[dict] = []
+
         if self._vision_client is not None:
-            vision_text = self._call_vision_api(image_bytes)
+            if self._vertex_model is not None:
+                # 2パス並列実行
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    future_vision = pool.submit(self._ocr_vision_pass, image_bytes)
+                    future_formulas = pool.submit(
+                        self._extract_formulas_with_gemini_vision, image_bytes
+                    )
+                    vision_text, rich_lines = future_vision.result()
+                    rich_formulas = future_formulas.result()
+            else:
+                vision_text, rich_lines = self._ocr_vision_pass(image_bytes)
+
             if vision_text:
                 candidates.append((vision_text, "gcp_vision_api"))
+
+            # gcp_vision_merged: Vision テキスト + Gemini 数式 in-place マージ
+            if rich_lines and rich_formulas:
+                merged = self._merge_read_with_formulas(rich_lines, rich_formulas)
+                if merged:
+                    candidates.append((merged, "gcp_vision_merged"))
 
         # PDF 直接テキスト抽出
         pdf_bytes = self._download_pdf_from_image_url(image_url)
@@ -318,7 +348,7 @@ class GcpMathSolver(BaseMathSolver):
         )
 
     def _call_vision_api(self, image_bytes: bytes) -> str:
-        """Cloud Vision DOCUMENT_TEXT_DETECTION を呼び出す。"""
+        """Cloud Vision DOCUMENT_TEXT_DETECTION を呼び出す（テキスト全文のみ）。"""
         try:
             from google.cloud import vision  # type: ignore[import]
 
@@ -330,6 +360,78 @@ class GcpMathSolver(BaseMathSolver):
             return full_text
         except Exception:
             return ""
+
+    def _ocr_vision_pass(
+        self, image_bytes: bytes
+    ) -> tuple[str, list[dict]]:
+        """Vision API を呼び出し ``(plain_text, rich_lines)`` を返す。
+
+        ``rich_lines`` の各要素は ``{"content": str, "polygon": None}``。
+        Vision API はページレベルのバウンディングボックスしか公開しないため
+        polygon は常に None とし、Pass 2 のヒューリスティック検出に任せる。
+        """
+        text = self._call_vision_api(image_bytes)
+        if not text:
+            return "", []
+        lines = [{"content": line, "polygon": None} for line in text.splitlines()]
+        return text, lines
+
+    def _extract_formulas_with_gemini_vision(
+        self, image_bytes: bytes
+    ) -> list[dict]:
+        """Gemini Vision で画像から LaTeX 数式を抽出し ``rich_formulas`` リストを返す。
+
+        返り値の各要素: ``{"value": str, "kind": "display"|"inline", "polygon": None}``
+
+        Gemini が利用できない場合や解析エラー時は空リストを返す（非致命的）。
+        """
+        if self._vertex_model is None:
+            return []
+        try:
+            from vertexai.generative_models import (  # type: ignore[import]
+                GenerationConfig,
+                Part,
+            )
+
+            prompt = (
+                "この数学問題の画像から、すべての数式を LaTeX で抽出してください。\n"
+                "display 数式（独立した行に表示される数式）は kind を \"display\"、"
+                "inline 数式（文章中に埋め込まれた数式）は kind を \"inline\" として分類してください。\n"
+                "以下の JSON 配列のみを返してください（コードフェンスや説明は不要）:\n"
+                '[{"kind":"display","value":"LaTeX文字列"}, ...]'
+            )
+            image_part = Part.from_data(data=image_bytes, mime_type="image/jpeg")
+            generation_config = GenerationConfig(
+                temperature=0.0,
+                max_output_tokens=512,
+            )
+            response = self._vertex_model.generate_content(
+                [prompt, image_part],
+                generation_config=generation_config,
+            )
+            raw = (response.text or "").strip()
+            raw = self._strip_code_fences(raw)
+            formulas_raw = json.loads(raw)
+            if not isinstance(formulas_raw, list):
+                return []
+            rich: list[dict] = []
+            for item in formulas_raw:
+                if not isinstance(item, dict):
+                    continue
+                val = str(item.get("value", "")).strip()
+                kind = str(item.get("kind", "display")).strip()
+                if not val:
+                    continue
+                rich.append({"value": val, "kind": kind, "polygon": None})
+            print(
+                f"[GCP-FORMULA] Gemini Vision extracted {len(rich)} formulas"
+                f" ({sum(1 for f in rich if f['kind']=='display')} display,"
+                f" {sum(1 for f in rich if f['kind']!='display')} inline)"
+            )
+            return rich
+        except Exception as exc:
+            print(f"[GCP-FORMULA] WARN: Gemini Vision formula extraction failed: {exc}")
+            return []
 
     # ------------------------------------------------------------------
     # Vertex AI Gemini LLM 解答生成
