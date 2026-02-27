@@ -388,14 +388,18 @@ class AzureMathSolver(BaseMathSolver):
                 "prebuilt-read",
                 RequestModel(bytes_source=image_bytes),
             ).result()
-            rich_lines: list[dict] = [
-                {
-                    "content": line.content,
-                    "polygon": getattr(line, "polygon", None),
-                }
-                for page in (result.pages or [])
-                for line in (page.lines or [])
-            ]
+            rich_lines: list[dict] = []
+            for page in (result.pages or []):
+                for line in (page.lines or []):
+                    raw_poly = getattr(line, "polygon", None)
+                    # Normalize polygon: may be bytes, Point-list, float-list, or None
+                    polygon: list | None = None
+                    if raw_poly is not None and not isinstance(raw_poly, (bytes, bytearray)):
+                        polygon = raw_poly
+                    content = line.content
+                    if isinstance(content, (bytes, bytearray)):
+                        content = content.decode("utf-8", errors="replace")
+                    rich_lines.append({"content": str(content), "polygon": polygon})
             return "\n".join(l["content"] for l in rich_lines), rich_lines
         except Exception:
             return "", []
@@ -435,15 +439,21 @@ class AzureMathSolver(BaseMathSolver):
             for page in (result.pages or []):
                 for f in getattr(page, "formulas", None) or []:
                     val = getattr(f, "value", None)
+                    if isinstance(val, (bytes, bytearray)):
+                        val = val.decode("utf-8", errors="replace")
                     conf = getattr(f, "confidence", 1.0) or 1.0
                     kind = getattr(f, "kind", "") or ""
+                    if isinstance(kind, (bytes, bytearray)):
+                        kind = kind.decode("utf-8", errors="replace")
                     if not val or conf < 0.5:
                         continue
                     # Polygon lives inside bounding_regions[0].polygon
-                    polygon: list[float] | None = None
+                    polygon: list | None = None
                     brs = getattr(f, "bounding_regions", None)
                     if brs:
-                        polygon = getattr(brs[0], "polygon", None)
+                        raw_poly = getattr(brs[0], "polygon", None)
+                        if raw_poly is not None and not isinstance(raw_poly, (bytes, bytearray)):
+                            polygon = raw_poly
                     rich_formulas.append({"value": val, "kind": kind, "polygon": polygon})
                     tag = "display" if kind == "display" else "inline"
                     latex_strings.append(f"[{tag}] {val}")
