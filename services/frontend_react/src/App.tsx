@@ -6,6 +6,7 @@ import PostPage from "./pages/PostPage";
 import ProfilePage from "./pages/ProfilePage";
 import LoginPage from "./pages/LoginPage";
 import CallbackPage from "./pages/CallbackPage";
+import SolverPage from "./pages/SolverPage";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<CallbackPage />} />
+          <Route path="/solver" element={<SolverPage />} />
           {/* Fallback: send everything else to home */}
           <Route path="*" element={<HomePage />} />
         </Routes>
