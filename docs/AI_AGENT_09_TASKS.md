@@ -6,20 +6,21 @@
 
 ---
 
-## Status Summary (Updated 2026-02-27 Session 3)
+## Status Summary (Updated 2026-02-27 Session 5)
 
 ```
 Infrastructure (Pulumi):    ✅ All 3 clouds staging+production deployed
 AWS API (production):       ✅ {"status":"ok","provider":"aws","version":"3.0.0"}
 GCP API (production):       ✅ {"status":"ok","provider":"gcp","version":"3.0.0"}
 Azure API (production):     ✅ {"status":"ok","provider":"azure","version":"3.0.0"}
-E2E test-sns-all.sh:        ✅ AWS 9/0, Azure 17/0, GCP 13/0 = 39 tests PASS/0 FAIL (2026-02-27 Session 3)
-Version scheme:             ✅ X.Y.Z → A.B.C.D に変更。現在値 1.0.84.204 (C=push数, D=commit数)
+E2E test-sns-all.sh:        ✅ AWS 9/0, Azure 17/0, GCP 13/0 = 39 tests PASS/0 FAIL (2026-02-27 Session 5)
+Version scheme:             ✅ X.Y.Z → A.B.C.D に変更。現在値 1.0.98.236 (C=push数, D=commit数)
 AWS API (staging):          ✅ {"status":"ok","provider":"aws","version":"3.0.0"}
 GCP API  (staging):         ✅ {"status":"ok","provider":"gcp","version":"3.0.0"}
 Azure API (staging):        ✅ {"status":"ok","provider":"azure","version":"3.0.0"}
 Security hardening (S1):    ✅ CORS・CloudTrail・HTTPS redirect・AuditLogs・Log Analytics本番反映完了 (2026-02-27 Session 3)
 Managed Identity (S2):      ✅ Azure Function App に SystemAssigned MSI 有効化（staging/production）(2026-02-27 Session 3)
+Azure WAF (Task 6):         ✅ Function App ミドルウェアで SQL injection/XSS/Path Traversal/Suspicious file 検出（2026-02-27 Session 5）
 GCP production state (0c):  ✅ 409 Conflict 解除 → 34 unchanged で正常復旧 (2026-02-27)
 deploy-azure v Python:      ✅ Python 3.12-slim --platform linux/amd64 設定済み
 Audit logs (0a/0b):         ✅ GCP staging/production IAMAuditConfig 作成完了・billing budget対応完了
@@ -137,7 +138,7 @@ S3 → [担当者要確認] サブスクリプション所有者を追加
 3 → Confirm DynamoDB GSI
 4 → Fix SNS:Unsubscribe (restore DELETE flow)
 ✅5 → GCP HTTPS redirect (Pulumi code done 2026-02-24 — applied by S1)
-6 → Azure WAF (production quality)
+✅6 → Azure WAF (DONE 2026-02-27 — Function App middleware, staging/production deployed)
 ✅7 → Release unused GCP static IPs (DONE 2026-02-24)
 ✅8 → Delete unused GCP Cloud Storage buckets (DONE 2026-02-24)
 9 → Monitoring & alerts
