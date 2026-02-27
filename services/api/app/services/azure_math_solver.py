@@ -498,9 +498,18 @@ class AzureMathSolver(BaseMathSolver):
 
         prompt = self._build_prompt(problem_text, request, structured_problem)
 
+        # accurate モード: 推論モデル（o3-mini 等）に切り替え
+        is_accurate = request.options.mode == "accurate"
+        accurate_deployment = settings.azure_openai_accurate_deployment
+        deployment = accurate_deployment if (is_accurate and bool(accurate_deployment)) else settings.azure_openai_deployment
+
+        # o3-mini/o1 系は temperature・response_format 非対応
+        _REASONING_PREFIXES = ("o1", "o3")
+        is_reasoning_model = any(deployment.lower().startswith(p) for p in _REASONING_PREFIXES)
+
         try:
-            response = self._openai_client.chat.completions.create(
-                model=settings.azure_openai_deployment,
+            create_kwargs: dict = dict(
+                model=deployment,
                 messages=[
                     {
                         "role": "system",
@@ -511,14 +520,21 @@ class AzureMathSolver(BaseMathSolver):
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.0,
                 max_tokens=min(
                     max(request.options.max_tokens, 512),
-                    8192 if request.options.mode == "accurate" else 2000,
+                    8192 if is_accurate else 2000,
                 ),
-                response_format={"type": "json_object"},
-                # accurate モードでは思考トークンを多く確保して計算精度を上げる
             )
+            if is_reasoning_model:
+                # 推論モデルは temperature=1 固定・response_format 非対応
+                create_kwargs["temperature"] = 1
+                # reasoning_effort で精度を最大化
+                create_kwargs["extra_body"] = {"reasoning_effort": "medium"}
+            else:
+                create_kwargs["temperature"] = 0.0
+                create_kwargs["response_format"] = {"type": "json_object"}
+            response = self._openai_client.chat.completions.create(**create_kwargs)
+
         except Exception as exc:
             raise HTTPException(
                 status_code=502,

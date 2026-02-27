@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     azure_openai_endpoint: str | None = None
     azure_openai_key: str | None = None
     azure_openai_deployment: str = "gpt-4o"
+    # accurate モード用推論モデル（o3-mini 等）。未設定時は通常モデルにフォールバック
+    azure_openai_accurate_deployment: str = ""
     azure_openai_api_version: str = "2024-12-01-preview"
 
     # Cosmos DB設定
@@ -108,6 +110,8 @@ class Settings(BaseSettings):
     # GCP Vertex AI (Gemini LLM)
     gcp_vertex_location: str = "us-central1"
     gcp_vertex_model: str = "gemini-2.0-flash-001"
+    # accurate モード用高精度モデル。未設定時は通常モデルにフォールバック
+    gcp_vertex_accurate_model: str = ""
 
     # 共通設定
     presigned_url_expiry: int = 300

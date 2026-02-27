@@ -473,9 +473,28 @@ class GcpMathSolver(BaseMathSolver):
                 ),
                 response_mime_type="application/json",
             )
+            # accurate モード: 高精度モデルに切り替え
+            is_accurate = request.options.mode == "accurate"
+            accurate_model = settings.gcp_vertex_accurate_model
+            use_accurate_model = is_accurate and bool(accurate_model)
+
+            if use_accurate_model:
+                from vertexai.generative_models import GenerativeModel  # type: ignore[import]
+                vertex_model = GenerativeModel(accurate_model)
+            else:
+                vertex_model = self._vertex_model
+
+            generation_config = GenerationConfig(
+                temperature=0.0,
+                max_output_tokens=min(
+                    max(request.options.max_tokens, 512),
+                    8192 if is_accurate else 2000,
+                ),
+                response_mime_type="application/json",
+            )
             # Gemini はシステム命令をモデル初期化時に渡すか、最初のメッセージに付ける
             full_prompt = f"{system_instruction}\n\n{prompt}"
-            response = self._vertex_model.generate_content(
+            response = vertex_model.generate_content(
                 full_prompt,
                 generation_config=generation_config,
             )
