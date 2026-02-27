@@ -465,39 +465,56 @@ class GcpMathSolver(BaseMathSolver):
                 GenerationConfig,  # type: ignore[import]
             )
 
-            generation_config = GenerationConfig(
-                temperature=0.0,
-                max_output_tokens=min(
-                    max(request.options.max_tokens, 512),
-                    8192 if request.options.mode == "accurate" else 2000,
-                ),
-                response_mime_type="application/json",
-            )
-            # accurate モード: 高精度モデルに切り替え
             is_accurate = request.options.mode == "accurate"
-            accurate_model = settings.gcp_vertex_accurate_model
-            use_accurate_model = is_accurate and bool(accurate_model)
+            accurate_model_name = settings.gcp_vertex_accurate_model
+            use_accurate_model = is_accurate and bool(accurate_model_name)
 
             if use_accurate_model:
                 from vertexai.generative_models import GenerativeModel  # type: ignore[import]
-                vertex_model = GenerativeModel(accurate_model)
+                vertex_model = GenerativeModel(accurate_model_name)
             else:
                 vertex_model = self._vertex_model
 
-            generation_config = GenerationConfig(
-                temperature=0.0,
-                max_output_tokens=min(
-                    max(request.options.max_tokens, 512),
-                    8192 if is_accurate else 2000,
-                ),
-                response_mime_type="application/json",
-            )
-            # Gemini はシステム命令をモデル初期化時に渡すか、最初のメッセージに付ける
-            full_prompt = f"{system_instruction}\n\n{prompt}"
-            response = vertex_model.generate_content(
-                full_prompt,
-                generation_config=generation_config,
-            )
+            # accurate + gpt-4o 相当: scratchpad 2段階呼び出し
+            if is_accurate:
+                # Stage 1: 計算過程を自由展開
+                stage1_prompt = self._build_scratchpad_prompt(
+                    problem_text, request, structured_problem
+                )
+                stage1_config = GenerationConfig(
+                    temperature=0.0,
+                    max_output_tokens=8192,
+                )
+                stage1_resp = vertex_model.generate_content(
+                    f"あなたは大学入試数学の専門家です。計算を省略せず厳密に解いてください。\n\n{stage1_prompt}",
+                    generation_config=stage1_config,
+                )
+                scratchpad = (stage1_resp.text or "").strip()
+
+                # Stage 2: JSON 抽出
+                stage2_prompt = self._build_json_extraction_prompt(scratchpad, request)
+                stage2_config = GenerationConfig(
+                    temperature=0.0,
+                    max_output_tokens=2000,
+                    response_mime_type="application/json",
+                )
+                response = vertex_model.generate_content(
+                    f"あなたは JSON フォーマッターです。出力は JSON オブジェクトのみで返してください。\n\n{stage2_prompt}",
+                    generation_config=stage2_config,
+                )
+            else:
+                # fast モード: 1段階
+                generation_config = GenerationConfig(
+                    temperature=0.0,
+                    max_output_tokens=min(max(request.options.max_tokens, 512), 2000),
+                    response_mime_type="application/json",
+                )
+                full_prompt = f"{system_instruction}\n\n{prompt}"
+                response = vertex_model.generate_content(
+                    full_prompt,
+                    generation_config=generation_config,
+                )
+
             text = response.text or ""
         except Exception as exc:
             raise HTTPException(

@@ -507,33 +507,70 @@ class AzureMathSolver(BaseMathSolver):
         _REASONING_PREFIXES = ("o1", "o3")
         is_reasoning_model = any(deployment.lower().startswith(p) for p in _REASONING_PREFIXES)
 
+        # accurate + 非推論モデル: scratchpad 2段階呼び出し
+        use_scratchpad = is_accurate and not is_reasoning_model
+
         try:
-            create_kwargs: dict = dict(
-                model=deployment,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "あなたは大学入試数学の解答アシスタントです。"
-                            "出力は必ず JSON オブジェクトのみで返してください。"
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=min(
-                    max(request.options.max_tokens, 512),
-                    8192 if is_accurate else 2000,
-                ),
-            )
-            if is_reasoning_model:
-                # 推論モデルは temperature=1 固定・response_format 非対応
-                create_kwargs["temperature"] = 1
-                # reasoning_effort で精度を最大化
-                create_kwargs["extra_body"] = {"reasoning_effort": "medium"}
+            if use_scratchpad:
+                # Stage 1: 計算過程を自由展開
+                stage1_prompt = self._build_scratchpad_prompt(
+                    problem_text, request, structured_problem
+                )
+                stage1_resp = self._openai_client.chat.completions.create(
+                    model=deployment,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "あなたは大学入試数学の専門家です。計算を省略せず厳密に解いてください。",
+                        },
+                        {"role": "user", "content": stage1_prompt},
+                    ],
+                    temperature=0.0,
+                    max_tokens=8192,
+                )
+                scratchpad = stage1_resp.choices[0].message.content or ""
+
+                # Stage 2: JSON 抽出
+                stage2_prompt = self._build_json_extraction_prompt(scratchpad, request)
+                response = self._openai_client.chat.completions.create(
+                    model=deployment,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "あなたは JSON フォーマッターです。出力は JSON オブジェクトのみで返してください。",
+                        },
+                        {"role": "user", "content": stage2_prompt},
+                    ],
+                    temperature=0.0,
+                    max_tokens=2000,
+                    response_format={"type": "json_object"},
+                )
             else:
-                create_kwargs["temperature"] = 0.0
-                create_kwargs["response_format"] = {"type": "json_object"}
-            response = self._openai_client.chat.completions.create(**create_kwargs)
+                # 1段階: 推論モデルまたは fast モード
+                create_kwargs: dict = dict(
+                    model=deployment,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "あなたは大学入試数学の解答アシスタントです。"
+                                "出力は必ず JSON オブジェクトのみで返してください。"
+                            ),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=min(
+                        max(request.options.max_tokens, 512),
+                        8192 if is_accurate else 2000,
+                    ),
+                )
+                if is_reasoning_model:
+                    create_kwargs["temperature"] = 1
+                    create_kwargs["extra_body"] = {"reasoning_effort": "medium"}
+                else:
+                    create_kwargs["temperature"] = 0.0
+                    create_kwargs["response_format"] = {"type": "json_object"}
+                response = self._openai_client.chat.completions.create(**create_kwargs)
 
         except Exception as exc:
             raise HTTPException(

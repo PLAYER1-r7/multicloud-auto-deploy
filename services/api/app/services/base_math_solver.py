@@ -2226,3 +2226,67 @@ class BaseMathSolver:
             "問題文:\n"
             f"{problem_text}"
         )
+
+    def _build_scratchpad_prompt(
+        self,
+        problem_text: str,
+        request: SolveRequest,
+        structured_problem: dict[str, object] | None = None,
+    ) -> str:
+        """Stage-1 用: 計算過程を省略なく自由記述させるプロンプト。"""
+        type_guidance = ""
+        if structured_problem:
+            problem_type = str(structured_problem.get("problemType", "algebra"))
+            type_guidance = self._problem_type_guidance(problem_type)
+
+        return (
+            "あなたは大学入試数学の専門家です。以下の問題を解いてください。\n"
+            "計算過程を一切省略せず、全ステップを詳しく展開してください。\n"
+            "特に守るべきルール:\n"
+            "① 各変数・点の座標は代入して完全に展開した数式で示す。\n"
+            "② 積分・微分は途中計算を全て行単位で示す。\n"
+            "③ 弧長計算では x'(t)² + y'(t)² を必ず展開し、\n"
+            "   完全平方 (at² + bt + c)² の形になるか確認してから √ を外すこと。\n"
+            "④ 各小問 (1)(2)(3) を独立したブロックとして解く。\n"
+            f"問題タイプ: {type_guidance}\n"
+            f"大学: {request.exam.university} / 年度: {request.exam.year} "
+            f"/ 科目: {request.exam.subject} / 問題番号: {request.exam.question_no}\n\n"
+            "問題文:\n"
+            f"{problem_text}"
+        )
+
+    def _build_json_extraction_prompt(
+        self,
+        scratchpad: str,
+        request: SolveRequest,
+    ) -> str:
+        """Stage-2 用: スクラッチパッドから JSON を抽出させるプロンプト。"""
+        need_latex = request.options.need_latex
+        need_steps = request.options.need_steps
+
+        latex_instruction = (
+            'latexには最終答案を表す LaTeX 式を入れる（例: "\\\\frac{3}{5}"）。'
+            if need_latex
+            else "latexはnullにする。"
+        )
+        steps_instruction = (
+            "stepsには各小問の解答ポイント（計算結果と根拠）を箇条書きで入れる。"
+            if need_steps
+            else "stepsは空配列 [] にする。"
+        )
+
+        return (
+            "以下の数学解答ドラフトから、正確に JSON を抽出してください。\n"
+            "解答ドラフトに存在する計算結果を忠実に使い、新たな推測は加えないこと。\n\n"
+            "JSON形式（このオブジェクトのみ出力）:\n"
+            '{"final":"最終答案の文章","latex":"LaTeX文字列またはnull",'
+            '"steps":["ステップ1","ステップ2"],"diagramGuide":null,'
+            '"confidence":0.0から1.0}\n\n'
+            f"ルール:\n"
+            f"- final: 全小問の答えをまとめて記述する。\n"
+            f"- {latex_instruction}\n"
+            f"- {steps_instruction}\n"
+            f"- confidence: 計算が完結していれば 0.9、不完全なら 0.5 以下。\n\n"
+            "解答ドラフト:\n"
+            f"{scratchpad[:12000]}"  # 長すぎる場合は先頭を使用
+        )
