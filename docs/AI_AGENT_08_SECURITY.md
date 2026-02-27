@@ -6,14 +6,14 @@
 
 ## Current Security Configuration Status
 
-> Last updated: 2026-02-24 (Defender for Cloud セキュアスコア分析・新規タスク追加)
+> Last updated: 2026-02-27 (Azure Function App セキュリティミドルウェア実装完了)
 
 | Feature                   | AWS                      | Azure                          | GCP                          | Notes                                                                                   |
 | ------------------------- | ------------------------ | ------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------- |
 | HTTPS enforced            | ✅                       | ✅                             | ✅ Pulumi済 (要 pulumi up)   | GCP: HTTP→HTTPS リダイレクト用 URLMap を分離。ポート80は301 redirect のみ               |
-| WAF                       | ✅ WebACL (CloudFront)   | ❌                             | ✅ Cloud Armor               | Azure: Front Door Standard SKU では WAF Policy 未設定 (要 Premium SKU or WAF Policy)    |
+| WAF                       | ✅ WebACL (CloudFront)   | ✅ Function App ミドルウェア   | ✅ Cloud Armor               | Azure: Function App middleware で SQL injection/XSS/Path Traversal 検出（2026-02-27）   |
 | Rate limiting             | ❌                       | ❌                             | ✅ 100req/min/IP             |                                                                                         |
-| SQLi / XSS protection     | ❌                       | ❌                             | ✅                           |                                                                                         |
+| SQLi / XSS protection     | ❌                       | ✅                             | ✅                           | Azure: ミドルウェアで SQL injection/XSS/Path Traversal/Suspicious file 検出済み          |
 | Data encryption (at rest) | ✅ SSE-S3                | ✅ Azure SSE                   | ✅ Google-managed            |                                                                                         |
 | Versioning                | ✅                       | ✅                             | ✅                           |                                                                                         |
 | Access logs (CDN)         | ✅ CloudFront            | ✅ Front Door → Log Analytics  | ✅ Cloud CDN                 | Azure: DiagnosticSetting 追加 (2026-02-24, 要 pulumi up)                                |

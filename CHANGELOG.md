@@ -4,19 +4,19 @@ Complete development history of the **multicloud-auto-deploy** project with deta
 
 This changelog includes commit bodies, file changes, and statistics for full transparency.
 
-**Repository**: [https://github.com/PLAYER1-r7/multicloud-auto-deploy](https://github.com/PLAYER1-r7/multicloud-auto-deploy)  
-**Branch**: `main`  
+**Repository**: [https://github.com/PLAYER1-r7/multicloud-auto-deploy](https://github.com/PLAYER1-r7/multicloud-auto-deploy)
+**Branch**: `main`
 **Generated**: 2026-02-15 08:25:46
 
 ---
 
 ## 📅 2026-02-27
 
-### ✨ **feat** (docs): add official cloud service icons to architecture diagrams
+### ✨ **feat** (docs): add official cloud service icons to architecture diagrams with dual placement
 
 **Manual Entry** | **Files Changed**: 19
 
-**Summary**: Integrated official AWS, Azure, and GCP service icons into interactive HTML architecture diagrams. Icons are embedded as Base64 data URIs (no external CDN dependencies) and injected into Mermaid flowchart nodes via JavaScript DOM manipulation.
+**Summary**: Integrated official AWS, Azure, and GCP service icons into interactive HTML architecture diagrams with dual icon placement: top-left corner for quick identification and text-inline for enhanced readability. Icons are embedded as Base64 data URIs (no external CDN dependencies) and injected into Mermaid flowchart nodes via JavaScript DOM manipulation.
 
 **Changes**:
 
@@ -25,8 +25,11 @@ This changelog includes commit bodies, file changes, and statistics for full tra
 > - Added `load_official_icon()` function with provider-specific icon mappings
 > - Icon assets: AWS (5 types), Azure (4 types), GCP (5 types)
 > - Base64 encoding for SVG → data URI conversion
-> - JavaScript injection code for Mermaid node icon placement (28x28px at top-left)
+> - JavaScript dual icon injection:
+>   - **Top-left corner**: 24x24px at (rect.x + 6, rect.y + 6)
+>   - **Text-inline**: 20x20px placed 4px left of node label text
 > - Pattern matching: `flowchart-{provider}_{resource_type}-{name}`
+> - Smart text element detection (foreignObject vs text/tspan)
 
 > **`assets/icons/`** (new directory)
 >
@@ -36,14 +39,15 @@ This changelog includes commit bodies, file changes, and statistics for full tra
 
 > **`docs/generated/architecture/`**
 >
-> - `architecture.staging.html` (85KB) - Staging environment with official icons
-> - `architecture.production.html` (85KB) - Production environment with official icons
-> - `architecture-combined.html` (91KB) - Staging + Production overlay diagram
+> - `architecture.staging.html` (78KB) - Staging environment with dual-placement icons
+> - `architecture.production.html` (78KB) - Production environment with dual-placement icons
+> - `architecture-combined.html` (84KB) - Staging + Production overlay diagram
 
 > **`docs/CLOUD_ARCHITECTURE_MAPPER.md`**
 >
-> - Added "Interactive HTML Diagram Generator" section
-> - Documented icon assets, usage, technical details, and known limitations
+> - Updated "Features" section to highlight dual icon placement
+> - Expanded "Technical Details" with JavaScript code examples
+> - Updated "Known Limitations" with text-inline positioning notes
 > - Noted 13 isolated resources identified (resource cleanup postponed)
 
 > **`README.md`**
@@ -51,15 +55,19 @@ This changelog includes commit bodies, file changes, and statistics for full tra
 > - Updated Architecture section with links to interactive HTML diagrams
 
 **Icon Sources**:
+
 - AWS Architecture Icons Asset Package (Q3-2021, 13.6MB from d1.awsstatic.com)
 - Azure Public Service Icons V14 (856KB from arch-center.azureedge.net)
 - Google Cloud Icons (2.2MB from cloud.google.com)
 
 **Technical Highlights**:
+
 - Zero external dependencies (all icons Base64-embedded)
 - Mermaid.js v10 ESM module integration
 - Responsive sidebar legend with resource counts
 - Pattern-based node ID matching for icon injection
+- **Dual icon placement** for improved visual hierarchy and readability
+- Smart text element detection (handles both foreignObject and native SVG text)
 
 ---
 

@@ -84,7 +84,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 @app.middleware("http")
 async def security_validation_middleware(request: Request, call_next):
     """Block requests matching common attack patterns."""
-    
+
     # Check 1: SQL Injection patterns in query string
     query_string = str(request.url.query).lower()
     sql_patterns = [
@@ -99,7 +99,7 @@ async def security_validation_middleware(request: Request, call_next):
         "<script>",
         "javascript:",
     ]
-    
+
     for pattern in sql_patterns:
         if pattern in query_string:
             logger.warning(
@@ -118,11 +118,18 @@ async def security_validation_middleware(request: Request, call_next):
                     "rule": "SQL Injection Detection",
                 },
             )
-    
+
     # Check 2: Path Traversal patterns in URL path
     path = request.url.path.lower()
-    path_traversal_patterns = ["../", "..\\", "%2e%2e%2f", "%2e%2e/", "..%2f", "%2e%2e%5c"]
-    
+    path_traversal_patterns = [
+        "../",
+        "..\\",
+        "%2e%2e%2f",
+        "%2e%2e/",
+        "..%2f",
+        "%2e%2e%5c",
+    ]
+
     for pattern in path_traversal_patterns:
         if pattern in path:
             logger.warning(
@@ -139,7 +146,7 @@ async def security_validation_middleware(request: Request, call_next):
                     "rule": "Path Traversal Detection",
                 },
             )
-    
+
     # Check 3: Suspicious file extensions
     suspicious_extensions = [
         ".env",
@@ -152,7 +159,7 @@ async def security_validation_middleware(request: Request, call_next):
         "web.config",
         ".htaccess",
     ]
-    
+
     for ext in suspicious_extensions:
         if path.endswith(ext):
             logger.warning(
@@ -169,11 +176,11 @@ async def security_validation_middleware(request: Request, call_next):
                     "rule": "Suspicious File Detection",
                 },
             )
-    
+
     # Check 4: XSS patterns in User-Agent header
     user_agent = request.headers.get("user-agent", "").lower()
     xss_patterns = ["<script", "javascript:", "onerror=", "onload=", "eval(", "alert("]
-    
+
     for pattern in xss_patterns:
         if pattern in user_agent:
             logger.warning(
@@ -190,7 +197,7 @@ async def security_validation_middleware(request: Request, call_next):
                     "rule": "XSS Detection",
                 },
             )
-    
+
     # All checks passed - proceed with request
     response = await call_next(request)
     return response

@@ -131,6 +131,7 @@ python3 scripts/cloud_architecture_mapper.py compare \
 - ✅ Official Azure Public Service Icons V14 (18px SVG with gradients)
 - ✅ Official GCP Product Icons (SVG)
 - ✅ JavaScript icon injection into Mermaid-rendered nodes
+- ✅ **Dual icon placement**: Top-left corner (24px) + Text-inline (20px)
 - ✅ No external CDN dependencies (all icons embedded)
 - ✅ Separate diagrams for staging, production, and combined view
 
@@ -159,9 +160,10 @@ assets/icons/
     └── load-balancer.svg   (Cloud Load Balancer)
 ```
 
-**Total size**: ~50KB (14KB AWS + 16KB Azure + 20KB GCP)  
-**Format**: SVG (embedded as Base64 data URIs in HTML)  
+**Total size**: ~50KB (14KB AWS + 16KB Azure + 20KB GCP)
+**Format**: SVG (embedded as Base64 data URIs in HTML)
 **Source**:
+
 - AWS: [AWS Architecture Icons Asset Package](https://aws.amazon.com/architecture/icons/)
 - Azure: [Azure Public Service Icons V14](https://learn.microsoft.com/azure/architecture/icons/)
 - GCP: [Google Cloud Icons](https://cloud.google.com/icons)
@@ -188,6 +190,7 @@ Generated HTML files in `docs/generated/architecture/`:
 - `architecture-combined.html` (~91KB) - Staging + Production overlay with color-coded nodes
 
 Each HTML file includes:
+
 - Embedded Mermaid.js v10 (ESM module)
 - Base64-encoded SVG icons (no external requests)
 - JavaScript DOM manipulation for icon injection
@@ -197,6 +200,7 @@ Each HTML file includes:
 ### Technical Details
 
 **Icon Loading**:
+
 ```python
 def load_official_icon(provider: str, resource_type: str) -> str:
     """Load official SVG icon and return Base64 data URI"""
@@ -205,17 +209,44 @@ def load_official_icon(provider: str, resource_type: str) -> str:
 ```
 
 **Icon Injection (JavaScript)**:
+
 ```javascript
 // Pattern: flowchart-{provider}_{resource_type}-{name}-{index}
 const nodeId = node.id;
 const match = nodeId.match(/flowchart-([a-z]+)_([a-z_]+)-/);
-if (match && icons[match[1]] && icons[match[1]][match[2]]) {
-  // Inject <image> element at (x+6, y+6) with 28x28px size
-  rect.parentNode.insertBefore(iconElement, rect.nextSibling);
+if (match && resourceIcons[`${match[1]}:${match[2]}`]) {
+  // 1. Top-left corner icon (24x24px at x+6, y+6)
+  const topIcon = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "image",
+  );
+  topIcon.setAttribute("x", rectX + 6);
+  topIcon.setAttribute("y", rectY + 6);
+  topIcon.setAttribute("width", 24);
+  topIcon.setAttribute("height", 24);
+  node.appendChild(topIcon);
+
+  // 2. Text-inline icon (20x20px, 4px left of text)
+  const textIcon = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "image",
+  );
+  textIcon.setAttribute("x", textX - 24); // 4px left of text
+  textIcon.setAttribute("y", textY);
+  textIcon.setAttribute("width", 20);
+  textIcon.setAttribute("height", 20);
+  labelGroup.insertBefore(textIcon, labelGroup.firstChild);
 }
 ```
 
+**Dual Icon Placement**:
+
+- **Top-left corner**: 24x24px icon at (rect.x + 6, rect.y + 6) for quick resource type identification
+- **Text-inline**: 20x20px icon placed 4px left of node label text for enhanced readability
+- Both icons use the same provider-specific official SVG
+
 **Node ID Convention**:
+
 - Pattern: `flowchart-{provider}_{resource_type}-{name}-{index}`
 - Examples: `flowchart-aws_cdn-E1TBH4R432SZBZ-0`, `flowchart-azure_compute-mcadfuncdiev0w-1`
 - Provider: `aws` | `azure` | `gcp`
@@ -223,16 +254,18 @@ if (match && icons[match[1]] && icons[match[1]][match[2]]) {
 
 ### Known Limitations
 
-- Icons assume 48x48px source size (scaled to 28x28px in nodes)
+- Icons assume 48x48px source size (scaled to 24px top-left, 20px text-inline)
 - Injection timing requires 800ms setTimeout for Mermaid rendering
 - No icon caching (data URIs embedded in each HTML file)
 - Resource type mapping is manually maintained in `load_official_icon()`
+- Text-inline icon positioning may vary depending on Mermaid node type (foreignObject vs text elements)
 
 ### Resource Analysis
 
 The tool can identify isolated/orphaned resources (nodes with no connections). As of 2026-02-27:
 
 **13 isolated resources** identified across staging:
+
 - ❌ **Delete candidates** (5): `multicloud-auto-deploy-staging-posts` (AWS DynamoDB), 4 Azure Storage Accounts not in Pulumi
 - ✅ **In use but unconnected** (2): GCP function-source bucket, uploads bucket
 - ❓ **Needs verification** (6): 3 AWS CloudFront distributions for ashnova.jp domains, GCP landing bucket, 2 others

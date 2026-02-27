@@ -1,8 +1,93 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> Last verified: 2026-02-27 Session 3 (S1・S2・Task 13 完了 ✅ / エンドポイント本番運用 ✅ / README セキュリティ情報反映 ✅)
-> Previous: 2026-02-27 Session 2 (セキュリティ変更デプロイ ✅ / GCP production復旧 ✅ / 統合テスト39/0 ✅)
+> Last verified: 2026-02-27 Session 4 (アーキテクチャ図アイコン強化完了 ✅ / デュアルアイコン配置実装 ✅ / ドキュメント更新完了 ✅)
+> Previous: 2026-02-27 Session 3 (S1・S2・Task 13 完了 ✅ / エンドポイント本番運用 ✅ / README セキュリティ情報反映 ✅)
+
+---
+
+## Session 2026-02-27 (Continuation 4): Architecture Diagram Icon Enhancement
+
+### Completed Work
+
+| Task                                         | Result                                                                | Status |
+| -------------------------------------------- | --------------------------------------------------------------------- | ------ |
+| **デュアルアイコン配置実装**                 | ノード左上（24px）+ テキスト横（20px）の2箇所にアイコン表示           | ✅     |
+| **generate_icon_diagram.py JavaScript 更新** | foreignObject / text要素の両方に対応するスマート検出ロジック実装      | ✅     |
+| **3環境HTML再生成**                          | staging/production/combined の3ファイル全て再生成（78KB, 78KB, 84KB） | ✅     |
+| **CLOUD_ARCHITECTURE_MAPPER.md 更新**        | Features / Technical Details / Known Limitations セクション更新       | ✅     |
+| **CHANGELOG.md 更新**                        | 2026-02-27 エントリに詳細な実装内容とファイルサイズ更新               | ✅     |
+| **README.md アーキテクチャリンク追加**       | インタラクティブHTML図への直接リンク追加済み                          | ✅     |
+
+### Technical Implementation Details
+
+**Icon Placement Strategy**:
+
+1. **Top-left corner icon** (24x24px):
+   - Position: (rect.x + 6, rect.y + 6)
+   - Purpose: Quick visual resource type identification
+   - Always visible regardless of node size
+
+2. **Text-inline icon** (20x20px):
+   - Position: 4px left of node label text
+   - Purpose: Enhanced readability with text association
+   - Smart detection: Handles both `foreignObject` and native SVG `text`/`tspan` elements
+
+**JavaScript DOM Manipulation**:
+
+```javascript
+// 1. Top-left corner
+const topIcon = createSVGImage(iconUrl, rectX + 6, rectY + 6, 24, 24);
+node.appendChild(topIcon);
+
+// 2. Text-inline (foreignObject vs text element detection)
+if (textElement.tagName === "foreignObject") {
+  textX = parseFloat(textElement.getAttribute("x") || 0);
+  textY =
+    parseFloat(textElement.getAttribute("y") || 0) + height / 2 - iconSize / 2;
+} else {
+  const tspan = textElement.querySelector("tspan");
+  textX = parseFloat((tspan || textElement).getAttribute("x") || 0);
+  textY =
+    parseFloat((tspan || textElement).getAttribute("y") || 0) - iconSize / 2;
+}
+const textIcon = createSVGImage(iconUrl, textX - 24, textY, 20, 20);
+labelGroup.insertBefore(textIcon, labelGroup.firstChild);
+```
+
+### Generated Files
+
+| File                           | Size | Icons                         | Description                            |
+| ------------------------------ | ---- | ----------------------------- | -------------------------------------- |
+| `architecture.staging.html`    | 78KB | AWS (5) + Azure (4) + GCP (5) | Staging環境（デュアルアイコン配置）    |
+| `architecture.production.html` | 78KB | AWS (5) + Azure (4) + GCP (5) | Production環境（デュアルアイコン配置） |
+| `architecture-combined.html`   | 84KB | AWS (5) + Azure (4) + GCP (5) | 統合ビュー（color-coded nodes）        |
+
+**Icon Sources**:
+
+- AWS: 14KB (cloudfront, lambda, s3, dynamodb, api-gateway)
+- Azure: 16KB (cdn, function, storage, cosmos-db)
+- GCP: 20KB (cdn, run, storage, firestore, load-balancer)
+- **Total embedded assets**: ~50KB Base64-encoded SVG data URIs
+
+### Documentation Updates
+
+✅ **CLOUD_ARCHITECTURE_MAPPER.md**:
+
+- Features section: Added "Dual icon placement" bullet point
+- Technical Details: Expanded JavaScript code samples with dual placement logic
+- Known Limitations: Added text-inline positioning variance note
+
+✅ **CHANGELOG.md**:
+
+- Updated 2026-02-27 entry with detailed implementation notes
+- Added file size changes (85KB → 78KB for staging/production)
+- Documented dual icon placement strategy
+
+✅ **README.md**:
+
+- Architecture section now links to all 3 interactive HTML diagrams
+- Added visual indicators (📊) for diagram links
 
 ---
 

@@ -468,6 +468,9 @@ def render_mermaid(snapshot: dict[str, Any]) -> str:
     lines.extend(render_cloud_lines("azure", azure_resources))
     lines.extend(render_cloud_lines("gcp", gcp_resources))
 
+    # フロー経路関連ノードのID収集
+    flow_node_ids: set[str] = set()
+
     for provider, resources in [
         ("aws", aws_resources),
         ("azure", azure_resources),
@@ -476,10 +479,49 @@ def render_mermaid(snapshot: dict[str, Any]) -> str:
         entry = first_resource(resources, "cdn") or first_resource(
             resources, "load_balancer"
         )
+        storage = first_resource(resources, "object_storage")
+        compute = first_resource(resources, "compute")
+        database = first_resource(resources, "database")
+
         if entry:
             entry_key = f"{entry.get('resource_type', 'resource')}-{entry.get('name')}"
             entry_id = f"{provider}_{normalize_name(entry_key, provider)}"
-            lines.append(f"  User --> {entry_id}")
+            lines.append(f"  User -->|ユーザーアクセス| {entry_id}")
+            flow_node_ids.add(entry_id)
+
+            # フロー経路: CDN/LB → Storage → Compute → Database
+            if storage:
+                storage_key = f"object_storage-{storage.get('name')}"
+                storage_id = f"{provider}_{normalize_name(storage_key, provider)}"
+                lines.append(f"  {entry_id} -->|データ取得| {storage_id}")
+                flow_node_ids.add(storage_id)
+
+            if compute:
+                compute_key = f"compute-{compute.get('name')}"
+                compute_id = f"{provider}_{normalize_name(compute_key, provider)}"
+                if storage:
+                    storage_key = f"object_storage-{storage.get('name')}"
+                    storage_id = f"{provider}_{normalize_name(storage_key, provider)}"
+                    lines.append(f"  {storage_id} -->|API呼び出し| {compute_id}")
+                else:
+                    lines.append(f"  {entry_id} -->|API呼び出し| {compute_id}")
+                flow_node_ids.add(compute_id)
+
+            if database:
+                database_key = f"database-{database.get('name')}"
+                database_id = f"{provider}_{normalize_name(database_key, provider)}"
+                if compute:
+                    compute_key = f"compute-{compute.get('name')}"
+                    compute_id = f"{provider}_{normalize_name(compute_key, provider)}"
+                    lines.append(f"  {compute_id} -->|データアクセス| {database_id}")
+                flow_node_ids.add(database_id)
+
+    # フロー関連ノードにスタイルを適用
+    lines.append(
+        "  classDef user_flow fill:#c7d2fe,stroke:#4f46e5,stroke-width:3px,color:#1e1b4b"
+    )
+    for node_id in flow_node_ids:
+        lines.append(f"  class {node_id} user_flow")
 
     return "\n".join(lines) + "\n"
 

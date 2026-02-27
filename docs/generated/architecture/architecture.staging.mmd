@@ -41,6 +41,28 @@ flowchart LR
     gcp_cdn-multicloud-auto-deploy-staging-cdn-backend --> gcp_object_storage-ashnova-multicloud-auto-deploy-staging-frontend
     gcp_compute-multicloud-auto-deploy-staging-api --> gcp_database-default
   end
-  User --> aws_cdn-E17ZFSUVHSJDWV
-  User --> azure_cdn-multicloud-auto-deploy-staging-fd
-  User --> gcp_cdn-multicloud-auto-deploy-staging-cdn-backend
+  User -->|ユーザーアクセス| aws_cdn-E17ZFSUVHSJDWV
+  aws_cdn-E17ZFSUVHSJDWV -->|データ取得| aws_object_storage-multicloud-auto-deploy-staging-frontend
+  aws_object_storage-multicloud-auto-deploy-staging-frontend -->|API呼び出し| aws_compute-multicloud-auto-deploy-staging-api
+  aws_compute-multicloud-auto-deploy-staging-api -->|データアクセス| aws_database-multicloud-auto-deploy-staging-messages
+  User -->|ユーザーアクセス| azure_cdn-multicloud-auto-deploy-staging-fd
+  azure_cdn-multicloud-auto-deploy-staging-fd -->|データ取得| azure_object_storage-mcadfuncd45ihd
+  azure_object_storage-mcadfuncd45ihd -->|API呼び出し| azure_compute-multicloud-auto-deploy-staging-func
+  azure_compute-multicloud-auto-deploy-staging-func -->|データアクセス| azure_database-mcad-cosmos-d45ihd
+  User -->|ユーザーアクセス| gcp_cdn-multicloud-auto-deploy-staging-cdn-backend
+  gcp_cdn-multicloud-auto-deploy-staging-cdn-backend -->|データ取得| gcp_object_storage-ashnova-multicloud-auto-deploy-staging-frontend
+  gcp_object_storage-ashnova-multicloud-auto-deploy-staging-frontend -->|API呼び出し| gcp_compute-multicloud-auto-deploy-staging-api
+  gcp_compute-multicloud-auto-deploy-staging-api -->|データアクセス| gcp_database-default
+  classDef user_flow fill:#c7d2fe,stroke:#4f46e5,stroke-width:3px,color:#1e1b4b
+  class aws_cdn-E17ZFSUVHSJDWV user_flow
+  class gcp_object_storage-ashnova-multicloud-auto-deploy-staging-frontend user_flow
+  class aws_database-multicloud-auto-deploy-staging-messages user_flow
+  class aws_object_storage-multicloud-auto-deploy-staging-frontend user_flow
+  class azure_compute-multicloud-auto-deploy-staging-func user_flow
+  class gcp_compute-multicloud-auto-deploy-staging-api user_flow
+  class azure_database-mcad-cosmos-d45ihd user_flow
+  class azure_cdn-multicloud-auto-deploy-staging-fd user_flow
+  class aws_compute-multicloud-auto-deploy-staging-api user_flow
+  class gcp_database-default user_flow
+  class gcp_cdn-multicloud-auto-deploy-staging-cdn-backend user_flow
+  class azure_object_storage-mcadfuncd45ihd user_flow

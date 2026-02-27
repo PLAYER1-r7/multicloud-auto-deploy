@@ -38,6 +38,28 @@ flowchart LR
     gcp_cdn-multicloud-auto-deploy-production-cdn-backend --> gcp_object_storage-ashnova-multicloud-auto-deploy-production-frontend
     gcp_compute-multicloud-auto-deploy-production-api --> gcp_database-default
   end
-  User --> aws_cdn-E17ZFSUVHSJDWV
-  User --> azure_cdn-multicloud-auto-deploy-production-fd
-  User --> gcp_cdn-multicloud-auto-deploy-production-cdn-backend
+  User -->|ユーザーアクセス| aws_cdn-E17ZFSUVHSJDWV
+  aws_cdn-E17ZFSUVHSJDWV -->|データ取得| aws_object_storage-multicloud-auto-deploy-production-frontend
+  aws_object_storage-multicloud-auto-deploy-production-frontend -->|API呼び出し| aws_compute-multicloud-auto-deploy-production-api
+  aws_compute-multicloud-auto-deploy-production-api -->|データアクセス| aws_database-multicloud-auto-deploy-production-posts
+  User -->|ユーザーアクセス| azure_cdn-multicloud-auto-deploy-production-fd
+  azure_cdn-multicloud-auto-deploy-production-fd -->|データ取得| azure_object_storage-mcadfuncd45ihd
+  azure_object_storage-mcadfuncd45ihd -->|API呼び出し| azure_compute-multicloud-auto-deploy-production-func
+  azure_compute-multicloud-auto-deploy-production-func -->|データアクセス| azure_database-mcad-cosmos-diev0w
+  User -->|ユーザーアクセス| gcp_cdn-multicloud-auto-deploy-production-cdn-backend
+  gcp_cdn-multicloud-auto-deploy-production-cdn-backend -->|データ取得| gcp_object_storage-ashnova-multicloud-auto-deploy-production-frontend
+  gcp_object_storage-ashnova-multicloud-auto-deploy-production-frontend -->|API呼び出し| gcp_compute-multicloud-auto-deploy-production-api
+  gcp_compute-multicloud-auto-deploy-production-api -->|データアクセス| gcp_database-default
+  classDef user_flow fill:#c7d2fe,stroke:#4f46e5,stroke-width:3px,color:#1e1b4b
+  class aws_cdn-E17ZFSUVHSJDWV user_flow
+  class gcp_database-default user_flow
+  class aws_compute-multicloud-auto-deploy-production-api user_flow
+  class azure_compute-multicloud-auto-deploy-production-func user_flow
+  class azure_cdn-multicloud-auto-deploy-production-fd user_flow
+  class gcp_cdn-multicloud-auto-deploy-production-cdn-backend user_flow
+  class aws_object_storage-multicloud-auto-deploy-production-frontend user_flow
+  class gcp_compute-multicloud-auto-deploy-production-api user_flow
+  class azure_object_storage-mcadfuncd45ihd user_flow
+  class gcp_object_storage-ashnova-multicloud-auto-deploy-production-frontend user_flow
+  class aws_database-multicloud-auto-deploy-production-posts user_flow
+  class azure_database-mcad-cosmos-diev0w user_flow

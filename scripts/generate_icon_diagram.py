@@ -212,9 +212,12 @@ def generate_html_diagram(
         mermaid.initialize({{
             startOnLoad: true,
             theme: 'default',
+            fontSize: 36,
             flowchart: {{
                 htmlLabels: true,
-                curve: 'basis'
+                curve: 'basis',
+                nodeSpacing: 50,
+                rankSpacing: 80
             }}
         }});
 
