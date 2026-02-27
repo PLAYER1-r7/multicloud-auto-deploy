@@ -145,6 +145,10 @@ class BaseMathSolver:
         pdfminer.six は縦組み数式（分数・積分上下限）を行分割するため、
         以下のパターンを修復する:
 
+        - ページ区切り文字 (\\x0c) を除去
+        - 問番号の分離: "(2)\\n\\nt が" → "(2) t が"
+        - 文中の行分割: "に\\n対して" → "に対して"
+        - 下付き文字の復元: "Pt" → "P_t", "U0" → "U_0"
         - 積分上下限: "∫ 2\\n\\n1\\n" → "∫_{1}^{2} "
         - lim 添字:   "lim\\nn→∞"   → "lim_{n→∞}"
         - 縦分割分数: "π\\n6\\n"     → "π/6"
@@ -152,6 +156,9 @@ class BaseMathSolver:
         - 上付き文字（小文字変数のみ）: "x2" → "x²", "α2" → "α²"
           ※ 大文字ラベル (A2, T2) は変換しない
         """
+        # Rule 0: ページ区切り文字を除去
+        text = text.replace("\x0c", "")
+
         # Rule 1: 積分の上下限
         text = re.sub(r"∫ (\S+)\n+(\S+)\n", r"∫_{\2}^{\1} ", text)
 
@@ -174,6 +181,19 @@ class BaseMathSolver:
 
         # Rule 5: 余分な連続空行を最大 2 行に圧縮
         text = re.sub(r"\n{3,}", "\n\n", text)
+
+        # Rule 6: 下付き文字の復元 — 単一大文字 + t (幾何学的な点ラベル: Pt→P_t)
+        text = re.sub(r"\b([A-Z])t\b", r"\1_t", text)
+
+        # Rule 7: 単一大文字 + 一桁数字 の下付き (U0→U_0, U1→U_1)
+        text = re.sub(r"\b([A-Z])([01])\b", r"\1_\2", text)
+
+        # Rule 8: 問番号 "(N)\n\n" と本文を結合: "(2)\n\nt が" → "(2) t が"
+        text = re.sub(r"(\(\d+\))\n+(\S)", r"\1 \2", text)
+
+        # Rule 9: 日本語文中に挟まった改行を除去
+        # "〜 に\n対して" のような行分割 (直前が日本語、直後も日本語) を結合
+        text = re.sub(r"([\u3040-\u9fff、。])\n([\u3040-\u9fff])", r"\1\2", text)
 
         return text.strip()
 
@@ -1992,6 +2012,19 @@ class BaseMathSolver:
         )
 
         category_keywords = {
+            "parametric_curve": [
+                "曲線の長さ",
+                "弧長",
+                "媒介変数",
+                "パラメータ",
+                "内分",
+                "描く曲線",
+                "曲線と",
+                "囲まれた",
+                "曲線の長",
+                "t : (1-t)",
+                "t:(1-t)",
+            ],
             "vector_geometry": [
                 "ベクトル",
                 "内積",
@@ -2062,6 +2095,16 @@ class BaseMathSolver:
 
     def _problem_type_guidance(self, problem_type: str) -> str:
         guidance_map = {
+            "parametric_curve": (
+                "媒介変数表示の曲線を扱います。必ず次の手順で厳密に計算してください: "
+                "① 各点の座標をパラメータ t の式で表す（代入して完全展開）。"
+                "② x'(t), y'(t) を求め、x'(t) の符号と単調性を確認する。"
+                "③ 面積は ∫y(t)·x'(t) dt を t の範囲で計算（置換積分で展開）。"
+                "④ 弧長は ∫√(x'(t)²+y'(t)²) dt を計算する際、"
+                "   x'²+y'² を展開して【完全平方】にならないか必ず確認すること。"
+                "   完全平方になる場合は √を外して直接積分せよ。"
+                "⑤ 各小問の答えを t（またはパラメータ a）の多項式・分数として簡潔に示す。"
+            ),
             "vector_geometry": "図形関係はベクトル・座標で定式化し、条件を方程式化して未知点を解いてください。",
             "calculus": "関数を定義し、微分・増減・極値または積分の標準手順で厳密に処理してください。",
             "probability": "標本空間・事象・場合分けを明示し、重複や漏れがないように確率を計算してください。",
@@ -2115,7 +2158,21 @@ class BaseMathSolver:
         if structured_problem:
             problem_type = str(structured_problem.get("problemType", "algebra"))
             type_guidance = self._problem_type_guidance(problem_type)
-            if problem_type == "vector_geometry":
+            if problem_type == "parametric_curve":
+                final_rule = (
+                    "finalには各小問 (1)(2)(3) の答えをそれぞれ明記してください。"
+                    "特に弧長は計算過程で x'²+y'² の展開と完全平方の確認を示し、"
+                    "a の多項式として答えを出してください。"
+                )
+                if request.options.need_steps:
+                    steps_rule = (
+                        "stepsには各小問を独立したステップとして記述してください: "
+                        "① (1) 座標の計算: U_t の座標を t の式で完全展開して示す。"
+                        "② (2) 面積: ∫y(t)x'(t)dt の展開と定積分の計算を詳しく示す。"
+                        "③ (3) 弧長: x'(t), y'(t) を計算し, x'²+y'² を展開・完全平方の確認, √を外して積分まで示す。"
+                        "各ステップで途中式を省略しないこと。"
+                    )
+            elif problem_type == "vector_geometry":
                 final_rule = (
                     "finalには最終的な領域・座標に加えて、条件を①②のように番号付きで整理し、境界の含む/含まないと"
                     "原点の扱いを明記してください。"

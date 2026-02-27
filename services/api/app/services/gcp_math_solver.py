@@ -467,7 +467,10 @@ class GcpMathSolver(BaseMathSolver):
 
             generation_config = GenerationConfig(
                 temperature=0.0,
-                max_output_tokens=min(max(request.options.max_tokens, 512), 2000),
+                max_output_tokens=min(
+                    max(request.options.max_tokens, 512),
+                    8192 if request.options.mode == "accurate" else 2000,
+                ),
                 response_mime_type="application/json",
             )
             # Gemini はシステム命令をモデル初期化時に渡すか、最初のメッセージに付ける

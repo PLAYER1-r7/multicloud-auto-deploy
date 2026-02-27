@@ -512,8 +512,12 @@ class AzureMathSolver(BaseMathSolver):
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.0,
-                max_tokens=min(max(request.options.max_tokens, 512), 2000),
+                max_tokens=min(
+                    max(request.options.max_tokens, 512),
+                    8192 if request.options.mode == "accurate" else 2000,
+                ),
                 response_format={"type": "json_object"},
+                # accurate モードでは思考トークンを多く確保して計算精度を上げる
             )
         except Exception as exc:
             raise HTTPException(

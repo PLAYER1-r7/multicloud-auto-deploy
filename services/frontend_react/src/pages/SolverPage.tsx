@@ -44,7 +44,7 @@ export default function SolverPage() {
       const res = await solveMath({
         input: { source: "url", imageUrl: PROBLEM_IMAGE_URL },
         exam: DEMO_EXAM,
-        options: { mode: "fast", needSteps: true, needLatex: true },
+        options: { mode: "accurate", needSteps: true, needLatex: true, maxTokens: 8192 },
       });
       setResult(res);
     } catch (e: unknown) {
@@ -82,7 +82,9 @@ export default function SolverPage() {
           {/* 問題画像（読み込み成功時のみ表示） */}
           {!imgError ? (
             <details className="problem-image-details">
-              <summary className="problem-image-summary">問題画像を見る</summary>
+              <summary className="problem-image-summary">
+                問題画像を見る
+              </summary>
               <img
                 src={PROBLEM_IMAGE_URL}
                 alt="東京大学 2025年度 数学 第1問"
@@ -91,7 +93,10 @@ export default function SolverPage() {
               />
             </details>
           ) : (
-            <p className="muted" style={{ fontSize: "0.8rem", marginTop: "0.5rem" }}>
+            <p
+              className="muted"
+              style={{ fontSize: "0.8rem", marginTop: "0.5rem" }}
+            >
               ※ 画像は mixed-content のためブロックされました。
               <a
                 href="http://server-test.net/math/tokyo/q_pdf/2025_1.pdf"
