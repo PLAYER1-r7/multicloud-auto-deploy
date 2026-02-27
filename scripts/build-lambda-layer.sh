@@ -83,12 +83,19 @@ cat "$BUILD_DIR/requirements-layer.txt"
 echo ""
 
 # Lambda Layerの構造に従ってインストール (python/ ディレクトリに配置)
+# Suppress non-critical warnings for cleaner CI/CD logs
 pip3 install -r "$BUILD_DIR/requirements-layer.txt" \
     -t "$BUILD_DIR/python/" \
     --upgrade \
     --platform manylinux2014_x86_64 \
     --python-version 3.12 \
-    --only-binary=:all: 2>&1 | tee /tmp/pip-install.log
+    --only-binary=:all: \
+    --disable-pip-version-check \
+    --quiet 2>&1 | tee /tmp/pip-install.log || { \
+      echo -e "${RED}❌ pip install failed${NC}"; \
+      cat /tmp/pip-install.log; \
+      exit 1; \
+    }
 
 # 不要なファイルを削除してサイズを削減
 echo -e "${YELLOW}4. 不要なファイルの削除...${NC}"
@@ -113,13 +120,22 @@ echo -e "${GREEN}✅ クリーンアップ完了${NC}"
 # ZIPパッケージの作成
 echo -e "${YELLOW}5. ZIPパッケージの作成...${NC}"
 cd "$BUILD_DIR"
-zip -r9 ../lambda-layer.zip python/ > /dev/null
+zip -r9q ../lambda-layer.zip python/ || { \
+  echo -e "${RED}❌ Failed to create ZIP file${NC}"; \
+  exit 1; \
+}
 cd "$API_DIR"
-LAYER_SIZE=$(du -h "$BUILD_DIR/../lambda-layer.zip" | cut -f1)
+LAYER_ZIP="$BUILD_DIR/../lambda-layer.zip"
+if [ ! -f "$LAYER_ZIP" ]; then
+  echo -e "${RED}❌ ZIP file not created: $LAYER_ZIP${NC}"
+  exit 1
+fi
+
+LAYER_SIZE=$(du -h "$LAYER_ZIP" | cut -f1)
 echo -e "${GREEN}✅ Layerパッケージ作成完了 (サイズ: $LAYER_SIZE)${NC}"
 
-# サイズ確認
-LAYER_SIZE_BYTES=$(stat -f%z "$BUILD_DIR/../lambda-layer.zip" 2>/dev/null || stat -c%s "$BUILD_DIR/../lambda-layer.zip")
+# サイズ確認 (Linux/macOS互換)
+LAYER_SIZE_BYTES=$(stat -c%s "$LAYER_ZIP" 2>/dev/null || stat -f%z "$LAYER_ZIP" 2>/dev/null || du -b "$LAYER_ZIP" | cut -f1)
 LAYER_SIZE_MB=$((LAYER_SIZE_BYTES / 1024 / 1024))
 
 echo ""
@@ -131,12 +147,18 @@ echo "Layer サイズ: ${LAYER_SIZE} (${LAYER_SIZE_MB}MB)"
 echo ""
 
 if [ $LAYER_SIZE_MB -gt 50 ]; then
-    echo -e "${YELLOW}⚠️  警告: Layer サイズが50MBを超えています${NC}"
+    echo -e "${YELLOW}⚠️  警告: Layer サイズが50MBを超えています（${LAYER_SIZE_MB}MB）${NC}"
     echo "   Lambda Layerの最大サイズは250MB（解凍後）です"
+    echo -e "${YELLOW}   ⚠️  S3アップロードが必要になり、デプロイが遅くなります${NC}"
 else
-    echo -e "${GREEN}✅ Layer サイズOK (50MB以下)${NC}"
+    echo -e "${GREEN}✅ Layer サイズOK (${LAYER_SIZE_MB}MB - 50MB以下)${NC}"
+fi
+
+# GitHub Actions環境での出力設定
+if [ -n "$GITHUB_OUTPUT" ]; then
+    echo "layer_size_mb=$LAYER_SIZE_MB" >> "$GITHUB_OUTPUT"
+    echo "layer_zip_path=$LAYER_ZIP" >> "$GITHUB_OUTPUT"
 fi
 
 echo ""
-echo "次のコマンドでLayerをデプロイできます:"
-echo "  aws lambda publish-layer-version --layer-name $LAYER_NAME --zip-file fileb://$BUILD_DIR/../lambda-layer.zip --compatible-runtimes python3.12"
+echo "✨ Lambda Layer ビルド完了！"

@@ -332,9 +332,18 @@ jobs:
           echo "📦 Building Lambda Layer (dependencies)..."
           bash ../../scripts/build-lambda-layer.sh
 
-          # Show layer info
-          echo "✅ Layer package created:"
-          ls -lh lambda-layer.zip
+          # Capture layer info for subsequent steps
+          if [ -f lambda-layer.zip ]; then
+            LAYER_SIZE=$(du -h lambda-layer.zip | cut -f1)
+            echo "✅ Layer package created: $LAYER_SIZE"
+            ls -lh lambda-layer.zip
+            
+            # Export for GitHub Actions
+            echo "layer_created=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Layer package creation failed"
+            exit 1
+          fi
 
       - name: Package Backend (Application Code Only)
         run: |
@@ -373,36 +382,83 @@ jobs:
           set -e
 
           LAYER_NAME="multicloud-auto-deploy-${{ steps.set_stack.outputs.stack_name }}-dependencies"
+          LAYER_ZIP="services/api/lambda-layer.zip"
 
+          # Validate ZIP file exists and is readable
+          if [ ! -f "$LAYER_ZIP" ]; then
+            echo "❌ Layer ZIP not found: $LAYER_ZIP"
+            exit 1
+          fi
+
+          LAYER_SIZE=$(du -h "$LAYER_ZIP" | cut -f1)
+          echo "📊 Layer size: $LAYER_SIZE"
           echo "🚀 Publishing Custom Lambda Layer: $LAYER_NAME"
+          
+          # Publish layer with error handling
           LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
-            --layer-name $LAYER_NAME \
-            --description "Dependencies for FastAPI + Mangum + JWT (Python 3.13)" \
-            --zip-file fileb://services/api/lambda-layer.zip \
-            --compatible-runtimes python3.13 \
-            --region ${{ env.AWS_REGION }} \
-            --query LayerVersionArn \
-            --output text)
+            --layer-name "$LAYER_NAME" \
+            --description "Dependencies for FastAPI + Mangum + JWT (Python 3.12)" \
+            --zip-file "fileb://$LAYER_ZIP" \
+            --compatible-runtimes python3.12 \
+            --region "${{ env.AWS_REGION }}" \
+            --query 'LayerVersionArn' \
+            --output text 2>&1) || {
+            echo "❌ Failed to publish layer"
+            echo "$LAYER_VERSION_ARN"
+            exit 1
+          }
+
+          if [ -z "$LAYER_VERSION_ARN" ]; then
+            echo "❌ Layer ARN is empty"
+            exit 1
+          fi
 
           echo "✅ Layer published: $LAYER_VERSION_ARN"
           echo "layer_arn=$LAYER_VERSION_ARN" >> $GITHUB_OUTPUT
 
       - name: Cleanup Old Lambda Layer Versions
+        continue-on-error: true
         run: |
+          set +e  # Continue even if cleanup fails
+
           LAYER_NAME="multicloud-auto-deploy-${{ steps.set_stack.outputs.stack_name }}-dependencies"
           echo "🧹 Cleaning up old Lambda Layer versions (keeping latest 3) for: $LAYER_NAME"
-          VERSIONS=$(aws lambda list-layer-versions --layer-name $LAYER_NAME \
-            --region ${{ env.AWS_REGION }} --query "LayerVersions[].Version" --output text 2>/dev/null || echo "")
+          
+          # Get layer versions (suppress errors if layer doesn't exist yet)
+          VERSIONS=$(aws lambda list-layer-versions \
+            --layer-name "$LAYER_NAME" \
+            --region "${{ env.AWS_REGION }}" \
+            --query "LayerVersions[].Version" \
+            --output text 2>/dev/null) || true
+
           if [ -z "$VERSIONS" ]; then
-            echo "ℹ️  No versions found or insufficient permissions — skipping cleanup"
+            echo "ℹ️  No versions found — skipping cleanup"
             exit 0
           fi
-          SORTED=$(echo $VERSIONS | tr ' ' '\n' | sort -n | head -n -3)
+
+          # Sort and delete old versions (keep latest 3)
+          SORTED=$(echo "$VERSIONS" | tr ' ' '\n' | sort -rn | tail -n +4)
+          DELETED_COUNT=0
+
           for v in $SORTED; do
-            aws lambda delete-layer-version --layer-name $LAYER_NAME --version-number $v --region ${{ env.AWS_REGION }} 2>/dev/null && echo "  Deleted $LAYER_NAME:$v" || echo "  ⚠️  Could not delete $LAYER_NAME:$v (skipped)"
+            if aws lambda delete-layer-version \
+              --layer-name "$LAYER_NAME" \
+              --version-number "$v" \
+              --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
+              echo "  ✓ Deleted v$v"
+              ((DELETED_COUNT++))
+            else
+              echo "  ⚠️  Could not delete v$v (skipped)"
+            fi
           done
-          REMAINING=$(aws lambda list-layer-versions --layer-name $LAYER_NAME --region ${{ env.AWS_REGION }} --query "length(LayerVersions)" --output text 2>/dev/null || echo "unknown")
-          echo "✅ Layer cleanup done. Remaining versions: $REMAINING"
+
+          REMAINING=$(aws lambda list-layer-versions \
+            --layer-name "$LAYER_NAME" \
+            --region "${{ env.AWS_REGION }}" \
+            --query "length(LayerVersions)" \
+            --output text 2>/dev/null || echo "?")
+
+          echo "✅ Cleanup done ($DELETED_COUNT deleted). Remaining versions: $REMAINING"
 
       - name: Update Lambda Function
         id: update_lambda
