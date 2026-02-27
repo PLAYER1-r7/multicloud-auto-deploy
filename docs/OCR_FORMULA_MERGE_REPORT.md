@@ -1,8 +1,9 @@
 # OCR 数式マージ実装レポート
 
-> 作成日: 2026-02-27
+> 作成日: 2026-02-27  
+> 最終更新: 2026-02-27
 > 対象ブランチ: develop
-> 関連コミット: 608f98f / 4fa3394 / cc0956b
+> 関連コミット: 608f98f / 4fa3394 / cc0956b / 731daac / 26e560a
 
 ---
 
@@ -19,7 +20,77 @@ Azure Document Intelligence (DI) の `prebuilt-read` パスは日本語テキス
 
 ---
 
-## 2. 検出したバグと修正
+## 2. PDF テキスト抽出の日本語・数式品質改善
+
+### 2-A. 日本語文字化け修正（commit 731daac）
+
+**問題**: `pypdf` は CIDFont Type2（ToUnicode マップなし）の PDF に対応しておらず、
+グリフ ID をそのまま Unicode コードポイントとして解釈するため、日本語が
+シンハラ語・タイ語等の別文字列に化けていた。
+
+```
+# 修正前（pypdf）
+1ඪฏ໘্ͷ఺ A (0 , 0) ɼB (0 , 1)…
+
+# 修正後（pdfminer.six）
+1 　座標平面上の点 A(0, 0)，B(0, 1)，C(1, 1)，D(1, 0) を考える。
+```
+
+**修正**: `_extract_text_from_pdf_bytes()` を `pdfminer.six` 優先・`pypdf` フォールバック構成に変更。
+`pdfminer.six` は CIDFont の CMap を内部に保持しており日本語を正確に Unicode に変換する。
+
+また、`pdfminer.six` が解決できなかった `(cid:N)` 表記を CID マッピングで変換する
+`_fix_pdfminer_cid_chars()` を追加した。
+
+| CID 表記 | 変換後 | 記号名 |
+|---|---|---|
+| `(cid:53)` | `≦` | \leqq |
+| `(cid:54)` | `≧` | \geqq |
+| `(cid:90)` | `∫` | integral |
+| `(cid:88)` | `∑` | summation |
+| `(cid:81)` | `∏` | product |
+| `(cid:112)` | `∞` | infinity |
+| `(cid:195)` | *(削除)* | 大括弧アーティファクト |
+| `(cid:33)` | *(削除)* | 大括弧アーティファクト |
+
+**依存パッケージ追加**: `pdfminer.six==20260107` を全 requirements に追加。
+
+---
+
+### 2-B. PDF 数式テキスト正規化（commit 26e560a）
+
+**問題**: `pdfminer.six` は縦組み数式（分数・積分上下限）を行分割して出力するため、
+数式が断片化した状態でテキスト抽出される。
+
+| 原文（PDF 内数式） | pdfminer 生テキスト | 修正後 |
+|---|---|---|
+| $\int_1^2$ | `∫ 2\n\n1\n` | `∫_{1}^{2}` |
+| $\lim_{n\to\infty}$ | `lim\nn→∞` | `lim_{n→∞}` |
+| $\frac{\pi}{6}$ | `π\n6` | `π/6` |
+| $\frac{1}{2}$ | `1\n2` | `1/2` |
+| $\frac{1}{z}$ | `1\nz` | `1/z` |
+| $x^2$ | `x2` | `x²` |
+| $\alpha^2$ | `α2` | `α²` |
+
+**修正**: `_normalize_pdf_math_text()` を追加し、pdfminer 抽出後に自動適用。
+
+```python
+def _normalize_pdf_math_text(self, text: str) -> str:
+    # Rule 1: 積分上下限  ∫ 2\n1\n   → ∫_{1}^{2}
+    # Rule 2: lim 添字    lim\nn→∞   → lim_{n→∞}
+    # Rule 3: 縦分割分数  π\n6       → π/6
+    # Rule 4: 上付き文字  x2/α2     → x²/α²  (大文字ラベル A2,T2 は除外)
+    # Rule 5: 余分な空行を最大2行に圧縮
+```
+
+**誤変換防止**: 上付き変換（Rule 4）は小文字ラテン・ギリシャ小文字のみ対象とし、
+`A2`, `T2` 等の大文字インデックスラベルは変換しない。
+
+---
+
+## 3. 検出したバグと修正（Azure DI 2パスマージ）
+
+> ※ 旧 §2 をリナンバー
 
 ### Bug 1: display 数式がサイレントに消える
 
@@ -50,7 +121,7 @@ Azure Document Intelligence (DI) の `prebuilt-read` パスは日本語テキス
 
 ---
 
-## 3. ヒューリスティック数式領域検出
+## 4. ヒューリスティック数式領域検出
 
 ### 設計思想
 
@@ -101,7 +172,7 @@ $$\lim_{n\to\infty} n \int_1^2 \log\left(1 + \frac{x}{n}\right)^{1/2} dx$$
 
 ---
 
-## 4. OCR ソース評価スコア体系
+## 5. OCR ソース評価スコア体系
 
 | ソース                    | ボーナス | 特性                                                 |
 | ------------------------- | -------: | ---------------------------------------------------- |
@@ -116,7 +187,7 @@ $$\lim_{n\to\infty} n \int_1^2 \log\left(1 + \frac{x}{n}\right)^{1/2} dx$$
 
 ---
 
-## 5. GCP 実装
+## 6. GCP 実装
 
 ### 設計
 
@@ -150,7 +221,7 @@ Vision API テキスト + `rich_lines` リスト（polygon=None）を返す。
 
 ---
 
-## 6. 検証結果（東京大学 2025 年入試数学 6 問）
+## 7. 検証結果（東京大学 2025 年入試数学 6 問）
 
 実施日: 2026-02-27
 API エンドポイント: `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/v1/solve`
@@ -174,19 +245,37 @@ API エンドポイント: `https://multicloud-auto-deploy-staging-func-d8a2guhf
 
 ---
 
-## 7. 実装ファイル一覧
+## 8. 実装ファイル一覧
 
-| ファイル                                              | 変更概要                                                      |
-| ----------------------------------------------------- | ------------------------------------------------------------- |
-| `services/api/app/services/base_math_solver.py`       | `_is_formula_candidate`, `_has_formula_signal`, `_find_formula_regions`, `_merge_read_with_formulas`, `_poly_y_range`, `_y_overlap_ratio` を共通メソッドとして追加 |
-| `services/api/app/services/azure_math_solver.py`      | bytes ガード、ポリゴン処理、2パスマージ実装；上記メソッドは base から継承 |
-| `services/api/app/services/gcp_math_solver.py`        | `_ocr_vision_pass`, `_extract_formulas_with_gemini_vision`, `_extract_text_with_vision_api_merged` 追加 |
+| ファイル | 変更概要 |
+| --- | --- |
+| `services/api/app/services/base_math_solver.py` | `_is_formula_candidate`, `_has_formula_signal`, `_find_formula_regions`, `_merge_read_with_formulas`, `_poly_y_range`, `_y_overlap_ratio` を共通メソッドとして追加；`_fix_pdfminer_cid_chars`, `_normalize_pdf_math_text`, `_extract_text_from_pdf_bytes`（pdfminer 優先化）を追加 |
+| `services/api/app/services/azure_math_solver.py` | bytes ガード、ポリゴン処理、2パスマージ実装；共通メソッドは base から継承 |
+| `services/api/app/services/gcp_math_solver.py` | `_ocr_vision_pass`, `_extract_formulas_with_gemini_vision` 追加；GCP Vision + Gemini Vision 2パスマージ実装 |
+| `services/api/requirements.txt` | `pdfminer.six==20260107` 追加 |
+| `services/api/requirements-gcp.txt` | `pdfminer.six==20260107`, `google-cloud-vision==3.8.1`, `google-cloud-aiplatform==1.77.0` 追加 |
+| `services/api/requirements-azure.txt` | `pdfminer.six==20260107` 追加 |
+| `services/api/requirements-layer.txt` | `pdfminer.six==20260107` 追加 |
 
 ---
 
-## 8. 今後の改善案
+## 9. GCP 稼働までに解決した問題
+
+| 問題 | 原因 | 対処 |
+|---|---|---|
+| HTTP 404 | GCP Cloud Run は `/v1/solve`（Azure は `/api/v1/solve`）| パスを修正 |
+| HTTP 503 `SOLVE_ENABLED=false` | env var 未設定がデフォルト false | `gcloud run services update --update-env-vars SOLVE_ENABLED=true` |
+| HTTP 502 `parents[4] IndexError` | Cloud Run デプロイパスが浅く `parents[4]` が範囲外 | `try/except IndexError` で None を返すよう修正 |
+| HTTP 502 `ModuleNotFoundError: google-cloud-vision` | `requirements-gcp.txt` に未記載 | `google-cloud-vision==3.8.1`, `google-cloud-aiplatform==1.77.0` を追加 |
+| HTTP 404 Vertex AI モデルなし | `gemini-2.0-flash-001` は `asia-northeast1` 未対応 | モデル名 `gemini-2.0-flash`・ロケーション `us-central1` に変更 |
+| Vertex AI API 無効 | プロジェクト `ashnova` で API が未有効 | `gcloud services enable aiplatform.googleapis.com` |
+
+---
+
+## 10. 今後の改善案
 
 1. **`_has_formula_signal` の偽陽性減少**: `\quad` 単体などをブラックリスト化
 2. **OCR 後処理の正規化**: `ェ` → `x` などの CJK-Latin 誤認識を修正
 3. **GCP Document AI の活用**: `processors/math` で数式抽出をさらに高精度化
-4. **マルチクラウド統合テスト**: GCP staging で 6 問 OCR テストを実施し Azure と比較
+4. **`_normalize_pdf_math_text` の拡張**: `x 1\n2` → `x^{1/2}` 等のより複雑な縦組み数式への対応
+5. **CI/CD 連携**: GCP デプロイ後の `SOLVE_ENABLED=true` を terraform/env ファイルで恒久化
