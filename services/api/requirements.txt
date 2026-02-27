@@ -20,6 +20,7 @@ python-multipart==0.0.9
 pyjwt==2.9.0
 requests==2.32.3
 pypdf==5.3.0
+pdfminer.six==20260107
 
 # Database (NoSQL — DynamoDB Local uses boto3, already listed under AWS)
 

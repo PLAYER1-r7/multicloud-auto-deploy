@@ -119,7 +119,44 @@ class BaseMathSolver:
 
         return None
 
+    # CID → Unicode mapping for common Japanese math PDF fonts (Computer Modern)
+    _CID_MAP: dict[str, str] = {
+        "(cid:53)": "≦",   # \leqq (CMSY)
+        "(cid:54)": "≧",   # \geqq
+        "(cid:90)": "∫",   # integral (CMEX)
+        "(cid:88)": "∑",   # summation
+        "(cid:81)": "∏",   # product
+        "(cid:112)": "∞",  # infinity
+        "(cid:195)": "",   # large left-paren bracket (display artifact)
+        "(cid:33)": "",    # large right-paren bracket (display artifact)
+    }
+
+    def _fix_pdfminer_cid_chars(self, text: str) -> str:
+        """pdfminer が解決できなかった (cid:N) 表記を既知のマッピングで置換する。"""
+        for cid, replacement in self._CID_MAP.items():
+            text = text.replace(cid, replacement)
+        # 残った未知の (cid:N) は空白に
+        text = re.sub(r"\(cid:\d+\)", " ", text)
+        return text
+
     def _extract_text_from_pdf_bytes(self, pdf_bytes: bytes) -> str:
+        """PDF bytes からテキストを抽出する。
+
+        pdfminer.six を優先して使用する（日本語 CIDFont の ToUnicode マップに対応）。
+        インポートに失敗した場合は pypdf にフォールバックする。
+        """
+        # --- pdfminer.six (優先) ---
+        try:
+            from pdfminer.high_level import extract_text as pdfminer_extract  # type: ignore[import]
+
+            text = pdfminer_extract(BytesIO(pdf_bytes))
+            text = self._fix_pdfminer_cid_chars(text).strip()
+            if text:
+                return text
+        except Exception:
+            pass
+
+        # --- pypdf (フォールバック) ---
         try:
             reader = PdfReader(BytesIO(pdf_bytes))
             texts: list[str] = []
@@ -601,7 +638,9 @@ class BaseMathSolver:
             return None
 
     @staticmethod
-    def _y_overlap_ratio(a_min: float, a_max: float, b_min: float, b_max: float) -> float:
+    def _y_overlap_ratio(
+        a_min: float, a_max: float, b_min: float, b_max: float
+    ) -> float:
         """Fraction of the smaller vertical span that overlaps with the other span."""
         overlap = min(a_max, b_max) - max(a_min, b_min)
         if overlap <= 0:
@@ -701,7 +740,10 @@ class BaseMathSolver:
                 if line_formula[li] is not None:
                     continue
                 l_yr = self._poly_y_range(line.get("polygon"))
-                if l_yr and self._y_overlap_ratio(l_yr[0], l_yr[1], f_yr[0], f_yr[1]) >= 0.3:
+                if (
+                    l_yr
+                    and self._y_overlap_ratio(l_yr[0], l_yr[1], f_yr[0], f_yr[1]) >= 0.3
+                ):
                     line_formula[li] = f
 
         poly_emitted: set[int] = {
@@ -709,7 +751,9 @@ class BaseMathSolver:
         }
 
         # --- Pass 2: heuristic matching for unmatched display formulas ---
-        unmatched_display = [f for f, _ in display_formulas if id(f) not in poly_emitted]
+        unmatched_display = [
+            f for f, _ in display_formulas if id(f) not in poly_emitted
+        ]
         if unmatched_display:
             regions = self._find_formula_regions(read_lines)
             print(
@@ -740,7 +784,9 @@ class BaseMathSolver:
                     li += 1
 
         # Safety net: display formulas still not emitted → append at bottom
-        still_unmatched = [f["value"] for f, _ in display_formulas if id(f) not in emitted]
+        still_unmatched = [
+            f["value"] for f, _ in display_formulas if id(f) not in emitted
+        ]
         if still_unmatched or inline_latex:
             parts.append("\n[検出された数式 (LaTeX)]")
             for val in still_unmatched:
