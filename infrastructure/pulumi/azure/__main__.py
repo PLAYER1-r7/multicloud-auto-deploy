@@ -2,11 +2,18 @@
 Multi-Cloud Auto Deploy - Azure Pulumi Implementation
 
 Architecture:
-- Azure Functions (Consumption Plan Y1)
+- Azure Functions (FlexConsumption)
 - Storage Account (Functions + Frontend)
 - Application Insights (Monitoring)
+- Front Door CDN (Production only; staging: direct Blob Storage for cost efficiency)
 
-Cost: ~$2-8/month for low traffic
+Cost:
+  - Staging (no Front Door): ~$2-8/month for low traffic
+  - Production (with Front Door): ~$35-50/month with Front Door Standard
+
+Environment Strategy:
+  - staging: Direct Blob Storage access, no CDN (cost optimized)
+  - production: Front Door for global distribution, custom domains, and security
 """
 
 import monitoring
@@ -26,6 +33,9 @@ project_name = "multicloud-auto-deploy"
 #   pulumi config set frontendDomain <afd_hostname>
 # Used for Azure AD app registration redirect URIs
 frontend_domain = config.get("frontendDomain") or ""
+
+# Enable CDN only for production (staging: direct Blob Storage access)
+enable_cdn = stack != "staging"
 
 # Common tags
 common_tags = {
@@ -357,7 +367,7 @@ app_registration = azuread.Application(
                     f"https://{frontend_domain}/sns/auth/callback",
                     f"https://{frontend_domain}/sns/",
                 ]
-                if frontend_domain
+                if (enable_cdn and frontend_domain)
                 else []
             )
         ),
@@ -403,339 +413,379 @@ app_service_principal = azuread.ServicePrincipal(
 # - API URL: https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
 
 # ========================================
-# Azure Front Door for Frontend CDN
+# Azure Front Door for Frontend CDN (Production only)
 # ========================================
-# Front Door Profile (Standard SKU - cost-effective)
-frontdoor_profile = azure.cdn.Profile(
-    "frontdoor-profile",
-    profile_name=f"{project_name}-{stack}-fd",
-    resource_group_name=resource_group.name,
-    location="Global",  # Front Door is global
-    sku=azure.cdn.SkuArgs(
-        name="Standard_AzureFrontDoor",
-    ),
-    # Extend origin response timeout to 60s (default: 30s) to accommodate
-    # Python Dynamic Consumption cold starts which can take 10-30+ seconds.
-    # Without this, AFD times out during cold start and returns HTTP 502.
-    origin_response_timeout_seconds=60,
-    tags=common_tags,
-    # Force replacement when SKU changes (Premium -> Standard not supported)
-    opts=pulumi.ResourceOptions(replace_on_changes=["sku"]),
-)
+# Staging uses direct Blob Storage access for cost efficiency
+if enable_cdn:
+    # Front Door Profile (Standard SKU - cost-effective)
+    frontdoor_profile = azure.cdn.Profile(
+        "frontdoor-profile",
+        profile_name=f"{project_name}-{stack}-fd",
+        resource_group_name=resource_group.name,
+        location="Global",  # Front Door is global
+        sku=azure.cdn.SkuArgs(
+            name="Standard_AzureFrontDoor",
+        ),
+        # Extend origin response timeout to 60s (default: 30s) to accommodate
+        # Python Dynamic Consumption cold starts which can take 10-30+ seconds.
+        # Without this, AFD times out during cold start and returns HTTP 502.
+        origin_response_timeout_seconds=60,
+        tags=common_tags,
+        # Force replacement when SKU changes (Premium -> Standard not supported)
+        opts=pulumi.ResourceOptions(replace_on_changes=["sku"]),
+    )
 
-# Front Door Endpoint
-frontdoor_endpoint = azure.cdn.AFDEndpoint(
-    "frontdoor-endpoint",
-    endpoint_name=storage_suffix.result.apply(lambda suffix: f"mcad-{stack}-{suffix}"),
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    location="Global",
-    enabled_state="Enabled",
-    tags=common_tags,
-)
+    # Front Door Endpoint
+    frontdoor_endpoint = azure.cdn.AFDEndpoint(
+        "frontdoor-endpoint",
+        endpoint_name=storage_suffix.result.apply(
+            lambda suffix: f"mcad-{stack}-{suffix}"
+        ),
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+        location="Global",
+        enabled_state="Enabled",
+        tags=common_tags,
+    )
 
-# Front Door Origin Group
-frontdoor_origin_group = azure.cdn.AFDOriginGroup(
-    "frontdoor-origin-group",
-    origin_group_name=f"{project_name}-{stack}-origin-group",
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    load_balancing_settings=azure.cdn.LoadBalancingSettingsParametersArgs(
-        sample_size=4,
-        successful_samples_required=3,
-        additional_latency_in_milliseconds=50,
-    ),
-    health_probe_settings=azure.cdn.HealthProbeParametersArgs(
-        probe_path="/",
-        probe_request_type="HEAD",
-        probe_protocol="Https",
-        probe_interval_in_seconds=100,
-    ),
-)
+    # Front Door Origin Group
+    frontdoor_origin_group = azure.cdn.AFDOriginGroup(
+        "frontdoor-origin-group",
+        origin_group_name=f"{project_name}-{stack}-origin-group",
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+        load_balancing_settings=azure.cdn.LoadBalancingSettingsParametersArgs(
+            sample_size=4,
+            successful_samples_required=3,
+            additional_latency_in_milliseconds=50,
+        ),
+        health_probe_settings=azure.cdn.HealthProbeParametersArgs(
+            probe_path="/",
+            probe_request_type="HEAD",
+            probe_protocol="Https",
+            probe_interval_in_seconds=100,
+        ),
+    )
 
-# Front Door Origin (Storage Account for Frontend)
-frontdoor_origin = azure.cdn.AFDOrigin(
-    "frontdoor-origin",
-    origin_name=f"{project_name}-{stack}-origin",
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    origin_group_name=frontdoor_origin_group.name,
-    host_name=frontend_storage.primary_endpoints.apply(
-        lambda endpoints: (
-            endpoints.web.replace("https://", "").replace("/", "")
-            if endpoints.web
-            else ""
-        )
-    ),
-    origin_host_header=frontend_storage.primary_endpoints.apply(
-        lambda endpoints: (
-            endpoints.web.replace("https://", "").replace("/", "")
-            if endpoints.web
-            else ""
-        )
-    ),
-    http_port=80,
-    https_port=443,
-    priority=1,
-    weight=1000,
-    enabled_state="Enabled",
-)
+    # Front Door Origin (Storage Account for Frontend)
+    frontdoor_origin = azure.cdn.AFDOrigin(
+        "frontdoor-origin",
+        origin_name=f"{project_name}-{stack}-origin",
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+        origin_group_name=frontdoor_origin_group.name,
+        host_name=frontend_storage.primary_endpoints.apply(
+            lambda endpoints: (
+                endpoints.web.replace("https://", "").replace("/", "")
+                if endpoints.web
+                else ""
+            )
+        ),
+        origin_host_header=frontend_storage.primary_endpoints.apply(
+            lambda endpoints: (
+                endpoints.web.replace("https://", "").replace("/", "")
+                if endpoints.web
+                else ""
+            )
+        ),
+        http_port=80,
+        https_port=443,
+        priority=1,
+        weight=1000,
+        enabled_state="Enabled",
+    )
 
-# Front Door Origin Group for Function App (API backend)
-frontdoor_api_origin_group = azure.cdn.AFDOriginGroup(
-    "frontdoor-api-origin-group",
-    origin_group_name=f"{project_name}-{stack}-api-origin-group",
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    load_balancing_settings=azure.cdn.LoadBalancingSettingsParametersArgs(
-        sample_size=1,
-        successful_samples_required=1,
-        additional_latency_in_milliseconds=0,
-    ),
-    health_probe_settings=azure.cdn.HealthProbeParametersArgs(
-        probe_path="/api/HttpTrigger",
-        probe_request_type="GET",
-        probe_protocol="Https",
-        probe_interval_in_seconds=100,
-    ),
-)
+    # Front Door Origin Group for Function App (API backend)
+    frontdoor_api_origin_group = azure.cdn.AFDOriginGroup(
+        "frontdoor-api-origin-group",
+        origin_group_name=f"{project_name}-{stack}-api-origin-group",
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+        load_balancing_settings=azure.cdn.LoadBalancingSettingsParametersArgs(
+            sample_size=1,
+            successful_samples_required=1,
+            additional_latency_in_milliseconds=0,
+        ),
+        health_probe_settings=azure.cdn.HealthProbeParametersArgs(
+            probe_path="/api/HttpTrigger",
+            probe_request_type="GET",
+            probe_protocol="Https",
+            probe_interval_in_seconds=100,
+        ),
+    )
 
-# Front Door Origin (Function App for API)
-# Use dynamic hostname from workflow output (resolved at deployment time)
-frontdoor_api_origin = azure.cdn.AFDOrigin(
-    "frontdoor-api-origin",
-    origin_name=f"{project_name}-{stack}-api-origin",
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    origin_group_name=frontdoor_api_origin_group.name,
-    host_name=pulumi.Output.concat(
-        f"{project_name}-{stack}-func",
-        "-d45ihd.japaneast-01.azurewebsites.net",
-    ),
-    origin_host_header=pulumi.Output.concat(
-        f"{project_name}-{stack}-func",
-        "-d45ihd.japaneast-01.azurewebsites.net",
-    ),
-    http_port=80,
-    https_port=443,
-    priority=1,
-    weight=1000,
-    enabled_state="Enabled",
-)
+    # Front Door Origin (Function App for API)
+    # Use dynamic hostname from workflow output (resolved at deployment time)
+    frontdoor_api_origin = azure.cdn.AFDOrigin(
+        "frontdoor-api-origin",
+        origin_name=f"{project_name}-{stack}-api-origin",
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+        origin_group_name=frontdoor_api_origin_group.name,
+        host_name=pulumi.Output.concat(
+            f"{project_name}-{stack}-func",
+            "-d45ihd.japaneast-01.azurewebsites.net",
+        ),
+        origin_host_header=pulumi.Output.concat(
+            f"{project_name}-{stack}-func",
+            "-d45ihd.japaneast-01.azurewebsites.net",
+        ),
+        http_port=80,
+        https_port=443,
+        priority=1,
+        weight=1000,
+        enabled_state="Enabled",
+    )
 
-# ========================================
-# Front Door: Rule Set for React SPA URL rewriting
-# /sns/<deep-link> → /sns/index.html (SPA client-side routing)
-#
-# Conditions (all AND'd):
-#   1. Path begins with /sns/
-#   2. Path does NOT begin with /sns/assets/  (preserve static bundles)
-#   3. Path does NOT end with known static file extensions
-# Action: URL Rewrite source=/sns/  destination=/sns/index.html
-# ========================================
-spa_rule_set = azure.cdn.RuleSet(
-    "spa-rule-set",
-    rule_set_name="SpaRuleSet",
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-)
+    # ========================================
+    # Front Door: Rule Set for React SPA URL rewriting
+    # /sns/<deep-link> → /sns/index.html (SPA client-side routing)
+    # ========================================
+    spa_rule_set = azure.cdn.RuleSet(
+        "spa-rule-set",
+        rule_set_name="SpaRuleSet",
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+    )
 
-exam_shortcut_rule = azure.cdn.Rule(
-    "exam-shortcut-rule",
-    rule_name="ExamShortcut",
-    rule_set_name=spa_rule_set.name,
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    order=10,
-    conditions=[
-        azure.cdn.DeliveryRuleUrlPathConditionArgs(
-            name="UrlPath",
-            parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
-                type_name="DeliveryRuleUrlPathMatchConditionParameters",
-                operator="Equal",
-                negate_condition=False,
-                match_values=["/exam", "/exam/"],
-                transforms=["Lowercase"],
+    # Front Door: Rule Set for API URL rewriting
+    # /api/* → /api/HttpTrigger/* (Function App path prefix)
+    api_rule_set = azure.cdn.RuleSet(
+        "api-rule-set",
+        rule_set_name="ApiRuleSet",
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+    )
+
+    api_rewrite_rule = azure.cdn.Rule(
+        "api-rewrite-rule",
+        rule_name="ApiPathRewrite",
+        rule_set_name=api_rule_set.name,
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+        order=1,
+        conditions=[
+            # Match: path begins with /api/
+            azure.cdn.DeliveryRuleUrlPathConditionArgs(
+                name="UrlPath",
+                parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
+                    type_name="DeliveryRuleUrlPathMatchConditionParameters",
+                    operator="BeginsWith",
+                    negate_condition=False,
+                    match_values=["/api/"],
+                    transforms=["Lowercase"],
+                ),
             ),
-        ),
-    ],
-    actions=[
-        azure.cdn.UrlRewriteActionArgs(
-            name="UrlRewrite",
-            parameters=azure.cdn.UrlRewriteActionParametersArgs(
-                type_name="DeliveryRuleUrlRewriteActionParameters",
-                source_pattern="/",
-                destination="/sns/index.html",
-                preserve_unmatched_path=False,
+        ],
+        actions=[
+            azure.cdn.UrlRewriteActionArgs(
+                name="UrlRewrite",
+                parameters=azure.cdn.UrlRewriteActionParametersArgs(
+                    type_name="DeliveryRuleUrlRewriteActionParameters",
+                    source_pattern="/api/",
+                    destination="/api/HttpTrigger/",
+                    preserve_unmatched_path=True,
+                ),
             ),
-        ),
-    ],
-    opts=pulumi.ResourceOptions(depends_on=[spa_rule_set]),
-)
+        ],
+        opts=pulumi.ResourceOptions(depends_on=[api_rule_set]),
+    )
 
-spa_rewrite_rule = azure.cdn.Rule(
-    "spa-rewrite-rule",
-    rule_name="SpaRouting",
-    rule_set_name=spa_rule_set.name,
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    order=2,
-    conditions=[
-        # Condition 1: path begins with /sns/
-        azure.cdn.DeliveryRuleUrlPathConditionArgs(
-            name="UrlPath",
-            parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
-                type_name="DeliveryRuleUrlPathMatchConditionParameters",
-                operator="BeginsWith",
-                negate_condition=False,
-                match_values=["/sns/"],
-                transforms=["Lowercase"],
+    exam_shortcut_rule = azure.cdn.Rule(
+        "exam-shortcut-rule",
+        rule_name="ExamShortcut",
+        rule_set_name=spa_rule_set.name,
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+        order=10,
+        conditions=[
+            azure.cdn.DeliveryRuleUrlPathConditionArgs(
+                name="UrlPath",
+                parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
+                    type_name="DeliveryRuleUrlPathMatchConditionParameters",
+                    operator="Equal",
+                    negate_condition=False,
+                    match_values=["/exam", "/exam/"],
+                    transforms=["Lowercase"],
+                ),
             ),
-        ),
-        # Condition 2: NOT /sns/assets/ (Vite bundle output)
-        azure.cdn.DeliveryRuleUrlPathConditionArgs(
-            name="UrlPath",
-            parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
-                type_name="DeliveryRuleUrlPathMatchConditionParameters",
-                operator="BeginsWith",
-                negate_condition=True,
-                match_values=["/sns/assets/"],
-                transforms=["Lowercase"],
+        ],
+        actions=[
+            azure.cdn.UrlRewriteActionArgs(
+                name="UrlRewrite",
+                parameters=azure.cdn.UrlRewriteActionParametersArgs(
+                    type_name="DeliveryRuleUrlRewriteActionParameters",
+                    source_pattern="/",
+                    destination="/sns/index.html",
+                    preserve_unmatched_path=False,
+                ),
             ),
-        ),
-        # Condition 3: NOT a static file (has no known extension)
-        # Azure AFD limits match_values to 10 per condition
-        azure.cdn.DeliveryRuleUrlPathConditionArgs(
-            name="UrlPath",
-            parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
-                type_name="DeliveryRuleUrlPathMatchConditionParameters",
-                operator="EndsWith",
-                negate_condition=True,
-                match_values=[
-                    ".html",
-                    ".js",
-                    ".css",
-                    ".png",
-                    ".svg",
-                    ".ico",
-                    ".json",
-                    ".woff",
-                    ".woff2",
-                    ".map",
-                ],
-                transforms=["Lowercase"],
+        ],
+        opts=pulumi.ResourceOptions(depends_on=[spa_rule_set]),
+    )
+
+    spa_rewrite_rule = azure.cdn.Rule(
+        "spa-rewrite-rule",
+        rule_name="SpaRouting",
+        rule_set_name=spa_rule_set.name,
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+        order=2,
+        conditions=[
+            # Condition 1: path begins with /sns/
+            azure.cdn.DeliveryRuleUrlPathConditionArgs(
+                name="UrlPath",
+                parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
+                    type_name="DeliveryRuleUrlPathMatchConditionParameters",
+                    operator="BeginsWith",
+                    negate_condition=False,
+                    match_values=["/sns/"],
+                    transforms=["Lowercase"],
+                ),
             ),
-        ),
-    ],
-    actions=[
-        azure.cdn.UrlRewriteActionArgs(
-            name="UrlRewrite",
-            parameters=azure.cdn.UrlRewriteActionParametersArgs(
-                type_name="DeliveryRuleUrlRewriteActionParameters",
-                source_pattern="/sns/",
-                destination="/sns/index.html",
-                preserve_unmatched_path=False,
+            # Condition 2: NOT /sns/assets/ (Vite bundle output)
+            azure.cdn.DeliveryRuleUrlPathConditionArgs(
+                name="UrlPath",
+                parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
+                    type_name="DeliveryRuleUrlPathMatchConditionParameters",
+                    operator="BeginsWith",
+                    negate_condition=True,
+                    match_values=["/sns/assets/"],
+                    transforms=["Lowercase"],
+                ),
             ),
+            # Condition 3: NOT a static file (has no known extension)
+            # Azure AFD limits match_values to 10 per condition
+            azure.cdn.DeliveryRuleUrlPathConditionArgs(
+                name="UrlPath",
+                parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
+                    type_name="DeliveryRuleUrlPathMatchConditionParameters",
+                    operator="EndsWith",
+                    negate_condition=True,
+                    match_values=[
+                        ".html",
+                        ".js",
+                        ".css",
+                        ".png",
+                        ".svg",
+                        ".ico",
+                        ".json",
+                        ".woff",
+                        ".woff2",
+                        ".map",
+                    ],
+                    transforms=["Lowercase"],
+                ),
+            ),
+        ],
+        actions=[
+            azure.cdn.UrlRewriteActionArgs(
+                name="UrlRewrite",
+                parameters=azure.cdn.UrlRewriteActionParametersArgs(
+                    type_name="DeliveryRuleUrlRewriteActionParameters",
+                    source_pattern="/sns/",
+                    destination="/sns/index.html",
+                    preserve_unmatched_path=False,
+                ),
+            ),
+        ],
+        opts=pulumi.ResourceOptions(depends_on=[spa_rule_set]),
+    )
+
+    # Front Door: Security Rule Set (Free Custom Rules)
+    security_rule_set = azure.cdn.RuleSet(
+        "security-rule-set",
+        rule_set_name="SecurityRules",
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+    )
+
+    # Front Door Route for API (/api/* → Function App)
+    frontdoor_api_route = azure.cdn.Route(
+        "frontdoor-api-route",
+        route_name=f"{project_name}-{stack}-api-route",
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+        endpoint_name=frontdoor_endpoint.name,
+        origin_group=azure.cdn.ResourceReferenceArgs(
+            id=frontdoor_api_origin_group.id,
         ),
-    ],
-    opts=pulumi.ResourceOptions(depends_on=[spa_rule_set]),
-)
-
-# Front Door Route (/* → Blob Storage with SPA rule set attached)
-# ========================================
-# Front Door: Security Rule Set (Free Custom Rules)
-# Purpose: Implement security patterns without WAF Premium SKU
-# Note: Azure Front Door Standard SKU rule engine has limited action types.
-#       Security headers and advanced WAF rules are best implemented via:
-#       1. Azure Application Gateway WAF (if used)
-#       2. React application headers configuration
-#       3. Azure Defender for Cloud (already enabled)
-# Current Setup: Basic rule set for future expansion
-# ========================================
-security_rule_set = azure.cdn.RuleSet(
-    "security-rule-set",
-    rule_set_name="SecurityRules",
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-)
-
-# Front Door Route for API (/api/* → Function App)
-# IMPORTANT: This route must be defined BEFORE the /* route to ensure API requests
-# are routed to the Function App backend, not the Storage Account.
-frontdoor_api_route = azure.cdn.Route(
-    "frontdoor-api-route",
-    route_name=f"{project_name}-{stack}-api-route",
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    endpoint_name=frontdoor_endpoint.name,
-    origin_group=azure.cdn.ResourceReferenceArgs(
-        id=frontdoor_api_origin_group.id,
-    ),
-    supported_protocols=["Http", "Https"],
-    patterns_to_match=["/api/*"],
-    forwarding_protocol="HttpsOnly",
-    link_to_default_domain="Enabled",
-    https_redirect="Enabled",
-    opts=pulumi.ResourceOptions(
-        depends_on=[
-            frontdoor_api_origin,
-            security_rule_set,
-        ]
-    ),
-)
-
-# Update Front Door Route to include both SPA and Security rule sets
-frontdoor_route = azure.cdn.Route(
-    "frontdoor-route",
-    route_name=f"{project_name}-{stack}-route",
-    profile_name=frontdoor_profile.name,
-    resource_group_name=resource_group.name,
-    endpoint_name=frontdoor_endpoint.name,
-    origin_group=azure.cdn.ResourceReferenceArgs(
-        id=frontdoor_origin_group.id,
-    ),
-    supported_protocols=["Http", "Https"],
-    patterns_to_match=["/*"],
-    forwarding_protocol="HttpsOnly",
-    link_to_default_domain="Enabled",
-    https_redirect="Enabled",
-    rule_sets=[
-        azure.cdn.ResourceReferenceArgs(id=spa_rule_set.id),
-        azure.cdn.ResourceReferenceArgs(id=security_rule_set.id),
-    ],
-    opts=pulumi.ResourceOptions(
-        depends_on=[
-            frontdoor_origin,
-            frontdoor_api_route,
-            exam_shortcut_rule,
-            spa_rewrite_rule,
-            security_rule_set,
-        ]
-    ),
-)
-
-# Export security rule set ID for reference
-pulumi.export("security_rule_set_id", security_rule_set.id)
-
-# ========================================
-# Front Door Diagnostic Settings (Access Logs → Log Analytics)
-# ========================================
-# Captures FrontDoorAccessLog and WAF logs for security auditing.
-frontdoor_diagnostics = azure.insights.DiagnosticSetting(
-    "frontdoor-diagnostics",
-    name=f"{project_name}-{stack}-fd-diag",
-    resource_uri=frontdoor_profile.id,
-    workspace_id=log_analytics_workspace.id,
-    logs=[
-        azure.insights.LogSettingsArgs(
-            category_group="allLogs",
-            enabled=True,
+        supported_protocols=["Http", "Https"],
+        patterns_to_match=["/api/*"],
+        forwarding_protocol="HttpsOnly",
+        link_to_default_domain="Enabled",
+        https_redirect="Enabled",
+        rule_sets=[
+            azure.cdn.ResourceReferenceArgs(id=api_rule_set.id),
+        ],
+        opts=pulumi.ResourceOptions(
+            depends_on=[
+                frontdoor_api_origin,
+                api_rewrite_rule,
+            ]
         ),
-    ],
-    opts=pulumi.ResourceOptions(
-        depends_on=[frontdoor_profile, log_analytics_workspace]
-    ),
-)
+    )
+
+    # Front Door Route
+    frontdoor_route = azure.cdn.Route(
+        "frontdoor-route",
+        route_name=f"{project_name}-{stack}-route",
+        profile_name=frontdoor_profile.name,
+        resource_group_name=resource_group.name,
+        endpoint_name=frontdoor_endpoint.name,
+        origin_group=azure.cdn.ResourceReferenceArgs(
+            id=frontdoor_origin_group.id,
+        ),
+        supported_protocols=["Http", "Https"],
+        patterns_to_match=["/*"],
+        forwarding_protocol="HttpsOnly",
+        link_to_default_domain="Enabled",
+        https_redirect="Enabled",
+        rule_sets=[
+            azure.cdn.ResourceReferenceArgs(id=spa_rule_set.id),
+            azure.cdn.ResourceReferenceArgs(id=security_rule_set.id),
+        ],
+        opts=pulumi.ResourceOptions(
+            depends_on=[
+                frontdoor_origin,
+                frontdoor_api_route,
+                exam_shortcut_rule,
+                spa_rewrite_rule,
+                security_rule_set,
+            ]
+        ),
+    )
+
+    # Front Door Diagnostic Settings (Access Logs → Log Analytics)
+    frontdoor_diagnostics = azure.insights.DiagnosticSetting(
+        "frontdoor-diagnostics",
+        name=f"{project_name}-{stack}-fd-diag",
+        resource_uri=frontdoor_profile.id,
+        workspace_id=log_analytics_workspace.id,
+        logs=[
+            azure.insights.LogSettingsArgs(
+                category_group="allLogs",
+                enabled=True,
+            ),
+        ],
+        opts=pulumi.ResourceOptions(
+            depends_on=[frontdoor_profile, log_analytics_workspace]
+        ),
+    )
+else:
+    # Staging: Use Blob Storage direct access
+    frontdoor_profile = None
+    frontdoor_endpoint = None
+    frontdoor_origin_group = None
+    frontdoor_origin = None
+    frontdoor_api_origin_group = None
+    frontdoor_api_origin = None
+    spa_rule_set = None
+    exam_shortcut_rule = None
+    spa_rewrite_rule = None
+    security_rule_set = None
+    frontdoor_route = None
+    frontdoor_diagnostics = None
 
 # ========================================
 # Monitoring and Alerts
@@ -767,7 +817,7 @@ monitoring_resources = monitoring.setup_monitoring(
     location=location,
     function_app_id=function_app_id,
     cosmos_account_id=cosmos_account.id,
-    frontdoor_profile_id=frontdoor_profile.id,
+    frontdoor_profile_id=frontdoor_profile.id if enable_cdn else None,
     alarm_email=alarm_email,
     function_memory_mb=function_memory_mb,
 )
@@ -808,12 +858,21 @@ pulumi.export(
         lambda endpoints: endpoints.web if endpoints.web else "Not configured yet"
     ),
 )
-pulumi.export("frontdoor_endpoint_name", frontdoor_endpoint.name)
-pulumi.export("frontdoor_hostname", frontdoor_endpoint.host_name)
-pulumi.export(
-    "frontdoor_url",
-    frontdoor_endpoint.host_name.apply(lambda hostname: f"https://{hostname}"),
-)
+if enable_cdn:
+    pulumi.export("frontdoor_endpoint_name", frontdoor_endpoint.name)
+    pulumi.export("frontdoor_hostname", frontdoor_endpoint.host_name)
+    pulumi.export(
+        "frontdoor_url",
+        frontdoor_endpoint.host_name.apply(lambda hostname: f"https://{hostname}"),
+    )
+else:
+    # Staging: Direct Blob Storage access
+    pulumi.export(
+        "frontend_endpoint_url",
+        frontend_storage.primary_endpoints.apply(
+            lambda endpoints: endpoints.web if endpoints.web else "Not configured"
+        ),
+    )
 pulumi.export("app_insights_instrumentation_key", app_insights.instrumentation_key)
 pulumi.export("key_vault_name", key_vault.name)
 pulumi.export("key_vault_uri", key_vault.properties.vault_uri)
@@ -899,17 +958,26 @@ pulumi.export(
 pulumi.export(
     "monitoring_cosmos_alerts", list(monitoring_resources["cosmos_alerts"].keys())
 )
-pulumi.export(
-    "monitoring_frontdoor_alerts", list(monitoring_resources["frontdoor_alerts"].keys())
-)
+if enable_cdn:
+    pulumi.export(
+        "monitoring_frontdoor_alerts",
+        list(monitoring_resources["frontdoor_alerts"].keys()),
+    )
+else:
+    pulumi.export("monitoring_frontdoor_alerts", [])
 
 # Cost estimation
-pulumi.export(
-    "cost_estimate",
+cost_msg = (
     "Azure Functions FlexConsumption: Pay-as-you-go. "
     "Storage: $0.02/GB/month. "
     "Application Insights: 5GB free/month. "
-    "Azure Front Door Standard: $35/month + $0.01/GB. "
     "Key Vault: $0.03 per 10,000 operations (secrets are free). "
-    "Estimated: $35-50/month with Front Door Standard.",
 )
+if enable_cdn:
+    cost_msg += "Azure Front Door Standard: $35/month + $0.01/GB. Estimated: $35-50/month with Front Door."
+else:
+    cost_msg += (
+        "Direct Blob Storage access (no CDN). Estimated: $2-8/month for low traffic."
+    )
+
+pulumi.export("cost_estimate", cost_msg)
