@@ -2140,8 +2140,10 @@ class BaseMathSolver:
 
         steps_rule = (
             "stepsには、①条件抽出・設定 ②立式・不等式化 ③領域統合・結論 の順で記述してください。"
-            "各ステップは必ず $$\\begin{aligned}...\\end{aligned}$$ 形式のLaTeXブロックで書くこと。"
-            "日本語の説明は \\text{} 内に入れること（例: \\text{よって}）。\\mbox は絶対に使わないこと。"
+            "各ステップは日本語テキストと $...$ インライン数式を混在させた1〜3文の自然な文章で書くこと。"
+            "例: '点 $P_t$ は $A(0,0)$ から $B(0,1)$ を $t:(1-t)$ に内分するので $P_t=(0,t)$ となる。'"
+            "\\begin{aligned} \\begin{array} \\begin{matrix} などのLaTeX環境は絶対に使わないこと。"
+            "\\mbox は絶対に使わないこと。"
             if request.options.need_steps
             else "stepsは必ず空配列 [] にしてください。"
         )
@@ -2171,11 +2173,11 @@ class BaseMathSolver:
                 if request.options.need_steps:
                     steps_rule = (
                         "stepsには各小問を独立したステップとして記述してください。"
-                        "各ステップは必ず $$\\begin{aligned}...\\end{aligned}$$ 形式でLaTeXブロックとして記述すること。"
-                        "日本語の説明文はLaTeXの \\text{} 内に入れること（例: \\text{よって}）。"
-                        "① (1) 座標: $U_t$ の座標を $t$ の式で完全展開。"
-                        "② (2) 面積: $\\int_0^1 y(t)x'(t)\\,dt$ の展開と定積分を詳しく。"
-                        "③ (3) 弧長: $x'(t)$, $y'(t)$ を計算し $x'^2+y'^2$ の展開・完全平方、積分まで。"
+                        "各ステップは日本語テキストと $...$ インライン数式を混在させた自然な文章で書くこと。"
+                        "\\begin{aligned} \\begin{array} などのLaTeX環境は絶対に使わないこと。"
+                        "① (1) 座標: $U_t$ の座標を $t$ の式で完全展開して示す。"
+                        "② (2) 面積: $\\int_0^1 y(t)x'(t)\\,dt$ の展開と定積分の結果を詳しく示す。"
+                        "③ (3) 弧長: $x'(t)$、$y'(t)$ を求め、$x'(t)^2+y'(t)^2$ を展開・完全平方の確認をして積分まで示す。"
                         "途中式を省略しないこと。"
                     )
             elif problem_type == "vector_geometry":
@@ -2227,9 +2229,8 @@ class BaseMathSolver:
             f"解法手順: {steps_req}\n"
             f"LaTeX: {latex_req}\n"
             f"追加規則(steps): {steps_rule}\n"
-            "追加規則(steps フォーマット): steps の各要素は必ず $$\\begin{aligned}...\\end{aligned}$$ 形式で記述。"
-            "絶対に $...$ なしの生LaTeXを返さないこと。"
-            "日本語テキストは \\text{} 内に入れること（例: \\text{よって}、\\text{面積}）。\\mbox 禁止。\n"
+            "追加規則(steps フォーマット): steps の各要素は日本語テキストと $...$ インライン数式を混在させた文章。"
+            "$$...$$ブロック数式・\\begin{aligned}・\\begin{array} は絶対に使わないこと。\\mbox 禁止。\n"
             f"追加規則(latex): {latex_rule}\n"
             f"追加規則(final): {final_rule or '通常の最終答案を簡潔に記述。'}\n"
             f"追加規則(数式再解釈): {reinterpret_rule}\n"

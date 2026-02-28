@@ -1,8 +1,24 @@
 import { useState } from "react";
 import { solveMath } from "../api/solve";
 import type { SolveResponse } from "../types/solve";
+import {
+  createMaterialFromSolve,
+  enhanceMaterial,
+  generateAudio,
+  getRecommendations,
+} from "../api/learning";
+import type {
+  AudioResponse,
+  EnhancedLearningMaterial,
+  RecommendationResponse,
+} from "../types/learning";
 import MathText from "../components/MathText";
 import MathGraph from "../components/MathGraph";
+import EnhancedMaterialCard from "../components/EnhancedMaterialCard";
+import AudioPlayer from "../components/AudioPlayer";
+import PersonalizationPanel from "../components/PersonalizationPanel";
+import RecommendationCarousel from "../components/RecommendationCarousel";
+import ConceptDeepDiveModal from "../components/ConceptDeepDiveModal";
 
 // ═══════════════════════════════════════════
 // 東大 2025 数学 第1問 固定デモ
@@ -36,6 +52,16 @@ export default function SolverPage() {
   const [error, setError] = useState("");
   const [imgError, setImgError] = useState(false);
   const [ocrExpanded, setOcrExpanded] = useState(false);
+  const [phase3Loading, setPhase3Loading] = useState(false);
+  const [phase3Error, setPhase3Error] = useState("");
+  const [enhancedMaterial, setEnhancedMaterial] =
+    useState<EnhancedLearningMaterial | null>(null);
+  const [audioData, setAudioData] = useState<AudioResponse | null>(null);
+  const [recommendationData, setRecommendationData] =
+    useState<RecommendationResponse | null>(null);
+  const [deepDiveOpen, setDeepDiveOpen] = useState(false);
+  const [deepDiveConcept, setDeepDiveConcept] = useState("");
+  const [deepDiveExplanation, setDeepDiveExplanation] = useState("");
 
   const handleSolve = async () => {
     setLoading(true);
@@ -53,6 +79,10 @@ export default function SolverPage() {
         },
       });
       setResult(res);
+      setEnhancedMaterial(null);
+      setAudioData(null);
+      setRecommendationData(null);
+      setPhase3Error("");
     } catch (e: unknown) {
       type ApiDetail = { loc?: unknown[]; msg?: string };
       type AxiosLike = { response?: { data?: { detail?: unknown } } };
@@ -73,6 +103,68 @@ export default function SolverPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRunPhase3 = async () => {
+    if (!result) return;
+
+    setPhase3Loading(true);
+    setPhase3Error("");
+
+    try {
+      const material = await createMaterialFromSolve({
+        solve_response: {
+          request_id: result.requestId,
+          status: result.status as "success" | "error",
+          problem_text: result.problemText,
+          answer: {
+            final: result.answer.final,
+            latex: result.answer.latex ?? "",
+            steps: result.answer.steps,
+            confidence: result.answer.confidence,
+          },
+          meta: {
+            ocr_provider: result.meta.ocrProvider,
+            model: result.meta.model,
+            latency_ms: result.meta.latencyMs,
+            cost_usd: result.meta.costUsd,
+          },
+        },
+        exam: {
+          university: DEMO_EXAM.university,
+          year: DEMO_EXAM.year,
+          subject: DEMO_EXAM.subject,
+          questionNo: DEMO_EXAM.questionNo,
+        },
+        problem_image_url: PROBLEM_IMAGE_URL,
+      });
+
+      const materialId = material.materialId ?? material.material_id;
+      if (!materialId) {
+        throw new Error("materialId の取得に失敗しました");
+      }
+
+      const enhanced = await enhanceMaterial(materialId);
+      setEnhancedMaterial(enhanced);
+
+      const audio = await generateAudio(materialId);
+      setAudioData(audio);
+
+      const recommendations = await getRecommendations("phase3-demo-user", 5);
+      setRecommendationData(recommendations);
+    } catch (e: unknown) {
+      setPhase3Error(
+        e instanceof Error ? e.message : "PHASE 3 の実行に失敗しました",
+      );
+    } finally {
+      setPhase3Loading(false);
+    }
+  };
+
+  const handleShowDeepDive = (concept: string, explanation: string) => {
+    setDeepDiveConcept(concept);
+    setDeepDiveExplanation(explanation);
+    setDeepDiveOpen(true);
   };
 
   return (
@@ -256,12 +348,18 @@ export default function SolverPage() {
                       {result.answer.steps.map((step, i) => {
                         // $が含まれない場合、LaTeXコマンドを検出して自動ラップ
                         let displayStep = step;
+                        // $が含まれない場合のみ自動ラップ
                         if (!step.includes("$") && /\\[a-zA-Z{(]/.test(step)) {
-                          // LaTeX改行 \\ を含む場合は aligned 環境で包む
-                          if (/\\\\/.test(step)) {
-                            displayStep = `$$\\begin{aligned}${step}\\end{aligned}$$`;
-                          } else {
+                          // \begin{...} 環境がある場合はそのまま $$ で包む
+                          if (/\\begin\{/.test(step)) {
                             displayStep = `$$${step}$$`;
+                          } else {
+                            displayStep = step
+                              .split(/\n+/)
+                              .map(line => line.trim())
+                              .filter(Boolean)
+                              .map(line => `$${line}$`)
+                              .join(" ");
                           }
                         }
                         return (
@@ -295,6 +393,66 @@ export default function SolverPage() {
           )}
         </div>
       </div>
+
+      {result && (
+        <div className="phase3-container">
+          <div className="phase3-header">
+            <h3 className="phase3-main-title">PHASE 3: 学習UI</h3>
+            <p className="phase3-main-desc">
+              Bedrock・Polly・Personalize を使った拡張教材を表示します。
+            </p>
+            <button
+              type="button"
+              className="button primary"
+              onClick={handleRunPhase3}
+              disabled={phase3Loading}
+            >
+              {phase3Loading ? "拡張処理中..." : "教材を拡張して表示"}
+            </button>
+          </div>
+
+          {phase3Error && (
+            <div className="alert error" style={{ marginTop: "1rem" }}>
+              <strong>PHASE 3 エラー:</strong> {phase3Error}
+            </div>
+          )}
+
+          {enhancedMaterial && (
+            <div className="phase3-stack">
+              <EnhancedMaterialCard
+                material={enhancedMaterial}
+                onLoadAudio={() => undefined}
+                onShowDeepDive={handleShowDeepDive}
+              />
+
+              {audioData && (
+                <AudioPlayer
+                  audioData={audioData}
+                  materialId={enhancedMaterial.baseMaterial.materialId}
+                />
+              )}
+
+              {recommendationData && (
+                <div className="phase3-grid">
+                  <PersonalizationPanel
+                    profile={recommendationData.learning_profile}
+                  />
+                  <RecommendationCarousel
+                    items={recommendationData.recommendations}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <ConceptDeepDiveModal
+        isOpen={deepDiveOpen}
+        concept={deepDiveConcept}
+        explanation={deepDiveExplanation}
+        onClose={() => setDeepDiveOpen(false)}
+      />
     </section>
   );
 }

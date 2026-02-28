@@ -983,7 +983,9 @@ code {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .spinner {
@@ -1138,6 +1140,12 @@ code {
   line-height: 1.65;
   color: var(--text-primary);
   white-space: pre-wrap;
+  text-align: left;
+}
+
+.step-item .katex-display {
+  text-align: left;
+  margin: 0.25em 0;
 }
 
 /* LaTeX 最終答案ブロック */
@@ -1226,4 +1234,177 @@ code {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.2rem 0.6rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Phase 3 — Enhanced Learning UI
+   ═══════════════════════════════════════════════════════════ */
+
+.phase3-container {
+  margin-top: 1.5rem;
+}
+
+.phase3-header {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px 0 var(--card-shadow);
+  padding: 1rem 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.phase3-main-title {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.phase3-main-desc {
+  margin: 0.4rem 0 0.9rem;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+}
+
+.phase3-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.phase3-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 780px) {
+  .phase3-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.phase3-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px 0 var(--card-shadow);
+  padding: 1rem;
+}
+
+.phase3-title {
+  margin: 0 0 0.8rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.phase3-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.phase3-kv {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem;
+  background: var(--hover-bg);
+}
+
+.phase3-kv span {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.2rem;
+}
+
+.phase3-kv strong {
+  font-size: 0.84rem;
+  color: var(--text-primary);
+}
+
+.phase3-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.phase3-recommendations {
+  display: flex;
+  overflow-x: auto;
+  gap: 0.7rem;
+  padding-bottom: 0.2rem;
+}
+
+.phase3-rec-item {
+  min-width: 180px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem;
+  background: var(--hover-bg);
+}
+
+.phase3-rec-id {
+  margin: 0;
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.phase3-rec-score {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.phase3-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.phase3-modal-card {
+  width: min(760px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px 0 var(--card-shadow);
+  padding: 1rem;
+}
+
+.phase3-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.phase3-modal-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.phase3-modal-body {
+  margin-top: 0.8rem;
+}
+
+.phase3-pre {
+  margin: 0;
+  padding: 0.9rem;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  line-height: 1.7;
 }
