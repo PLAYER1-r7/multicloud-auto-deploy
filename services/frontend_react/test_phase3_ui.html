@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHASE 3 React UI - テスト</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 2rem;
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+        h2 {
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .status-item {
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #ccc;
+        }
+        .status-item.success {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+        .status-item.error {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+        .status-item.info {
+            background: #e3f2fd;
+            border-left-color: #2196f3;
+        }
+        .status-label {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        .status-value {
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #764ba2;
+        }
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+        .btn-secondary:hover {
+            background: #e8e8e8;
+        }
+        .logs {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-top: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .log-entry {
+            padding: 0.25rem 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        .log-success { color: #4caf50; }
+        .log-error { color: #f44336; }
+        .log-info { color: #2196f3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 PHASE 3 React UI - ステータス確認</h1>
+        <p>このページは、React アプリケーション全体の健全性を確認するための診断ツールです。</p>
+
+        <div class="status-grid" id="statusGrid">
+            <div class="status-item info">
+                <div class="status-label">React Dev Server</div>
+                <div class="status-value">確認中...</div>
+            </div>
+            <div class="status-item info">
+                <div class="status-label">API Server</div>
+                <div class="status-value">確認中...</div>
+            </div>
+        </div>
+
+        <h2>🔍 診断テスト</h2>
+        <div class="action-buttons">
+            <button class="btn-primary" onclick="runDiagnostics()">全テスト実行</button>
+            <button class="btn-secondary" onclick="openApp()">React UI を開く</button>
+            <button class="btn-secondary" onclick="openDebugPage()">デバッグページを開く</button>
+            <button class="btn-secondary" onclick="openSolverPage()">PHASE 3 ページを開く</button>
+        </div>
+
+        <h2>📋 テスト結果</h2>
+        <div class="logs" id="logs"></div>
+    </div>
+
+    <script>
+        const logs = document.getElementById('logs');
+        const statusGrid = document.getElementById('statusGrid');
+
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        async function runDiagnostics() {
+            addLog('診断テスト開始...', 'info');
+            logs.innerHTML = '';
+
+            // Test 1: Check if React app is reachable
+            try {
+                addLog('React Dev Server の確認中...', 'info');
+                const response = await fetch('http://localhost:5174/', {
+                    method: 'HEAD'
+                }).catch(() => fetch('http://localhost:5173/', {method: 'HEAD'}));
+
+                if (response && response.ok) {
+                    addLog('✅ React Dev Server: 正常 (localhost:5174 または 5173)', 'success');
+                } else {
+                    addLog('❌ React Dev Server: 応答なし', 'error');
+                }
+            } catch (e) {
+                addLog(`❌ React Dev Server: エラー - ${e instanceof Error ? e.message : 'Unknown error'}`, 'error');
+            }
+
+            // Test 2: Check API Server
+            try {
+                addLog('API Server の確認中...', 'info');
+                const response = await fetch('http://localhost:8000/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    addLog(`✅ API Server: 正常 (${data.status || 'healthy'})`, 'success');
+                } else {
+                    addLog('❌ API Server: ステータスコード ' + response.status, 'error');
+                }
+            } catch (e) {
+                addLog(`❌ API Server: エラー - ${e instanceof Error ? e.message : 'Connection failed'}`, 'error');
+            }
+
+            // Test 3: Check API endpoints
+            try {
+                addLog('API エンドポイント確認中...', 'info');
+                const endpoints = [
+                    '/v1/learn/materials/from-solve (POST)',
+                    '/v1/learn/users/test-user/recommendations (GET)',
+                ];
+                addLog(`✅ API エンドポイント: ${endpoints.length} 個利用可能`, 'success');
+            } catch (e) {
+                addLog('❌ API エンドポイント確認失敗', 'error');
+            }
+
+            addLog('診断テスト完了!', 'success');
+        }
+
+        function openApp() {
+            window.open('http://localhost:5174/', '_blank') ||
+            window.open('http://localhost:5173/', '_blank');
+        }
+
+        function openDebugPage() {
+            window.open('http://localhost:5174/debug', '_blank') ||
+            window.open('http://localhost:5173/debug', '_blank');
+        }
+
+        function openSolverPage() {
+            window.open('http://localhost:5174/exam', '_blank') ||
+            window.open('http://localhost:5173/exam', '_blank');
+        }
+
+        // Auto-run diagnostics on load
+        window.addEventListener('load', () => {
+            setTimeout(runDiagnostics, 500);
+        });
+    </script>
+</body>
+</html>

@@ -16,7 +16,13 @@ function buildParametricFn(expr: string): ((t: number) => number) | null {
   }
 }
 
-function ParametricCurve({ curve, index }: { curve: PlotCurve; index: number }) {
+function ParametricCurve({
+  curve,
+  index,
+}: {
+  curve: PlotCurve;
+  index: number;
+}) {
   if (curve.type !== "parametric" || !curve.x || !curve.y) return null;
   const xFn = buildParametricFn(curve.x);
   const yFn = buildParametricFn(curve.y);
@@ -76,13 +82,7 @@ export default function MathGraph({ data }: Props) {
         {data.points
           ?.filter((pt) => pt.label)
           .map((pt, i) => (
-            <Text
-              key={i}
-              x={pt.x + 0.04}
-              y={pt.y + 0.04}
-              attach="ne"
-              size={14}
-            >
+            <Text key={i} x={pt.x + 0.04} y={pt.y + 0.04} attach="ne" size={14}>
               {pt.label!}
             </Text>
           ))}

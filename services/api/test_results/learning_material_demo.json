@@ -1,0 +1,99 @@
+{
+  "materialId": "33600bbb-62e0-435d-b030-733c5e2c1021",
+  "createdAt": "2026-02-28T01:42:29.047111+00:00",
+  "examMetadata": {
+    "university": "tokyo",
+    "year": 2025,
+    "subject": "math",
+    "questionNo": "1"
+  },
+  "problemText": "\n    次の不定積分を求めよ。\n\n    $\\int \\frac{x}{\\sqrt{x^2 + 1}} dx$\n    ",
+  "problemImageUrl": "http://server-test.net/math/tokyo/q_jpg/2025_1.jpg",
+  "solutionFinal": "$\\sqrt{x^2 + 1} + C$",
+  "solutionSteps": [
+    "$u = x^2 + 1$ と置換する。",
+    "$\\frac{du}{dx} = 2x$ より、$dx = \\frac{du}{2x}$",
+    "与式は $\\int \\frac{x}{\\sqrt{u}} \\cdot \\frac{du}{2x} = \\int \\frac{1}{2\\sqrt{u}} du$",
+    "$= \\frac{1}{2} \\cdot 2\\sqrt{u} + C = \\sqrt{u} + C$",
+    "$u = x^2 + 1$ を代入すると、$\\sqrt{x^2 + 1} + C$"
+  ],
+  "solutionLatex": "\\sqrt{x^2 + 1} + C",
+  "solutionConfidence": 0.95,
+  "ocrProvider": "azure",
+  "outline": [
+    {
+      "stepNumber": 1,
+      "brief": "$u = x^2 + 1$ と置換する。",
+      "details": "$u = x^2 + 1$ と置換する。"
+    },
+    {
+      "stepNumber": 2,
+      "brief": "$\\frac{du}{dx} = 2x$ より、$dx = \\frac{du}{2x}$",
+      "details": "$\\frac{du}{dx} = 2x$ より、$dx = \\frac{du}{2x}$"
+    },
+    {
+      "stepNumber": 3,
+      "brief": "与式は $\\int \\frac{x}{\\sqrt{u}} \\cdot \\frac{du}{2x} = \\int \\frac{1}{2\\sqrt{u}} du$",
+      "details": "与式は $\\int \\frac{x}{\\sqrt{u}} \\cdot \\frac{du}{2x} = \\int \\frac{1}{2\\sqrt{u}} du$"
+    },
+    {
+      "stepNumber": 4,
+      "brief": "$= \\frac{1}{2} \\cdot 2\\sqrt{u} + C = \\sqrt{u} + C$",
+      "details": "$= \\frac{1}{2} \\cdot 2\\sqrt{u} + C = \\sqrt{u} + C$"
+    },
+    {
+      "stepNumber": 5,
+      "brief": "$u = x^2 + 1$ を代入すると、$\\sqrt{x^2 + 1} + C$",
+      "details": "$u = x^2 + 1$ を代入すると、$\\sqrt{x^2 + 1} + C$"
+    }
+  ],
+  "keyConcepts": [
+    "積分"
+  ],
+  "quizQuestions": [
+    {
+      "questionId": "6ce4a46b-8c2f-4e4d-8127-d65a0d92668c",
+      "questionType": "short_answer",
+      "questionText": "この問題の最終答案を書いてください",
+      "answer": "（解答を確認してください）",
+      "explanation": "上記の解法プロセスを参考に、答案を作成しましょう"
+    },
+    {
+      "questionId": "d650da54-4901-4c53-8fa0-571b5669078f",
+      "questionType": "fill_blank",
+      "questionText": "最初のステップは「$u = x^2 + 1$ と置換する。....」です。この方針の理由は何ですか？",
+      "answer": "（上記解説を参考に論述してください）",
+      "explanation": "問題の条件と必要な計算方法を関連付けることが大切です"
+    }
+  ],
+  "commonMistakes": [
+    {
+      "mistakeDescription": "積分定数を忘れる",
+      "whyWrong": "不定積分は常に任意定数 C を含む",
+      "correction": "∫f(x)dx = F(x) + C (C は任意定数)",
+      "preventionTip": "積分計算の最後に必ず +C を記入"
+    }
+  ],
+  "additionalExamples": [],
+  "referenceProblems": [
+    {
+      "university": "tokyo",
+      "year": 2024,
+      "questionNo": "1",
+      "similarityScore": 0.75
+    },
+    {
+      "university": "tokyo",
+      "year": 2026,
+      "questionNo": "1",
+      "similarityScore": 0.75
+    }
+  ],
+  "difficulty_level": "basic",
+  "learningObjectives": [
+    "基本公式を理解する",
+    "単純な計算手順を習得する",
+    "「積分」に関する深い理解を身につける"
+  ],
+  "awsPersonalizationScore": 0.5
+}

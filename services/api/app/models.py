@@ -294,3 +294,147 @@ class SolveResponse(BaseModel):
     meta: SolveMeta
 
     model_config = {"populate_by_name": True}
+
+
+# ========================================================================== #
+# Learning Material Models (AWS Learning Assistant)
+# ========================================================================== #
+
+
+class LearningOutlineStep(BaseModel):
+    """学習アウトラインの各ステップ"""
+
+    step_number: int = Field(alias="stepNumber")
+    brief: str  # 1行簡潔版
+    details: str | None = None  # オプション：詳細説明
+    key_formula: str | None = Field(None, alias="keyFormula")
+
+    model_config = {"populate_by_name": True}
+
+
+class QuizQuestion(BaseModel):
+    """自動生成クイズ問題"""
+
+    question_id: str = Field(alias="questionId")
+    question_type: str = Field(
+        alias="questionType"
+    )  # "fill_blank", "multiple_choice", "short_answer"
+    question_text: str = Field(alias="questionText")
+    options: list[str] | None = None  # Multiple choice の場合のみ
+    answer: str
+    explanation: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class CommonMistake(BaseModel):
+    """よくある間違いと対策"""
+
+    mistake_description: str = Field(alias="mistakeDescription")
+    why_wrong: str = Field(alias="whyWrong")
+    correction: str
+    prevention_tip: str | None = Field(None, alias="preventionTip")
+
+    model_config = {"populate_by_name": True}
+
+
+class ReferenceProblem(BaseModel):
+    """関連する参考問題（別の大学/年度）"""
+
+    university: str
+    year: int | None = None
+    question_no: str = Field(alias="questionNo")
+    similarity_score: float = Field(alias="similarityScore")  # 0.0-1.0
+
+    model_config = {"populate_by_name": True}
+
+
+class LearningMaterial(BaseModel):
+    """AWS Learning Assistant 向け統合学習教材"""
+
+    # Basic ID & Metadata
+    material_id: str = Field(alias="materialId")
+    created_at: str = Field(alias="createdAt")
+    source_solve_response: str | None = Field(
+        None, alias="sourceSolveResponseId"
+    )  # 元の SolveResponse ID
+
+    # Problem & Solution (from Azure/GCP SolveResponse)
+    exam_metadata: SolveExam = Field(alias="examMetadata")
+    problem_text: str = Field(alias="problemText")
+    problem_image_url: str | None = Field(None, alias="problemImageUrl")
+
+    # Solution from Azure/GCP
+    solution_final: str = Field(alias="solutionFinal")
+    solution_steps: list[str] = Field(alias="solutionSteps")
+    solution_latex: str | None = Field(None, alias="solutionLatex")
+    solution_confidence: float = Field(ge=0.0, le=1.0, alias="solutionConfidence")
+    ocr_provider: str = Field(alias="ocrProvider")  # "azure" or "gcp"
+
+    # Learning Material Enhancements (generated/extracted)
+    outline: list[LearningOutlineStep] = Field(
+        default_factory=list
+    )  # 各ステップを簡潔化
+    key_concepts: list[str] = Field(default_factory=list, alias="keyConcepts")
+    quiz_questions: list[QuizQuestion] = Field(
+        default_factory=list, alias="quizQuestions"
+    )
+    common_mistakes: list[CommonMistake] = Field(
+        default_factory=list, alias="commonMistakes"
+    )
+    additional_examples: list[str] = Field(
+        default_factory=list, alias="additionalExamples"
+    )
+    reference_problems: list[ReferenceProblem] = Field(
+        default_factory=list, alias="referenceProblems"
+    )
+
+    # Difficulty & Learning Goals
+    difficulty_level: str = Field("intermediate")  # "basic", "intermediate", "advanced"
+    learning_objectives: list[str] = Field(
+        default_factory=list, alias="learningObjectives"
+    )
+
+    # AWS Personalization tracking
+    aws_personalization_score: float = Field(
+        default=0.5, alias="awsPersonalizationScore"
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class EnhancedLearningMaterial(BaseModel):
+    """PHASE 2: Bedrock/Polly/Personalize で拡張された学習教材"""
+
+    # PHASE 1 の基本教材
+    base_material: LearningMaterial = Field(alias="baseMaterial")
+
+    # PHASE 2: Bedrock による詳細解説
+    detailed_explanation: str | None = Field(None, alias="detailedExplanation")
+    concept_deep_dives: dict[str, str] = Field(
+        default_factory=dict, alias="conceptDeepDives"
+    )
+    mistake_analysis: list[str] = Field(default_factory=list, alias="mistakeAnalysis")
+
+    # PHASE 2: Polly による音声化
+    audio_urls: dict[str, str] | None = Field(
+        None, alias="audioUrls"
+    )  # "explanation", "step_1", etc.
+    audio_format: str = Field("mp3", alias="audioFormat")  # "mp3", "wav"
+    generated_at: str | None = Field(None, alias="generatedAt")
+
+    # PHASE 2: Personalize による推薦
+    personalized_recommendations: list[str] = Field(
+        default_factory=list, alias="personalizedRecommendations"
+    )
+    related_materials: list[str] = Field(default_factory=list, alias="relatedMaterials")
+    personalization_score: float = Field(default=0.0, alias="personalizationScore")
+
+    # Enhancement metadata
+    enhancement_timestamp: str | None = Field(None, alias="enhancementTimestamp")
+    enhancement_models: dict[str, str] = Field(
+        default_factory=dict, alias="enhancementModels"
+    )  # {"bedrock": "...", "polly": "...", ...}
+    is_fully_enhanced: bool = Field(False, alias="isFullyEnhanced")
+
+    model_config = {"populate_by_name": True}

@@ -356,9 +356,9 @@ export default function SolverPage() {
                           } else {
                             displayStep = step
                               .split(/\n+/)
-                              .map(line => line.trim())
+                              .map((line) => line.trim())
                               .filter(Boolean)
-                              .map(line => `$${line}$`)
+                              .map((line) => `$${line}$`)
                               .join(" ");
                           }
                         }

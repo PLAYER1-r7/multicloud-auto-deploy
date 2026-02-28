@@ -11,7 +11,7 @@ from app.auth import UserInfo, get_current_user
 from app.backends import get_backend
 from app.config import settings
 from app.models import CreatePostBody, HealthResponse, ListPostsResponse, UpdatePostBody
-from app.routes import limits, posts, profile, solve, uploads
+from app.routes import learning, limits, posts, profile, solve, uploads
 
 # AWS Lambda Powertools (observability)
 try:
@@ -209,6 +209,7 @@ app.include_router(posts.router)
 app.include_router(uploads.router)
 app.include_router(profile.router)
 app.include_router(solve.router)
+app.include_router(learning.router)
 
 
 # ── Validation error handler ────────────────────────────────────────────────
