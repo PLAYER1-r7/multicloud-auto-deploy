@@ -286,6 +286,56 @@ jobs:
           echo "api_url=${API_URL}" >> "$GITHUB_OUTPUT"
           echo "📍 Configured API URL: ${API_URL}"
 
+      - name: Update AFD Origin for Function App
+        # AFD Routes direct /api/* requests to a Function App origin.
+        # The origin hostname must match the actual Function App hostname to route correctly.
+        # This step updates the AFD API origin to use the dynamically-resolved Function App hostname.
+        run: |
+          FUNC_HOSTNAME="${{ steps.function_api.outputs.function_hostname }}"
+          if [ -z "$FUNC_HOSTNAME" ]; then
+            echo "❌ Function App hostname not available"
+            exit 1
+          fi
+
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
+          PROFILE_NAME="multicloud-auto-deploy-${STACK_NAME}-fd"
+          SUBSCRIPTION_ID=$(az account show --query id --output tsv)
+
+          echo "🔗 Updating AFD API origin to: ${FUNC_HOSTNAME}"
+
+          # Update the AFD origin definition with the actual Function App hostname
+          ACCESS_TOKEN=$(az account get-access-token --query accessToken --output tsv)
+          ORIGIN_NAME="multicloud-auto-deploy-${STACK_NAME}-api-origin"
+          ORIGIN_GROUP_NAME="multicloud-auto-deploy-${STACK_NAME}-api-origin-group"
+
+          HTTP_STATUS=$(curl -sX PATCH \
+            "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Cdn/profiles/${PROFILE_NAME}/originGroups/${ORIGIN_GROUP_NAME}/origins/${ORIGIN_NAME}?api-version=2023-05-01" \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"properties\": {
+                \"hostName\": \"${FUNC_HOSTNAME}\",
+                \"originHostHeader\": \"${FUNC_HOSTNAME}\",
+                \"httpPort\": 80,
+                \"httpsPort\": 443,
+                \"priority\": 1,
+                \"weight\": 1000,
+                \"enabledState\": \"Enabled\"
+              }
+            }" \
+            --max-time 30 -o /dev/null -w "%{http_code}")
+
+          if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "202" ]; then
+            echo "✅ AFD API origin updated to ${FUNC_HOSTNAME} (HTTP ${HTTP_STATUS})"
+          else
+            echo "⚠️  AFD API origin update returned HTTP ${HTTP_STATUS} — API routing may fail"
+            # Log the actual response for debugging
+            curl -sX GET \
+              "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Cdn/profiles/${PROFILE_NAME}/originGroups/${ORIGIN_GROUP_NAME}/origins/${ORIGIN_NAME}?api-version=2023-05-01" \
+              -H "Authorization: Bearer ${ACCESS_TOKEN}" | jq '.' 2>/dev/null || echo "Could not fetch origin details"
+          fi
+
       - name: Link Custom Domain to Front Door Route
         # Pulumi's Route resource does not include custom_domains, so we must link the manually-managed
         # custom domain after each Pulumi deploy. Without this step, Azure Front Door serves the
