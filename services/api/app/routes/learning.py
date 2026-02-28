@@ -20,11 +20,67 @@ from app.models import (
     SolveResponse,
 )
 from app.services.material_generator import MaterialGenerator
-from bedrock_integration import BedrockIntegration
-from personalize_integration import PersonalizeIntegration
-from polly_integration import PollyIntegration
+
+# PHASE 2 AWS Integration (with fallback to mock implementations)
+import sys
+from pathlib import Path
+
+# Add parent directory to path for AWS integration modules
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+# Try to import AWS integration modules, fallback to None if not available
+try:
+    from bedrock_integration import BedrockIntegration
+except (ImportError, ModuleNotFoundError):
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning("bedrock_integration module not found, using mock")
+    BedrockIntegration = None
+
+try:
+    from personalize_integration import PersonalizeIntegration
+except (ImportError, ModuleNotFoundError):
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning("personalize_integration module not found, using mock")
+    PersonalizeIntegration = None
+
+try:
+    from polly_integration import PollyIntegration
+except (ImportError, ModuleNotFoundError):
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning("polly_integration module not found, using mock")
+    PollyIntegration = None
 
 logger = logging.getLogger(__name__)
+
+# Mock implementations for when AWS modules are not available
+class MockBedrockIntegration:
+    def generate_detailed_explanation(self, *args, **kwargs):
+        return {"overview": "Mock explanation", "steps": [], "notes": []}
+    
+    def generate_concept_deepdive(self, *args, **kwargs):
+        return {"definition": "Mock definition", "background": "Mock", "applications": [], "related": [], "misconceptions": []}
+    
+    def analyze_common_mistakes(self, *args, **kwargs):
+        return {"mistakes": [], "prevention_strategies": []}
+
+class MockPollyIntegration:
+    def generate_material_audio(self, *args, **kwargs):
+        return {"explanation": b""}
+
+class MockPersonalizeIntegration:
+    def analyze_learning_pattern(self, *args, **kwargs):
+        return {"preferred_difficulty": "intermediate", "concepts": [], "speed": "normal"}
+    
+    def get_recommendations(self, *args, **kwargs):
+        return []
+
+# Use actual implementations if available, otherwise use mocks
+if BedrockIntegration is None:
+    BedrockIntegration = MockBedrockIntegration
+if PollyIntegration is None:
+    PollyIntegration = MockPollyIntegration
+if PersonalizeIntegration is None:
+    PersonalizeIntegration = MockPersonalizeIntegration
 
 # 統合インスタンス（キャッシュ）
 _bedrock_client: BedrockIntegration | None = None
