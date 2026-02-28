@@ -57,8 +57,12 @@ class AzureMathSolver(BaseMathSolver):
 
     def _build_di_client(self) -> Any:
         """Azure Document Intelligence クライアントを構築する。"""
-        endpoint = settings.azure_document_intelligence_endpoint
-        key = settings.azure_document_intelligence_key
+        endpoint = getattr(
+            settings, "azure_document_intelligence_endpoint", None
+        ) or os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT")
+        key = getattr(settings, "azure_document_intelligence_key", None) or os.getenv(
+            "AZURE_DOCUMENT_INTELLIGENCE_KEY"
+        )
         if not endpoint or not key:
             return None
         try:
