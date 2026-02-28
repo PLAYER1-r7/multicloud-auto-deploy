@@ -37,6 +37,7 @@ azure-ai-documentintelligence==1.0.0  # Document Intelligence OCR
 
 # Azure / OpenAI (Azure OpenAI経由でGPT-4o呼び出し)
 openai==1.63.2
+jiter==0.8.0  # Required dependency for openai SDK JSON parsing
 
 # GCP
 google-cloud-firestore==2.19.0

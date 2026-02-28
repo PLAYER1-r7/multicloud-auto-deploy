@@ -24,3 +24,4 @@ azure-ai-documentintelligence==1.0.0
 
 # Azure OpenAI (GPT-4o for exam answer generation)
 openai==1.63.2
+jiter==0.8.0  # Required dependency for openai SDK JSON parsing
