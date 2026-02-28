@@ -547,6 +547,11 @@ class AzureMathSolver(BaseMathSolver):
                 )
             else:
                 # 1段階: 推論モデルまたは fast モード
+                _token_limit = min(
+                    max(request.options.max_tokens, 512),
+                    8192 if is_accurate else 2000,
+                )
+                _token_key = "max_completion_tokens" if is_reasoning_model else "max_tokens"
                 create_kwargs: dict = dict(
                     model=deployment,
                     messages=[
@@ -559,10 +564,7 @@ class AzureMathSolver(BaseMathSolver):
                         },
                         {"role": "user", "content": prompt},
                     ],
-                    max_tokens=min(
-                        max(request.options.max_tokens, 512),
-                        8192 if is_accurate else 2000,
-                    ),
+                    **{_token_key: _token_limit},
                 )
                 if is_reasoning_model:
                     create_kwargs["temperature"] = 1
