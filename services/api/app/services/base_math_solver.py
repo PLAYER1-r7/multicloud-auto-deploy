@@ -2145,7 +2145,7 @@ class BaseMathSolver:
         )
         sample_hint = self._build_sample_corpus_hint(request)
         latex_rule = (
-            "latexには最終答案を表すLaTeX式を入れてください。"
+            "latexには最終答案を表すLaTeX式を入れてください。KaTeXで描画するため \\mbox は使わず \\text{} を使うこと。"
             if request.options.need_latex
             else "latexは必ず null にしてください。"
         )
@@ -2170,9 +2170,9 @@ class BaseMathSolver:
                     steps_rule = (
                         "stepsには各小問を独立したステップとして記述してください: "
                         "① (1) 座標の計算: U_t の座標を t の式で完全展開して示す。"
-                        "② (2) 面積: ∫y(t)x'(t)dt の展開と定積分の計算を詳しく示す。"
-                        "③ (3) 弧長: x'(t), y'(t) を計算し, x'²+y'² を展開・完全平方の確認, √を外して積分まで示す。"
-                        "各ステップで途中式を省略しないこと。"
+                        "② (2) 面積: $\\int_0^1 y(t)x'(t)\\,dt$ の展開と定積分の計算を詳しく示す。"
+                        "③ (3) 弧長: $x'(t)$, $y'(t)$ を計算し, $x'^2+y'^2$ を展開・完全平方の確認, $\\sqrt{}$を外して積分まで示す。"
+                        "各ステップで途中式を省略しないこと。数式は必ず $...$ または $$...$$ で囲むこと。"
                     )
             elif problem_type == "vector_geometry":
                 final_rule = (
@@ -2223,6 +2223,9 @@ class BaseMathSolver:
             f"解法手順: {steps_req}\n"
             f"LaTeX: {latex_req}\n"
             f"追加規則(steps): {steps_rule}\n"
+            "追加規則(steps LaTeX): steps の各項目内の数式は必ず $...$ または $$...$$ で囲むこと。"
+            "日本語テキストと数式が混在する場合は例: 'U_t の座標は $(t^2(3-2t),\\, 3t(1-t))$ となる。' のように書く。"
+            "\\mbox は絶対に使わず、数式内のテキストは \\text{} を使うこと。\n"
             f"追加規則(latex): {latex_rule}\n"
             f"追加規則(final): {final_rule or '通常の最終答案を簡潔に記述。'}\n"
             f"追加規則(数式再解釈): {reinterpret_rule}\n"
