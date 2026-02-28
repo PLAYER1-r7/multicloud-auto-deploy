@@ -2139,7 +2139,9 @@ class BaseMathSolver:
         latex_req = "必要" if request.options.need_latex else "不要"
 
         steps_rule = (
-            "stepsには、①条件抽出・設定 ②立式・不等式化 ③領域統合・結論 の順で簡潔に書いてください。"
+            "stepsには、①条件抽出・設定 ②立式・不等式化 ③領域統合・結論 の順で記述してください。"
+            "各ステップは必ず $$\\begin{aligned}...\\end{aligned}$$ 形式のLaTeXブロックで書くこと。"
+            "日本語の説明は \\text{} 内に入れること（例: \\text{よって}）。\\mbox は絶対に使わないこと。"
             if request.options.need_steps
             else "stepsは必ず空配列 [] にしてください。"
         )
@@ -2225,9 +2227,9 @@ class BaseMathSolver:
             f"解法手順: {steps_req}\n"
             f"LaTeX: {latex_req}\n"
             f"追加規則(steps): {steps_rule}\n"
-            "追加規則(steps LaTeX): steps の各項目内の数式は必ず $...$ または $$...$$ で囲むこと。"
-            "日本語テキストと数式が混在する場合は例: 'U_t の座標は $(t^2(3-2t),\\, 3t(1-t))$ となる。' のように書く。"
-            "\\mbox は絶対に使わず、数式内のテキストは \\text{} を使うこと。\n"
+            "追加規則(steps フォーマット): steps の各要素は必ず $$\\begin{aligned}...\\end{aligned}$$ 形式で記述。"
+            "絶対に $...$ なしの生LaTeXを返さないこと。"
+            "日本語テキストは \\text{} 内に入れること（例: \\text{よって}、\\text{面積}）。\\mbox 禁止。\n"
             f"追加規則(latex): {latex_rule}\n"
             f"追加規則(final): {final_rule or '通常の最終答案を簡潔に記述。'}\n"
             f"追加規則(数式再解釈): {reinterpret_rule}\n"

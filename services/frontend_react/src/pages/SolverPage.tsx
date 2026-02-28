@@ -254,10 +254,15 @@ export default function SolverPage() {
                     <h5 className="steps-title">解説ステップ</h5>
                     <ol className="steps-list">
                       {result.answer.steps.map((step, i) => {
-                        // $が含まれていない場合、LaTeXコマンドを検出して$$...$$で自動ラップ
+                        // $が含まれない場合、LaTeXコマンドを検出して自動ラップ
                         let displayStep = step;
-                        if (!step.includes("$") && /\\[a-zA-Z{]/.test(step)) {
-                          displayStep = `$$${step}$$`;
+                        if (!step.includes("$") && /\\[a-zA-Z{(]/.test(step)) {
+                          // LaTeX改行 \\ を含む場合は aligned 環境で包む
+                          if (/\\\\/.test(step)) {
+                            displayStep = `$$\\begin{aligned}${step}\\end{aligned}$$`;
+                          } else {
+                            displayStep = `$$${step}$$`;
+                          }
                         }
                         return (
                           <li key={i} className="step-item">
