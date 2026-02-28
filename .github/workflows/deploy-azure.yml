@@ -1135,6 +1135,32 @@ jobs:
           echo "✅ Frontend uploaded to Azure Blob Storage"
           echo "🌐 Frontend URL: https://${FRONTDOOR_HOSTNAME}/sns/"
 
+      - name: Create /exam shortcut
+        # Without Azure Front Door, create /exam/index.html as a copy of /sns/index.html
+        # This allows users to access the exam page via /exam instead of /sns/exam
+        run: |
+          STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
+
+          echo "🔗 Creating /exam shortcut..."
+
+          # Get storage account key
+          STORAGE_KEY=$(az storage account keys list \
+            --resource-group $RESOURCE_GROUP \
+            --account-name $STORAGE_ACCOUNT \
+            --query '[0].value' -o tsv)
+
+          # Copy /sns/index.html to /exam/index.html
+          az storage blob copy start \
+            --account-name $STORAGE_ACCOUNT \
+            --account-key $STORAGE_KEY \
+            --destination-container '$web' \
+            --destination-blob exam/index.html \
+            --source-container '$web' \
+            --source-blob sns/index.html
+
+          echo "✅ /exam shortcut created"
+
       - name: Verify Deployment
         run: |
           FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
