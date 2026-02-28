@@ -504,7 +504,7 @@ exam_shortcut_rule = azure.cdn.Rule(
     rule_set_name=spa_rule_set.name,
     profile_name=frontdoor_profile.name,
     resource_group_name=resource_group.name,
-    order=1,
+    order=10,
     conditions=[
         azure.cdn.DeliveryRuleUrlPathConditionArgs(
             name="UrlPath",
