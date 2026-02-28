@@ -118,11 +118,11 @@ jobs:
         continue-on-error: true
         run: |
           URLMAP="${{ steps.env.outputs.urlmap }}"
-          
+
           # List available URL maps for debugging
           echo "📋 Available URL Maps:"
           gcloud compute url-maps list --global --project "${{ secrets.GCP_PROJECT_ID }}" || echo "No URL maps found"
-          
+
           # Attempt to invalidate cache (non-blocking if URL map doesn't exist)
           if gcloud compute url-maps describe "$URLMAP" --global --project "${{ secrets.GCP_PROJECT_ID }}" &>/dev/null; then
             gcloud compute url-maps invalidate-cdn-cache "$URLMAP" \
