@@ -253,11 +253,18 @@ export default function SolverPage() {
                   <div className="answer-steps">
                     <h5 className="steps-title">解説ステップ</h5>
                     <ol className="steps-list">
-                      {result.answer.steps.map((step, i) => (
-                        <li key={i} className="step-item">
-                          <MathText text={step} />
-                        </li>
-                      ))}
+                      {result.answer.steps.map((step, i) => {
+                        // $が含まれていない場合、LaTeXコマンドを検出して$$...$$で自動ラップ
+                        let displayStep = step;
+                        if (!step.includes("$") && /\\[a-zA-Z{]/.test(step)) {
+                          displayStep = `$$${step}$$`;
+                        }
+                        return (
+                          <li key={i} className="step-item">
+                            <MathText text={displayStep} />
+                          </li>
+                        );
+                      })}
                     </ol>
                   </div>
                 )}
