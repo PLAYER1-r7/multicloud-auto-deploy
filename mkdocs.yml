@@ -1,0 +1,126 @@
+site_name: multicloud-auto-deploy Documentation
+site_description: Multi-Cloud Auto Deploy Platform - AWS/Azure/GCP 対応
+site_author: PLAYER1-r7
+site_url: https://PLAYER1-r7.github.io/multicloud-auto-deploy/
+repo_url: https://github.com/PLAYER1-r7/multicloud-auto-deploy
+repo_name: PLAYER1-r7/multicloud-auto-deploy
+edit_uri: edit/develop/docs/
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Overview: getting-started/overview.md
+      - Setup Guide: getting-started/setup.md
+      - Quick Start: getting-started/quickstart.md
+  - Architecture:
+      - System Design: architecture/system-design.md
+      - Cloud Architecture: architecture/cloud-architecture.md
+      - API Design: architecture/api-design.md
+  - Implementation:
+      - Implementation Guide: implementation-guide.md
+      - Backend API: implementation/backend.md
+      - Frontend: implementation/frontend.md
+      - Infrastructure (Pulumi): implementation/infrastructure.md
+  - Deployment:
+      - CI/CD Pipeline: deployment/cicd.md
+      - Deployment Steps: deployment/getting-deployed.md
+      - Environments: deployment/environments.md
+  - Operations:
+      - Monitoring & Alerts: operations/monitoring.md
+      - Security: operations/security.md
+      - Troubleshooting: troubleshooting.md
+  - Project Management:
+      - GitHub Features Guide: github-features-guide.md
+      - Roadmap: roadmap.md
+      - Task Status: tasks.md
+  - Technical Reference:
+      - API Reference: reference/api.md
+      - Infrastructure Code: reference/infrastructure.md
+      - Testing Guide: reference/testing.md
+
+theme:
+  name: material
+  logo: images/icons/multicloud.svg
+  favicon: images/icons/multicloud.svg
+  language: ja
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.expand
+    - navigation.path
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search:
+      lang:
+        - en
+        - ja
+  - minify:
+      minify_css: true
+      minify_js: true
+      minify_html: true
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.arithmatex
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.critic
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: True
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/PLAYER1-r7/multicloud-auto-deploy
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/PLAYER1_r7
+  version:
+    provider: mike
+    default: latest
+
+copyright: "© 2026 multicloud-auto-deploy. Licensed under MIT."

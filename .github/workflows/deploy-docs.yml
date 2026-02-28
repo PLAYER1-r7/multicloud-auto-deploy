@@ -1,0 +1,115 @@
+name: Deploy Documentation to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/deploy-docs.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mkdocs mkdocs-material pymdown-extensions
+
+      - name: Build documentation
+        run: mkdocs build --verbose
+        env:
+          CI: true
+
+      - name: Generate Site Index (Debugging)
+        run: |
+          echo "## Documentation Site Structure" >> /tmp/build_summary.md
+          echo "" >> /tmp/build_summary.md
+          echo "### Built Pages" >> /tmp/build_summary.md
+          find site -name "*.html" -type f | head -20 | sed 's|^site/||; s|index.html||' | sort >> /tmp/build_summary.md
+          echo "" >> /tmp/build_summary.md
+          echo "**Total Pages**: $(find site -name "*.html" -type f | wc -l)" >> /tmp/build_summary.md
+          echo "**Build Size**: $(du -sh site | cut -f1)" >> /tmp/build_summary.md
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: site/
+          retention-days: 5
+
+      - name: Setup Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v4
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: deployment
+        uses: actions/deploy-pages@v3
+        with:
+          artifact_name: documentation
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const buildSummary = fs.existsSync('/tmp/build_summary.md') 
+              ? fs.readFileSync('/tmp/build_summary.md', 'utf8')
+              : 'Build completed successfully';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 📚 Documentation Preview\n\n✅ Documentation built successfully!\n\n${buildSummary}\n\n_Documentation will be published to [GitHub Pages](https://PLAYER1-r7.github.io/multicloud-auto-deploy/) when merged to \`main\`._`
+            });
+
+  notify:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: build
+    steps:
+      - name: Documentation Build Summary
+        run: |
+          echo "## Documentation Build Summary 📚" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ needs.build.result == 'success' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "📖 **Published to**: https://PLAYER1-r7.github.io/multicloud-auto-deploy/" >> $GITHUB_STEP_SUMMARY
+          fi
