@@ -15,24 +15,24 @@
 
 ### MAIN ブランチ（本番環境 - 厳格）
 
-| 設定項目 | 状態 | 説明 |
-|---------|------|------|
-| **PR 必須** | ✅ | 直接 push は禁止、PR 経由のみ |
-| **Approval 数** | ✅ 1 人 | 最低 1 人のレビュー必須 |
-| **古い承認の無効化** | ✅ | 新 commit push で古い approval を無効化 |
-| **Code Owner Review** | ✅ | CODEOWNERS ファイルの owner のレビュー必須 |
-| **Admin 制限** | ✅ | Admin も同じルールを遵守 |
-| **Force Push 禁止** | ✅ | 強制 push は不可 |
-| **削除禁止** | ✅ | ブランチ削除は不可 |
+| 設定項目              | 状態    | 説明                                       |
+| --------------------- | ------- | ------------------------------------------ |
+| **PR 必須**           | ✅      | 直接 push は禁止、PR 経由のみ              |
+| **Approval 数**       | ✅ 1 人 | 最低 1 人のレビュー必須                    |
+| **古い承認の無効化**  | ✅      | 新 commit push で古い approval を無効化    |
+| **Code Owner Review** | ✅      | CODEOWNERS ファイルの owner のレビュー必須 |
+| **Admin 制限**        | ✅      | Admin も同じルールを遵守                   |
+| **Force Push 禁止**   | ✅      | 強制 push は不可                           |
+| **削除禁止**          | ✅      | ブランチ削除は不可                         |
 
 ### DEVELOP ブランチ（開発環境 - バランス型）
 
-| 設定項目 | 状態 | 説明 |
-|---------|------|------|
-| **PR 必須** | ✅ | 直接 push は禁止、PR 経由のみ |
-| **Approval 数** | ✅ 0 人 | Approval 不要（開発スピード重視） |
-| **Force Push 禁止** | ✅ | 強制 push は不可 |
-| **削除禁止** | ✅ | ブランチ削除は不可 |
+| 設定項目            | 状態    | 説明                              |
+| ------------------- | ------- | --------------------------------- |
+| **PR 必須**         | ✅      | 直接 push は禁止、PR 経由のみ     |
+| **Approval 数**     | ✅ 0 人 | Approval 不要（開発スピード重視） |
+| **Force Push 禁止** | ✅      | 強制 push は不可                  |
+| **削除禁止**        | ✅      | ブランチ削除は不可                |
 
 ---
 
@@ -515,6 +515,7 @@ gh run list --branch main --limit 10 --json name
 ### 実装状況
 
 ✅ **MAIN ブランチ（本番環境）**
+
 - **PR 必須**: ✅ 有効
 - **Approval**: ✅ 1 人最低必須
 - **Code Owner Review**: ✅ CODEOWNERS による審査必須
@@ -524,6 +525,7 @@ gh run list --branch main --limit 10 --json name
 - **削除**: ✅ 禁止
 
 ✅ **DEVELOP ブランチ（開発環境）**
+
 - **PR 必須**: ✅ 有効
 - **Approval**: ✅ 不要（開発効率優先）
 - **Force Push**: ✅ 禁止
@@ -544,6 +546,7 @@ curl -s -H "Authorization: token $(gh auth token)" \
 ```
 
 **出力例**:
+
 ```json
 {
   "pr_required": true,
@@ -556,6 +559,7 @@ curl -s -H "Authorization: token $(gh auth token)" \
 ### 次のステップ
 
 1. **Web UI での確認（オプション）**
+
    ```
    Settings → Branches → Branch protection rules
    ```

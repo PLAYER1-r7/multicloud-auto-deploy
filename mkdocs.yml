@@ -30,9 +30,7 @@ nav:
       - Security: operations/security.md
       - Troubleshooting: troubleshooting.md
   - Project Management:
-      - GitHub Features Guide: github-features-guide.md
-      - Roadmap: roadmap.md
-      - Task Status: tasks.md
+      - GitHub Features Guide: GITHUB_FEATURES_GUIDE.md
   - Technical Reference:
       - API Reference: reference/api.md
       - Infrastructure Code: reference/infrastructure.md

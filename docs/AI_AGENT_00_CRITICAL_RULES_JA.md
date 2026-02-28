@@ -352,6 +352,7 @@ git push origin v1.1.0
 ```
 
 **GitHub Features の活用により、以下が実現できる：**
+
 - 🔄 プロジェクト進捗の自動可視化
 - 📊 タスク管理と GitHub Issues の一元化
 - 🚀 Release 自動化 + CHANGELOG 自動生成

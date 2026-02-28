@@ -1,6 +1,6 @@
 # 00 — Critical Rules: Read This First
 
-> **This document MUST be read before any other document in this repository.**  
+> **This document MUST be read before any other document in this repository.**
 > It contains the minimum set of rules that, if violated, will cause data loss, production outages,
 > or hours of wasted debugging. Every point here was learned from a past incident.
 
@@ -392,6 +392,7 @@ git push origin v1.1.0
 ```
 
 **Benefits of using GitHub Features:**
+
 - 🔄 Automatic project progress visibility
 - 📊 Unified task management and GitHub Issues
 - 🚀 Automated releases + CHANGELOG generation
