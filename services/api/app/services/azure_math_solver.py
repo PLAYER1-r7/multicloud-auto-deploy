@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -46,6 +47,7 @@ class AzureMathSolver(BaseMathSolver):
 
     def __init__(self) -> None:
         self._sample_pdf_text_cache: dict[str, str] = {}
+        self._openai_status: str = ""
         self._di_client = self._build_di_client()
         self._openai_client = self._build_openai_client()
 
@@ -72,19 +74,28 @@ class AzureMathSolver(BaseMathSolver):
 
     def _build_openai_client(self) -> Any:
         """Azure OpenAI クライアントを構築する。"""
-        endpoint = settings.azure_openai_endpoint
-        key = settings.azure_openai_key
+        endpoint = getattr(settings, "azure_openai_endpoint", None) or os.getenv(
+            "AZURE_OPENAI_ENDPOINT"
+        )
+        key = getattr(settings, "azure_openai_key", None) or os.getenv(
+            "AZURE_OPENAI_KEY"
+        )
+
         if not endpoint or not key:
+            self._openai_status = f"endpoint_set={bool(endpoint)}, key_set={bool(key)}"
             return None
+
         try:
             from openai import AzureOpenAI
 
+            self._openai_status = "ok"
             return AzureOpenAI(
                 azure_endpoint=endpoint,
                 api_key=key,
                 api_version=settings.azure_openai_api_version,
             )
-        except ImportError:
+        except ImportError as exc:
+            self._openai_status = f"openai_import_error={exc}"
             return None
 
     # ------------------------------------------------------------------
@@ -503,11 +514,13 @@ class AzureMathSolver(BaseMathSolver):
         """
         if self._openai_client is None:
             # Azure 環境では Bedrock は利用不可。設定不備として 502 を返す。
+            debug = self._openai_status or "unknown"
             raise HTTPException(
                 status_code=502,
                 detail=(
                     "Azure OpenAI client is not configured. "
-                    "Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_KEY environment variables."
+                    "Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_KEY environment variables. "
+                    f"(debug: {debug})"
                 ),
             )
 
