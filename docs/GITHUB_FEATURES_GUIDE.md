@@ -1,0 +1,213 @@
+# GitHub 機能統合ガイド
+
+> **最終更新**: 2026-02-28  
+> **ステータス**: ✅ Issues + Milestones 設定完了 / 🟡 Releases workflow 準備完了
+
+---
+
+## 📋 実装済み機能
+
+### 1️⃣ GitHub Issues + Milestones
+
+**ステータス**: ✅ **完全実装**
+
+#### 作成済み Milestone
+- **Phase 3: React UI** — React UI 実装 & 統合テスト (完了: 2026-02-28)
+- **Phase 4: 拡張機能** — Phase 3 完了後の今後の施策
+- **Session 6: セキュリティ監視** — CloudWatch/Monitor/Logging アラート設定
+- **Session 7: パフォーマンス最適化** — Lighthouse スコア >90, LCP <2.5s
+
+#### 作成済み Issue
+
+| Issue | 状態 | Milestone | ラベル |
+|-------|------|-----------|--------|
+| #31 | ✅ 完了 | Phase 3 | testing, infrastructure |
+| #29 | ✅ 完了 | Phase 3 | backend, azure |
+| #30 | ✅ 完了 | Phase 3 | backend, aws, database |
+| #32 | ⏳ 未実装 | Phase 3 | critical, deployment |
+| #33 | ⏳ 部分完了 | Session 6 | enhancement, deployment |
+| #34 | ⏳ 未実装 | Session 7 | enhancement, testing |
+
+####使用方法
+
+**新しいタスク追加**:
+```bash
+gh issue create --title "Task タイトル" \
+  --label "critical,security" \
+  --milestone "Phase 4: 拡張機能" \
+  --body "## 概要\n...\n## チェックリスト\n- [ ] Item 1" \
+  --assignee PLAYER1-r7
+```
+
+**進捗更新**:
+```bash
+gh issue edit <number> --state closed
+# または
+gh issue edit <number> --label "⚠️ blocked"
+```
+
+**Issue をフィルタリング**:
+```bash
+# 特定の Milestone 内の未解決 Issue
+gh issue list --milestone "Phase 4: 拡張機能" --state open
+
+# 特定のラベルを持つ Issue
+gh issue list --label "critical" --state open
+
+# 自分に割り当てられた Issue
+gh issue list --assignee @me --state open
+```
+
+---
+
+### 2️⃣ GitHub Project Board（推奨: Web UI で設定）
+
+**ステータス**: 🟡 **準備中**
+
+#### セットアップ手順
+
+1. **Project を作成**: [GitHub Projects](https://github.com/PLAYER1-r7/multicloud-auto-deploy/projects)
+   - New Project ボタンをクリック
+   - Template: "Automated kanban"
+   - 名前: "Phase 4 Progress" など
+
+2. **Automation を設定**:
+   - "To do" → 新規 Issue が自動追加
+   - "In progress" → PR と連動
+   - "Done" → closed issue が自動移動
+
+3. **フィルタリング**:
+   - Milestone: "Phase 4: 拡張機能"
+   - ラベル: "critical", "enhancement"
+
+---
+
+### 3️⃣ GitHub Releases（自動化版）
+
+**ステータス**: ✅ **Workflow 実装完了 (`.github/workflows/release.yml`)**
+
+#### 自動機能
+
+✅ `git tag v*` をプッシュすると自動実行:
+- Conventional Commits から Release Notes 自動生成
+- GitHub Release の自動作成
+- CHANGELOG.md の自動更新
+- versions.json の自動更新
+
+#### 使用方法
+
+**新規リリース**:
+```bash
+# 1. バージョンをタグとしてプッシュ
+git tag v1.1.0
+git push origin v1.1.0
+
+# → 自動的に以下が実行される:
+# - GitHub Release 作成
+# - CHANGELOG.md 更新
+# - versions.json 更新
+# - Milestone を close
+```
+
+**確認**:
+```bash
+# Tags 一覧
+gh release list
+
+# 特定の Release を表示
+gh release view v1.1.0
+```
+
+#### Conventional Commits ガイド
+
+commit message でリリースノートを自動生成するために、以下の形式を推奨：
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+**Type**:
+- `feat`: 新機能 → 🎯 Features
+- `fix`: バグ修正 → 🐛 Fixes
+- `docs`: ドキュメント → 📝 Docs
+- `style`: コード整形 → 💅 Styles
+- `refactor`: リファクタリング → ♻️ Refactor
+- `test`: テスト追加 → 🧪 Tests
+- `chore`: その他 → 🔧 Chores
+- `perf`: パフォーマンス → ⚡ Performance
+
+**例**:
+```bash
+git commit -m "feat(api): add new /recommendations endpoint
+
+Integrates Bedrock for ML-based recommendations
+
+Closes #25"
+```
+
+---
+
+## 🚀 次のステップ
+
+### Phase A: Issue 管理（今すぐ）
+- [ ] GitHub Project Board を手動作成
+- [ ] 既存 Issue をボードに追加
+- [ ] 毎週の ステータス更新を Issue comment で実施
+
+### Phase B: Release 自動化（次週）
+- [ ] 最初の Release v1.1.0 を作成
+  ```bash
+  git tag v1.1.0
+  git push origin v1.1.0
+  ```
+- [ ] Release Notes が自動生成されるか確認
+- [ ] CHANGELOG.md / versions.json の更新を確認
+
+### Phase C: CI/CD 統合（今後）
+- [ ] ✅ Branch Protection Rules（Task #32）
+- [ ] ✅ Code Review 自動化（Copilot Reviews）
+- [ ] Dependabot 設定（セキュリティアップデート）
+
+---
+
+## 📚 参考資料
+
+- [GitHub Issues Documentation](https://docs.github.com/en/issues)
+- [GitHub Projects (v2)](https://docs.github.com/en/issues/planning-and-tracking-with-projects)
+- [GitHub Releases](https://docs.github.com/en/repositories/releasing-projects-on-github)
+- [Conventional Commits](https://www.conventionalcommits.org/)
+
+---
+
+## 📊 ステータスダッシュボード
+
+### Issues Summary
+```
+Total Issues: 13
+├─ Open: 6
+│  ├─ Critical: 1 (#32)
+│  ├─ Enhancement: 2 (#33, #34)
+│  └─ Other: 3
+└─ Closed: 7 (✅ #31, #29, #30, etc)
+```
+
+### Milestones Progress
+| Milestone | Open Issues | Closed Issues | Status |
+|-----------|-------------|---------------|--------|
+| Phase 3 | 3 | 3 | 50% |
+| Phase 4 | 0 | 0 | 0% |
+| Session 6 | 1 | 0 | 0% |
+| Session 7 | 1 | 0 | 0% |
+
+---
+
+## 🔗 利用可能なリンク
+
+- **Issues Board**: https://github.com/PLAYER1-r7/multicloud-auto-deploy/issues
+- **Milestones**: https://github.com/PLAYER1-r7/multicloud-auto-deploy/milestones
+- **Releases**: https://github.com/PLAYER1-r7/multicloud-auto-deploy/releases
+- **Actions**: https://github.com/PLAYER1-r7/multicloud-auto-deploy/actions

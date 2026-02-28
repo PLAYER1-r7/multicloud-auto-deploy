@@ -1,0 +1,198 @@
+name: Release & Changelog
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get previous tag
+        id: prev-tag
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+          echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
+          echo "Previous tag: $PREV_TAG"
+
+      - name: Generate Release Notes
+        id: release-notes
+        run: |
+          CURRENT_TAG=${{ github.ref_name }}
+          PREV_TAG=${{ steps.prev-tag.outputs.tag }}
+          
+          echo "## Overview" > /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          
+          if [ -z "$PREV_TAG" ]; then
+            echo "Initial release" >> /tmp/release_notes.md
+            COMMIT_RANGE="HEAD"
+          else
+            COMMIT_RANGE="${PREV_TAG}...HEAD"
+          fi
+          
+          echo "" >> /tmp/release_notes.md
+          echo "### 🎯 Changes" >> /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          
+          # Extract commit messages with conventional commit format
+          git log ${COMMIT_RANGE} --oneline --pretty=format:"%h - %s" | \
+            grep -E "^[a-f0-9]+ - (feat|fix|docs|style|refactor|test|chore|perf)(\(.+\))?:" | \
+            sed 's/^\([a-f0-9]\+ - feat/- **✨ Feature** \n  \1/' | \
+            sed 's/^\([a-f0-9]\+ - fix/- **🐛 Fix** \n  \1/' | \
+            sed 's/^\([a-f0-9]\+ - docs/- **📝 Docs** \n  \1/' | \
+            sed 's/^\([a-f0-9]\+ - refactor/- **♻️ Refactor** \n  \1/' | \
+            sed 's/^\([a-f0-9]\+ - test/- **🧪 Test** \n  \1/' >> /tmp/release_notes.md
+          
+          echo "" >> /tmp/release_notes.md
+          echo "### 📊 Stats" >> /tmp/release_notes.md
+          echo "" >> /tmp/release_notes.md
+          COMMIT_COUNT=$(git log ${COMMIT_RANGE} --oneline | wc -l)
+          CHANGED_FILES=$(git log ${COMMIT_RANGE} --name-only --pretty=format: | sort -u | wc -l)
+          echo "- **Commits**: ${COMMIT_COUNT}" >> /tmp/release_notes.md
+          echo "- **Files Changed**: ${CHANGED_FILES}" >> /tmp/release_notes.md
+          
+          cat /tmp/release_notes.md
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          cat /tmp/release_notes.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Get Release Date
+        id: date
+        run: |
+          echo "date=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: |
+            ${{ env.RELEASE_NOTES }}
+            
+            ---
+            
+            **Released**: ${{ steps.date.outputs.date }}
+            **Tag**: ${{ github.ref_name }}
+            **Commit**: ${{ github.sha }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update versions.json
+        run: |
+          VERSION=${{ github.ref_name }}
+          VERSION_NUM=${VERSION#v}
+          
+          if [ -f versions.json ]; then
+            python3 << 'PYTHON'
+          import json
+          from datetime import datetime
+          
+          with open('versions.json', 'r') as f:
+            data = json.load(f)
+          
+          data['version'] = "${{ env.VERSION_NUM }}"
+          data['released_at'] = "${{ steps.date.outputs.date }}"
+          data['tag'] = "${{ github.ref_name }}"
+          data['github_release_url'] = "https://github.com/PLAYER1-r7/multicloud-auto-deploy/releases/tag/${{ github.ref_name }}"
+          
+          with open('versions.json', 'w') as f:
+            json.dump(data, f, indent=2)
+          
+          print(f"✅ versions.json 更新完了: {data['version']}")
+          PYTHON
+          fi
+
+  update-changelog:
+    runs-on: ubuntu-latest
+    needs: create-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Update CHANGELOG.md
+        run: |
+          python3 << 'PYTHON'
+          import json
+          from datetime import datetime
+          import re
+          
+          CURRENT_TAG = "${{ github.ref_name }}"
+          CURRENT_VERSION = CURRENT_TAG.lstrip('v')
+          
+          # Read existing changelog
+          with open('CHANGELOG.md', 'r') as f:
+            content = f.read()
+          
+          # Create new changelog entry
+          release_date = "${{ steps.date.outputs.date }}"
+          
+          new_entry = f"""## [{CURRENT_VERSION}](https://github.com/PLAYER1-r7/multicloud-auto-deploy/releases/tag/{CURRENT_TAG}) - {release_date}
+          
+          ### Added
+          - GitHub Issues + Milestones integration for better task management
+          - Automated Release Notes generation
+          - Conventional Commits support
+          
+          ### Changed
+          - Improved changelog automation
+          
+          ### Fixed
+          - Version management system
+          
+          ---
+          
+          """
+          
+          # Prepend new entry to changelog
+          updated_content = new_entry + content
+          
+          with open('CHANGELOG.md', 'w') as f:
+            f.write(updated_content)
+          
+          print("✅ CHANGELOG.md 更新完了")
+          PYTHON
+
+      - name: Commit and Push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add versions.json CHANGELOG.md
+          
+          if [ -z "$(git diff --cached --exit-code)" ]; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update versions and changelog for ${{ github.ref_name }}"
+            git push origin develop
+            echo "✅ Pushed changelog and version updates"
+          fi
+
+  notify-release:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [create-release, update-changelog]
+    steps:
+      - name: Release Summary
+        run: |
+          echo "## Release Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**GitHub Release**: [View Release](https://github.com/PLAYER1-r7/multicloud-auto-deploy/releases/tag/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
