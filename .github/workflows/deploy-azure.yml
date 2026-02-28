@@ -8,6 +8,7 @@ on:
     paths:
       - "services/api/**"
       - "infrastructure/pulumi/azure/**"
+      - ".github/config/azure.*.env"
       - ".github/workflows/deploy-azure.yml"
   workflow_dispatch:
     inputs:

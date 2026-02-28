@@ -6,8 +6,9 @@ on:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
     paths:
-      - "services/**"
+      - "services/api/**"
       - "infrastructure/pulumi/gcp/**"
+      - ".github/config/gcp.*.env"
       - ".github/workflows/deploy-gcp.yml"
   workflow_dispatch:
     inputs:

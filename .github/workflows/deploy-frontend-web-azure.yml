@@ -7,6 +7,7 @@ on:
       - main # production自動デプロイ
     paths:
       - "services/frontend_react/**"
+      - ".github/config/azure.*.env"
       - ".github/workflows/deploy-frontend-web-azure.yml"
   workflow_dispatch:
     inputs:

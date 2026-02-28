@@ -6,8 +6,9 @@ on:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
     paths:
-      - "services/**"
+      - "services/api/**"
       - "infrastructure/pulumi/aws/**"
+      - ".github/config/aws.*.env"
       - ".github/workflows/deploy-aws.yml"
   workflow_dispatch:
     inputs:

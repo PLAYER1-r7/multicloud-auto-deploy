@@ -37,13 +37,42 @@ main     →  production  ⚠️ すぐに本番環境に反映されます
 
 ## トリガー条件 (パスフィルタ)
 
-| 変更されたパス               | トリガーされるワークフロー              |
-| ---------------------------- | --------------------------------------- |
-| `services/api/**`            | deploy-{aws,azure,gcp}.yml              |
-| `infrastructure/pulumi/**`   | deploy-{aws,azure,gcp}.yml              |
-| `services/frontend_react/**` | deploy-frontend-{aws,azure,gcp}.yml     |
-| `services/frontend_web/**`   | deploy-frontend-web-{aws,azure,gcp}.yml |
-| `static-site/**`             | deploy-landing-{aws,azure,gcp}.yml      |
+> ⚠️ **クラウドプロバイダー固有のデプロイ**: 各ワークフローはクラウド固有のパスのみを監視し、不要なデプロイを防ぎます。
+
+### バックエンド API (`deploy-{aws,azure,gcp}.yml`)
+
+| 変更されたパス                       | トリガーされるワークフロー |
+| ------------------------------------ | -------------------------- |
+| `services/api/**`                    | 全クラウド (API は共通)    |
+| `infrastructure/pulumi/aws/**`       | AWS のみ                   |
+| `infrastructure/pulumi/azure/**`     | Azure のみ                 |
+| `infrastructure/pulumi/gcp/**`       | GCP のみ                   |
+| `.github/config/aws.*.env`           | AWS のみ                   |
+| `.github/config/azure.*.env`         | Azure のみ                 |
+| `.github/config/gcp.*.env`           | GCP のみ                   |
+| `.github/workflows/deploy-aws.yml`   | AWS のみ                   |
+| `.github/workflows/deploy-azure.yml` | Azure のみ                 |
+| `.github/workflows/deploy-gcp.yml`   | GCP のみ                   |
+
+### フロントエンド React SPA (`deploy-frontend-web-{aws,azure,gcp}.yml`)
+
+| 変更されたパス                                 | トリガーされるワークフロー |
+| ---------------------------------------------- | -------------------------- |
+| `services/frontend_react/**`                   | 全クラウド (共通)          |
+| `.github/config/aws.*.env`                     | AWS のみ                   |
+| `.github/config/azure.*.env`                   | Azure のみ                 |
+| `.github/config/gcp.*.env`                     | GCP のみ                   |
+| `.github/workflows/deploy-frontend-web-*.yml`  | 対応クラウドのみ           |
+
+### ランディングページ (`deploy-landing-{aws,azure,gcp}.yml`)
+
+| 変更されたパス                             | トリガーされるワークフロー |
+| ------------------------------------------ | -------------------------- |
+| `static-site/**`                           | 全クラウド (共通)          |
+| `.github/config/aws.*.env`                 | AWS のみ                   |
+| `.github/config/azure.*.env`               | Azure のみ                 |
+| `.github/config/gcp.*.env`                 | GCP のみ                   |
+| `.github/workflows/deploy-landing-*.yml`   | 対応クラウドのみ           |
 
 ---
 
