@@ -559,17 +559,7 @@ jobs:
 
           # Get Front Door URL for CORS from Pulumi outputs
           FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
-          FRONTEND_STORAGE_NAME="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
-          STORAGE_STATIC_WEBSITE_URL="https://${FRONTEND_STORAGE_NAME}.z11.web.core.windows.net"
-          CORS_ORIGINS="http://localhost:5173"
-          # Always include Storage Static Website (primary frontend host)
-          if [ -n "$FRONTEND_STORAGE_NAME" ]; then
-            CORS_ORIGINS="${STORAGE_STATIC_WEBSITE_URL},${CORS_ORIGINS}"
-          fi
-          # Include Front Door if deployed (optional, depends on stack)
-          if [ -n "$FRONTDOOR_URL" ]; then
-            CORS_ORIGINS="https://${FRONTDOOR_URL},${CORS_ORIGINS}"
-          fi
+          CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
           # Custom domain from config file (single source of truth)
           AZURE_CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
           if [ -n "$AZURE_CUSTOM_DOMAIN" ]; then
@@ -950,87 +940,53 @@ jobs:
 
       - name: Ensure Azure CORS Origins
         # Safety net: ensures both the app setting and platform-level CORS (Kestrel intercept)
-        # always include the Storage Static Website and custom domain regardless of deploy step.
+        # always include https://<customDomain> regardless of what the deploy step set.
         # customDomain comes from the committed config file (.github/config/azure.<stack>.env).
         run: |
           STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
           RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
           FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
           FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
-          FRONTEND_STORAGE_NAME="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
-          
+
           # Custom domain from config file (single source of truth)
           CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
 
-          echo "🔒 Ensuring CORS origins are properly configured (stack: $STACK_NAME)..."
-
-          # Build correct CORS_ORIGINS: always include Storage, optionally Front Door/custom domain
-          CORS_ORIGINS="http://localhost:5173"
-          # Always include Storage Static Website (primary frontend host)
-          if [ -n "$FRONTEND_STORAGE_NAME" ]; then
-            CORS_ORIGINS="https://${FRONTEND_STORAGE_NAME}.z11.web.core.windows.net,${CORS_ORIGINS}"
-          fi
-          # Include Front Door if deployed
-          if [ -n "$FRONTDOOR_URL" ]; then
-            CORS_ORIGINS="https://${FRONTDOOR_URL},${CORS_ORIGINS}"
-          fi
-          # Include custom domain if configured
-          if [ -n "$CUSTOM_DOMAIN" ]; then
-            CORS_ORIGINS="https://${CUSTOM_DOMAIN},${CORS_ORIGINS}"
+          if [[ -z "$CUSTOM_DOMAIN" ]]; then
+            echo "⏭️  No custom domain set — skipping CORS safety net"
+            exit 0
           fi
 
-          echo "📋 Target CORS_ORIGINS: $CORS_ORIGINS"
+          echo "🔒 Ensuring CORS origins include https://$CUSTOM_DOMAIN (stack: $STACK_NAME)..."
 
-          # 1. Ensure app setting CORS_ORIGINS matches target
+          # Build correct CORS_ORIGINS
+          CORS_ORIGINS="https://${FRONTDOOR_URL},https://${CUSTOM_DOMAIN},http://localhost:5173"
+
+          # 1. Ensure app setting CORS_ORIGINS includes custom domain
           CURRENT_CORS=$(az functionapp config appsettings list \
             --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" \
             --query "[?name=='CORS_ORIGINS'].value" -o tsv 2>/dev/null || echo "")
-          if [ "$CURRENT_CORS" = "$CORS_ORIGINS" ]; then
-            echo "✅ CORS_ORIGINS app setting is correct"
+          if echo "$CURRENT_CORS" | grep -q "$CUSTOM_DOMAIN"; then
+            echo "✅ CORS_ORIGINS app setting already includes $CUSTOM_DOMAIN"
           else
-            echo "⚠️  CORS_ORIGINS mismatch. Current: [$CURRENT_CORS]"
-            echo "🔄 Updating CORS_ORIGINS..."
+            echo "⚠️  CORS_ORIGINS missing $CUSTOM_DOMAIN — restoring: $CORS_ORIGINS"
             az functionapp config appsettings set \
               --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" \
               --settings "CORS_ORIGINS=${CORS_ORIGINS}" > /dev/null
-            echo "✅ CORS_ORIGINS updated"
+            echo "✅ CORS_ORIGINS restored to: $CORS_ORIGINS"
           fi
 
-          # 2. Ensure platform-level CORS (Kestrel) includes all origins
+          # 2. Ensure platform-level CORS (Kestrel) includes custom domain
           CURRENT_PLATFORM=$(az functionapp cors show \
             --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" \
             --query "allowedOrigins" -o json 2>/dev/null || echo "[]")
-          
-          # Parse required origins from CORS_ORIGINS string
-          IFS=',' read -ra REQUIRED_ORIGINS <<< "$CORS_ORIGINS"
-          ALL_PRESENT=true
-          for origin in "${REQUIRED_ORIGINS[@]}"; do
-            if ! echo "$CURRENT_PLATFORM" | grep -q "$(echo "$origin" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"; then
-              ALL_PRESENT=false
-              break
-            fi
-          done
-          
-          if [ "$ALL_PRESENT" = true ]; then
-            echo "✅ Platform-level CORS includes all required origins"
+          if echo "$CURRENT_PLATFORM" | grep -q "$CUSTOM_DOMAIN"; then
+            echo "✅ Platform-level CORS already includes $CUSTOM_DOMAIN"
           else
-            echo "⚠️  Platform-level CORS is incomplete, rebuilding..."
-            # Clear and rebuild platform CORS
-            ORIGINS_JSON="["
-            FIRST=true
-            for origin in "${REQUIRED_ORIGINS[@]}"; do
-              ORIGIN_CLEAN=$(echo "$origin" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-              if [ "$FIRST" = false ]; then ORIGINS_JSON+=","; fi
-              ORIGINS_JSON+="\"${ORIGIN_CLEAN}\""
-              FIRST=false
-            done
-            ORIGINS_JSON+="]"
-            
-            az rest \
-              --method PUT \
-              --url "https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}/config/web?api-version=2022-03-01" \
-              --body "{\"properties\":{\"cors\":{\"allowedOrigins\":${ORIGINS_JSON},\"supportCredentials\":false}}}" \
-              2>/dev/null && echo "✅ Platform-level CORS updated" || echo "⚠️  Platform CORS update failed (non-fatal)"
+            echo "⚠️  Platform CORS missing $CUSTOM_DOMAIN — adding..."
+            az functionapp cors add \
+              --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" \
+              --allowed-origins "https://${CUSTOM_DOMAIN}" > /dev/null
+            echo "✅ Platform CORS updated to include https://$CUSTOM_DOMAIN"
           fi
 
       - name: Enable Static Website Hosting
