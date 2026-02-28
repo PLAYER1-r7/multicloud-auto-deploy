@@ -8,9 +8,10 @@ Azure Monitor Alerts for:
 - Cost anomalies
 """
 
+from typing import Optional
+
 import pulumi
 import pulumi_azure_native as azure_native
-from typing import Optional, List
 
 
 def create_action_group(
@@ -97,8 +98,7 @@ def create_function_app_alerts(
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(
-                action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
@@ -132,8 +132,7 @@ def create_function_app_alerts(
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(
-                action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
@@ -173,8 +172,7 @@ def create_function_app_alerts(
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(
-                action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
@@ -230,8 +228,7 @@ def create_cosmos_db_alerts(
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(
-                action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
@@ -265,8 +262,7 @@ def create_cosmos_db_alerts(
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(
-                action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
@@ -314,8 +310,7 @@ def create_frontdoor_alerts(
             ],
         ),
         actions=[
-            azure_native.insights.MetricAlertActionArgs(
-                action_group_id=action_group_id)
+            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
         ],
         tags={
             "Project": project_name,
