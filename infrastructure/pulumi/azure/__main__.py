@@ -522,7 +522,7 @@ exam_shortcut_rule = azure.cdn.Rule(
             name="UrlRewrite",
             parameters=azure.cdn.UrlRewriteActionParametersArgs(
                 type_name="DeliveryRuleUrlRewriteActionParameters",
-                source_pattern="/exam",
+                source_pattern="/",
                 destination="/sns/index.html",
                 preserve_unmatched_path=False,
             ),
