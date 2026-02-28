@@ -548,49 +548,6 @@ if enable_cdn:
         resource_group_name=resource_group.name,
     )
 
-    # Front Door: Rule Set for API URL rewriting
-    # /api/* → /api/HttpTrigger/* (Function App path prefix)
-    api_rule_set = azure.cdn.RuleSet(
-        "api-rule-set",
-        rule_set_name="ApiRuleSet",
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-    )
-
-    api_rewrite_rule = azure.cdn.Rule(
-        "api-rewrite-rule",
-        rule_name="ApiPathRewrite",
-        rule_set_name=api_rule_set.name,
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-        order=1,
-        conditions=[
-            # Match: path begins with /api/
-            azure.cdn.DeliveryRuleUrlPathConditionArgs(
-                name="UrlPath",
-                parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
-                    type_name="DeliveryRuleUrlPathMatchConditionParameters",
-                    operator="BeginsWith",
-                    negate_condition=False,
-                    match_values=["/api/"],
-                    transforms=["Lowercase"],
-                ),
-            ),
-        ],
-        actions=[
-            azure.cdn.UrlRewriteActionArgs(
-                name="UrlRewrite",
-                parameters=azure.cdn.UrlRewriteActionParametersArgs(
-                    type_name="DeliveryRuleUrlRewriteActionParameters",
-                    source_pattern="/api/",
-                    destination="/api/HttpTrigger/",
-                    preserve_unmatched_path=True,
-                ),
-            ),
-        ],
-        opts=pulumi.ResourceOptions(depends_on=[api_rule_set]),
-    )
-
     exam_shortcut_rule = azure.cdn.Rule(
         "exam-shortcut-rule",
         rule_name="ExamShortcut",
@@ -715,13 +672,9 @@ if enable_cdn:
         forwarding_protocol="HttpsOnly",
         link_to_default_domain="Enabled",
         https_redirect="Enabled",
-        rule_sets=[
-            azure.cdn.ResourceReferenceArgs(id=api_rule_set.id),
-        ],
         opts=pulumi.ResourceOptions(
             depends_on=[
                 frontdoor_api_origin,
-                api_rewrite_rule,
             ]
         ),
     )
