@@ -48,8 +48,18 @@ export default function SolverPage() {
       });
       setResult(res);
     } catch (e: unknown) {
-      type AxiosLike = { response?: { data?: { detail?: string } } };
-      const detail = (e as AxiosLike).response?.data?.detail;
+      type ApiDetail = { loc?: unknown[]; msg?: string };
+      type AxiosLike = { response?: { data?: { detail?: unknown } } };
+      const raw = (e as AxiosLike).response?.data?.detail;
+      const detail = Array.isArray(raw)
+        ? (raw as ApiDetail[])
+            .map((d) => `${d.loc ? d.loc.join(".") + ": " : ""}${d.msg ?? JSON.stringify(d)}`)
+            .join("\n")
+        : typeof raw === "string"
+          ? raw
+          : raw != null
+            ? JSON.stringify(raw)
+            : null;
       setError(detail ?? (e as Error).message ?? "エラーが発生しました");
     } finally {
       setLoading(false);
@@ -109,6 +119,7 @@ export default function SolverPage() {
               </a>
             </p>
           )}
+          {/* 注記: PROBLEM_IMAGE_URL は http:// のため HTTPS ページでは mixed-content ブロックされます */}
         </div>
 
         {/* 右: 解答パネル */}

@@ -37,7 +37,11 @@ export default function MathText({ text, className }: Props) {
             <span
               key={i}
               dangerouslySetInnerHTML={{ __html: html }}
-              style={seg.display ? { display: "block", margin: "0.6em 0" } : undefined}
+              style={
+                seg.display
+                  ? { display: "block", margin: "0.6em 0" }
+                  : undefined
+              }
             />
           );
         } catch {

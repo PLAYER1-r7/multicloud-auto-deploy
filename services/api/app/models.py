@@ -178,7 +178,7 @@ class SolveOptions(BaseModel):
     mode: str = Field("fast", pattern="^(fast|accurate)$")
     need_steps: bool = Field(True, alias="needSteps")
     need_latex: bool = Field(True, alias="needLatex")
-    max_tokens: int = Field(2000, alias="maxTokens", ge=256, le=4096)
+    max_tokens: int = Field(2000, alias="maxTokens", ge=256, le=16384)
     debug_ocr: bool = Field(False, alias="debugOcr")
 
     model_config = {"populate_by_name": True}
