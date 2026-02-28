@@ -324,6 +324,125 @@ az ad app update \
 
 ---
 
+## Rule 16 — Actively Use GitHub Features
+
+This project is designed to maximize the use of GitHub's built-in features. Leverage them actively
+when executing tasks:
+
+### GitHub Issues
+
+- When you find a new task, bug, or improvement, **always create a GitHub Issue** using
+  `gh issue create`
+- Update progress via `gh issue comment` to keep context in the Issue
+- Assign labels (`bug`, `enhancement`, `documentation`, `security`, etc.) to categorize work
+
+```bash
+# Create an issue
+gh issue create --title "Title" --body "Description" --label bug,high-priority
+
+# Comment on an issue with progress update
+gh issue comment <ISSUE_NUMBER> --body "Progress: ..."
+
+# Add labels to an issue
+gh issue edit <ISSUE_NUMBER> --add-label enhancement
+```
+
+### Pull Requests
+
+- **Always use Pull Requests for code changes** (direct push to `main` is forbidden — see Rule 3)
+- Include in every PR:
+  - Clear title using Conventional Commits (`feat(api): ...`, `fix(ui): ...`, etc.)
+  - Description of changes
+  - Related Issue number (`Closes #123`)
+  - Required reviewers (`@PLAYER1-r7`, etc.)
+
+```bash
+# Create feature branch and open PR
+git checkout -b feature/new-endpoint develop
+git push origin feature/new-endpoint
+gh pr create --base develop --title "feat(api): add /posts endpoint" \
+  --body "Closes #25"
+```
+
+### GitHub Releases and CHANGELOG
+
+- Tag versions with `v1.2.3` format
+- Release creation is automated via `.github/workflows/release.yml` — just push the tag
+- Release Notes and CHANGELOG.md are generated automatically
+
+```bash
+# Tag a version (Release auto-generation is triggered)
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+### Branch Protection Rules
+
+- `main` branch is protected with strict rules (PR required, approval required, Code Owner review required)
+- `develop` branch requires PR while balancing development velocity and security
+- See [docs/BRANCH_PROTECTION_SETUP.md](./BRANCH_PROTECTION_SETUP.md) for details
+
+### GitHub Discussions
+
+- Use GitHub Discussions for questions, suggestions, and knowledge sharing
+- Categories: 📢 Announcements, 💡 Ideas & Feedback, 🤝 General Discussion, ❓ Q&A, 🔧 Technical Help
+
+```bash
+# Access Discussions at Web UI: https://github.com/PLAYER1-r7/multicloud-auto-deploy/discussions
+```
+
+**Benefits of using GitHub Features:**
+- 🔄 Automatic project progress visibility
+- 📊 Unified task management and GitHub Issues
+- 🚀 Automated releases + CHANGELOG generation
+- 🛡️ Enforced PR-based code review workflow
+- 📚 Auto-published documentation via GitHub Pages
+
+---
+
+## Rule 17 — You May Install Required Applications
+
+In the Dev Container environment, you are free to install any application needed to complete tasks
+(tools, libraries, CLIs, etc.).
+
+### Approved Installation Methods
+
+**Always OK to install:**
+
+- Python packages (`pip install`)
+- Node.js packages (`npm install`)
+- Docker images (`docker pull`)
+- Development tools (`git`, `curl`, `jq`, `terraform`, `pulumi`, `aws`, `az`, `gcloud`, etc.)
+- System packages (`apt install` as needed)
+
+**Guidelines:**
+
+1. Use standard package managers (`apt`, `pip`, `npm`) and document installations
+2. Verify functionality after installation (e.g., `--version`)
+3. For important tools (new language runtimes, etc.), update CONTRIBUTING.md
+
+```bash
+# Install Python packages (recommended)
+pip install --upgrade pandas requests
+
+# Upgrade AWS CLI
+aws --version && pip install --upgrade awscli
+
+# Install system packages (if needed)
+apt-get update && apt-get install -y jq curl
+
+# Verify installation
+python3 --version
+terraform -version
+```
+
+### Dependency Updates
+
+Dependabot automatically checks dependencies weekly and proposes security updates as PRs
+(see [docs/GITHUB_FEATURES_GUIDE.md](./GITHUB_FEATURES_GUIDE.md)).
+
+---
+
 ## Quick Reference: Where to Find What
 
 | Topic                      | File                                                       |

@@ -286,6 +286,121 @@ az ad app update \
 
 ---
 
+## ルール16 — GitHub Features を積極的に活用する
+
+このプロジェクトは GitHub の機能を最大限に活用するように設計されている。タスク実行時は以下を活用すること：
+
+### GitHub Issues
+
+- 新しいタスク・バグ・改善案を見つけたら、必ず `gh issue create` で GitHub Issue を作成する
+- 既存の Issue へのコメント、進捗更新は `gh issue comment` で行い、Issue にコンテキストを残す
+- Issue にラベル（`bug`, `enhancement`, `documentation`, `security` など）を付与して分類する
+
+```bash
+# Issue を作成
+gh issue create --title "タイトル" --body "説明" --label bug,high-priority
+
+# Issue をコメント更新
+gh issue comment <ISSUE_NUMBER> --body "進捗: ..."
+
+# Issue にラベルを追加
+gh issue edit <ISSUE_NUMBER> --add-label enhancement
+```
+
+### Pull Requests
+
+- コード変更は常に Pull Request（PR）経由で行う（`main` への直接 push は禁止 — ルール3参照）
+- PR 作成時は以下を含める：
+  - 明確なタイトル（Conventional Commits 形式：`feat(api): ...`, `fix(ui): ...` など）
+  - 変更内容の説明
+  - 関連する Issue 番号（`Closes #123`)
+  - レビュー必須者（`@PLAYER1-r7` など）
+
+```bash
+# 機能ブランチを作成とPRを同時に作成
+git checkout -b feature/new-endpoint develop
+git push origin feature/new-endpoint
+gh pr create --base develop --title "feat(api): add /posts endpoint" \
+  --body "Closes #25"
+```
+
+### GitHub Releases と CHANGELOG
+
+- Version タグは `v1.2.3` 形式で付与する
+- Release 作成は自動化ワークフロー（`.github/workflows/release.yml`）に任せる
+- Release Notes と CHANGELOG.md は自動で生成される
+
+```bash
+# Version タグを打つ（Release 自動生成がトリガーされる）
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+### Branch Protection Rules
+
+- `main` ブランチは厳格なルール下で保護されている（PR 必須、approval 必須、Code Owner review 必須）
+- `develop` ブランチは PR 必須で動作効率とセキュリティのバランスを取っている
+- 詳細は [docs/BRANCH_PROTECTION_SETUP.md](./BRANCH_PROTECTION_SETUP.md) を参照
+
+### GitHub Discussions
+
+- 質問、提案、知見共有は GitHub Discussions を使う
+- カテゴリ：📢 Announcements, 💡 Ideas & Feedback, 🤝 General Discussion, ❓ Q&A, 🔧 Technical Help
+
+```bash
+# Discussions は Web UI から https://github.com/PLAYER1-r7/multicloud-auto-deploy/discussions で作成
+```
+
+**GitHub Features の活用により、以下が実現できる：**
+- 🔄 プロジェクト進捗の自動可視化
+- 📊 タスク管理と GitHub Issues の一元化
+- 🚀 Release 自動化 + CHANGELOG 自動生成
+- 🛡️ PR ベースの code review の強制化
+- 📚 GitHub Pages による自動ドキュメント公開
+
+---
+
+## ルール17 — 必要なアプリケーションはインストール可能
+
+Dev Container 環境では、タスク実行に必要なアプリケーション（ツール、ライブラリ、CLI など）は自由にインストール可能である。
+
+### インストール許可リスト
+
+**常にインストール OK：**
+
+- Python パッケージ（`pip install`）
+- Node.js パッケージ（`npm install`）
+- Docker イメージ（`docker pull`）
+- 開発ツール（`git`, `curl`, `jq`, `terraform`, `pulumi`, `aws`, `az`, `gcloud` など）
+- システムパッケージ（`apt install` など必要に応じて）
+
+**記載事項：**
+
+1. インストールしたツールは `apt`, `pip`, `npm` でインストールし、記録に残す
+2. インストール後は動作確認を行う（`--version` など）
+3. 重要なツール（新規言語ランタイムなど）は CONTRIBUTING.md に記載する必要がある
+
+```bash
+# Python パッケージをインストール（推奨）
+pip install --upgrade pandas requests
+
+# AWS CLI をアップグレード
+aws --version && pip install --upgrade awscli
+
+# システムパッケージをインストール（必要に応じて）
+apt-get update && apt-get install -y jq curl
+
+# インストール後は検証
+python3 --version
+terraform -version
+```
+
+### パッケージのアップグレード
+
+Dependabot が週次で依存関係をチェックし、セキュリティアップデートが自動 PR として提案される（[docs/GITHUB_FEATURES_GUIDE.md](./GITHUB_FEATURES_GUIDE.md) 参照）。
+
+---
+
 ## クイックリファレンス：何がどこにあるか
 
 | トピック                       | ファイル                                                   |
