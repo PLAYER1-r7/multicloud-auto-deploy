@@ -498,13 +498,46 @@ spa_rule_set = azure.cdn.RuleSet(
     resource_group_name=resource_group.name,
 )
 
+exam_shortcut_rule = azure.cdn.Rule(
+    "exam-shortcut-rule",
+    rule_name="ExamShortcut",
+    rule_set_name=spa_rule_set.name,
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    order=1,
+    conditions=[
+        azure.cdn.DeliveryRuleUrlPathConditionArgs(
+            name="UrlPath",
+            parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
+                type_name="DeliveryRuleUrlPathMatchConditionParameters",
+                operator="Equal",
+                negate_condition=False,
+                match_values=["/exam", "/exam/"],
+                transforms=["Lowercase"],
+            ),
+        ),
+    ],
+    actions=[
+        azure.cdn.UrlRewriteActionArgs(
+            name="UrlRewrite",
+            parameters=azure.cdn.UrlRewriteActionParametersArgs(
+                type_name="DeliveryRuleUrlRewriteActionParameters",
+                source_pattern="/exam",
+                destination="/sns/index.html",
+                preserve_unmatched_path=False,
+            ),
+        ),
+    ],
+    opts=pulumi.ResourceOptions(depends_on=[spa_rule_set]),
+)
+
 spa_rewrite_rule = azure.cdn.Rule(
     "spa-rewrite-rule",
     rule_name="SpaRouting",
     rule_set_name=spa_rule_set.name,
     profile_name=frontdoor_profile.name,
     resource_group_name=resource_group.name,
-    order=1,
+    order=2,
     conditions=[
         # Condition 1: path begins with /sns/
         azure.cdn.DeliveryRuleUrlPathConditionArgs(
@@ -606,6 +639,7 @@ frontdoor_route = azure.cdn.Route(
     opts=pulumi.ResourceOptions(
         depends_on=[
             frontdoor_origin,
+            exam_shortcut_rule,
             spa_rewrite_rule,
             security_rule_set,
         ]

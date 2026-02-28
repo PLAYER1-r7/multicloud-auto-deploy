@@ -27,7 +27,14 @@ if (typeof window !== "undefined") {
 }
 
 // basename from Vite's base config (e.g. /sns/ → /sns)
-const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
+// If current path is outside configured base (e.g. /exam), fallback to "/".
+const configuredBase = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
+const pathname = window.location.pathname;
+const basename =
+  configuredBase !== "/" &&
+  (pathname === configuredBase || pathname.startsWith(`${configuredBase}/`))
+    ? configuredBase
+    : "/";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
