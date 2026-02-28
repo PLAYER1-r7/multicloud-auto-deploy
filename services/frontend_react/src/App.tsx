@@ -6,7 +6,7 @@ import PostPage from "./pages/PostPage";
 import ProfilePage from "./pages/ProfilePage";
 import LoginPage from "./pages/LoginPage";
 import CallbackPage from "./pages/CallbackPage";
-import SolverPageMin from "./pages/SolverPageMin";
+import SolverPage from "./pages/SolverPage";
 import DebugPage from "./pages/DebugPage";
 import SimpleTestPage from "./pages/SimpleTestPage";
 
@@ -20,7 +20,7 @@ function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<CallbackPage />} />
-          <Route path="/exam" element={<SolverPageMin />} />
+          <Route path="/exam" element={<SolverPage />} />
           <Route path="/debug" element={<DebugPage />} />
           <Route path="/test" element={<SimpleTestPage />} />
           {/* Fallback: send everything else to home */}
