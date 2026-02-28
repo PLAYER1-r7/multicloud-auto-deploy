@@ -54,7 +54,12 @@
         "cloudfront:GetOriginAccessControl",
         "cloudfront:UpdateOriginAccessControl",
         "cloudfront:DeleteOriginAccessControl",
-        "cloudfront:ListOriginAccessControls"
+        "cloudfront:ListOriginAccessControls",
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:UpdateDistribution",
+        "cloudfront:ListDistributions",
+        "cloudfront:CreateDistribution"
       ],
       "Resource": "*"
     },
@@ -81,6 +86,29 @@
       "Resource": [
         "arn:aws:iam::278280499340:role/multicloud-auto-deploy-*"
       ]
+    },
+    {
+      "Sid": "CognitoPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:DescribeUserPool",
+        "cognito-idp:DescribeUserPoolClient",
+        "cognito-idp:UpdateUserPoolClient",
+        "cognito-idp:ListUserPools",
+        "cognito-idp:ListUserPoolClients"
+      ],
+      "Resource": [
+        "arn:aws:cognito-idp:ap-northeast-1:278280499340:userpool/*"
+      ]
+    },
+    {
+      "Sid": "LambdaListPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:ListLayerVersions",
+        "lambda:ListLayers"
+      ],
+      "Resource": "*"
     }
   ]
 }

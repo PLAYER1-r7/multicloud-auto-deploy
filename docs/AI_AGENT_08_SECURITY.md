@@ -617,6 +617,7 @@ S3 Objects:     arn:aws:s3:::multicloud-auto-deploy-*/*
 API Gateway:    arn:aws:apigateway:ap-northeast-1::/apis/*
 CloudFront:     * (リソースベースの制限なし)
 IAM Role:       arn:aws:iam::278280499340:role/multicloud-auto-deploy-*
+Cognito:        arn:aws:cognito-idp:ap-northeast-1:278280499340:userpool/*
 ```
 
 **アクション:**
@@ -655,13 +656,29 @@ IAM Role:       arn:aws:iam::278280499340:role/multicloud-auto-deploy-*
     "cloudfront:PublishFunction",
     "cloudfront:GetFunction",
     "cloudfront:DescribeFunction",
-    "cloudfront:ListFunctions"
+    "cloudfront:ListFunctions",
+    "cloudfront:GetDistribution",
+    "cloudfront:GetDistributionConfig",
+    "cloudfront:UpdateDistribution",
+    "cloudfront:ListDistributions",
+    "cloudfront:CreateDistribution"
   ],
   "APIGateway": ["apigateway:GET", "apigateway:POST"],
   "IAMRolePolicy": [
     "iam:PutRolePolicy",
     "iam:GetRolePolicy",
     "iam:DeleteRolePolicy"
+  ],
+  "Cognito": [
+    "cognito-idp:DescribeUserPool",
+    "cognito-idp:DescribeUserPoolClient",
+    "cognito-idp:UpdateUserPoolClient",
+    "cognito-idp:ListUserPools",
+    "cognito-idp:ListUserPoolClients"
+  ],
+  "LambdaList": [
+    "lambda:ListLayerVersions",
+    "lambda:ListLayers"
   ]
 }
 ```
