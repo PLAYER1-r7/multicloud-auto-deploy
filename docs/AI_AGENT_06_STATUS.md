@@ -1,8 +1,29 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> Last verified: 2026-02-27 Session 4 (アーキテクチャ図アイコン強化完了 ✅ / デュアルアイコン配置実装 ✅ / ドキュメント更新完了 ✅)
-> Previous: 2026-02-27 Session 3 (S1・S2・Task 13 完了 ✅ / エンドポイント本番運用 ✅ / README セキュリティ情報反映 ✅)
+> Last verified: 2026-02-28 Session 1 (Azure staging AFD 削除後の復旧完了 ✅ / `/exam` 自動作成導入 ✅ / Pulumi 監視アラート修正 ✅)
+> Previous: 2026-02-27 Session 4 (アーキテクチャ図アイコン強化完了 ✅ / デュアルアイコン配置実装 ✅ / ドキュメント更新完了 ✅)
+
+---
+
+## Session 2026-02-28 (Continuation 1): Azure Staging Reset After AFD Removal
+
+### Completed Work
+
+| Task                                  | Result                                                                                         | Status |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- | ------ |
+| Confirm staging AFD removal           | Azure Front Door for staging is removed; production AFD remains active                         | ✅     |
+| Recover exam entry URL                | Added static website shortcut `/exam/index.html` as copy of `/sns/index.html`                  | ✅     |
+| Automate shortcut creation in CI/CD   | Added `Create /exam shortcut` step to `deploy-azure.yml`                                       | ✅     |
+| Fix Pulumi failure after AFD deletion | Updated Azure monitoring to skip Front Door metric alerts when `frontdoor_profile_id` is unset | ✅     |
+| Validate end-to-end deployment        | GitHub Actions run succeeded; `/exam` returns 200 and serves React SPA                         | ✅     |
+
+### Azure Staging Notes (2026-02-28)
+
+- Staging frontend now runs directly on Azure Storage Static Website (no Front Door layer).
+- `/exam` is supported without CDN rules by copying `/sns/index.html` to `/exam/index.html`.
+- `Create /exam shortcut` runs on each Azure deploy to keep exam entry path in sync.
+- Monitoring no longer attempts to create/update Front Door alerts when CDN is disabled.
 
 ---
 
@@ -227,17 +248,18 @@ VITE_BASE_PATH=/sns/ npm run build
 ## Azure (japaneast)
 
 ```
-CDN URL  : https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net
-API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
+Frontend URL : https://mcadwebd45ihd.z11.web.core.windows.net
+Exam URL     : https://mcadwebd45ihd.z11.web.core.windows.net/exam
+API URL      : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
 ```
 
-| Resource        | Name                                                                  | Status |
-| --------------- | --------------------------------------------------------------------- | ------ |
-| Front Door      | `multicloud-auto-deploy-staging-fd` / endpoint: `mcad-staging-d45ihd` | ✅     |
-| Storage Account | `mcadwebd45ihd`                                                       | ✅     |
-| Function App    | `multicloud-auto-deploy-staging-func` (Python 3.12, always-ready=1)   | ✅     |
-| Cosmos DB       | `simple-sns-cosmos` (Serverless)                                      | ✅     |
-| Resource Group  | `multicloud-auto-deploy-staging-rg`                                   | ✅     |
+| Resource        | Name                                                                | Status |
+| --------------- | ------------------------------------------------------------------- | ------ |
+| Front Door      | staging AFD removed (cost optimization)                             | ✅     |
+| Storage Account | `mcadwebd45ihd`                                                     | ✅     |
+| Function App    | `multicloud-auto-deploy-staging-func` (Python 3.12, always-ready=1) | ✅     |
+| Cosmos DB       | `simple-sns-cosmos` (Serverless)                                    | ✅     |
+| Resource Group  | `multicloud-auto-deploy-staging-rg`                                 | ✅     |
 
 **Configured (2026-02-23)**:
 
@@ -246,7 +268,7 @@ API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneas
 **Unresolved issues**:
 
 - End-to-end verification of `PUT /posts/{id}` is incomplete.
-- WAF not configured (Front Door Standard SKU).
+- Some test scripts still default `AZURE_FD_URL` to legacy staging AFD; override to Storage URL when running old scripts.
 
 ---
 
@@ -313,8 +335,9 @@ curl -I https://d1tf3uumcm4bo1.cloudfront.net/
 curl -s https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/health
 
 # Azure
-curl -I https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/
-curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/health"
+curl -I https://mcadwebd45ihd.z11.web.core.windows.net/sns/
+curl -I https://mcadwebd45ihd.z11.web.core.windows.net/exam
+curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger/v1/health"
 ```
 
 ---

@@ -1,6 +1,6 @@
 # Staging Test Guide
 
-> **Last updated**: 2026-02-23  
+> **Last updated**: 2026-02-28
 > **Applies to**: staging environments on AWS, Azure, GCP
 
 ---
@@ -19,17 +19,21 @@ three cloud staging environments. The test suite covers:
 
 ---
 
-## Staging Endpoints (2026-02-23)
+## Staging Endpoints (2026-02-28)
 
-| Cloud     | CDN URL                                                        | API URL                                                                                       |
-| --------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **AWS**   | `https://d1tf3uumcm4bo1.cloudfront.net`                        | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com`                                 |
-| **Azure** | `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net` | `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net` |
-| **GCP**   | `https://www.gcp.ashnova.jp`                                   | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`                          |
+| Cloud     | CDN URL                                          | API URL                                                                                       |
+| --------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| **AWS**   | `https://d1tf3uumcm4bo1.cloudfront.net`          | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com`                                 |
+| **Azure** | `https://mcadwebd45ihd.z11.web.core.windows.net` | `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net` |
+| **GCP**   | `https://www.gcp.ashnova.jp`                     | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`                          |
 
 > **Note**: The Azure API URL (`AZURE_API_URL`) is the Function App base URL **without** the
 > `/api/HttpTrigger` path. The function uses a wildcard route `{*route}` so all API paths
 > (e.g. `/health`, `/posts`) are served directly at the base URL.
+>
+> **Azure staging change (2026-02-28)**: Front Door was removed from staging for cost optimization.
+> Frontend is now served from Azure Storage Static Website, and `/exam` is provided by
+> copying `/sns/index.html` to `/exam/index.html` during Azure deployment workflow.
 
 ---
 
@@ -136,7 +140,7 @@ GCP_TOKEN=$(gcloud auth print-identity-token)
 
 ```bash
 # Method: Browser only
-# 1. Open https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/sns/
+# 1. Open https://mcadwebd45ihd.z11.web.core.windows.net/exam
 # 2. Log in with your Microsoft account
 # 3. DevTools → Application → Local Storage → origin → id_token
 # 4. Copy the value
@@ -203,14 +207,14 @@ AZURE_TOKEN="<paste id_token here>"
 
 ### `test-sns-azure.sh` (6 sections)
 
-| Section | Tests                                                                          |
-| ------- | ------------------------------------------------------------------------------ |
-| 1       | Front Door returns `/sns/` with React SPA HTML                                 |
-| 2       | Function App `/health` → 200, `/posts` → 200 with `.items`                     |
-| 3       | AFD SPA deep-link URL Rewrite: `/sns/login`, `/sns/profile`, `/sns/feed` → 200 |
-| 4       | Auth guard: POST without token → 401                                           |
-| 5       | Authenticated: GET/POST/PUT/DELETE posts, presigned URL                        |
-| 6       | Cleanup                                                                        |
+| Section | Tests                                                            |
+| ------- | ---------------------------------------------------------------- |
+| 1       | Azure Storage Static Website returns `/sns/` with React SPA HTML |
+| 2       | Function App `/health` → 200, `/posts` → 200 with `.items`       |
+| 3       | Exam shortcut path `/exam` and `/exam/` return 200 and serve SPA |
+| 4       | Auth guard: POST without token → 401                             |
+| 5       | Authenticated: GET/POST/PUT/DELETE posts, presigned URL          |
+| 6       | Cleanup                                                          |
 
 ### `test-sns-gcp.sh` (7 sections)
 
@@ -242,10 +246,12 @@ All scripts support URL overrides via environment variables:
 | --------------- | --------------------------------------------------------------------------------------------- | ------------------------------------ |
 | `AWS_CF_URL`    | `https://d1tf3uumcm4bo1.cloudfront.net`                                                       | test-staging-all, test-landing-pages |
 | `AWS_API_URL`   | `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com`                                 | test-staging-all, test-e2e           |
-| `AZURE_FD_URL`  | `https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net`                                | test-staging-all, test-landing-pages |
+| `AZURE_FD_URL`  | `https://mcadwebd45ihd.z11.web.core.windows.net`                                              | test-staging-all, test-landing-pages |
 | `AZURE_API_URL` | `https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net` | test-staging-all, test-e2e           |
 | `GCP_CDN_URL`   | `https://www.gcp.ashnova.jp`                                                                  | test-staging-all, test-landing-pages |
 | `GCP_API_URL`   | `https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app`                          | test-staging-all, test-e2e           |
+
+> Note: The variable name remains `AZURE_FD_URL` for backward compatibility in scripts.
 
 Example — test production URLs instead of staging:
 
@@ -336,11 +342,11 @@ curl -sI http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-
 
 **原因の切り分け**:
 
-| DevTools > Security タブの表示 | 原因 | 対処 |
-| ------------------------------- | ---- | ---- |
-| `chrome-exte...` が Secure origins に表示されている | Chrome 拡張機能が証明書エラーのあるリソースを注入している | 拡張機能を1つずつオフにして特定 |
+| DevTools > Security タブの表示                              | 原因                                                                   | 対処                                       |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------ |
+| `chrome-exte...` が Secure origins に表示されている         | Chrome 拡張機能が証明書エラーのあるリソースを注入している              | 拡張機能を1つずつオフにして特定            |
 | "You have recently allowed content with certificate errors" | 過去にブラウザがこのサイトで証明書エラーを「許可」した記録が残っている | 下記の「ブラウザキャッシュクリア手順」参照 |
-| Mixed Content の `http://` URLが表示される | サーバーサイドに http:// リソースが残っている | JS バンドル・API レスポンス・DBを調査 |
+| Mixed Content の `http://` URLが表示される                  | サーバーサイドに http:// リソースが残っている                          | JS バンドル・API レスポンス・DBを調査      |
 
 **ブラウザキャッシュのクリア手順** ("recently allowed certificate errors" の場合):
 
@@ -364,12 +370,13 @@ gcloud compute url-maps invalidate-cdn-cache multicloud-auto-deploy-staging-lb \
 
 See [GCP_SNS_FIX_REPORT_20260223.md](GCP_SNS_FIX_REPORT_20260223.md) (issue G3).
 
-### Azure `/sns/deep-link` returns 404
+### Azure `/exam` returns 404
 
-The Front Door Rule Set rewrites `/sns/*` → `/sns/index.html`. If this fails:
+Staging uses Storage Static Website. `/exam` is available only when `exam/index.html` exists.
 
-1. Open Azure Portal → Front Door → Rule Sets → check the rewrite rule.
-2. Verify the Rule Set is associated with the route.
+1. Verify blob exists in `$web` container: `exam/index.html`.
+2. Re-run Azure deploy workflow (includes `Create /exam shortcut` step).
+3. If needed, manually copy `/sns/index.html` to `/exam/index.html` using Azure CLI.
 
 ---
 

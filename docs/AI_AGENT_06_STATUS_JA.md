@@ -1,8 +1,29 @@
 # 06 — 環境ステータス
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> 最終確認: 2026-02-27 Session 4 (アーキテクチャ図アイコン強化完了 ✅ / デュアルアイコン配置実装 ✅ / ドキュメント更新完了 ✅)
-> 前回: 2026-02-27 Session 3 (S1・S2・Task 13 完了 ✅ / エンドポイント本番運用 ✅ / README セキュリティ情報反映 ✅)
+> 最終確認: 2026-02-28 Session 1 (Azure staging AFD削除後の復旧完了 ✅ / `/exam` 自動作成導入 ✅ / Pulumi監視アラート修正 ✅)
+> 前回: 2026-02-27 Session 4 (アーキテクチャ図アイコン強化完了 ✅ / デュアルアイコン配置実装 ✅ / ドキュメント更新完了 ✅)
+
+---
+
+## セッション 2026-02-28 (継続 1): AFD削除後のAzure staging再整備
+
+### 完了作業
+
+| タスク                        | 結果                                                                          | 状況 |
+| ----------------------------- | ----------------------------------------------------------------------------- | ---- |
+| staging AFD削除の反映確認     | staging の Azure Front Door は削除済み、production AFD は継続稼働             | ✅   |
+| `/exam` 導線の復旧            | Static Website 上で `/exam/index.html` を `/sns/index.html` から作成          | ✅   |
+| CI/CD 自動化                  | `deploy-azure.yml` に `Create /exam shortcut` ステップを追加                  | ✅   |
+| AFD削除後の Pulumi 失敗を修正 | `frontdoor_profile_id` 未設定時は Front Door MetricAlert を作成しないよう修正 | ✅   |
+| デプロイ後の実動確認          | GitHub Actions 成功、`/exam` が HTTP 200 で React SPA を返すことを確認        | ✅   |
+
+### Azure staging 補足 (2026-02-28)
+
+- staging フロントは Front Door ではなく Azure Storage Static Website で提供。
+- `/exam` は CDN ルールではなく、`/sns/index.html` のコピーで維持。
+- Azure デプロイごとに `/exam/index.html` を自動再作成し、導線を保持。
+- CDN 無効時に Front Door アラートを触らないため、`Alert scope is invalid` を回避。
 
 ---
 
@@ -227,17 +248,18 @@ VITE_BASE_PATH=/sns/ npm run build
 ## Azure (japaneast)
 
 ```
-CDN URL  : https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net
-API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
+Frontend URL : https://mcadwebd45ihd.z11.web.core.windows.net
+Exam URL     : https://mcadwebd45ihd.z11.web.core.windows.net/exam
+API URL      : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
 ```
 
-| リソース        | 名前                                                                  | ステータス |
-| --------------- | --------------------------------------------------------------------- | ---------- |
-| Front Door      | `multicloud-auto-deploy-staging-fd` / endpoint: `mcad-staging-d45ihd` | ✅         |
-| Storage Account | `mcadwebd45ihd`                                                       | ✅         |
-| Function App    | `multicloud-auto-deploy-staging-func` (Python 3.12, always-ready=1)   | ✅         |
-| Cosmos DB       | `messages` (Serverless, db: messages / container: messages)           | ✅         |
-| Resource Group  | `multicloud-auto-deploy-staging-rg`                                   | ✅         |
+| リソース        | 名前                                                                | ステータス |
+| --------------- | ------------------------------------------------------------------- | ---------- |
+| Front Door      | staging AFD は削除済み（コスト最適化）                              | ✅         |
+| Storage Account | `mcadwebd45ihd`                                                     | ✅         |
+| Function App    | `multicloud-auto-deploy-staging-func` (Python 3.12, always-ready=1) | ✅         |
+| Cosmos DB       | `messages` (Serverless, db: messages / container: messages)         | ✅         |
+| Resource Group  | `multicloud-auto-deploy-staging-rg`                                 | ✅         |
 
 **構成済み** (2026-02-23):
 
@@ -246,7 +268,7 @@ API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneas
 **未解決の課題**:
 
 - `PUT /posts/{id}` のエンドツーエンド検証が不完全
-- WAF 未構成 (Front Door Standard SKU)
+- 一部テストスクリプトの `AZURE_FD_URL` 初期値が旧staging AFDのまま（実行時はStorage URLへ上書き推奨）
 
 ---
 
@@ -309,8 +331,9 @@ curl -I https://d1tf3uumcm4bo1.cloudfront.net/
 curl -s https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com/health
 
 # Azure
-curl -I https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net/
-curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/health"
+curl -I https://mcadwebd45ihd.z11.web.core.windows.net/sns/
+curl -I https://mcadwebd45ihd.z11.web.core.windows.net/exam
+curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api/HttpTrigger/v1/health"
 
 # GCP
 curl -s http://34.117.111.182/ | head -3
