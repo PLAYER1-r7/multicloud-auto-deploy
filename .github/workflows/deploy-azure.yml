@@ -214,7 +214,6 @@ jobs:
           echo "frontdoor_hostname=$(pulumi stack output frontdoor_hostname)" >> $GITHUB_OUTPUT
           echo "frontdoor_endpoint_name=$(pulumi stack output frontdoor_endpoint_name)" >> $GITHUB_OUTPUT
 
-          # Manual Function App reference (not managed by Pulumi)
           # Function App name is environment-specific
           STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
           FUNC_APP_NAME="multicloud-auto-deploy-${STACK_NAME}-func"
@@ -225,17 +224,67 @@ jobs:
           echo "frontend_storage_name=$(pulumi stack output frontend_storage_name)" >> $GITHUB_OUTPUT
           echo "functions_storage_name=$(pulumi stack output functions_storage_name)" >> $GITHUB_OUTPUT
 
-          # Get Function App URL
-          FUNC_HOSTNAME=$(az functionapp config hostname list \
-            --webapp-name ${FUNC_APP_NAME} \
-            --resource-group $RG_NAME \
-            --query '[0].name' -o tsv)
-          API_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
-          echo "api_url=${API_URL}" >> $GITHUB_OUTPUT
-
-          echo "📍 Configured API URL: ${API_URL}"
+          echo "📍 Function App name: ${FUNC_APP_NAME}"
           echo "🔐 Azure AD Client ID: $(pulumi stack output azure_ad_client_id)"
           echo "🗄️  Cosmos DB Account: $(pulumi stack output cosmos_account_name)"
+
+      - name: Ensure Function App Exists (IaC-friendly)
+        id: ensure_function_app
+        run: |
+          set -euo pipefail
+
+          FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
+          FUNCTIONS_STORAGE_NAME="${{ steps.pulumi_outputs.outputs.functions_storage_name }}"
+
+          echo "🔎 Checking Function App: ${FUNCTION_APP}"
+          if az functionapp show --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
+            echo "✅ Function App already exists"
+          else
+            echo "🛠️  Function App not found. Creating with Flex Consumption..."
+            az functionapp create \
+              --name "$FUNCTION_APP" \
+              --resource-group "$RESOURCE_GROUP" \
+              --storage-account "$FUNCTIONS_STORAGE_NAME" \
+              --flexconsumption-location "${{ env.AZURE_REGION }}" \
+              --runtime python \
+              --runtime-version "${{ env.PYTHON_VERSION }}" \
+              --functions-version 4 \
+              --instance-memory 2048 \
+              --https-only true
+            echo "✅ Function App created"
+          fi
+
+      - name: Resolve Function API URL
+        id: function_api
+        run: |
+          set -euo pipefail
+
+          FUNCTION_APP="${{ steps.pulumi_outputs.outputs.function_app_name }}"
+          RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
+
+          FUNC_HOSTNAME=""
+          for i in {1..20}; do
+            FUNC_HOSTNAME=$(az functionapp config hostname list \
+              --webapp-name "$FUNCTION_APP" \
+              --resource-group "$RESOURCE_GROUP" \
+              --query '[0].name' -o tsv 2>/dev/null || true)
+            if [ -n "$FUNC_HOSTNAME" ] && [ "$FUNC_HOSTNAME" != "None" ]; then
+              break
+            fi
+            echo "⏳ Waiting for hostname... ($i/20)"
+            sleep 10
+          done
+
+          if [ -z "$FUNC_HOSTNAME" ] || [ "$FUNC_HOSTNAME" = "None" ]; then
+            echo "❌ Failed to resolve Function App hostname"
+            exit 1
+          fi
+
+          API_URL="https://${FUNC_HOSTNAME}/api/HttpTrigger"
+          echo "function_hostname=${FUNC_HOSTNAME}" >> "$GITHUB_OUTPUT"
+          echo "api_url=${API_URL}" >> "$GITHUB_OUTPUT"
+          echo "📍 Configured API URL: ${API_URL}"
 
       - name: Link Custom Domain to Front Door Route
         # Pulumi's Route resource does not include custom_domains, so we must link the manually-managed
@@ -398,7 +447,7 @@ jobs:
 
           # Check for ongoing deployments and wait if necessary
           echo "🔍 Checking for ongoing deployments..."
-          MAX_WAIT=300  # 5 minutes max wait
+          MAX_WAIT=180  # 3 minutes max wait
           WAIT_COUNT=0
           while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
             # Get deployment status from Kudu API
@@ -408,9 +457,9 @@ jobs:
               --query "status" -o tsv 2>/dev/null || echo "Unknown")
 
             if [ "$DEPLOY_STATUS" = "Running" ] || [ "$DEPLOY_STATUS" = "Building" ]; then
-              echo "⏳ Deployment in progress (status: $DEPLOY_STATUS), waiting 30s..."
-              sleep 30
-              WAIT_COUNT=$((WAIT_COUNT+30))
+              echo "⏳ Deployment in progress (status: $DEPLOY_STATUS), waiting 15s..."
+              sleep 15
+              WAIT_COUNT=$((WAIT_COUNT+15))
             else
               echo "✅ No ongoing deployment detected"
               break
@@ -420,8 +469,6 @@ jobs:
           if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
             echo "⚠️  Timeout waiting for previous deployment, proceeding anyway..."
           fi
-
-          sleep 10  # Additional safety buffer
 
           # Get Cosmos DB endpoint and keys directly from Pulumi outputs
           echo "🔑 Getting Cosmos DB credentials from Pulumi outputs..."
@@ -629,7 +676,7 @@ jobs:
             --resource-group $RESOURCE_GROUP \
             --setting-names WEBSITE_RUN_FROM_PACKAGE \
             --output none 2>/dev/null && echo "ℹ️  WEBSITE_RUN_FROM_PACKAGE cleared" || echo "ℹ️  WEBSITE_RUN_FROM_PACKAGE not set (OK)"
-          sleep 5
+          sleep 2
 
           # Fix FC1 Flex Consumption deployment storage.
           # Strategy: read the ACTUAL deployment storage account from the function app's
@@ -724,7 +771,7 @@ jobs:
               && echo "✅ FC1 deployment storage updated via ARM PATCH" \
               || echo "⚠️  ARM PATCH also failed"
           fi
-          sleep 15
+              sleep 5
 
           echo "📦 Deploying function app package (with retry logic)..."
 
@@ -778,8 +825,28 @@ jobs:
             # 3. Flex Consumption async deployment: zip uploaded, Kudu processing in background
             # "Deployment is still on-going" = deployment was accepted and is executing asynchronously
             elif grep -q "on-going\|still running\|still in progress" deploy_log.txt; then
-              echo "⏳ Deployment accepted (async). Waiting 120s for Kudu to complete..."
-              sleep 120
+              echo "⏳ Deployment accepted (async). Polling deployment status for up to 120s..."
+              ASYNC_WAIT_MAX=120
+              ASYNC_WAIT=0
+              while [ $ASYNC_WAIT -lt $ASYNC_WAIT_MAX ]; do
+                ASYNC_STATUS=$(az rest --method get \
+                  --url "https://${FUNCTION_APP}.scm.azurewebsites.net/api/deployments/latest" \
+                  --resource "https://management.azure.com/" \
+                  --query "status" -o tsv 2>/dev/null || echo "Unknown")
+
+                if [ "$ASYNC_STATUS" = "Running" ] || [ "$ASYNC_STATUS" = "Building" ] || [ "$ASYNC_STATUS" = "Unknown" ]; then
+                  echo "⏳ Async deploy status: $ASYNC_STATUS (waited ${ASYNC_WAIT}s/${ASYNC_WAIT_MAX}s)"
+                  sleep 15
+                  ASYNC_WAIT=$((ASYNC_WAIT+15))
+                else
+                  echo "✅ Async deploy reached terminal status: $ASYNC_STATUS"
+                  break
+                fi
+              done
+
+              if [ $ASYNC_WAIT -ge $ASYNC_WAIT_MAX ]; then
+                echo "⚠️  Async deploy polling timed out after ${ASYNC_WAIT_MAX}s; continuing"
+              fi
               DEPLOY_SUCCESS=true
               break
             # 4. Critical error (but not "partially successful" or "in progress")
@@ -949,7 +1016,7 @@ jobs:
           STORAGE_ACCOUNT="${{ steps.pulumi_outputs.outputs.frontend_storage_name }}"
           RESOURCE_GROUP="${{ steps.pulumi_outputs.outputs.resource_group_name }}"
           FRONTDOOR_HOSTNAME="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
-          API_URL="${{ steps.pulumi_outputs.outputs.api_url }}"
+          API_URL="${{ steps.function_api.outputs.api_url }}"
           # Config file is authoritative for stable AD values — no Pulumi runtime dependency
           STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
           AZURE_CLIENT_ID="${{ steps.cloud_config.outputs.azure_client_id }}"
