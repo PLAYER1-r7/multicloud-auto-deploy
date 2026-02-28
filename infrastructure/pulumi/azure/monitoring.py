@@ -333,7 +333,7 @@ def setup_monitoring(
     location: str,
     function_app_id: pulumi.Output[str],
     cosmos_account_id: Optional[pulumi.Output[str]],
-    frontdoor_profile_id: pulumi.Output[str],
+    frontdoor_profile_id: Optional[pulumi.Output[str]],
     alarm_email: Optional[str] = None,
     function_memory_mb: int = 2048,
 ) -> dict:
@@ -383,14 +383,16 @@ def setup_monitoring(
             action_group.id,
         )
 
-    # Create Front Door alerts
-    frontdoor_alerts = create_frontdoor_alerts(
-        project_name,
-        stack,
-        resource_group_name,
-        frontdoor_profile_id,
-        action_group.id,
-    )
+    # Create Front Door alerts (if Front Door is enabled)
+    frontdoor_alerts = {}
+    if frontdoor_profile_id:
+        frontdoor_alerts = create_frontdoor_alerts(
+            project_name,
+            stack,
+            resource_group_name,
+            frontdoor_profile_id,
+            action_group.id,
+        )
 
     return {
         "action_group": action_group,
