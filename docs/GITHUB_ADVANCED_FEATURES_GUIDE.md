@@ -12,17 +12,20 @@
 **目的**: 本番・ステージング・開発環境ごとに承認ルールと環境変数を管理
 
 **実装状況**:
-- ✅ Production 環境設定ガイド完成
-- ✅ Staging 環境設定ガイド完成
-- ✅ Development 環境設定ガイド完成
-- ✅ デプロイワークフロー統合例完成
+
+- ✅ Production 環境作成完了（@PLAYER1-r7 承認必須、main ブランチのみ）
+- ✅ Staging 環境作成完了（承認不要、develop ブランチのみ）
+- ✅ Development 環境作成完了（承認不要、全ブランチ対応）
+- ✅ 環境変数設定完了（各環境で 7-10 個の変数）
 
 **セットアップ**: [docs/GITHUB_ENVIRONMENTS_GUIDE.md](./GITHUB_ENVIRONMENTS_GUIDE.md)
 
 **具体的な効果**:
+
 ```
 develop → staging （承認なし・即座にデプロイ）
 main → production （@PLAYER1-r7 の承認必須）
+全ブランチ → development （即座に開発環境へデプロイ）
 ```
 
 ---
@@ -32,16 +35,19 @@ main → production （@PLAYER1-r7 の承認必須）
 **目的**: Python・JavaScript コードのセキュリティ脆弱性を自動検出
 
 **実装状況**:
+
 - ✅ CodeQL ワークフロー（`.github/workflows/codeql.yml`）既に実装済み
 - ✅ Push・PR・スケジュール実行対応
 - ✅ セキュリティアラート通知機能実装
 
 **実行タイミング**:
+
 - 📍 `services/` または `infrastructure/` に変更がある push
 - 📍 `main`・`develop` への pull request
 - 📍 毎週日曜 00:00 UTC に自動実行
 
 **検出される脆弱性の例**:
+
 ```
 ❌ SQL Injection
 ❌ Cross-Site Scripting (XSS)
@@ -51,6 +57,7 @@ main → production （@PLAYER1-r7 の承認必須）
 ```
 
 **確認方法**:
+
 ```
 Settings → Security → Code scanning → View all
 ```
@@ -70,6 +77,7 @@ Settings → Security → Code scanning → View all
    - New Project → "Table" または "Board" テンプレート
 
 2. **ステータスフィールドを設定**
+
    ```
    - 📋 Todo
    - 🔄 In Progress
@@ -78,6 +86,7 @@ Settings → Security → Code scanning → View all
    ```
 
 3. **自動ルール（Automation）を有効化**
+
    ```
    - New Issue → Todo に自動追加
    - PR Open → In Progress に自動移動
@@ -93,6 +102,7 @@ Settings → Security → Code scanning → View all
    ```
 
 **効果**:
+
 - チーム全体が「誰が何をしているか」をリアルタイム把握
 - Issue → PR → マージの自動化パイプライン
 - ボトルネック（長時間 In Review 状態）を可視化
@@ -106,16 +116,19 @@ Settings → Security → Code scanning → View all
 **セットアップ方法**:
 
 1. **GitHub Slack App をインストール**
+
    ```
    Slack Marketplace → GitHub → Install
    ```
 
 2. **Slack で subscribe コマンドを実行**
+
    ```
    /github subscribe PLAYER1-r7/multicloud-auto-deploy
    ```
 
 3. **通知フィルタを設定** (Slack コマンド)
+
    ```bash
    # Issues と Deployments のみ通知
    /github subscribe PLAYER1-r7/multicloud-auto-deploy \
@@ -125,6 +138,7 @@ Settings → Security → Code scanning → View all
    ```
 
 **Slack メッセージ例**:
+
 ```
 🚀 [multicloud-auto-deploy] Deployment created
    main → production
@@ -139,6 +153,7 @@ Settings → Security → Code scanning → View all
 ```
 
 **効果**:
+
 - 本番環境デプロイ失敗を即座に Slack で通知
 - Critical Issue 追加時にチーム全体に 🔴 アラート
 - PR マージ待ちの情報を Reviewer に自動催促
@@ -152,6 +167,7 @@ Settings → Security → Code scanning → View all
 **セットアップ方法**（Web UI）:
 
 1. **Settings → Pull Requests**
+
    ```
    ✅ Allow auto-merge
    ✅ Auto-merge method: Squash (推奨)
@@ -179,11 +195,13 @@ PR closed + ブランチ削除
 ```
 
 **効果**:
+
 - セキュリティアップデート（npm・pip）の高速マージ
 - 手動マージ作業の削減
 - 依存関係が常に最新状態に保たれる
 
 **⚠️ 注意**:
+
 - Auto-merge は **Dependabot PR のみ** が推奨（他の PR は手動マージ）
 - `main` ブランチへの auto-merge は避ける（staging の検証後に本番マージ）
 
@@ -211,20 +229,20 @@ PR closed + ブランチ削除
 
 ## 📚 完全リファレンス
 
-| # | 機能 | ステータス | ドキュメント |
-|---|------|----------|---------------------------|
-| 1 | GitHub Issues | ✅ 完了 | GITHUB_FEATURES_GUIDE.md |
-| 2 | GitHub Milestones | ✅ 完了 | GITHUB_FEATURES_GUIDE.md |
-| 3 | GitHub Releases | ✅ 完了 | GITHUB_FEATURES_GUIDE.md |
-| 4 | Branch Protection | ✅ 完了 | BRANCH_PROTECTION_SETUP.md |
-| 5 | Dependabot | ✅ 完了 | GITHUB_FEATURES_GUIDE.md |
-| 6 | GitHub Discussions | ✅ 完了 | github-discussions-setup.md |
-| 7 | GitHub Pages | ✅ 完了 | mkdocs.yml + index.md |
-| 8 | **Environments** | ✅ **完了** | **GITHUB_ENVIRONMENTS_GUIDE.md** |
-| 9 | **Code Scanning** | ✅ **実装済み** | .github/workflows/codeql.yml |
-| 10 | Project Board v2 | 📋 ガイド完成 | **この file** |
-| 11 | Slack Integration | 📋 ガイド完成 | **この file** |
-| 12 | Auto-Merge | 📋 ガイド完成 | **この file** |
+| #   | 機能               | ステータス      | ドキュメント                     |
+| --- | ------------------ | --------------- | -------------------------------- |
+| 1   | GitHub Issues      | ✅ 完了         | GITHUB_FEATURES_GUIDE.md         |
+| 2   | GitHub Milestones  | ✅ 完了         | GITHUB_FEATURES_GUIDE.md         |
+| 3   | GitHub Releases    | ✅ 完了         | GITHUB_FEATURES_GUIDE.md         |
+| 4   | Branch Protection  | ✅ 完了         | BRANCH_PROTECTION_SETUP.md       |
+| 5   | Dependabot         | ✅ 完了         | GITHUB_FEATURES_GUIDE.md         |
+| 6   | GitHub Discussions | ✅ 完了         | github-discussions-setup.md      |
+| 7   | GitHub Pages       | ✅ 完了         | mkdocs.yml + index.md            |
+| 8   | **Environments**   | ✅ **完了**     | **GITHUB_ENVIRONMENTS_GUIDE.md** |
+| 9   | **Code Scanning**  | ✅ **実装済み** | .github/workflows/codeql.yml     |
+| 10  | Project Board v2   | 📋 ガイド完成   | **この file**                    |
+| 11  | Slack Integration  | 📋 ガイド完成   | **この file**                    |
+| 12  | Auto-Merge         | 📋 ガイド完成   | **この file**                    |
 
 ---
 
@@ -267,4 +285,3 @@ graph LR
 6. 📋 **Auto-Merge** - ガイド完成（Settings で有効化可能）
 
 **合計：12 関数の GitHub Features が活用可能に！** 🎉
-
