@@ -252,7 +252,7 @@ document_intelligence = azure.cognitiveservices.Account(
     location=location,
     kind="FormRecognizer",
     sku=azure.cognitiveservices.SkuArgs(
-        name="S0",  # Standard tier: pay-per-page OCR
+        name="F0",  # Free tier: 500 pages/month (月額¥0 when usage < 500)
     ),
     properties=azure.cognitiveservices.AccountPropertiesArgs(
         public_network_access="Enabled",
@@ -313,7 +313,7 @@ azure_openai_deployment = azure.cognitiveservices.Deployment(
     ),
     sku=azure.cognitiveservices.SkuArgs(
         name="GlobalStandard",
-        capacity=10,  # 10K tokens per minute
+        capacity=1,  # 1K tokens per minute (cost-optimized from 10K)
     ),
     opts=pulumi.ResourceOptions(depends_on=[azure_openai_account]),
 )
@@ -481,6 +481,48 @@ frontdoor_origin = azure.cdn.AFDOrigin(
     enabled_state="Enabled",
 )
 
+# Front Door Origin Group for Function App (API backend)
+frontdoor_api_origin_group = azure.cdn.AFDOriginGroup(
+    "frontdoor-api-origin-group",
+    origin_group_name=f"{project_name}-{stack}-api-origin-group",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    load_balancing_settings=azure.cdn.LoadBalancingSettingsParametersArgs(
+        sample_size=1,
+        successful_samples_required=1,
+        additional_latency_in_milliseconds=0,
+    ),
+    health_probe_settings=azure.cdn.HealthProbeParametersArgs(
+        probe_path="/api/HttpTrigger",
+        probe_request_type="GET",
+        probe_protocol="Https",
+        probe_interval_in_seconds=100,
+    ),
+)
+
+# Front Door Origin (Function App for API)
+# Use dynamic hostname from workflow output (resolved at deployment time)
+frontdoor_api_origin = azure.cdn.AFDOrigin(
+    "frontdoor-api-origin",
+    origin_name=f"{project_name}-{stack}-api-origin",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    origin_group_name=frontdoor_api_origin_group.name,
+    host_name=pulumi.Output.concat(
+        f"{project_name}-{stack}-func",
+        "-d45ihd.japaneast-01.azurewebsites.net",
+    ),
+    origin_host_header=pulumi.Output.concat(
+        f"{project_name}-{stack}-func",
+        "-d45ihd.japaneast-01.azurewebsites.net",
+    ),
+    http_port=80,
+    https_port=443,
+    priority=1,
+    weight=1000,
+    enabled_state="Enabled",
+)
+
 # ========================================
 # Front Door: Rule Set for React SPA URL rewriting
 # /sns/<deep-link> → /sns/index.html (SPA client-side routing)
@@ -617,6 +659,31 @@ security_rule_set = azure.cdn.RuleSet(
     resource_group_name=resource_group.name,
 )
 
+# Front Door Route for API (/api/* → Function App)
+# IMPORTANT: This route must be defined BEFORE the /* route to ensure API requests
+# are routed to the Function App backend, not the Storage Account.
+frontdoor_api_route = azure.cdn.Route(
+    "frontdoor-api-route",
+    route_name=f"{project_name}-{stack}-api-route",
+    profile_name=frontdoor_profile.name,
+    resource_group_name=resource_group.name,
+    endpoint_name=frontdoor_endpoint.name,
+    origin_group=azure.cdn.ResourceReferenceArgs(
+        id=frontdoor_api_origin_group.id,
+    ),
+    supported_protocols=["Http", "Https"],
+    patterns_to_match=["/api/*"],
+    forwarding_protocol="HttpsOnly",
+    link_to_default_domain="Enabled",
+    https_redirect="Enabled",
+    opts=pulumi.ResourceOptions(
+        depends_on=[
+            frontdoor_api_origin,
+            security_rule_set,
+        ]
+    ),
+)
+
 # Update Front Door Route to include both SPA and Security rule sets
 frontdoor_route = azure.cdn.Route(
     "frontdoor-route",
@@ -639,6 +706,7 @@ frontdoor_route = azure.cdn.Route(
     opts=pulumi.ResourceOptions(
         depends_on=[
             frontdoor_origin,
+            frontdoor_api_route,
             exam_shortcut_rule,
             spa_rewrite_rule,
             security_rule_set,
