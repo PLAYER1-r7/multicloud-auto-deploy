@@ -29,7 +29,7 @@ function ParametricCurve({ curve, index }: { curve: PlotCurve; index: number }) 
 
   return (
     <Plot.Parametric
-      xy={(t) => [xFn(t), yFn(t)]}
+      xy={(t: number) => [xFn(t), yFn(t)]}
       t={[tMin, tMax]}
       color={color}
       weight={2.5}

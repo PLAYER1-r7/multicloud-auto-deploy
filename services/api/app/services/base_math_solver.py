@@ -1772,9 +1772,7 @@ class BaseMathSolver:
             normalized["diagramGuide"] = nested.get(
                 "diagramGuide", normalized["diagramGuide"]
             )
-            normalized["plotData"] = nested.get(
-                "plotData", normalized["plotData"]
-            )
+            normalized["plotData"] = nested.get("plotData", normalized["plotData"])
             normalized["confidence"] = nested.get(
                 "confidence", normalized["confidence"]
             )
@@ -2230,7 +2228,7 @@ class BaseMathSolver:
             f"追加規則(数式再解釈): {reinterpret_rule}\n"
             "追加規則(diagramGuide): vector_geometryの場合は図示手順を文章で必ず記述し、その他はnull可。\n"
             "追加規則(plotData): 図示が必要な問題（媒介変数曲線・領域・座標幾何など）では必ず plotData を生成。"
-            "curves.x/y には mathjs 互換の式（例: t^2*(3-2*t))を使用。式の中にスペースは入れないこと。不要な場合は{\"needPlot\":false}。\n"
+            'curves.x/y には mathjs 互換の式（例: t^2*(3-2*t))を使用。式の中にスペースは入れないこと。不要な場合は{"needPlot":false}。\n'
             f"サンプル参照: {sample_hint or '利用可能な年度サンプルなし。'}\n"
             f"{structured_section}\n"
             "問題文:\n"

@@ -45,7 +45,12 @@ export default function SolverPage() {
       const res = await solveMath({
         input: { source: "url", imageUrl: PROBLEM_IMAGE_URL },
         exam: DEMO_EXAM,
-        options: { mode: "accurate", needSteps: true, needLatex: true, maxTokens: 8192 },
+        options: {
+          mode: "accurate",
+          needSteps: true,
+          needLatex: true,
+          maxTokens: 8192,
+        },
       });
       setResult(res);
     } catch (e: unknown) {
@@ -54,7 +59,10 @@ export default function SolverPage() {
       const raw = (e as AxiosLike).response?.data?.detail;
       const detail = Array.isArray(raw)
         ? (raw as ApiDetail[])
-            .map((d) => `${d.loc ? d.loc.join(".") + ": " : ""}${d.msg ?? JSON.stringify(d)}`)
+            .map(
+              (d) =>
+                `${d.loc ? d.loc.join(".") + ": " : ""}${d.msg ?? JSON.stringify(d)}`,
+            )
             .join("\n")
         : typeof raw === "string"
           ? raw
@@ -227,7 +235,9 @@ export default function SolverPage() {
                 {result.answer.diagramGuide && (
                   <div className="answer-diagram-guide">
                     <h5 className="steps-title">図示ガイド</h5>
-                    <p className="diagram-guide-text">{result.answer.diagramGuide}</p>
+                    <p className="diagram-guide-text">
+                      {result.answer.diagramGuide}
+                    </p>
                   </div>
                 )}
 
