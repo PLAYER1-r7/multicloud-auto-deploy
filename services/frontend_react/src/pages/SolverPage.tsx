@@ -2,6 +2,7 @@ import { useState } from "react";
 import { solveMath } from "../api/solve";
 import type { SolveResponse } from "../types/solve";
 import MathText from "../components/MathText";
+import MathGraph from "../components/MathGraph";
 
 // ═══════════════════════════════════════════
 // 東大 2025 数学 第1問 固定デモ
@@ -213,6 +214,30 @@ export default function SolverPage() {
                 <div className="answer-final">
                   <MathText text={result.answer.final} />
                 </div>
+
+                {/* LaTeX 最終答案ブロック */}
+                {result.answer.latex && (
+                  <div className="answer-latex-block">
+                    <span className="answer-latex-label">LaTeX</span>
+                    <MathText text={`$$${result.answer.latex}$$`} />
+                  </div>
+                )}
+
+                {/* 図示ガイド */}
+                {result.answer.diagramGuide && (
+                  <div className="answer-diagram-guide">
+                    <h5 className="steps-title">図示ガイド</h5>
+                    <p className="diagram-guide-text">{result.answer.diagramGuide}</p>
+                  </div>
+                )}
+
+                {/* インタラクティブグラフ */}
+                {result.answer.plotData?.needPlot && (
+                  <div className="answer-graph">
+                    <h5 className="steps-title">グラフ</h5>
+                    <MathGraph data={result.answer.plotData} />
+                  </div>
+                )}
 
                 {result.answer.steps.length > 0 && (
                   <div className="answer-steps">

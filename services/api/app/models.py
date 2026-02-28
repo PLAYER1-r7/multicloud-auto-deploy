@@ -192,6 +192,61 @@ class SolveRequest(BaseModel):
     options: SolveOptions = Field(default_factory=SolveOptions)
 
 
+class PlotCurve(BaseModel):
+    """図示用パラメトリック曲線または関数"""
+
+    type: str = "parametric"  # "parametric" | "function"
+    x: str | None = None  # mathjs 式 (t の関数)
+    y: str | None = None  # mathjs 式 (t の関数)
+    fn: str | None = None  # mathjs 式 (x の関数)
+    t_min: float | None = Field(None, alias="tMin")
+    t_max: float | None = Field(None, alias="tMax")
+    label: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class PlotPoint(BaseModel):
+    """図示用点"""
+
+    x: float
+    y: float
+    label: str | None = None
+
+
+class PlotSegment(BaseModel):
+    """図示用線分"""
+
+    from_point: list[float] = Field(alias="from")
+    to: list[float]
+    label: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class PlotViewBox(BaseModel):
+    """図示用ビューボックス"""
+
+    x_min: float = Field(alias="xMin")
+    x_max: float = Field(alias="xMax")
+    y_min: float = Field(alias="yMin")
+    y_max: float = Field(alias="yMax")
+
+    model_config = {"populate_by_name": True}
+
+
+class PlotData(BaseModel):
+    """AI が生成する図示データ"""
+
+    need_plot: bool = Field(True, alias="needPlot")
+    curves: list[PlotCurve] = Field(default_factory=list)
+    segments: list[PlotSegment] = Field(default_factory=list)
+    points: list[PlotPoint] = Field(default_factory=list)
+    view_box: PlotViewBox | None = Field(None, alias="viewBox")
+
+    model_config = {"populate_by_name": True}
+
+
 class SolveAnswer(BaseModel):
     """AI解答"""
 
@@ -199,6 +254,7 @@ class SolveAnswer(BaseModel):
     latex: str | None = None
     steps: list[str] = Field(default_factory=list)
     diagram_guide: str | None = Field(None, alias="diagramGuide")
+    plot_data: PlotData | None = Field(None, alias="plotData")
     confidence: float = Field(ge=0.0, le=1.0)
 
     model_config = {"populate_by_name": True}

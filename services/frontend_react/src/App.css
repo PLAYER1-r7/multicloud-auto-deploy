@@ -1140,6 +1140,77 @@ code {
   white-space: pre-wrap;
 }
 
+/* LaTeX 最終答案ブロック */
+.answer-latex-block {
+  margin-top: 0.9rem;
+  padding: 0.65rem 0.9rem;
+  background: rgba(37, 99, 235, 0.06);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.answer-latex-label {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2563eb;
+  margin-bottom: 0.3rem;
+}
+
+/* 図示ガイド */
+.answer-diagram-guide {
+  margin-top: 1rem;
+}
+
+.diagram-guide-text {
+  font-size: 0.86rem;
+  line-height: 1.7;
+  color: var(--text-primary);
+  background: var(--code-bg);
+  border-left: 3px solid var(--accent);
+  padding: 0.55rem 0.8rem;
+  border-radius: 0 6px 6px 0;
+  margin: 0;
+}
+
+/* グラフセクション */
+.answer-graph {
+  margin-top: 1rem;
+}
+
+.math-graph-wrapper {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.math-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  background: var(--code-bg);
+  border-top: 1px solid var(--border);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 /* メタ情報 */
 .result-meta {
   display: flex;

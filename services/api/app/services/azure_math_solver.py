@@ -101,7 +101,9 @@ class AzureMathSolver(BaseMathSolver):
             ocr.text
         )
         structured_problem = self._build_structured_problem(ocr.text, request)
-        answer_payload = self._generate_with_openai(ocr.text, request, structured_problem)
+        answer_payload = self._generate_with_openai(
+            ocr.text, request, structured_problem
+        )
         answer_payload["diagramGuide"] = self._resolve_diagram_guide(
             answer_payload, structured_problem
         )
@@ -137,6 +139,7 @@ class AzureMathSolver(BaseMathSolver):
             latex=answer_payload.get("latex"),
             steps=answer_payload.get("steps", []),
             diagramGuide=answer_payload.get("diagramGuide"),
+            plotData=answer_payload.get("plotData"),
             confidence=float(answer_payload.get("confidence", 0.5)),
         )
 
@@ -152,7 +155,9 @@ class AzureMathSolver(BaseMathSolver):
                 ocrCandidates=ocr.candidate_count,
                 ocrTopCandidates=ocr.top_candidates,
                 ocrDebugTexts=ocr.debug_texts if request.options.debug_ocr else None,
-                structuredProblem=structured_problem if request.options.debug_ocr else None,
+                structuredProblem=structured_problem
+                if request.options.debug_ocr
+                else None,
                 ocrReplacementRatio=ocr_replacement_ratio,
                 ocrNonAsciiRatio=ocr_non_ascii_ratio,
                 ocrNeedsReview=ocr_needs_review,
@@ -310,7 +315,9 @@ class AzureMathSolver(BaseMathSolver):
                 pass
 
             blob.append_block((line + "\n").encode("utf-8"))
-            print(f"[OCR] Blob write OK: {self._OCR_BLOB_CONTAINER}/{self._OCR_BLOB_NAME}")
+            print(
+                f"[OCR] Blob write OK: {self._OCR_BLOB_CONTAINER}/{self._OCR_BLOB_NAME}"
+            )
         except Exception as exc:
             print(f"[OCR] WARN: Blob write failed: {exc}")
 
@@ -366,9 +373,7 @@ class AzureMathSolver(BaseMathSolver):
         elif read_text and latex_strings:
             # Fallback when polygon data is unavailable: append at bottom
             combined = (
-                read_text
-                + "\n\n[検出された数式 (LaTeX)]\n"
-                + "\n".join(latex_strings)
+                read_text + "\n\n[検出された数式 (LaTeX)]\n" + "\n".join(latex_strings)
             )
             results.append((combined, "azure_di_read+formulas"))
 
@@ -389,12 +394,14 @@ class AzureMathSolver(BaseMathSolver):
                 RequestModel(bytes_source=image_bytes),
             ).result()
             rich_lines: list[dict] = []
-            for page in (result.pages or []):
-                for line in (page.lines or []):
+            for page in result.pages or []:
+                for line in page.lines or []:
                     raw_poly = getattr(line, "polygon", None)
                     # Normalize polygon: may be bytes, Point-list, float-list, or None
                     polygon: list | None = None
-                    if raw_poly is not None and not isinstance(raw_poly, (bytes, bytearray)):
+                    if raw_poly is not None and not isinstance(
+                        raw_poly, (bytes, bytearray)
+                    ):
                         polygon = raw_poly
                     content = line.content
                     if isinstance(content, (bytes, bytearray)):
@@ -436,7 +443,7 @@ class AzureMathSolver(BaseMathSolver):
 
             rich_formulas: list[dict] = []
             latex_strings: list[str] = []
-            for page in (result.pages or []):
+            for page in result.pages or []:
                 for f in getattr(page, "formulas", None) or []:
                     val = getattr(f, "value", None)
                     if isinstance(val, (bytes, bytearray)):
@@ -452,9 +459,13 @@ class AzureMathSolver(BaseMathSolver):
                     brs = getattr(f, "bounding_regions", None)
                     if brs:
                         raw_poly = getattr(brs[0], "polygon", None)
-                        if raw_poly is not None and not isinstance(raw_poly, (bytes, bytearray)):
+                        if raw_poly is not None and not isinstance(
+                            raw_poly, (bytes, bytearray)
+                        ):
                             polygon = raw_poly
-                    rich_formulas.append({"value": val, "kind": kind, "polygon": polygon})
+                    rich_formulas.append(
+                        {"value": val, "kind": kind, "polygon": polygon}
+                    )
                     tag = "display" if kind == "display" else "inline"
                     latex_strings.append(f"[{tag}] {val}")
 
@@ -462,7 +473,11 @@ class AzureMathSolver(BaseMathSolver):
                 parts.append("\n[検出された数式 (LaTeX)]\n" + "\n".join(latex_strings))
 
             markdown_text = "\n".join(parts).strip()
-            return rich_formulas, latex_strings, (markdown_text if len(markdown_text) > 20 else "")
+            return (
+                rich_formulas,
+                latex_strings,
+                (markdown_text if len(markdown_text) > 20 else ""),
+            )
         except Exception:
             return [], [], ""
 
@@ -501,11 +516,17 @@ class AzureMathSolver(BaseMathSolver):
         # accurate モード: 推論モデル（o3-mini 等）に切り替え
         is_accurate = request.options.mode == "accurate"
         accurate_deployment = settings.azure_openai_accurate_deployment
-        deployment = accurate_deployment if (is_accurate and bool(accurate_deployment)) else settings.azure_openai_deployment
+        deployment = (
+            accurate_deployment
+            if (is_accurate and bool(accurate_deployment))
+            else settings.azure_openai_deployment
+        )
 
         # o3-mini/o1 系は temperature・response_format 非対応
         _REASONING_PREFIXES = ("o1", "o3")
-        is_reasoning_model = any(deployment.lower().startswith(p) for p in _REASONING_PREFIXES)
+        is_reasoning_model = any(
+            deployment.lower().startswith(p) for p in _REASONING_PREFIXES
+        )
 
         # accurate + 非推論モデル: scratchpad 2段階呼び出し
         use_scratchpad = is_accurate and not is_reasoning_model
@@ -551,7 +572,9 @@ class AzureMathSolver(BaseMathSolver):
                     max(request.options.max_tokens, 512),
                     8192 if is_accurate else 2000,
                 )
-                _token_key = "max_completion_tokens" if is_reasoning_model else "max_tokens"
+                _token_key = (
+                    "max_completion_tokens" if is_reasoning_model else "max_tokens"
+                )
                 create_kwargs: dict = dict(
                     model=deployment,
                     messages=[

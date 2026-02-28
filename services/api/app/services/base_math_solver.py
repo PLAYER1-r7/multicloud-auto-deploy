@@ -1753,6 +1753,7 @@ class BaseMathSolver:
             "latex": payload.get("latex"),
             "steps": payload.get("steps", []),
             "diagramGuide": payload.get("diagramGuide"),
+            "plotData": payload.get("plotData"),
             "confidence": payload.get("confidence", 0.5),
         }
 
@@ -1770,6 +1771,9 @@ class BaseMathSolver:
             normalized["steps"] = nested.get("steps", normalized["steps"])
             normalized["diagramGuide"] = nested.get(
                 "diagramGuide", normalized["diagramGuide"]
+            )
+            normalized["plotData"] = nested.get(
+                "plotData", normalized["plotData"]
             )
             normalized["confidence"] = nested.get(
                 "confidence", normalized["confidence"]
@@ -2209,6 +2213,10 @@ class BaseMathSolver:
             "JSON形式:"
             '{"final":"最終答案","latex":"LaTeX文字列またはnull",'
             '"steps":["手順1","手順2"],"diagramGuide":"図示手順の文章またはnull",'
+            '"plotData":{"needPlot":true/false,"curves":[{"type":"parametric","x":"t式","y":"t式","tMin":0,"tMax":1,"label":"曲線名"}],'
+            '"segments":[{"from":[x1,y1],"to":[x2,y2],"label":"線分名"}],'
+            '"points":[{"x":数値,"y":数値,"label":"点名"}],'
+            '"viewBox":{"xMin":数値,"xMax":数値,"yMin":数値,"yMax":数値}}またはnull,'
             '"confidence":0.0から1.0}\n\n'
             f"大学: {request.exam.university}\n"
             f"年度: {request.exam.year}\n"
@@ -2221,6 +2229,8 @@ class BaseMathSolver:
             f"追加規則(final): {final_rule or '通常の最終答案を簡潔に記述。'}\n"
             f"追加規則(数式再解釈): {reinterpret_rule}\n"
             "追加規則(diagramGuide): vector_geometryの場合は図示手順を文章で必ず記述し、その他はnull可。\n"
+            "追加規則(plotData): 図示が必要な問題（媒介変数曲線・領域・座標幾何など）では必ず plotData を生成。"
+            "curves.x/y には mathjs 互換の式（例: t^2*(3-2*t))を使用。式の中にスペースは入れないこと。不要な場合は{\"needPlot\":false}。\n"
             f"サンプル参照: {sample_hint or '利用可能な年度サンプルなし。'}\n"
             f"{structured_section}\n"
             "問題文:\n"

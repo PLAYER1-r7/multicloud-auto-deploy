@@ -27,11 +27,53 @@ export interface SolveRequest {
   options?: SolveOptions;
 }
 
+// ── 図示データ ──────────────────────────────────────
+export interface PlotCurve {
+  type: "parametric" | "function";
+  /** mathjs 互換式 (t の関数) */
+  x?: string;
+  y?: string;
+  /** mathjs 互換式 (x の関数) */
+  fn?: string;
+  tMin?: number;
+  tMax?: number;
+  label?: string;
+}
+
+export interface PlotPoint {
+  x: number;
+  y: number;
+  label?: string;
+}
+
+export interface PlotSegment {
+  from: [number, number];
+  to: [number, number];
+  label?: string;
+}
+
+export interface PlotViewBox {
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
+}
+
+export interface PlotData {
+  needPlot: boolean;
+  curves: PlotCurve[];
+  segments?: PlotSegment[];
+  points?: PlotPoint[];
+  viewBox?: PlotViewBox;
+}
+
+// ── 解答・レスポンス ────────────────────────────────
 export interface SolveAnswer {
   final: string;
   latex?: string;
   steps: string[];
   diagramGuide?: string;
+  plotData?: PlotData;
   confidence: number;
 }
 
