@@ -1,7 +1,7 @@
 # GitHub 機能統合ガイド
 
 > **最終更新**: 2026-02-28
-> **ステータス**: ✅ 全7機能実装完了 (Issues, Milestones, Releases, Dependabot, Pages, Discussions)
+> **ステータス**: ✅ 全7機能実装完了 + 設定ガイド完成
 
 ---
 
@@ -188,29 +188,34 @@ Closes #25"
 
 ## 🔐 4️⃣ GitHub Branch Protection Rules
 
-**ステータス**: ⏳ **Web UI 設定が必要**
+**ステータス**: ✅ **CLI で自動実装完了** (2026-02-28)
 
-> Branch Protection Rules は GitHub Web UI から設定してください（コマンドライン設定に制限あり）
+> **実装方法**: GitHub REST API（`gh api`、`curl`）により CLI で自動設定済み
+>
+> **対象ブランチ**: `main`（厳格）、`develop`（バランス型）
 
-### 設定手順
+### 設定内容
 
-1. **[Settings] → [Branches]** を開く
-2. **Branch protection rules** → **Add rule** をクリック
-3. ブランチ名: `main` を入力
-4. 以下のオプションを有効化:
-   - ✅ Require a pull request before merging
-   - ✅ Require status checks to pass before merging
-   - ✅ Require branches to be up to date before merging
-   - ✅ Require code reviews before merging (1 approval minimum)
-   - ✅ Dismiss stale pull request approvals
-   - ✅ Include administrators in restrictions
+| ブランチ | PR 必須 | Approval | Code Owner | Admin 制限 | Force Push | 削除 |
+|----------|--------|----------|------------|----------|-----------|------|
+| **main** | ✅ | ✅ 1人 | ✅ | ✅ | ❌ | ❌ |
+| **develop** | ✅ | ✅ 不要 | ❌ | ❌ | ❌ | ❌ |
 
-### 利点
+### 設定確認方法
 
-- ✅ 本番ブランチへの直接 push を禁止
-- ✅ CI/CD テストの自動実行と確認
-- ✅ コードレビュー必須化
-- ✅ セキュリティベストプラクティス遵守
+```bash
+# MAIN ブランチ確認
+curl -s -H "Authorization: token $(gh auth token)" \
+  "https://api.github.com/repos/PLAYER1-r7/multicloud-auto-deploy/branches/main/protection" | jq .
+
+# DEVELOP ブランチ確認
+curl -s -H "Authorization: token $(gh auth token)" \
+  "https://api.github.com/repos/PLAYER1-r7/multicloud-auto-deploy/branches/develop/protection" | jq .
+```
+
+### 詳細ガイド
+
+詳しい設定について、および手動での Web UI 設定方法は [docs/BRANCH_PROTECTION_SETUP.md](./BRANCH_PROTECTION_SETUP.md) を参照してください。
 
 ---
 
@@ -259,21 +264,23 @@ gh api repos/PLAYER1-r7/multicloud-auto-deploy/dependabot/alerts
 
 ### カテゴリ
 
-| カテゴリ | 説明 | 推奨用途 |
-|---------|------|---------|
-| 📢 Announcements | 新規 Release、重要な更新 | 重大アップデート告知 |
-| 💡 Ideas & Feedback | 機能提案、改善案 | ロードマップ議論 |
-| 🤝 General Discussion | 一般的なトピック | Session Notes、知見共有 |
-| ❓ Q&A | 質問と回答 | 技術的なサポート |
-| 🔧 Technical Help | トラブルシューティング | デバッグ支援 |
+| カテゴリ              | 説明                     | 推奨用途                |
+| --------------------- | ------------------------ | ----------------------- |
+| 📢 Announcements      | 新規 Release、重要な更新 | 重大アップデート告知    |
+| 💡 Ideas & Feedback   | 機能提案、改善案         | ロードマップ議論        |
+| 🤝 General Discussion | 一般的なトピック         | Session Notes、知見共有 |
+| ❓ Q&A                | 質問と回答               | 技術的なサポート        |
+| 🔧 Technical Help     | トラブルシューティング   | デバッグ支援            |
 
 ### 使用方法
 
 **Announcements - 新規 Release**
+
 ```markdown
 # 🚀 Release v1.1.0 Published
 
 ✨ **New Features**:
+
 - GitHub Issues + Milestones integration
 - Automated Releases + Changelog
 - Dependabot security updates
@@ -282,15 +289,18 @@ gh api repos/PLAYER1-r7/multicloud-auto-deploy/dependabot/alerts
 ```
 
 **General Discussion - Session Notes**
+
 ```markdown
 # 📝 Session 5 Summary (2026-02-28)
 
 ✅ Completed Today:
+
 - GitHub Issues setup
 - Milestones configuration
 - Release automation
 
 ⏳ Next Session:
+
 - Branch Protection Rules
 - GitHub Pages setup
 ```
@@ -356,6 +366,7 @@ mkdocs.yml                           # Site config
 ### Material for MkDocs テーマ
 
 ✨ 搭載機能:
+
 - 📱 レスポンシブデザイン
 - 🔍 全文検索
 - 📚 ナビゲーションタブ
@@ -365,6 +376,7 @@ mkdocs.yml                           # Site config
 ### ビルド済みサイト確認
 
 PR コメントで自動通知:
+
 ```
 ✅ Documentation built successfully!
 📖 Preview will be published to GitHub Pages when merged to main.
@@ -411,38 +423,42 @@ Total Issues: 13
 
 ### GitHub Features Status
 
-| 機能 | 実装状況 | リンク |
-|-----|---------|--------|
-| Issues | ✅ 完了 | [Issues](https://github.com/PLAYER1-r7/multicloud-auto-deploy/issues) |
-| Milestones | ✅ 完了 | [Milestones](https://github.com/PLAYER1-r7/multicloud-auto-deploy/milestones) |
-| Project Board | ⏳ Web UI で設定可能 | [Projects](https://github.com/PLAYER1-r7/multicloud-auto-deploy/projects) |
-| Releases | ✅ 完了 | [Releases](https://github.com/PLAYER1-r7/multicloud-auto-deploy/releases) |
-| Dependabot | ✅ 完了 | [Security](https://github.com/PLAYER1-r7/multicloud-auto-deploy/security/dependabot) |
-| Discussions | ✅ 設定ガイド完成 | [Discussions](https://github.com/PLAYER1-r7/multicloud-auto-deploy/discussions) |
-| GitHub Pages | ✅ 完了 | [Pages](https://PLAYER1-r7.github.io/multicloud-auto-deploy/) |
-| Branch Protection | ⏳ Web UI で設定必要 | Settings → Branches |
+| 機能              | 実装状況             | リンク                                                                               |
+| ----------------- | -------------------- | ------------------------------------------------------------------------------------ |
+| Issues            | ✅ 完了              | [Issues](https://github.com/PLAYER1-r7/multicloud-auto-deploy/issues)                |
+| Milestones        | ✅ 完了              | [Milestones](https://github.com/PLAYER1-r7/multicloud-auto-deploy/milestones)        |
+| Project Board     | ⏳ Web UI で設定可能 | [Projects](https://github.com/PLAYER1-r7/multicloud-auto-deploy/projects)            |
+| Releases          | ✅ 完了              | [Releases](https://github.com/PLAYER1-r7/multicloud-auto-deploy/releases)            |
+| Dependabot        | ✅ 完了              | [Security](https://github.com/PLAYER1-r7/multicloud-auto-deploy/security/dependabot) |
+| Discussions       | ✅ 設定ガイド完成    | [Discussions](https://github.com/PLAYER1-r7/multicloud-auto-deploy/discussions)      |
+| GitHub Pages      | ✅ 完了              | [Pages](https://PLAYER1-r7.github.io/multicloud-auto-deploy/)                        |
+| Branch Protection | ⏳ Web UI で設定必要 | Settings → Branches                                                                  |
 
 ---
 
 ## 🚀 次のステップ
 
 ### Phase A: Issue 管理（✅ 完了）
+
 - ✅ GitHub Issues 作成完了
 - ✅ Milestones 作成完了
 - ✅ ラベル体系構築完了
 
 ### Phase B: Release 自動化（✅ 完了）
+
 - ✅ Releases workflow 実装完了
 - ✅ Conventional Commits 対応
 - ✅ CHANGELOG.md 自動更新
 
 ### Phase C: セキュリティ & 運用（✅ 完了）
+
 - ✅ Dependabot 設定完了
 - ✅ GitHub Pages + MkDocs デプロイ完了
 - ✅ GitHub Discussions ガイド完成
 - ⏳ Branch Protection Rules を Web UI から設定
 
 ### Phase D: 品質管理（次週推奨）
+
 - [ ] GitHub Project Board を手動作成
 - [ ] Code Review 自動化（Copilot Reviews）
 - [ ] CI/CD アラート Slack 連携
