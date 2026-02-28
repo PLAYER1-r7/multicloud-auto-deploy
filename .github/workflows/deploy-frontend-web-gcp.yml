@@ -115,14 +115,26 @@ jobs:
           echo "✅ Deployed to gs://${BUCKET}/sns/"
 
       - name: Invalidate Cloud CDN Cache
+        continue-on-error: true
         run: |
           URLMAP="${{ steps.env.outputs.urlmap }}"
-          gcloud compute url-maps invalidate-cdn-cache "$URLMAP" \
-            --path "/sns/*" \
-            --global \
-            --async \
-            --project "${{ secrets.GCP_PROJECT_ID }}"
-          echo "✅ CDN invalidation issued for /sns/*"
+          
+          # List available URL maps for debugging
+          echo "📋 Available URL Maps:"
+          gcloud compute url-maps list --global --project "${{ secrets.GCP_PROJECT_ID }}" || echo "No URL maps found"
+          
+          # Attempt to invalidate cache (non-blocking if URL map doesn't exist)
+          if gcloud compute url-maps describe "$URLMAP" --global --project "${{ secrets.GCP_PROJECT_ID }}" &>/dev/null; then
+            gcloud compute url-maps invalidate-cdn-cache "$URLMAP" \
+              --path "/sns/*" \
+              --global \
+              --async \
+              --project "${{ secrets.GCP_PROJECT_ID }}"
+            echo "✅ CDN invalidation issued for /sns/*"
+          else
+            echo "⚠️  URL Map '$URLMAP' not found - skipping CDN cache invalidation"
+            echo "    Files have been deployed to GCS successfully"
+          fi
 
       - name: Deployment Summary
         run: |
