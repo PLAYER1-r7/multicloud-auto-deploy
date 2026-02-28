@@ -47,6 +47,7 @@ class AzureMathSolver(BaseMathSolver):
 
     def __init__(self) -> None:
         self._sample_pdf_text_cache: dict[str, str] = {}
+        self._di_status: str = ""
         self._openai_status: str = ""
         self._di_client = self._build_di_client()
         self._openai_client = self._build_openai_client()
@@ -64,16 +65,19 @@ class AzureMathSolver(BaseMathSolver):
             "AZURE_DOCUMENT_INTELLIGENCE_KEY"
         )
         if not endpoint or not key:
+            self._di_status = f"endpoint_set={bool(endpoint)}, key_set={bool(key)}"
             return None
         try:
             from azure.ai.documentintelligence import DocumentIntelligenceClient
             from azure.core.credentials import AzureKeyCredential
 
+            self._di_status = "ok"
             return DocumentIntelligenceClient(
                 endpoint=endpoint,
                 credential=AzureKeyCredential(key),
             )
-        except ImportError:
+        except ImportError as exc:
+            self._di_status = f"import_error={exc}"
             return None
 
     def _build_openai_client(self) -> Any:
@@ -194,11 +198,13 @@ class AzureMathSolver(BaseMathSolver):
         """Run Azure DI OCR, score all candidates, return the best as OcrResult."""
         raw_candidates = self._call_azure_di(image_bytes)
         if not raw_candidates:
+            debug_info = self._di_status or "unknown"
             raise HTTPException(
                 status_code=502,
                 detail=(
                     "Azure Document Intelligence returned no OCR candidates. "
-                    "Set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY."
+                    "Set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY. "
+                    f"(debug: di_status={debug_info})"
                 ),
             )
 
