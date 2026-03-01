@@ -7,6 +7,7 @@
 import React, { useMemo } from "react";
 import Plot from "react-plotly.js";
 import { evaluate } from "mathjs";
+import type { Data as PlotlyData } from "plotly.js";
 import type {
   PlotData,
   PlotPoint3D,
@@ -15,9 +16,6 @@ import type {
   PlotSurface3D,
   PlotViewRange3D,
 } from "../types/solve";
-
-// Plotly トレース型（最低限）
-type PlotlyData = Parameters<typeof Plot>[0]["data"][number];
 
 // ─── グリッド生成ヘルパー ─────────────────────────────────────
 function linspace(min: number, max: number, n = 30): number[] {
@@ -65,7 +63,7 @@ function planeTrace(plane: PlotPlane3D): PlotlyData | null {
   const xs = linspace(xRange[0], xRange[1], 20);
   const ys = linspace(yRange[0], yRange[1], 20);
   const zGrid: number[][] = ys.map((y) =>
-    xs.map((x) => (d - a * x - b * y) / c)
+    xs.map((x) => (d - a * x - b * y) / c),
   );
 
   return {
@@ -74,7 +72,10 @@ function planeTrace(plane: PlotPlane3D): PlotlyData | null {
     y: ys,
     z: zGrid,
     opacity: 0.45,
-    colorscale: [[0, "#a78bfa"], [1, "#c4b5fd"]],
+    colorscale: [
+      [0, "#a78bfa"],
+      [1, "#c4b5fd"],
+    ],
     showscale: false,
     name: label ?? "平面",
   } as PlotlyData;
@@ -87,9 +88,9 @@ function surfaceTrace(surf: PlotSurface3D): PlotlyData | null {
     const ys = linspace(yRange[0], yRange[1], 30);
     const zGrid: number[][] = ys.map((y) =>
       xs.map((x) => {
-        const val = evaluate(fnZ, { x, y });
-        return typeof val === "number" && isFinite(val) ? val : null;
-      })
+        const val = evaluate(fnZ, { x, y }) as unknown;
+        return typeof val === "number" && isFinite(val) ? val : NaN;
+      }),
     );
 
     return {
@@ -120,9 +121,21 @@ function buildLayout(viewRange?: PlotViewRange3D) {
   };
 
   const scene: Record<string, unknown> = {
-    xaxis: { ...axisBase, title: { text: "x" }, ...(viewRange ? { range: viewRange.xRange } : {}) },
-    yaxis: { ...axisBase, title: { text: "y" }, ...(viewRange ? { range: viewRange.yRange } : {}) },
-    zaxis: { ...axisBase, title: { text: "z" }, ...(viewRange ? { range: viewRange.zRange } : {}) },
+    xaxis: {
+      ...axisBase,
+      title: { text: "x" },
+      ...(viewRange ? { range: viewRange.xRange } : {}),
+    },
+    yaxis: {
+      ...axisBase,
+      title: { text: "y" },
+      ...(viewRange ? { range: viewRange.yRange } : {}),
+    },
+    zaxis: {
+      ...axisBase,
+      title: { text: "z" },
+      ...(viewRange ? { range: viewRange.zRange } : {}),
+    },
     aspectmode: "auto",
     bgcolor: "#f9fafb",
   };
@@ -176,7 +189,10 @@ const MathGraph3D: React.FC<MathGraph3DProps> = ({ data }) => {
     return result;
   }, [data]);
 
-  const layout = useMemo(() => buildLayout(data.viewRange3d), [data.viewRange3d]);
+  const layout = useMemo(
+    () => buildLayout(data.viewRange3d),
+    [data.viewRange3d],
+  );
 
   if (traces.length === 0) {
     return (
