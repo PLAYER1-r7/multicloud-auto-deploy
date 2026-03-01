@@ -113,6 +113,15 @@ jobs:
             echo "⚠️  customDomain not set — removing from Pulumi config (staging uses GCS directly)"
             pulumi config rm multicloud-auto-deploy-gcp:customDomain 2>/dev/null || true
           fi
+          # staging: IAMAuditConfig を無効化 (SA に setIamPolicy 権限がない)
+          # production: デフォルト (enableAuditLogs=true) のまま
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          if [ "$STACK_NAME" = "staging" ]; then
+            echo "⚠️  Disabling IAM audit logs for staging (SA lacks setIamPolicy permission)"
+            pulumi config set multicloud-auto-deploy-gcp:enableAuditLogs "false"
+          else
+            pulumi config rm multicloud-auto-deploy-gcp:enableAuditLogs 2>/dev/null || true
+          fi
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
@@ -143,11 +152,10 @@ jobs:
 
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
-        # continue-on-error: GCP staging has a known state drift issue where ManagedSslCertificate
-        # (400) and URLMap (412 precondition failed) cause pulumi up to fail. The existing
-        # infrastructure (Cloud Run, GCS buckets, CDN) continues to work fine and pulumi stack
+        # continue-on-error: GCP staging has a known state drift issue. The existing
+        # infrastructure (Cloud Run, GCS buckets) continues to work fine and pulumi stack
         # outputs are still valid. Subsequent steps (Cloud Run update, frontend deploy) should
-        # proceed regardless of this known non-blocking Pulumi error.
+        # proceed regardless of known non-blocking Pulumi errors.
         continue-on-error: true
         uses: pulumi/actions@v5
         with:
