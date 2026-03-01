@@ -15,7 +15,7 @@
     "custom_domain": "https://www.azure.ashnova.jp"
   },
   "gcp-static-site": {
-    "version": "1.0.111.292",
+    "version": "1.0.111.293",
     "description": "GCP GCS + Cloud CDN 静的サイト (ランディングページ)",
     "status": "stable",
     "note": "HTTPS未設定 (HTTP only)。TargetHttpsProxy + SSL証明書の設定が残課題",
