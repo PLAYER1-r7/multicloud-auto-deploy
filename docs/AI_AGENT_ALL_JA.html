@@ -1079,7 +1079,7 @@ Functions、Cloud Run、Cloud Functions）は <code>linux/amd64</code>
 を使用し、ターゲットプラットフォームを明示的に設定する：</strong></p>
 <div class="sourceCode" id="cb3"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> run <span class="at">--rm</span> <span class="at">--platform</span> linux/amd64 <span class="dt">\</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-v</span> /tmp/deploy:/out python:3.12-slim <span class="dt">\</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-v</span> /tmp/deploy:/out python:3.13-slim <span class="dt">\</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  bash <span class="at">-c</span> <span class="st">&quot;pip install --no-cache-dir --target /out -r requirements.txt -q&quot;</span></span></code></pre></div>
 <p>これは以下に適用される：</p>
 <ul>
@@ -1756,7 +1756,7 @@ Mac）</strong></li>
 パッケージは常にクロスコンパイルする：</p>
 <div class="sourceCode" id="cb18"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> run <span class="at">--rm</span> <span class="at">--platform</span> linux/amd64 <span class="dt">\</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-v</span> /tmp/deploy:/out python:3.12-slim <span class="dt">\</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-v</span> /tmp/deploy:/out python:3.13-slim <span class="dt">\</span></span>
 <span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  bash <span class="at">-c</span> <span class="st">&quot;pip install --no-cache-dir --target /out -r requirements.txt -q&quot;</span></span></code></pre></div>
 <p>詳細は <a
 href="AI_AGENT_00_CRITICAL_RULES.md">AI_AGENT_00_CRITICAL_RULES.md</a>
@@ -4867,7 +4867,7 @@ blob URL を指していた</li>
 関数が読み込まれない</li>
 </ol>
 <p><strong>修正</strong>: Python 3.12
-(<code>docker run python:3.12-slim</code>)
+(<code>docker run python:3.13-slim</code>)
 でパッケージを正しいアーキテクチャ向けに再ビルド・デプロイ</p>
 <p><strong>確認</strong>: <code>admin/functions</code> →
 <code>[{"name":"HttpTrigger"}]</code> ✅ / <code>/api/health</code> →
@@ -5875,7 +5875,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb91-1"><a href=
 <span id="cb91-2"><a href="#cb91-2" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /tmp/deploy_gcp/.deployment</span>
 <span id="cb91-3"><a href="#cb91-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> run <span class="at">--rm</span> <span class="at">--platform</span> linux/amd64 <span class="dt">\</span></span>
 <span id="cb91-4"><a href="#cb91-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-v</span> /tmp/deploy_gcp:/out <span class="dt">\</span></span>
-<span id="cb91-5"><a href="#cb91-5" aria-hidden="true" tabindex="-1"></a>  python:3.12-slim <span class="dt">\</span></span>
+<span id="cb91-5"><a href="#cb91-5" aria-hidden="true" tabindex="-1"></a>  python:3.13-slim <span class="dt">\</span></span>
 <span id="cb91-6"><a href="#cb91-6" aria-hidden="true" tabindex="-1"></a>  bash <span class="at">-c</span> <span class="st">&quot;pip install --no-cache-dir --target /out/.deployment </span><span class="dt">\</span></span>
 <span id="cb91-7"><a href="#cb91-7" aria-hidden="true" tabindex="-1"></a><span class="st">           -r /workspaces/multicloud-auto-deploy/services/api/requirements-gcp.txt -q&quot;</span></span>
 <span id="cb91-8"><a href="#cb91-8" aria-hidden="true" tabindex="-1"></a></span>
@@ -7411,7 +7411,7 @@ state 同期後、<code>pulumi up</code> 成功（34 unchanged）</td>
 <td>0d</td>
 <td>✅ <strong>deploy-azure Python 3.12</strong></td>
 <td><strong>DONE</strong> — CI/CD:
-<code>python:3.12-slim --platform linux/amd64</code> 設定済み</td>
+<code>python:3.13-slim --platform linux/amd64</code> 設定済み</td>
 <td>✅ 完了</td>
 </tr>
 </tbody>
@@ -8737,7 +8737,7 @@ register Python v2 functions on Consumption Linux</td>
 <td>Dev container is <code>aarch64</code>; Azure Functions runs
 <code>x86_64</code> — <code>.so</code> binaries incompatible</td>
 <td>Build with
-<code>docker run --platform linux/amd64 python:3.12-slim</code></td>
+<code>docker run --platform linux/amd64 python:3.13-slim</code></td>
 </tr>
 <tr class="even">
 <td>A4</td>
@@ -8779,7 +8779,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb153-1"><a href
 Deployment</h3>
 <ul>
 <li><strong>Always build with
-<code>--platform linux/amd64 python:3.11-slim</code></strong> — Dev
+<code>--platform linux/amd64 python:3.13-slim</code></strong> — Dev
 Container is aarch64; <code>.so</code> binaries are incompatible</li>
 <li><strong><code>SCM_DO_BUILD_DURING_DEPLOYMENT</code> is NOT supported
 on Flex Consumption</strong> — always deploy pre-built ZIP</li>
@@ -9011,7 +9011,7 @@ configured</td>
 <td>aarch64 <code>.so</code> binaries used (Dev Container is ARM); wrong
 Python version</td>
 <td>Use
-<code>docker run --platform linux/amd64 python:3.11-slim</code></td>
+<code>docker run --platform linux/amd64 python:3.13-slim</code></td>
 </tr>
 <tr class="even">
 <td>8</td>
@@ -9038,7 +9038,7 @@ in <code>create_post</code></td>
 <tbody>
 <tr class="odd">
 <td>Python package build</td>
-<td><code>docker run --platform linux/amd64 python:3.11-slim pip install</code></td>
+<td><code>docker run --platform linux/amd64 python:3.13-slim pip install</code></td>
 </tr>
 <tr class="even">
 <td>Platform CORS</td>
@@ -9235,7 +9235,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb159-1"><a href
 <h4 id="g3-cloud-function-rebuild-aarch64-linuxamd64">G3 — Cloud
 Function Rebuild (aarch64 → linux/amd64)</h4>
 <div class="sourceCode" id="cb160"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb160-1"><a href="#cb160-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> run <span class="at">--rm</span> <span class="at">--platform</span> linux/amd64 <span class="at">-v</span> /tmp/deploy_gcp:/out python:3.12-slim <span class="dt">\</span></span>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb160-1"><a href="#cb160-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> run <span class="at">--rm</span> <span class="at">--platform</span> linux/amd64 <span class="at">-v</span> /tmp/deploy_gcp:/out python:3.13-slim <span class="dt">\</span></span>
 <span id="cb160-2"><a href="#cb160-2" aria-hidden="true" tabindex="-1"></a>  bash <span class="at">-c</span> <span class="st">&quot;pip install --target /out/.deployment -r /out/requirements-gcp.txt -q&quot;</span></span>
 <span id="cb160-3"><a href="#cb160-3" aria-hidden="true" tabindex="-1"></a><span class="co"># CRITICAL: Copy main.py — Cloud Build requires it even if --entry-point differs</span></span>
 <span id="cb160-4"><a href="#cb160-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> services/api/function.py /tmp/deploy_gcp/.deployment/main.py</span></code></pre></div>

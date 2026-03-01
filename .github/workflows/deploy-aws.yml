@@ -338,7 +338,7 @@ jobs:
             LAYER_SIZE=$(du -h lambda-layer.zip | cut -f1)
             echo "✅ Layer package created: $LAYER_SIZE"
             ls -lh lambda-layer.zip
-            
+
             # Export for GitHub Actions
             echo "layer_created=true" >> $GITHUB_OUTPUT
           else
@@ -394,13 +394,13 @@ jobs:
           LAYER_SIZE=$(du -h "$LAYER_ZIP" | cut -f1)
           echo "📊 Layer size: $LAYER_SIZE"
           echo "🚀 Publishing Custom Lambda Layer: $LAYER_NAME"
-          
+
           # Publish layer with error handling
           LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
             --layer-name "$LAYER_NAME" \
-            --description "Dependencies for FastAPI + Mangum + JWT (Python 3.12)" \
+            --description "Dependencies for FastAPI + Mangum + JWT (Python 3.13)" \
             --zip-file "fileb://$LAYER_ZIP" \
-            --compatible-runtimes python3.12 \
+            --compatible-runtimes python3.13 \
             --region "${{ env.AWS_REGION }}" \
             --query 'LayerVersionArn' \
             --output text 2>&1) || {
@@ -424,7 +424,7 @@ jobs:
 
           LAYER_NAME="multicloud-auto-deploy-${{ steps.set_stack.outputs.stack_name }}-dependencies"
           echo "🧹 Cleaning up old Lambda Layer versions (keeping latest 3) for: $LAYER_NAME"
-          
+
           # Get layer versions (suppress errors if layer doesn't exist yet)
           VERSIONS=$(aws lambda list-layer-versions \
             --layer-name "$LAYER_NAME" \

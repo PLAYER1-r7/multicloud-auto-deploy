@@ -18,7 +18,7 @@
 #   $1 - Environment name (default: staging)
 #
 # Deployment Components:
-#   - Azure Functions (Flex Consumption, Python 3.12)
+#   - Azure Functions (Flex Consumption, Python 3.13)
 #   - Cosmos DB (Serverless)
 #   - Blob Storage ($web container)
 #   - Azure Front Door (Standard)
@@ -92,7 +92,7 @@ az functionapp create \
     --name "$FUNCTION_APP" \
     --storage-account "$STORAGE_ACCOUNT" \
     --runtime python \
-    --runtime-version 3.11 \
+    --runtime-version 3.13 \
     --functions-version 4 \
     --os-type Linux
 

@@ -57,7 +57,7 @@ check_tool terraform
 check_tool gh
 check_tool node
 check_tool npm
-check_tool python3.12
+check_tool python3.13
 check_tool docker
 check_tool jq
 check_tool curl
@@ -69,15 +69,15 @@ echo "================================================"
 echo ""
 
 # Check Python version and pip
-if command -v python3.12 &> /dev/null; then
-    echo "✅ python3.12: $(python3.12 --version)"
-    if python3.12 -m pip --version &> /dev/null; then
-        echo "  ✅ pip: $(python3.12 -m pip --version)"
+if command -v python3.13 &> /dev/null; then
+    echo "✅ python3.13: $(python3.13 --version)"
+    if python3.13 -m pip --version &> /dev/null; then
+        echo "  ✅ pip: $(python3.13 -m pip --version)"
     else
         echo "  ❌ pip: NOT AVAILABLE"
     fi
 else
-    echo "❌ python3.12: NOT FOUND"
+    echo "❌ python3.13: NOT FOUND"
 fi
 
 # Also check default python3
@@ -191,11 +191,11 @@ echo ""
 if aws sts get-caller-identity &> /dev/null; then
     echo "Lambda Functions (ap-northeast-1):"
     aws lambda list-functions --region ap-northeast-1 --query 'Functions[?contains(FunctionName, `multicloud`)].{Name:FunctionName, Runtime:Runtime, Arch:Architectures[0]}' --output table 2>/dev/null || echo "  None found"
-    
+
     echo ""
     echo "S3 Buckets:"
     aws s3 ls | grep -i multicloud || echo "  None found"
-    
+
     echo ""
     echo "CloudFront Distributions:"
     aws cloudfront list-distributions --query 'DistributionList.Items[?contains(Comment, `Multi-Cloud`)].{Id:Id, Status:Status, DomainName:DomainName}' --output table 2>/dev/null || echo "  None found"

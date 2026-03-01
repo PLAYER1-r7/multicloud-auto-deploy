@@ -2,19 +2,19 @@
 # Optimized for Cloud Functions Gen2 runtime
 
 # FastAPI Core
-fastapi==0.115.0
-pydantic==2.9.0
-pydantic-settings==2.5.2
-python-jose[cryptography]==3.3.0
-python-multipart==0.0.9
-pyjwt==2.9.0
-requests==2.32.3
-pypdf==5.3.0
+fastapi==0.134.0
+pydantic==2.12.5
+pydantic-settings==2.13.1
+python-jose[cryptography]==3.5.0
+python-multipart==0.0.22
+pyjwt==2.11.0
+requests==2.32.5
+pypdf==6.7.4
 pdfminer.six==20260107
 
 # GCP-specific dependencies
-google-cloud-firestore==2.19.0
-google-cloud-storage==2.18.0
+google-cloud-firestore==2.23.0
+google-cloud-storage==3.9.0
 google-cloud-vision==3.8.1
 google-cloud-aiplatform==1.77.0
 functions-framework==3.10.1

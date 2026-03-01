@@ -26,7 +26,7 @@
 # Prerequisites:
 #   - Terraform 1.5+
 #   - Node.js 18+
-#   - Python 3.12+
+#   - Python 3.13+
 #   - AWS CLI
 #   - GitHub CLI (for secrets check)
 #
@@ -169,7 +169,7 @@ for workflow in "${WORKFLOWS[@]}"; do
     run_test "ワークフロー: $workflow"
     if [ -f "$WORKFLOW_DIR/$workflow" ]; then
         log_success "$workflow 存在"
-        
+
         # YAML構文チェック（yamlが利用可能な場合）
         if command -v yamllint &> /dev/null; then
             if yamllint "$WORKFLOW_DIR/$workflow" 2>/dev/null; then
@@ -193,11 +193,11 @@ echo ""
 run_test "Lambda パッケージング シミュレーション"
 if [ -d "services/api" ]; then
     cd services/api
-    
+
     # クリーンアップ
     rm -rf .build/package .build/lambda-test.zip
     mkdir -p .build/package
-    
+
     log_info "依存関係インストール中..."
     if pip3 install -r requirements.txt \
         -t .build/package/ \
@@ -208,21 +208,21 @@ if [ -d "services/api" ]; then
     else
         log_error "依存関係インストール失敗"
     fi
-    
+
     log_info "アプリケーションコードコピー中..."
     if cp -r app .build/package/; then
         log_success "コードコピー完了"
     else
         log_error "コードコピー失敗"
     fi
-    
+
     log_info "ZIPパッケージ作成中..."
     cd .build/package
     if zip -r9 ../lambda-test.zip . > /dev/null 2>&1; then
         cd ../..
         PACKAGE_SIZE=$(du -h .build/lambda-test.zip | cut -f1)
         log_success "ZIPパッケージ作成完了（サイズ: $PACKAGE_SIZE）"
-        
+
         # パッケージ内容検証
         if unzip -l .build/lambda-test.zip | grep -q "app/main.py"; then
             log_success "パッケージ内容検証OK（main.pyが含まれる）"
@@ -233,7 +233,7 @@ if [ -d "services/api" ]; then
         cd ../..
         log_error "ZIPパッケージ作成失敗"
     fi
-    
+
     cd "$PROJECT_ROOT"
 else
     log_error "services/api ディレクトリが見つかりません"
@@ -249,23 +249,23 @@ echo ""
 run_test "React フロントエンドビルド"
 if [ -d "services/frontend_react" ]; then
     cd services/frontend_react
-    
+
     log_info "依存関係確認中..."
     if [ -f "package.json" ]; then
         log_success "package.json 存在"
-        
+
         # node_modulesの存在確認
         if [ -d "node_modules" ]; then
             log_success "node_modules 存在（依存関係インストール済み）"
-            
+
             log_info "ビルド実行中..."
             if npm run build > /tmp/react-build.log 2>&1; then
                 log_success "Reactビルド成功"
-                
+
                 # ビルド成果物確認
                 if [ -d "dist" ] && [ -f "dist/index.html" ]; then
                     log_success "ビルド成果物確認OK（dist/index.html存在）"
-                    
+
                     DIST_SIZE=$(du -sh dist | cut -f1)
                     log_info "ビルドサイズ: $DIST_SIZE"
                 else
@@ -281,7 +281,7 @@ if [ -d "services/frontend_react" ]; then
     else
         log_error "package.json が見つかりません"
     fi
-    
+
     cd "$PROJECT_ROOT"
 else
     log_error "services/frontend_react ディレクトリが見つかりません"
@@ -351,7 +351,7 @@ if command -v aws &> /dev/null && aws sts get-caller-identity &> /dev/null; then
     LAMBDA_NAME="multicloud-auto-deploy-staging-api"
     if aws lambda get-function --function-name "$LAMBDA_NAME" &> /dev/null; then
         log_success "Lambda関数存在: $LAMBDA_NAME"
-        
+
         LAMBDA_RUNTIME=$(aws lambda get-function-configuration --function-name "$LAMBDA_NAME" --query Runtime --output text)
         LAMBDA_MEMORY=$(aws lambda get-function-configuration --function-name "$LAMBDA_NAME" --query MemorySize --output text)
         log_info "Runtime: $LAMBDA_RUNTIME, Memory: ${LAMBDA_MEMORY}MB"

@@ -6,16 +6,16 @@ on:
       - main
       - develop
     paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
-      - '.github/workflows/deploy-docs.yml'
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/deploy-docs.yml"
   pull_request:
     branches:
       - main
       - develop
     paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
+      - "docs/**"
+      - "mkdocs.yml"
   workflow_dispatch:
 
 permissions:
@@ -39,8 +39,8 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.13"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -86,10 +86,10 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const buildSummary = fs.existsSync('/tmp/build_summary.md') 
+            const buildSummary = fs.existsSync('/tmp/build_summary.md')
               ? fs.readFileSync('/tmp/build_summary.md', 'utf8')
               : 'Build completed successfully';
-            
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,

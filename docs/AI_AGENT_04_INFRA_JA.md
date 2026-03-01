@@ -250,7 +250,7 @@ pulumi config set use_klayers true
 aws lambda publish-layer-version \
   --layer-name multicloud-auto-deploy-staging-dependencies \
   --zip-file fileb://services/api/lambda-layer.zip \
-  --compatible-runtimes python3.12 \
+  --compatible-runtimes python3.13 \
   --region ap-northeast-1
 
 # 3. アプリコードのみをパッケージ（~78 KB）

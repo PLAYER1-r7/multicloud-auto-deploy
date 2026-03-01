@@ -5,7 +5,7 @@ PulumiによるAWSインフラストラクチャ管理（完全Python実装）
 ## 📦 リソース
 
 - **API Gateway (HTTP API)** - RESTful API エンドポイント
-- **Lambda Function** - Python 3.12 FastAPI アプリケーション
+- **Lambda Function** - Python 3.13 FastAPI アプリケーション
 - **DynamoDB Table** - メッセージストレージ（オンデマンド）
 - **S3 Bucket** - 画像ストレージ（パブリック読み取り）
 - **IAM Roles & Policies** - 最小権限
@@ -57,11 +57,11 @@ pulumi destroy
 
 ## 📋 設定
 
-| Key | Description | Default |
-|-----|-------------|---------|
-| `aws:region` | AWSリージョン | `ap-northeast-1` |
-| `environment` | 環境名 | `staging` |
-| `project_name` | プロジェクト名 | `simple-sns` |
+| Key            | Description    | Default          |
+| -------------- | -------------- | ---------------- |
+| `aws:region`   | AWSリージョン  | `ap-northeast-1` |
+| `environment`  | 環境名         | `staging`        |
+| `project_name` | プロジェクト名 | `simple-sns`     |
 
 設定方法：
 
@@ -82,12 +82,12 @@ pulumi stack output api_url
 pulumi stack output
 ```
 
-| Output | Description |
-|--------|-------------|
-| `api_url` | API Gateway エンドポイント |
-| `messages_table_name` | DynamoDB テーブル名 |
-| `images_bucket_name` | S3 バケット名 |
-| `lambda_function_name` | Lambda 関数名 |
+| Output                 | Description                |
+| ---------------------- | -------------------------- |
+| `api_url`              | API Gateway エンドポイント |
+| `messages_table_name`  | DynamoDB テーブル名        |
+| `images_bucket_name`   | S3 バケット名              |
+| `lambda_function_name` | Lambda 関数名              |
 
 ## 🧪 テスト
 
@@ -105,6 +105,7 @@ curl $API_URL/api/messages
 ## 💰 コスト見積もり
 
 **月間想定（低トラフィック）**:
+
 - Lambda: ~$1（100万リクエスト無料枠内）
 - DynamoDB: ~$1（オンデマンド）
 - S3: ~$0.5（ストレージ + 転送）

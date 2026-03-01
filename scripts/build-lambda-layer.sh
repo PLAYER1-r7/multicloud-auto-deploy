@@ -56,7 +56,7 @@ else
     echo "requirements-layer.txt が見つかりません。デフォルト設定を使用します"
     # Lambda Layer requirements (AWS専用、boto3/botocore除外)
     cat > "$BUILD_DIR/requirements-layer.txt" <<EOF
-# Type checking (Python 3.12 compatibility)
+# Type checking (Python 3.13 compatibility)
 typing_extensions==4.12.2
 
 # FastAPI Core
@@ -88,7 +88,7 @@ pip3 install -r "$BUILD_DIR/requirements-layer.txt" \
     -t "$BUILD_DIR/python/" \
     --upgrade \
     --platform manylinux2014_x86_64 \
-    --python-version 3.12 \
+    --python-version 3.13 \
     --only-binary=:all: \
     --disable-pip-version-check \
     --quiet 2>&1 | tee /tmp/pip-install.log || { \

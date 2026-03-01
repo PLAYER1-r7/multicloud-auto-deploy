@@ -646,7 +646,7 @@ zip -r layer.zip python/
 aws lambda publish-layer-version \
   --layer-name multicloud-auto-deploy-dependencies \
   --zip-file fileb://layer.zip \
-  --compatible-runtimes python3.12
+  --compatible-runtimes python3.13
 
 # Lambda関数に紐付け
 aws lambda update-function-configuration \

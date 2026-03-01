@@ -10,8 +10,8 @@
 (an SNS-style messaging app) simultaneously to **AWS, Azure, and GCP** via fully automated
 CI/CD pipelines.
 
-- Frontend: React 18 + Vite + TypeScript + Tailwind CSS
-- Backend: FastAPI (Python 3.12) — Lambda / Azure Functions / Cloud Run
+- Frontend: React 19 + Vite + TypeScript + Tailwind CSS
+- Backend: FastAPI (Python 3.13) — Lambda / Azure Functions / Cloud Run
 - Database: DynamoDB / Cosmos DB / Firestore (shared logical schema)
 - IaC: Pulumi Python SDK
 - CI/CD: GitHub Actions
@@ -58,17 +58,17 @@ CI/CD pipelines.
 
 ```
 Frontend (SNS pages)
-  AWS:   React 18.2 / Vite 7.3 / TypeScript / Tailwind CSS  ← static SPA in S3 (staging + production)
-  Azure: React 18.2 / Vite / TypeScript  ← static SPA in Blob Storage $web/sns/ (production)
+  AWS:   React 19.2 / Vite 7.3 / TypeScript / Tailwind CSS  ← static SPA in S3 (staging + production)
+  Azure: React 19.2 / Vite / TypeScript  ← static SPA in Blob Storage $web/sns/ (production)
          (services/frontend_web Python SSR is superseded; CI now deploys React SPA via deploy-frontend-web-azure.yml)
-  GCP:   React 18.2 / Vite / TypeScript  ← static SPA in GCS sns/ prefix (staging + production)
+  GCP:   React 19.2 / Vite / TypeScript  ← static SPA in GCS sns/ prefix (staging + production)
          (Cloud Run frontend-web still exists but CDN routes to GCS bucket, not Cloud Run)
 
 Backend API
-  FastAPI 1.0 / Python 3.12 / Pydantic v2
+  FastAPI 1.0 / Python 3.13 / Pydantic v2
   AWS:   Lambda (x86_64) + API Gateway v2 (HTTP) + Lambda Layer + Mangum adapter
-  Azure: Azure Functions (Python 3.12, FC1 FlexConsumption)
-  GCP:   Cloud Run (Python 3.12, gen2)
+  Azure: Azure Functions (Python 3.13, FC1 FlexConsumption)
+  GCP:   Cloud Run (Python 3.13, gen2)
   Local: uvicorn + DynamoDB Local + MinIO
 
 Database (shared logical schema)
@@ -212,7 +212,7 @@ multicloud-auto-deploy/               ← workspace root = git repo root
 | ------------- | ------------------------------------------------ |
 | Base image    | `mcr.microsoft.com/devcontainers/base:ubuntu`    |
 | Python        | 3.12                                             |
-| Node.js       | 22                                               |
+| Node.js       | 24                                               |
 | Docker        | Docker-in-Docker v2                              |
 | Cloud CLIs    | AWS CLI, Azure CLI, Google Cloud SDK, GitHub CLI |
 | IaC           | Pulumi CLI                                       |
@@ -225,7 +225,7 @@ multicloud-auto-deploy/               ← workspace root = git repo root
 >
 > ```bash
 > docker run --rm --platform linux/amd64 \
->   -v /tmp/deploy:/out python:3.12-slim \
+>   -v /tmp/deploy:/out python:3.13-slim \
 >   bash -c "pip install --no-cache-dir --target /out -r requirements.txt -q"
 > ```
 >

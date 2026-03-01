@@ -1,8 +1,116 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> Last verified: 2026-02-28 Session 1 (Azure staging AFD 削除後の復旧完了 ✅ / `/exam` 自動作成導入 ✅ / Pulumi 監視アラート修正 ✅)
-> Previous: 2026-02-27 Session 4 (アーキテクチャ図アイコン強化完了 ✅ / デュアルアイコン配置実装 ✅ / ドキュメント更新完了 ✅)
+> Last verified: 2026-02-28 Session 3 (Azure OpenAI o3-mini JSON 出力修正完了 ✅ / OCR→LLM パイプライン正常動作 ✅)
+> Previous: 2026-02-28 Session 2 (Azure OpenAI 401 修正・mcad-openai-v2 再作成 ✅ / gpt-4o パイプライン HTTP 200 ✅ / o3-mini デプロイ完了 ✅)
+> Previous: 2026-02-28 Session 1 (Azure staging AFD 削除後の復旧完了 ✅ / `/exam` 自動作成導入 ✅ / Pulumi 監視アラート修正 ✅)
+
+---
+
+## Session 2026-02-28 (Continuation 3): Azure OpenAI o3-mini JSON 出力修正
+
+### Completed Work
+
+| Task                           | Result                                                                                                                        | Status |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ------ |
+| o3-mini トークン上限バグ修正   | `min(max(2000,512), 8192)=2000` になっていた問題を修正。推論モデルは `max(request.options.max_tokens, 8192)` で最低 8192 保証 | ✅     |
+| o3-mini `response_format` 追加 | `is_reasoning_model=True` 時も `response_format={"type":"json_object"}` を設定                                                | ✅     |
+| Docker ビルド & デプロイ       | Python 3.11-slim Docker ビルド (18MB) → Azure Function App デプロイ                                                           | ✅     |
+| 動作検証                       | HTTP 200 / `final: '(1) Uₜ = ..., (2) 面積 = 3/5, ...'` / `steps: 4` / `confidence: 0.9`                                      | ✅     |
+
+### 修正内容詳細 (`services/api/app/services/azure_math_solver.py`)
+
+**バグ1: トークン上限の誤算**
+
+```python
+# 修正前 (バグ): min(max(2000, 512), 8192) = 2000 になる
+_token_limit = min(
+    max(request.options.max_tokens, 512),
+    8192 if (is_accurate or is_reasoning_model) else 2000,
+)
+
+# 修正後: 推論モデルは常に min(8192, ...) でなく max(8192, user_max) を保証
+if is_reasoning_model:
+    _token_limit = max(request.options.max_tokens, 8192)
+else:
+    _token_limit = min(
+        max(request.options.max_tokens, 512),
+        8192 if is_accurate else 2000,
+    )
+```
+
+**バグ2: `response_format` 未設定**
+
+```python
+# 修正前: is_reasoning_model 時は response_format なし → 自由テキスト返却 → JSON パース失敗
+if is_reasoning_model:
+    create_kwargs["temperature"] = 1
+else:
+    create_kwargs["temperature"] = 0.0
+    create_kwargs["response_format"] = {"type": "json_object"}
+
+# 修正後: 推論モデルにも response_format を付与
+if is_reasoning_model:
+    create_kwargs["temperature"] = 1
+    create_kwargs["response_format"] = {"type": "json_object"}  # Azure o3-mini 対応
+else:
+    create_kwargs["temperature"] = 0.0
+    create_kwargs["response_format"] = {"type": "json_object"}
+```
+
+### 修正後の動作確認結果
+
+```
+HTTP: 200
+status: completed
+model: azure_openai/o3-mini
+latency: ~20 秒
+final: '(1) Uₜ = (t²(3-2t), 3t(1-t)), (2) 面積 = 3/5, (3) 弧長 = 2a³ - 3a² + 3a.'
+steps count: 4
+confidence: 0.9
+```
+
+---
+
+## Session 2026-02-28 (Continuation 2): Azure OpenAI 認証修正 & o3-mini 移行
+
+### Completed Work
+
+| Task                                   | Result                                                                                                                             | Status |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| Azure OpenAI 401 根本原因特定          | `mcad-openai-cea07c11` が `--custom-domain` なしで作成 → 共有エンドポイント `japaneast.api.cognitive.microsoft.com` → API キー不可 | ✅     |
+| `mcad-openai-v2` 再作成                | `--custom-domain mcad-openai-v2` 付きで作成 → `https://mcad-openai-v2.openai.azure.com/`                                           | ✅     |
+| gpt-4o デプロイ & 検証                 | `gpt-4o` (2024-11-20) デプロイ / HTTP 200 / latency 23秒                                                                           | ✅     |
+| o3-mini デプロイ                       | `mcad-openai-v2` に `o3-mini` デプロイ                                                                                             | ✅     |
+| Function App 環境変数更新              | `AZURE_OPENAI_ACCURATE_DEPLOYMENT=o3-mini` 設定                                                                                    | ✅     |
+| `extra_body` 削除                      | `{"reasoning_effort":"medium"}` は Azure OpenAI 非対応 → 削除                                                                      | ✅     |
+| `reasoning_content` フォールバック追加 | `message.content` が None の場合に `reasoning_content` を参照するよう修正                                                          | ✅     |
+
+### Azure OpenAI リソース変更履歴
+
+| リソース               | 状態        | エンドポイント                                   | 問題                                                       |
+| ---------------------- | ----------- | ------------------------------------------------ | ---------------------------------------------------------- |
+| `mcad-openai-cea07c11` | ❌ 削除済み | `https://japaneast.api.cognitive.microsoft.com/` | `--custom-domain` なし → 共有エンドポイント → API キー無効 |
+| `mcad-openai-v2`       | ✅ 使用中   | `https://mcad-openai-v2.openai.azure.com/`       | 正常                                                       |
+
+### 現在の環境変数 (staging Function App)
+
+| 変数                               | 値                                         |
+| ---------------------------------- | ------------------------------------------ |
+| `AZURE_OPENAI_ENDPOINT`            | `https://mcad-openai-v2.openai.azure.com/` |
+| `AZURE_OPENAI_DEPLOYMENT`          | `gpt-4o`                                   |
+| `AZURE_OPENAI_ACCURATE_DEPLOYMENT` | `o3-mini`                                  |
+| `AZURE_OPENAI_API_VERSION`         | `2024-12-01-preview`                       |
+
+### o3-mini 対応で判明した仕様
+
+| 項目                          | gpt-4o            | o3-mini (Azure)                         |
+| ----------------------------- | ----------------- | --------------------------------------- |
+| `temperature`                 | 0.0〜2.0 自由設定 | 1 固定                                  |
+| `max_tokens`                  | ✅                | ❌ → `max_completion_tokens`            |
+| `response_format`             | ✅ json_object    | ✅ json_object                          |
+| `extra_body.reasoning_effort` | N/A               | ❌ Azure 非対応                         |
+| 推論トークン消費              | なし              | 推論に内部トークン消費 → 最低 8192 必要 |
 
 ---
 
@@ -497,16 +605,16 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 **最終修正 (2026-02-24)**:
 
 ```bash
-# Python 3.12 / linux/amd64 でパッケージをビルド
-docker run --rm --platform linux/amd64 -v "$(pwd):/work" python:3.12-slim \
-  pip install --target /work/.deployment-py312 --no-cache-dir -q -r /work/requirements-azure.txt
+# Python 3.13 / linux/amd64 でパッケージをビルド
+docker run --rm --platform linux/amd64 -v "$(pwd):/work" python:3.13-slim \
+  pip install --target /work/.deployment-py313 --no-cache-dir -q -r /work/requirements-azure.txt
 # アプリコードをコピーしてzip作成
-cd .deployment-py312 && zip -r9 -q ../function-app-py312.zip .
+cd .deployment-py313 && zip -r9 -q ../function-app-py313.zip .
 # デプロイ
 az functionapp deployment source config-zip \
   --resource-group multicloud-auto-deploy-production-rg \
   --name multicloud-auto-deploy-production-func \
-  --src services/api/function-app-py312.zip \
+  --src services/api/function-app-py313.zip \
   --build-remote false --timeout 180
 ```
 
@@ -517,7 +625,7 @@ az functionapp deployment source config-zip \
 - `/api/limits` → `{"maxImagesPerPost":10}` HTTP 200 ✅
 - `/api/posts` → `{"items":[],...}` HTTP 200, Cosmos DB 接続 OK ✅
 
-**⚠️ CI/CD 残課題**: `deploy-azure.yml` の Build ステップが `python:3.11-slim` でパッケージをビルドしているが `functionAppConfig.runtime.version = "3.12"` → 次回CIデプロイ時に再発する可能性あり。`deploy-azure.yml` に `python:3.12-slim` へ変更が必要 (P1 残課題)。
+**✅ CI/CD 解決済み**: `deploy-azure.yml` の Build ステップを `python:3.13-slim` に更新。`functionAppConfig.runtime.version = "3.13"` と一致。Python 3.13 に統一完了。
 
 #### ✅ 3. GCP Production API — `/limits` エンドポイント 404 — RESOLVED 2026-02-24
 

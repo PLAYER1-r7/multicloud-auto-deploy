@@ -18,7 +18,7 @@
 #   $1 - Environment name (default: staging)
 #
 # Deployment Components:
-#   - Lambda Functions (Python 3.12)
+#   - Lambda Functions (Python 3.13)
 #   - API Gateway v2 (HTTP)
 #   - DynamoDB (PAY_PER_REQUEST)
 #   - S3 Static Website

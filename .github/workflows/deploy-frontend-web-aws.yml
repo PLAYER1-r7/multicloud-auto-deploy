@@ -22,7 +22,7 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  NODE_VERSION: "20"
+  NODE_VERSION: "24"
   PULUMI_PYTHON_VERSION: "3.13"
 
 concurrency:

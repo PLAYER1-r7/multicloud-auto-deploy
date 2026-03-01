@@ -29,7 +29,7 @@
 #   ./scripts/run-integration-tests.sh -k "test_create_post"
 #
 # Prerequisites:
-#   - Python 3.12+
+#   - Python 3.13+
 #   - pytest installed
 #   - pytest-mock installed (for mocking)
 #   - requests installed (for endpoint tests)
@@ -312,13 +312,13 @@ if [ "$TEST_FAILED" = false ]; then
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}✅ 全てのテストが成功しました！${NC}"
     echo -e "${GREEN}========================================${NC}"
-    
+
     # Show coverage report location if generated
     if [ -n "$COVERAGE" ]; then
         echo ""
         echo -e "${BLUE}カバレッジレポート: htmlcov/index.html${NC}"
     fi
-    
+
     exit 0
 else
     echo -e "${RED}========================================${NC}"

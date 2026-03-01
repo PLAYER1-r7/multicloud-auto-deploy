@@ -59,7 +59,7 @@ VS Code dev containerは `linux/aarch64` 用に構築されている。すべて
 
 ```bash
 docker run --rm --platform linux/amd64 \
-  -v /tmp/deploy:/out python:3.12-slim \
+  -v /tmp/deploy:/out python:3.13-slim \
   bash -c "pip install --no-cache-dir --target /out -r requirements.txt -q"
 ```
 

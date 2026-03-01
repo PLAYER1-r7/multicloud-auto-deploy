@@ -1,7 +1,7 @@
 # Integration Tests Complete Guide
 
-**Created**: 2026-02-18  
-**Version**: 1.0.0  
+**Created**: 2026-02-18
+**Version**: 1.0.0
 **Target Environments**: All (AWS/GCP/Azure)
 
 ---
@@ -23,12 +23,12 @@ The integration tests in this project comprehensively test the backend implement
 
 ### Test Types
 
-| Test Type                  | Description                                       | Tool              |
-| -------------------------- | ------------------------------------------------- | ----------------- |
-| **Unit Tests**             | Tests for individual backend class methods        | pytest (mocked)   |
-| **Integration Tests**      | Full-flow tests for CRUD operations               | pytest (mocked)   |
-| **API Endpoint Tests**     | HTTP tests against actually deployed APIs         | pytest + requests |
-| **E2E Tests**              | End-to-end tests across all clouds                | bash + curl       |
+| Test Type              | Description                                | Tool              |
+| ---------------------- | ------------------------------------------ | ----------------- |
+| **Unit Tests**         | Tests for individual backend class methods | pytest (mocked)   |
+| **Integration Tests**  | Full-flow tests for CRUD operations        | pytest (mocked)   |
+| **API Endpoint Tests** | HTTP tests against actually deployed APIs  | pytest + requests |
+| **E2E Tests**          | End-to-end tests across all clouds         | bash + curl       |
 
 ---
 
@@ -274,17 +274,17 @@ export AZURE_API_ENDPOINT="https://func-xyz.azurewebsites.net/api/HttpTrigger"
 
 ### API Endpoints
 
-| Endpoint                   | Method | Test                     | Reference Script   |
-| -------------------------- | ------ | ------------------------ | ------------------ |
-| `/`                        | GET    | Health check             | test-api.sh #1     |
-| `/api/messages/`           | GET    | List retrieval           | test-api.sh #2, #4 |
-| `/api/messages/`           | POST   | Create                   | test-api.sh #3     |
-| `/api/messages/{id}`       | GET    | Single retrieval         | test-api.sh #5     |
-| `/api/messages/{id}`       | PUT    | Update                   | test-api.sh #6, #7 |
-| `/api/messages/{id}`       | DELETE | Delete                   | test-api.sh #8, #9 |
-| `/api/messages/?page=1`    | GET    | Pagination               | test-api.sh #10    |
-| `/api/messages/invalid-id` | GET    | Error 404                | test-api.sh #11    |
-| `/api/messages/`           | POST   | Validation error         | test-api.sh #12    |
+| Endpoint                   | Method | Test             | Reference Script   |
+| -------------------------- | ------ | ---------------- | ------------------ |
+| `/`                        | GET    | Health check     | test-api.sh #1     |
+| `/api/messages/`           | GET    | List retrieval   | test-api.sh #2, #4 |
+| `/api/messages/`           | POST   | Create           | test-api.sh #3     |
+| `/api/messages/{id}`       | GET    | Single retrieval | test-api.sh #5     |
+| `/api/messages/{id}`       | PUT    | Update           | test-api.sh #6, #7 |
+| `/api/messages/{id}`       | DELETE | Delete           | test-api.sh #8, #9 |
+| `/api/messages/?page=1`    | GET    | Pagination       | test-api.sh #10    |
+| `/api/messages/invalid-id` | GET    | Error 404        | test-api.sh #11    |
+| `/api/messages/`           | POST   | Validation error | test-api.sh #12    |
 
 **Total**: 27 endpoint tests (9 endpoints × 3 clouds)
 
@@ -294,16 +294,16 @@ export AZURE_API_ENDPOINT="https://func-xyz.azurewebsites.net/api/HttpTrigger"
 
 Markers for classifying and filtering tests:
 
-| Marker                              | Description                    | Example                      |
-| ----------------------------------- | ------------------------------ | ---------------------------- |
-| `@pytest.mark.aws`                  | AWS-specific tests             | `pytest -m aws`              |
-| `@pytest.mark.gcp`                  | GCP-specific tests             | `pytest -m gcp`              |
-| `@pytest.mark.azure`                | Azure-specific tests           | `pytest -m azure`            |
-| `@pytest.mark.integration`          | Integration tests              | `pytest -m integration`      |
-| `@pytest.mark.unit`                 | Unit tests                     | `pytest -m unit`             |
-| `@pytest.mark.slow`                 | Slow-running tests             | `pytest -m "not slow"`       |
-| `@pytest.mark.requires_network`     | Requires network               | `pytest -m requires_network` |
-| `@pytest.mark.requires_credentials` | Requires credentials           | Excluded by default          |
+| Marker                              | Description          | Example                      |
+| ----------------------------------- | -------------------- | ---------------------------- |
+| `@pytest.mark.aws`                  | AWS-specific tests   | `pytest -m aws`              |
+| `@pytest.mark.gcp`                  | GCP-specific tests   | `pytest -m gcp`              |
+| `@pytest.mark.azure`                | Azure-specific tests | `pytest -m azure`            |
+| `@pytest.mark.integration`          | Integration tests    | `pytest -m integration`      |
+| `@pytest.mark.unit`                 | Unit tests           | `pytest -m unit`             |
+| `@pytest.mark.slow`                 | Slow-running tests   | `pytest -m "not slow"`       |
+| `@pytest.mark.requires_network`     | Requires network     | `pytest -m requires_network` |
+| `@pytest.mark.requires_credentials` | Requires credentials | Excluded by default          |
 
 ---
 
@@ -384,9 +384,9 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |
@@ -541,8 +541,8 @@ export AWS_API_ENDPOINT="https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws
 
 ---
 
-**Author**: GitHub Copilot  
-**Last Updated**: 2026-02-18  
+**Author**: GitHub Copilot
+**Last Updated**: 2026-02-18
 **Related Documents**:
 
 - [API_OPERATION_VERIFICATION_REPORT.md](API_OPERATION_VERIFICATION_REPORT.md)

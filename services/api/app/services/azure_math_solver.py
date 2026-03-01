@@ -19,11 +19,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import HTTPException
-
 from app.config import settings
 from app.models import SolveAnswer, SolveMeta, SolveRequest, SolveResponse
 from app.services.base_math_solver import BaseMathSolver
+from fastapi import HTTPException
 
 
 @dataclass
@@ -591,10 +590,17 @@ class AzureMathSolver(BaseMathSolver):
                 )
             else:
                 # 1段階: 推論モデルまたは fast モード
-                _token_limit = min(
-                    max(request.options.max_tokens, 512),
-                    8192 if is_accurate else 2000,
-                )
+                # 推論モデル (o3-mini 等) は max_completion_tokens に推論トークンも含まれるため
+                # 2000 では推論だけで使い切り出力が 0 になる → 最低 8192 を確保
+                # ※ min(max(user_max, 512), 8192) だと user_max=2000 のとき 2000 になるため
+                #   推論モデルは最低保証を 8192 とする
+                if is_reasoning_model:
+                    _token_limit = max(request.options.max_tokens, 8192)
+                else:
+                    _token_limit = min(
+                        max(request.options.max_tokens, 512),
+                        8192 if is_accurate else 2000,
+                    )
                 _token_key = (
                     "max_completion_tokens" if is_reasoning_model else "max_tokens"
                 )
@@ -613,8 +619,11 @@ class AzureMathSolver(BaseMathSolver):
                     **{_token_key: _token_limit},
                 )
                 if is_reasoning_model:
+                    # Azure OpenAI の推論モデルは temperature=1 固定
+                    # extra_body の reasoning_effort は Azure OpenAI 非対応のため除外
+                    # response_format=json_object は Azure OpenAI o3-mini でサポート
                     create_kwargs["temperature"] = 1
-                    create_kwargs["extra_body"] = {"reasoning_effort": "medium"}
+                    create_kwargs["response_format"] = {"type": "json_object"}
                 else:
                     create_kwargs["temperature"] = 0.0
                     create_kwargs["response_format"] = {"type": "json_object"}
@@ -626,7 +635,10 @@ class AzureMathSolver(BaseMathSolver):
                 detail=f"Azure OpenAI invocation failed: {exc}",
             ) from exc
 
+        # reasoning モデルは content が None の場合がある（reasoning_content に入る場合）
         text = response.choices[0].message.content or ""
+        if not text and hasattr(response.choices[0].message, "reasoning_content"):
+            text = response.choices[0].message.reasoning_content or ""
         parsed = self._parse_json_answer(text)
         if parsed is None:
             parsed = {

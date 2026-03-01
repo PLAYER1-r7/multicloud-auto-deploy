@@ -34,7 +34,7 @@ install:
 	@echo "📦 Installing frontend dependencies..."
 	cd services/frontend && npm install
 	@echo "📦 Installing backend dependencies..."
-	cd services/backend && python3.12 -m venv .venv && \
+	cd services/backend && python3.13 -m venv .venv && \
 		.venv/bin/pip install --upgrade pip && \
 		.venv/bin/pip install -r requirements.txt
 	@echo "✅ Dependencies installed"
@@ -53,7 +53,7 @@ build-backend:
 		rm -rf package lambda.zip && \
 		mkdir -p package && \
 		pip install --platform manylinux2014_x86_64 --only-binary=:all: \
-			--target package --python-version 3.12 --implementation cp \
+			--target package --python-version 3.13 --implementation cp \
 			fastapi==0.109.0 pydantic==2.5.3 python-dotenv==1.0.0 mangum==0.17.0 && \
 		cp -r src/* package/ && \
 		cd package && zip -r ../lambda.zip . -q

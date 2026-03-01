@@ -21,7 +21,7 @@ on:
           - production
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "24"
 
 concurrency:
   group: deploy-frontend-web-azure-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}

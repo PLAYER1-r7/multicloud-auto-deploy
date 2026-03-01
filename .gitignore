@@ -86,3 +86,5 @@ services/api/.build/
 services/frontend_react/.env.production
 .venv/
 .deployment/
+nohup.out
+services/api/.manual_deploy/

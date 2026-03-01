@@ -1,6 +1,6 @@
 # 07 — Runbooks
 
-> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
+> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
 > Step-by-step procedures for common tasks and incident response
 
 ---
@@ -288,7 +288,7 @@ The dev container is `aarch64`; Cloud Functions runs `linux/amd64`. Always use D
 mkdir -p /tmp/deploy_gcp/.deployment
 docker run --rm --platform linux/amd64 \
   -v /tmp/deploy_gcp:/out \
-  python:3.12-slim \
+  python:3.13-slim \
   bash -c "pip install --no-cache-dir --target /out/.deployment \
            -r /workspaces/multicloud-auto-deploy/services/api/requirements-gcp.txt -q"
 
@@ -342,7 +342,7 @@ az functionapp create \
   --name multicloud-auto-deploy-production-frontend-web-v2 \
   --resource-group "$RG" \
   --flexconsumption-location japaneast \
-  --runtime python --runtime-version 3.12 \
+  --runtime python --runtime-version 3.13 \
   --storage-account mcadfuncdiev0w
 
 # 2. Fix instance count to 1 (no recycling)
@@ -440,10 +440,10 @@ pulumi config set acmCertificateArn \
 
 ## [RB-16] Fix Azure FC1 InaccessibleStorageException (deployment storage account deleted)
 
-**Trigger:** `az functionapp deployment source config-zip` fails immediately with  
+**Trigger:** `az functionapp deployment source config-zip` fails immediately with
 `InaccessibleStorageException: BlobUploadFailedException: Name or service not known (xxxxx.blob.core.windows.net:443)`
 
-**Root cause:** The `functionAppConfig.deployment.storage` account linked to the FC1 function app has been deleted.  
+**Root cause:** The `functionAppConfig.deployment.storage` account linked to the FC1 function app has been deleted.
 Kudu's `StorageAccessibleCheck` blocks **all** zip deploys until the storage account is restored.
 
 ```bash
@@ -557,13 +557,13 @@ cp scripts/mac-widget/cost-monitor.env.sample scripts/mac-widget/.env
 # 必要な値を記入
 ```
 
-| 環境変数 | 用途 | 取得方法 |
-|---------|------|----------|
-| `AZURE_SUBSCRIPTION_ID` | Azure Cost Management API | `az account show --query id` |
-| `GCP_BILLING_ACCOUNT` | GCP Billing | `gcloud billing accounts list` |
-| `GCP_PROJECT_ID` | GCP プロジェクト | `gcloud config get-value project` |
-| `GITHUB_TOKEN` | GitHub Actions 使用量 | `gh auth token` |
-| `GH_ORG` or `GH_REPO` | GitHub 対象 | Org 名 or `owner/repo` |
+| 環境変数                | 用途                      | 取得方法                          |
+| ----------------------- | ------------------------- | --------------------------------- |
+| `AZURE_SUBSCRIPTION_ID` | Azure Cost Management API | `az account show --query id`      |
+| `GCP_BILLING_ACCOUNT`   | GCP Billing               | `gcloud billing accounts list`    |
+| `GCP_PROJECT_ID`        | GCP プロジェクト          | `gcloud config get-value project` |
+| `GITHUB_TOKEN`          | GitHub Actions 使用量     | `gh auth token`                   |
+| `GH_ORG` or `GH_REPO`   | GitHub 対象               | Org 名 or `owner/repo`            |
 
 AWS は `aws configure` 済みのデフォルトプロファイルを使用（追加設定不要）。
 
@@ -605,13 +605,13 @@ TOTAL  ¥25,010
 
 ### ファイル構成
 
-| ファイル | 役割 |
-|---------|------|
-| `scripts/cost_report.py` | ターミナル用月次レポート（`--months N` / `--json` 対応） |
-| `scripts/mac-widget/cost-monitor.1h.py` | xbar プラグイン本体 |
-| `scripts/mac-widget/cost-monitor.env.sample` | 認証情報テンプレート |
-| `scripts/mac-widget/install.sh` | xbar セットアップスクリプト |
-| `scripts/mac-widget/.env` | 認証情報（**git 管理外**） |
+| ファイル                                     | 役割                                                     |
+| -------------------------------------------- | -------------------------------------------------------- |
+| `scripts/cost_report.py`                     | ターミナル用月次レポート（`--months N` / `--json` 対応） |
+| `scripts/mac-widget/cost-monitor.1h.py`      | xbar プラグイン本体                                      |
+| `scripts/mac-widget/cost-monitor.env.sample` | 認証情報テンプレート                                     |
+| `scripts/mac-widget/install.sh`              | xbar セットアップスクリプト                              |
+| `scripts/mac-widget/.env`                    | 認証情報（**git 管理外**）                               |
 
 ---
 

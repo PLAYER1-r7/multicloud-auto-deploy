@@ -11,41 +11,41 @@
 #   - Docker builds
 
 # FastAPI Core
-fastapi==0.115.0
-pydantic==2.9.0
-pydantic-settings==2.5.2
-uvicorn[standard]==0.32.0
-python-jose[cryptography]==3.3.0
-python-multipart==0.0.9
-pyjwt==2.9.0
-requests==2.32.3
-pypdf==5.3.0
+fastapi==0.134.0
+pydantic==2.12.5
+pydantic-settings==2.13.1
+uvicorn[standard]==0.41.0
+python-jose[cryptography]==3.5.0
+python-multipart==0.0.22
+pyjwt==2.11.0
+requests==2.32.5
+pypdf==6.7.4
 pdfminer.six==20260107
 
 # Database (NoSQL — DynamoDB Local uses boto3, already listed under AWS)
 
 # AWS
-boto3==1.35.0
-mangum==0.17.0
+boto3==1.42.59
+mangum==0.21.0
 
 # Azure
-azure-cosmos==4.8.0
-azure-storage-blob==12.23.0
-azure-identity==1.18.0
-azure-functions==1.20.0  # Azure Functions runtime
-azure-ai-documentintelligence==1.0.0  # Document Intelligence OCR
+azure-cosmos==4.15.0
+azure-storage-blob==12.28.0
+azure-identity==1.25.2
+azure-functions==1.24.0  # Azure Functions runtime
+azure-ai-documentintelligence==1.0.2  # Document Intelligence OCR
 
 # Azure / OpenAI (Azure OpenAI経由でGPT-4o呼び出し)
-openai==1.63.2
-jiter==0.8.0  # Required dependency for openai SDK JSON parsing
+openai==2.24.0
+jiter==0.13.0  # Required dependency for openai SDK JSON parsing
 
 # GCP
-google-cloud-firestore==2.19.0
-google-cloud-storage==2.18.0
-functions-framework==3.5.0  # Cloud Functions runtime
+google-cloud-firestore==2.23.0
+google-cloud-storage==3.9.0
+functions-framework==3.10.1  # Cloud Functions runtime
 
 # S3-compatible (MinIO for local dev)
-minio==7.2.9
+minio==7.2.20
 
 # Testing
 pytest==9.0.2
@@ -56,4 +56,4 @@ httpx==0.28.1
 anyio[trio]==4.12.1
 
 # Linting / formatting (dev only — not needed in Lambda/Cloud Function bundles)
-ruff==0.15.1
+ruff==0.15.4
