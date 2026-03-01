@@ -56,7 +56,7 @@ jobs:
           else
             echo "environment=staging" >> $GITHUB_OUTPUT
             echo "s3_bucket=multicloud-auto-deploy-staging-frontend" >> $GITHUB_OUTPUT
-            echo "cloudfront_id=E1TBH4R432SZBZ" >> $GITHUB_OUTPUT
+            echo "cloudfront_id=E29M67YR7ZQY5A" >> $GITHUB_OUTPUT
             echo "url=https://staging.aws.ashnova.jp/" >> $GITHUB_OUTPUT
           fi
           echo "🌍 Deploying to: $ENV"
