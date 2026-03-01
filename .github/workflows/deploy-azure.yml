@@ -26,9 +26,8 @@ env:
   NODE_VERSION: "24"
   # Must match Azure Functions Flex Consumption runtime version.
   # The "Build and Package" step Docker image must also use this version.
-  # NOTE: Existing Function App is provisioned with 3.11. Change here AND update
-  # the "Ensure Function App runtime version" step when upgrading Python.
-  PYTHON_VERSION: "3.11"
+  # The "Ensure Function App runtime version" step auto-updates existing apps via az rest PATCH.
+  PYTHON_VERSION: "3.13"
 
 # Prevent concurrent Pulumi updates on the same stack (causes 409 Conflict)
 concurrency:
@@ -462,11 +461,11 @@ jobs:
           # Azure Functions Flex Consumption uses Python 3.11 on linux/amd64.
           # The GitHub Actions runner may be a different arch (e.g., arm64), so using the runner's
           # native pip would produce wrong .so binaries (e.g., cpython-311-aarch64 instead of
-          # cpython-311-x86_64). Docker ensures correct platform + Python version.
-          echo "Installing Azure-specific dependencies (linux/amd64 python:3.11)..."
+          # cpython-3XX-x86_64). Docker ensures correct platform + Python version.
+          echo "Installing Azure-specific dependencies (linux/amd64 python:3.13)..."
           docker run --rm --platform linux/amd64 \
             -v "$(pwd):/work" \
-            python:3.11-slim \
+            python:3.13-slim \
             pip install --target /work/.deployment --no-cache-dir -q \
               --prefer-binary \
               -r /work/requirements-azure.txt
