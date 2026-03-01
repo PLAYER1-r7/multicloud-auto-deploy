@@ -161,6 +161,11 @@ jobs:
         run: |
           RG="${{ steps.env.outputs.rg }}"
           PROFILE="${{ steps.env.outputs.afd_profile }}"
+          # AFD プロファイル自体が存在しない場合 (staging などCDNなし) はスキップ
+          if ! az afd profile show --profile-name "$PROFILE" --resource-group "$RG" >/dev/null 2>&1; then
+            echo "⚠️ AFD profile '$PROFILE' not found, skipping purge (CDN-less environment)"
+            exit 0
+          fi
           ENDPOINT=$(az afd endpoint list \
             --profile-name "$PROFILE" \
             --resource-group "$RG" \
