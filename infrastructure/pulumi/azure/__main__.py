@@ -289,7 +289,7 @@ document_intelligence_keys = pulumi.Output.all(
 # Uses GPT-4o model deployed in the same region as other resources.
 azure_openai_account = azure.cognitiveservices.Account(
     "azure-openai",
-    account_name=storage_suffix.result.apply(lambda suffix: f"mcad-openai-{suffix}"),
+    account_name=storage_suffix.result.apply(lambda suffix: f"mcad-oai-{suffix}"),
     resource_group_name=resource_group.name,
     location=location,
     kind="OpenAI",
@@ -300,7 +300,7 @@ azure_openai_account = azure.cognitiveservices.Account(
         public_network_access="Enabled",
         restore=False,
         custom_sub_domain_name=storage_suffix.result.apply(
-            lambda suffix: f"mcad-openai-{suffix}"
+            lambda suffix: f"mcad-oai-{suffix}"
         ),
     ),
     tags=common_tags,
