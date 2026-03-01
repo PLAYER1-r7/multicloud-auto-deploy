@@ -235,14 +235,84 @@ class PlotViewBox(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+# ── 3D 図示モデル ─────────────────────────────────────────────────────────── #
+
+
+class PlotPoint3D(BaseModel):
+    """3D 空間内の点"""
+
+    x: float
+    y: float
+    z: float
+    label: str | None = None
+
+
+class PlotLine3D(BaseModel):
+    """3D 空間内の線分"""
+
+    from_point: list[float] = Field(alias="from")  # [x, y, z]
+    to: list[float]                                  # [x, y, z]
+    label: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class PlotPlane3D(BaseModel):
+    """3D 空間内の平面 (ax + by + cz = d)"""
+
+    a: float = 0.0
+    b: float = 0.0
+    c: float = 1.0
+    d: float = 0.0
+    x_range: list[float] = Field(default_factory=lambda: [-3.0, 3.0], alias="xRange")
+    y_range: list[float] = Field(default_factory=lambda: [-3.0, 3.0], alias="yRange")
+    label: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class PlotSurface3D(BaseModel):
+    """3D 空間内の曲面 z = f(x, y) — mathjs 互換式"""
+
+    fn_z: str = Field(alias="fnZ")  # mathjs 式、例: "x^2 + y^2"
+    x_range: list[float] = Field(default_factory=lambda: [-3.0, 3.0], alias="xRange")
+    y_range: list[float] = Field(default_factory=lambda: [-3.0, 3.0], alias="yRange")
+    label: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class PlotViewRange3D(BaseModel):
+    """3D 軸範囲"""
+
+    x_range: list[float] = Field(default_factory=lambda: [-3.0, 3.0], alias="xRange")
+    y_range: list[float] = Field(default_factory=lambda: [-3.0, 3.0], alias="yRange")
+    z_range: list[float] = Field(default_factory=lambda: [-3.0, 3.0], alias="zRange")
+
+    model_config = {"populate_by_name": True}
+
+
+# ── 統合図示データ ──────────────────────────────────────────────────────────── #
+
+
 class PlotData(BaseModel):
-    """AI が生成する図示データ"""
+    """AI が生成する図示データ (2D / 3D 両対応)"""
 
     need_plot: bool = Field(True, alias="needPlot")
+    dimension: int = Field(2, ge=2, le=3)  # 2: 2D, 3: 3D
+
+    # 2D フィールド
     curves: list[PlotCurve] = Field(default_factory=list)
     segments: list[PlotSegment] = Field(default_factory=list)
     points: list[PlotPoint] = Field(default_factory=list)
     view_box: PlotViewBox | None = Field(None, alias="viewBox")
+
+    # 3D フィールド
+    points3d: list[PlotPoint3D] = Field(default_factory=list)
+    lines3d: list[PlotLine3D] = Field(default_factory=list)
+    planes3d: list[PlotPlane3D] = Field(default_factory=list)
+    surfaces3d: list[PlotSurface3D] = Field(default_factory=list)
+    view_range3d: PlotViewRange3D | None = Field(None, alias="viewRange3d")
 
     model_config = {"populate_by_name": True}
 

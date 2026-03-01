@@ -1140,6 +1140,26 @@ class BaseMathSolver:
                 return diagram_text
 
         problem_type = str(structured_problem.get("problemType", "algebra"))
+
+        if problem_type == "coordinate_2d":
+            objective_text = ""
+            objective = structured_problem.get("objective")
+            if isinstance(objective, list) and objective:
+                objective_text = str(objective[0]).strip()
+            return (
+                "① xy 座標系を描き、与えられた点・直線・曲線を配置する。"
+                f" ② {objective_text or '問題で求めるもの'} を図中に示す。"
+                " ③ 交点・領域・軸との交点を明記し、必要に応じて斜線・矢印で強調する。"
+            )
+
+        if problem_type == "coordinate_3d":
+            return (
+                "① xyz 空間座標系を描き、x・y・z 軸を配置する。"
+                " ② 問題に登場する点・直線・平面・曲面をそれぞれ描く。"
+                " ③ 各要素にラベル（座標値・方程式）を付記する。"
+                " ④ 交点・法線・距離などを図中に示し、立体的に把握できるようにする。"
+            )
+
         if problem_type != "vector_geometry":
             return None
 
@@ -2012,80 +2032,69 @@ class BaseMathSolver:
                 *math_expressions,
             ]
         )
+        lowered = text.lower()
 
+        # ── 3D 座標優先判定（z 軸・xyz 空間・空間座標キーワード）──────────────
+        coord3d_keywords = [
+            "z軸", "xyz空間", "空間座標", "xyz座標", "3次元", "三次元",
+            "yz平面", "xz平面", "zx平面",
+            "空間内", "空間の点", "空間上",
+            r"\(x,y,z\)", r"\(a,b,c\)",  # 正規表現パターンは以下で別途チェック
+        ]
+        coord3d_re_patterns = [
+            r"\bz\s*=\s*[-\d]",        # z = 数値
+            r"(?<!\w)[xyz]\s*[座軸]",    # z座標, z軸 など
+            r"\([^)]*,[^)]*,[^)]*\)",   # (x, y, z) 形式の3要素タプル
+        ]
+        coord3d_score = sum(1 for kw in coord3d_keywords[:7] if kw in lowered)
+        coord3d_score += sum(
+            1 for pat in coord3d_re_patterns
+            if re.search(pat, text)
+        )
+
+        # ── 2D 座標判定（xy 平面・放物線・円・直線など）──────────────────────
+        coord2d_keywords = [
+            "xy平面", "x軸", "y軸", "xy座標", "2次元",
+            "放物線", "双曲線", "楕円",
+            "直線y=", "直線x=", "y=ax",
+            "円の方程式", "交点の座標",
+            "座標を求め", "図示せよ", "座標平面",
+            "領域", "不等式y", "不等式x",
+        ]
+        coord2d_score = sum(1 for kw in coord2d_keywords if kw in lowered)
+
+        # ── その他カテゴリ ──────────────────────────────────────────────────
         category_keywords = {
             "parametric_curve": [
-                "曲線の長さ",
-                "弧長",
-                "媒介変数",
-                "パラメータ",
-                "内分",
-                "描く曲線",
-                "曲線と",
-                "囲まれた",
-                "曲線の長",
-                "t : (1-t)",
-                "t:(1-t)",
+                "曲線の長さ", "弧長", "媒介変数", "パラメータ",
+                "内分", "描く曲線", "曲線と", "囲まれた",
+                "曲線の長", "t : (1-t)", "t:(1-t)",
             ],
             "vector_geometry": [
-                "ベクトル",
-                "内積",
-                "外積",
-                "直線",
-                "平面",
-                "座標",
-                "点",
-                "距離",
-                "法線",
+                "ベクトル", "内積", "外積", "直線",
+                "平面", "座標", "点", "距離", "法線",
             ],
             "calculus": [
-                "微分",
-                "積分",
-                "極値",
-                "増減",
-                "接線",
-                "導関数",
-                "面積",
-                "∫",
+                "微分", "積分", "極値", "増減",
+                "接線", "導関数", "面積", "∫",
             ],
             "probability": [
-                "確率",
-                "期待値",
-                "事象",
-                "試行",
-                "サイコロ",
-                "コイン",
-                "組合せ",
-                "場合の数",
+                "確率", "期待値", "事象", "試行",
+                "サイコロ", "コイン", "組合せ", "場合の数",
             ],
             "sequence": [
-                "数列",
-                "漸化式",
-                "等差",
-                "等比",
-                "一般項",
-                "和",
+                "数列", "漸化式", "等差", "等比", "一般項", "和",
             ],
             "trigonometry": [
-                "三角",
-                "sin",
-                "cos",
-                "tan",
-                "正弦",
-                "余弦",
+                "三角", "sin", "cos", "tan", "正弦", "余弦",
             ],
             "log_exponential": [
-                "対数",
-                "log",
-                "指数",
-                "exp",
-                "ln",
+                "対数", "log", "指数", "exp", "ln",
             ],
         }
 
         best_type = "algebra"
         best_score = 0
-        lowered = text.lower()
 
         for category, keywords in category_keywords.items():
             score = sum(1 for keyword in keywords if keyword.lower() in lowered)
@@ -2093,7 +2102,16 @@ class BaseMathSolver:
                 best_type = category
                 best_score = score
 
+        # 3D 座標はスコアが 1 以上あれば優先（vector_geometry より強い）
+        if coord3d_score >= 1:
+            return "coordinate_3d"
+
+        # 2D 座標はスコアが 2 以上、かつ他カテゴリより同等以上の場合に優先
+        if coord2d_score >= 2 and coord2d_score >= best_score:
+            return "coordinate_2d"
+
         return best_type
+
 
     def _problem_type_guidance(self, problem_type: str) -> str:
         guidance_map = {
@@ -2108,6 +2126,24 @@ class BaseMathSolver:
                 "⑤ 各小問の答えを t（またはパラメータ a）の多項式・分数として簡潔に示す。"
             ),
             "vector_geometry": "図形関係はベクトル・座標で定式化し、条件を方程式化して未知点を解いてください。",
+            "coordinate_2d": (
+                "2次元座標幾何の問題です。必ず次の方針で解いてください: "
+                "① xy 座標系を明示し、与えられた各点・直線・曲線の方程式を整理する。"
+                "② 問題の指示（図示・交点・領域など）に従って幾何的条件を方程式化する。"
+                "③ 図示が求められている場合は plotData フィールドを必ず生成し、"
+                "   dimension=2 として曲線・線分・点をすべて含めること。"
+                "④ viewBox は描画要素全体が収まる適切な範囲を設定する。"
+            ),
+            "coordinate_3d": (
+                "3次元空間座標の問題です。必ず次の方針で解いてください: "
+                "① xyz 座標系を明示し、点・直線・平面・曲面の方程式を整理する。"
+                "② 問題の指示（交点・距離・体積・図示など）に従って条件を方程式化する。"
+                "③ 図示が求められている場合は plotData フィールドを必ず生成し、"
+                "   dimension=3 として points3d・lines3d・planes3d・surfaces3d を"
+                "   解答に登場する要素すべてについて生成すること。"
+                "④ 平面は ax+by+cz=d の係数 (a,b,c,d) で表現し、"
+                "   曲面は fnZ フィールドに mathjs 互換の z=f(x,y) 式を記述する。"
+            ),
             "calculus": "関数を定義し、微分・増減・極値または積分の標準手順で厳密に処理してください。",
             "probability": "標本空間・事象・場合分けを明示し、重複や漏れがないように確率を計算してください。",
             "sequence": "漸化式や一般項を明示し、帰納的関係と初期条件から式を確定してください。",
@@ -2188,6 +2224,30 @@ class BaseMathSolver:
                 if request.options.need_steps:
                     steps_rule = self._build_geometry_steps_rule(structured_problem)
 
+            elif problem_type == "coordinate_2d":
+                final_rule = (
+                    "finalには求めた座標・方程式・領域を明記し、問題の指示通りに図示対象を列挙してください。"
+                )
+                if request.options.need_steps:
+                    steps_rule = (
+                        "stepsには ① 与えられた点・直線・曲線の方程式を整理 "
+                        "② 交点・距離・面積などの計算 ③ 図示方法の説明 の順で記述してください。"
+                        "各ステップは日本語テキストと $...$ インライン数式を混在させた自然な文章で書くこと。"
+                        "\\begin{aligned} などのLaTeX環境は絶対に使わないこと。"
+                    )
+
+            elif problem_type == "coordinate_3d":
+                final_rule = (
+                    "finalには求めた点・直線・平面・体積などを明記し、xyz座標を使って簡潔に示してください。"
+                )
+                if request.options.need_steps:
+                    steps_rule = (
+                        "stepsには ① xyz座標系の設定と各要素の方程式 "
+                        "② 交点・法線・距離・体積などの計算 ③ 3D図の構成要素の説明（どの点・直線・平面を描くか）"
+                        " の順で記述してください。"
+                        "各ステップは日本語テキストと $...$ インライン数式を混在させた自然な文章で書くこと。"
+                    )
+
             math_block_section = ""
             math_blocks = structured_problem.get("mathBlocks")
             if isinstance(math_blocks, list) and math_blocks:
@@ -2205,6 +2265,22 @@ class BaseMathSolver:
                 f"{math_block_section}"
             )
 
+        # 座標問題は必ず plotData を生成するよう強制
+        is_coordinate_problem = (
+            structured_problem is not None
+            and str(structured_problem.get("problemType", "")).startswith("coordinate_")
+        )
+        plot_data_rule = (
+            "【必須】座標問題のため plotData を必ず生成してください。"
+            "dimension=2 の場合: curves/segments/points/viewBox を使い、"
+            "問題に登場する全ての曲線・直線・点を含めること。"
+            "dimension=3 の場合: points3d/lines3d/planes3d/surfaces3d を使い、"
+            "問題に登場する全ての空間要素を含めること。"
+            "needPlot は必ず true にすること。"
+            if is_coordinate_problem
+            else "図示が必要な問題（媒介変数曲線・領域・座標幾何など）では必ず plotData を生成。不要な場合は{\"needPlot\":false}。"
+        )
+
         return (
             "あなたは大学入試数学の解答アシスタントです。"
             "与えられた問題文を読み、厳密に解答してください。"
@@ -2214,13 +2290,24 @@ class BaseMathSolver:
             f"問題タイプ別の解法方針: {type_guidance}"
             "OCRが曖昧な箇所は、最小限の仮定を明示して解き、confidenceを下げてください。"
             "出力は必ずJSONオブジェクトのみで返してください。\n"
-            "JSON形式:"
+            "JSON形式:\n"
             '{"final":"最終答案","latex":"LaTeX文字列またはnull",'
             '"steps":["手順1","手順2"],"diagramGuide":"図示手順の文章またはnull",'
-            '"plotData":{"needPlot":true/false,"curves":[{"type":"parametric","x":"t式","y":"t式","tMin":0,"tMax":1,"label":"曲線名"}],'
+            '"plotData":{'
+            '"needPlot":true/false,'
+            '"dimension":2または3,'
+            # 2D フィールド
+            '"curves":[{"type":"parametric","x":"t式","y":"t式","tMin":0,"tMax":1,"label":"曲線名"}],'
             '"segments":[{"from":[x1,y1],"to":[x2,y2],"label":"線分名"}],'
             '"points":[{"x":数値,"y":数値,"label":"点名"}],'
-            '"viewBox":{"xMin":数値,"xMax":数値,"yMin":数値,"yMax":数値}}またはnull,'
+            '"viewBox":{"xMin":数値,"xMax":数値,"yMin":数値,"yMax":数値},'
+            # 3D フィールド
+            '"points3d":[{"x":数値,"y":数値,"z":数値,"label":"点名"}],'
+            '"lines3d":[{"from":[x1,y1,z1],"to":[x2,y2,z2],"label":"線分名"}],'
+            '"planes3d":[{"a":数値,"b":数値,"c":数値,"d":数値,"xRange":[min,max],"yRange":[min,max],"label":"平面名"}],'
+            '"surfaces3d":[{"fnZ":"mathjs式(x,y)","xRange":[min,max],"yRange":[min,max],"label":"曲面名"}],'
+            '"viewRange3d":{"xRange":[min,max],"yRange":[min,max],"zRange":[min,max]}'
+            '}またはnull,'
             '"confidence":0.0から1.0}\n\n'
             f"大学: {request.exam.university}\n"
             f"年度: {request.exam.year}\n"
@@ -2234,14 +2321,16 @@ class BaseMathSolver:
             f"追加規則(latex): {latex_rule}\n"
             f"追加規則(final): {final_rule or '通常の最終答案を簡潔に記述。'}\n"
             f"追加規則(数式再解釈): {reinterpret_rule}\n"
-            "追加規則(diagramGuide): vector_geometryの場合は図示手順を文章で必ず記述し、その他はnull可。\n"
-            "追加規則(plotData): 図示が必要な問題（媒介変数曲線・領域・座標幾何など）では必ず plotData を生成。"
-            'curves.x/y には mathjs 互換の式（例: t^2*(3-2*t))を使用。式の中にスペースは入れないこと。不要な場合は{"needPlot":false}。\n'
+            "追加規則(diagramGuide): coordinate_2d/coordinate_3d/vector_geometryの場合は図示手順を文章で必ず記述し、その他はnull可。\n"
+            f"追加規則(plotData): {plot_data_rule}\n"
+            "plotData.curves.x/y には mathjs 互換の式（例: t^2*(3-2*t))を使用。式の中にスペースは入れないこと。\n"
+            "plotData.surfaces3d.fnZ には mathjs 互換の式（例: x^2+y^2）を使用。\n"
             f"サンプル参照: {sample_hint or '利用可能な年度サンプルなし。'}\n"
             f"{structured_section}\n"
             "問題文:\n"
             f"{problem_text}"
         )
+
 
     def _build_scratchpad_prompt(
         self,

@@ -14,6 +14,7 @@ import type {
 } from "../types/learning";
 import MathText from "../components/MathText";
 import MathGraph from "../components/MathGraph";
+import MathGraph3D from "../components/MathGraph3D";
 import EnhancedMaterialCard from "../components/EnhancedMaterialCard";
 import AudioPlayer from "../components/AudioPlayer";
 import PersonalizationPanel from "../components/PersonalizationPanel";
@@ -337,7 +338,11 @@ export default function SolverPage() {
                 {result.answer.plotData?.needPlot && (
                   <div className="answer-graph">
                     <h5 className="steps-title">グラフ</h5>
-                    <MathGraph data={result.answer.plotData} />
+                    {result.answer.plotData.dimension === 3 ? (
+                      <MathGraph3D data={result.answer.plotData} />
+                    ) : (
+                      <MathGraph data={result.answer.plotData} />
+                    )}
                   </div>
                 )}
 

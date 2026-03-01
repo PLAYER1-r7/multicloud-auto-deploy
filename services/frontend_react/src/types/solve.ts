@@ -59,12 +59,59 @@ export interface PlotViewBox {
   yMax: number;
 }
 
+// ── 3D 図示データ ────────────────────────────────────
+export interface PlotPoint3D {
+  x: number;
+  y: number;
+  z: number;
+  label?: string;
+}
+
+export interface PlotLine3D {
+  from: [number, number, number];
+  to: [number, number, number];
+  label?: string;
+}
+
+export interface PlotPlane3D {
+  /** ax + by + cz = d */
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  xRange: [number, number];
+  yRange: [number, number];
+  label?: string;
+}
+
+export interface PlotSurface3D {
+  /** mathjs 互換式 z = f(x, y) */
+  fnZ: string;
+  xRange: [number, number];
+  yRange: [number, number];
+  label?: string;
+}
+
+export interface PlotViewRange3D {
+  xRange: [number, number];
+  yRange: [number, number];
+  zRange: [number, number];
+}
+
 export interface PlotData {
   needPlot: boolean;
+  /** 2 = 2D (default), 3 = 3D */
+  dimension?: number;
   curves: PlotCurve[];
   segments?: PlotSegment[];
   points?: PlotPoint[];
   viewBox?: PlotViewBox;
+  /** 3D data */
+  points3d?: PlotPoint3D[];
+  lines3d?: PlotLine3D[];
+  planes3d?: PlotPlane3D[];
+  surfaces3d?: PlotSurface3D[];
+  viewRange3d?: PlotViewRange3D;
 }
 
 // ── 解答・レスポンス ────────────────────────────────
