@@ -171,11 +171,17 @@ jobs:
           fi
 
           # CloudFront/カスタムドメインがない場合 (staging) は S3 website URL を使用
+          # ただし S3 website は HTTP のため Cognito は HTTP redirect URI を拒否する。
+          # CDN なし staging では localhost のみを Cognito に登録する (テスト用途として十分)。
           if [[ -z "$CF_DOMAIN" && -z "$CUSTOM_DOMAIN" && -n "$FRONTEND_URL" ]]; then
             S3_BASE="${FRONTEND_URL%/}"
-            CALLBACK_URLS="$CALLBACK_URLS ${S3_BASE}/sns/auth/callback"
-            LOGOUT_URLS="$LOGOUT_URLS ${S3_BASE}/sns/"
-            echo "📦 S3 website callback URLs added: ${S3_BASE}/sns/auth/callback"
+            if [[ "$S3_BASE" == https://* ]]; then
+              CALLBACK_URLS="$CALLBACK_URLS ${S3_BASE}/sns/auth/callback"
+              LOGOUT_URLS="$LOGOUT_URLS ${S3_BASE}/sns/"
+              echo "📦 S3 website callback URLs added: ${S3_BASE}/sns/auth/callback"
+            else
+              echo "⚠️  S3 website URL is HTTP (${S3_BASE}) - skipping Cognito registration (HTTP not allowed). Use localhost for testing."
+            fi
           fi
 
           aws cognito-idp update-user-pool-client \
