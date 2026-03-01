@@ -451,6 +451,7 @@ jobs:
             -v "$(pwd):/work" \
             python:3.13-slim \
             pip install --target /work/.deployment --no-cache-dir -q \
+              --prefer-binary \
               -r /work/requirements-azure.txt
 
           # Aggressive cleanup of unnecessary files
@@ -485,6 +486,13 @@ jobs:
             echo "✅ pydantic_core: $(basename $SO_FILE)"
           else
             echo "⚠️  pydantic_core .so not found — package may be missing"
+          fi
+          JITER_SO=$(find .deployment -name 'jiter*.so' | head -1)
+          if [ -n "$JITER_SO" ]; then
+            echo "✅ jiter C extension: $(basename $JITER_SO)"
+          else
+            echo "❌ jiter .so not found — openai JSON parsing will fail (No module named 'jiter.jiter')"
+            exit 1
           fi
 
           # Create ZIP package with maximum compression
