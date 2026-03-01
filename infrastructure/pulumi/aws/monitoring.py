@@ -258,7 +258,7 @@ def setup_monitoring(
     lambda_function_name: pulumi.Output[str],
     api_gateway_id: pulumi.Output[str],
     api_gateway_name: pulumi.Output[str],
-    cloudfront_distribution_id: pulumi.Output[str],
+    cloudfront_distribution_id: Optional[pulumi.Output[str]] = None,
     alarm_email: Optional[str] = None,
 ) -> dict:
     """
@@ -288,13 +288,15 @@ def setup_monitoring(
         sns_topic.arn,
     )
 
-    # Create CloudFront alarms
-    cloudfront_alarms = create_cloudfront_alarms(
-        project_name,
-        stack,
-        cloudfront_distribution_id,
-        sns_topic.arn,
-    )
+    # Create CloudFront alarms only when distribution is provided
+    cloudfront_alarms = {}
+    if cloudfront_distribution_id is not None:
+        cloudfront_alarms = create_cloudfront_alarms(
+            project_name,
+            stack,
+            cloudfront_distribution_id,
+            sns_topic.arn,
+        )
 
     return {
         "sns_topic": sns_topic,

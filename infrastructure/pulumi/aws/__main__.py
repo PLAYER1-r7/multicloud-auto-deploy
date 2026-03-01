@@ -37,6 +37,10 @@ cf_domain = config.get("cloudFrontDomain") or ""
 # Used for Cognito callback/logout URLs alongside the CloudFront domain
 custom_domain = config.get("customDomain") or ""
 
+# CloudFront / CDN: production only
+# Staging uses direct S3 static website hosting (no CDN, no custom domain)
+use_cloudfront = (stack == "production")
+
 # Common tags
 common_tags = {
     "Project": project_name,
@@ -548,14 +552,16 @@ frontend_bucket = aws.s3.Bucket(
     tags=common_tags,
 )
 
-# Block all public access — CloudFront OAI 経由のみアクセス許可
+# S3 public access:
+# - production: block all (CloudFront OAI 経由のみ)
+# - staging: allow public read (direct S3 website hosting)
 frontend_public_access = aws.s3.BucketPublicAccessBlock(
     "frontend-public-access",
     bucket=frontend_bucket.id,
-    block_public_acls=True,
-    block_public_policy=True,
-    ignore_public_acls=True,
-    restrict_public_buckets=True,
+    block_public_acls=use_cloudfront,
+    block_public_policy=use_cloudfront,
+    ignore_public_acls=use_cloudfront,
+    restrict_public_buckets=use_cloudfront,
 )
 
 # Configure bucket for website hosting
@@ -571,45 +577,71 @@ aws.s3.BucketWebsiteConfigurationV2(
 )
 
 # ========================================
-# CloudFront Distribution for Frontend
+# CloudFront Distribution for Frontend (production のみ)
+# staging は S3 静的ウェブホスティングを直接使用 (CDN なし)
 # ========================================
-# CloudFront Origin Access Identity (OAI) for S3 access
-cloudfront_oai = aws.cloudfront.OriginAccessIdentity(
-    "cloudfront-oai",
-    comment=f"{project_name}-{stack} CloudFront OAI",
-)
+if use_cloudfront:
+    # CloudFront Origin Access Identity (OAI) for S3 access
+    cloudfront_oai = aws.cloudfront.OriginAccessIdentity(
+        "cloudfront-oai",
+        comment=f"{project_name}-{stack} CloudFront OAI",
+    )
 
-# S3 バケットポリシー: CloudFront OAI 経由のみ許可（パブリック直接アクセス禁止）
-cloudfront_bucket_policy = aws.s3.BucketPolicy(
-    "cloudfront-bucket-policy",
-    bucket=frontend_bucket.id,
-    policy=pulumi.Output.all(frontend_bucket.arn, cloudfront_oai.iam_arn).apply(
-        lambda args: json.dumps(
-            {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "CloudFrontOAIAccess",
-                        "Effect": "Allow",
-                        "Principal": {"AWS": args[1]},
-                        "Action": "s3:GetObject",
-                        "Resource": f"{args[0]}/*",
-                    },
-                ],
-            }
-        )
-    ),
-    opts=pulumi.ResourceOptions(
-        depends_on=[frontend_public_access], replace_on_changes=["bucket"]
-    ),
-)
+    # S3 バケットポリシー: CloudFront OAI 経由のみ許可（パブリック直接アクセス禁止）
+    cloudfront_bucket_policy = aws.s3.BucketPolicy(
+        "cloudfront-bucket-policy",
+        bucket=frontend_bucket.id,
+        policy=pulumi.Output.all(frontend_bucket.arn, cloudfront_oai.iam_arn).apply(
+            lambda args: json.dumps(
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "CloudFrontOAIAccess",
+                            "Effect": "Allow",
+                            "Principal": {"AWS": args[1]},
+                            "Action": "s3:GetObject",
+                            "Resource": f"{args[0]}/*",
+                        },
+                    ],
+                }
+            )
+        ),
+        opts=pulumi.ResourceOptions(
+            depends_on=[frontend_public_access], replace_on_changes=["bucket"]
+        ),
+    )
+else:
+    # staging: S3 パブリック読み取りポリシー (CloudFront なし)
+    cloudfront_oai = None
+    aws.s3.BucketPolicy(
+        "frontend-bucket-public-policy",
+        bucket=frontend_bucket.id,
+        policy=frontend_bucket.arn.apply(
+            lambda arn: json.dumps(
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "PublicReadGetObject",
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": "s3:GetObject",
+                            "Resource": f"{arn}/*",
+                        }
+                    ],
+                }
+            )
+        ),
+        opts=pulumi.ResourceOptions(depends_on=[frontend_public_access]),
+    )
 
 # ========================================
-# AWS WAF for CloudFront
+# AWS WAF / CloudFront Response Headers / Distribution
+# production のみ作成 (staging は CDN なし)
 # ========================================
-# WAF Web ACL for DDoS protection and rate limiting
-# Note: WAF is disabled for staging to reduce cost (~$6/month)
-if stack == "production":
+if use_cloudfront:
+    # WAF Web ACL for DDoS protection and rate limiting
     waf_web_acl = aws.wafv2.WebAcl(
         "cloudfront-waf",
         name=f"{project_name}-{stack}-cloudfront-waf",
@@ -688,164 +720,154 @@ if stack == "production":
         ),
     )
 
-# ========================================
-# CloudFront Response Headers Policy (セキュリティヘッダー)
-# HSTS, CSP(upgrade-insecure-requests), X-Content-Type-Options,
-# X-Frame-Options, Referrer-Policy, XSS を付与
-# 「保護されていない通信」警告の解消
-# ========================================
-cloudfront_response_headers_policy = aws.cloudfront.ResponseHeadersPolicy(
-    "security-headers-policy",
-    name=f"{project_name}-{stack}-security-headers",
-    comment="Security headers: HSTS, CSP upgrade-insecure-requests, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, XSS",
-    security_headers_config=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigArgs(
-        strict_transport_security=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigStrictTransportSecurityArgs(
-            access_control_max_age_sec=31536000,  # 1年
-            include_subdomains=True,
-            preload=False,  # HSTS preload list 登録は手動で行うため False
-            override=True,
-        ),
-        # upgrade-insecure-requests: ブラウザが自動的に HTTP → HTTPS にアップグレード
-        # 「保護されていない通信」(mixed content) 警告を抑制する
-        content_security_policy=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigContentSecurityPolicyArgs(
-            content_security_policy="upgrade-insecure-requests",
-            override=True,
-        ),
-        content_type_options=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigContentTypeOptionsArgs(
-            override=True,
-        ),
-        frame_options=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigFrameOptionsArgs(
-            frame_option="SAMEORIGIN",
-            override=True,
-        ),
-        referrer_policy=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigReferrerPolicyArgs(
-            referrer_policy="strict-origin-when-cross-origin",
-            override=True,
-        ),
-        xss_protection=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigXssProtectionArgs(
-            mode_block=True,
-            override=True,
-            protection=True,
-        ),
-    ),
-)
-
-# CloudFront Distribution with conditional WAF
-# PriceClass_200: 北米 + 欧州 + 日本 + 韓国 + インド (日本ユーザーの遅延解消)
-# PriceClass_100 (北米+欧州のみ) は日本からのアクセスが米国エッジ経由になり遅延が大きい
-cloudfront_kwargs = {
-    "enabled": True,
-    "is_ipv6_enabled": True,
-    "comment": f"{project_name}-{stack} Frontend Distribution",
-    "default_root_object": "index.html",
-    "price_class": "PriceClass_200",  # NA/EU/JP/KR/IN エッジ使用 (PriceClass_All より安価)
-    "origins": [
-        aws.cloudfront.DistributionOriginArgs(
-            origin_id=frontend_bucket.bucket_regional_domain_name,
-            domain_name=frontend_bucket.bucket_regional_domain_name,
-            s3_origin_config=aws.cloudfront.DistributionOriginS3OriginConfigArgs(
-                origin_access_identity=cloudfront_oai.cloudfront_access_identity_path,
+    # ========================================
+    # CloudFront Response Headers Policy (セキュリティヘッダー)
+    # HSTS, CSP(upgrade-insecure-requests), X-Content-Type-Options,
+    # X-Frame-Options, Referrer-Policy, XSS を付与
+    # ========================================
+    cloudfront_response_headers_policy = aws.cloudfront.ResponseHeadersPolicy(
+        "security-headers-policy",
+        name=f"{project_name}-{stack}-security-headers",
+        comment="Security headers: HSTS, CSP upgrade-insecure-requests, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, XSS",
+        security_headers_config=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigArgs(
+            strict_transport_security=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigStrictTransportSecurityArgs(
+                access_control_max_age_sec=31536000,  # 1年
+                include_subdomains=True,
+                preload=False,
+                override=True,
+            ),
+            content_security_policy=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigContentSecurityPolicyArgs(
+                content_security_policy="upgrade-insecure-requests",
+                override=True,
+            ),
+            content_type_options=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigContentTypeOptionsArgs(
+                override=True,
+            ),
+            frame_options=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigFrameOptionsArgs(
+                frame_option="SAMEORIGIN",
+                override=True,
+            ),
+            referrer_policy=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigReferrerPolicyArgs(
+                referrer_policy="strict-origin-when-cross-origin",
+                override=True,
+            ),
+            xss_protection=aws.cloudfront.ResponseHeadersPolicySecurityHeadersConfigXssProtectionArgs(
+                mode_block=True,
+                override=True,
+                protection=True,
             ),
         ),
-    ],
-    "default_cache_behavior": aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
-        target_origin_id=frontend_bucket.bucket_regional_domain_name,
-        viewer_protocol_policy="redirect-to-https",
-        allowed_methods=["GET", "HEAD", "OPTIONS"],
-        cached_methods=["GET", "HEAD"],
-        compress=True,
-        forwarded_values=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
-            query_string=False,
-            cookies=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs(
-                forward="none",
+    )
+
+    # CloudFront Distribution with WAF
+    cloudfront_kwargs = {
+        "enabled": True,
+        "is_ipv6_enabled": True,
+        "comment": f"{project_name}-{stack} Frontend Distribution",
+        "default_root_object": "index.html",
+        "price_class": "PriceClass_200",
+        "origins": [
+            aws.cloudfront.DistributionOriginArgs(
+                origin_id=frontend_bucket.bucket_regional_domain_name,
+                domain_name=frontend_bucket.bucket_regional_domain_name,
+                s3_origin_config=aws.cloudfront.DistributionOriginS3OriginConfigArgs(
+                    origin_access_identity=cloudfront_oai.cloudfront_access_identity_path,
+                ),
+            ),
+        ],
+        "default_cache_behavior": aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
+            target_origin_id=frontend_bucket.bucket_regional_domain_name,
+            viewer_protocol_policy="redirect-to-https",
+            allowed_methods=["GET", "HEAD", "OPTIONS"],
+            cached_methods=["GET", "HEAD"],
+            compress=True,
+            forwarded_values=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
+                query_string=False,
+                cookies=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs(
+                    forward="none",
+                ),
+            ),
+            response_headers_policy_id=cloudfront_response_headers_policy.id,
+            min_ttl=0,
+            default_ttl=3600,
+            max_ttl=86400,
+        ),
+        "custom_error_responses": [
+            aws.cloudfront.DistributionCustomErrorResponseArgs(
+                error_code=403,
+                response_code=200,
+                response_page_path="/index.html",
+            ),
+            aws.cloudfront.DistributionCustomErrorResponseArgs(
+                error_code=404,
+                response_code=200,
+                response_page_path="/index.html",
+            ),
+        ],
+        "restrictions": aws.cloudfront.DistributionRestrictionsArgs(
+            geo_restriction=aws.cloudfront.DistributionRestrictionsGeoRestrictionArgs(
+                restriction_type="none",
             ),
         ),
-        response_headers_policy_id=cloudfront_response_headers_policy.id,
-        min_ttl=0,
-        default_ttl=3600,  # 1 hour
-        max_ttl=86400,  # 24 hours
-    ),
-    "custom_error_responses": [
-        aws.cloudfront.DistributionCustomErrorResponseArgs(
-            error_code=403,
-            response_code=200,
-            response_page_path="/index.html",
-        ),
-        aws.cloudfront.DistributionCustomErrorResponseArgs(
-            error_code=404,
-            response_code=200,
-            response_page_path="/index.html",
-        ),
-    ],
-    "restrictions": aws.cloudfront.DistributionRestrictionsArgs(
-        geo_restriction=aws.cloudfront.DistributionRestrictionsGeoRestrictionArgs(
-            restriction_type="none",
-        ),
-    ),
-    "tags": common_tags,
-}
+        "tags": common_tags,
+    }
 
-# Custom domain configuration (optional)
-# custom_domain is defined near the top of this file
-acm_certificate_arn = config.get(
-    "acmCertificateArn"
-)  # ACM certificate ARN in us-east-1
+    # Custom domain configuration (optional)
+    acm_certificate_arn = config.get("acmCertificateArn")
 
-if custom_domain and acm_certificate_arn:
-    cloudfront_kwargs["aliases"] = [custom_domain]
-    cloudfront_kwargs["viewer_certificate"] = (
-        aws.cloudfront.DistributionViewerCertificateArgs(
-            acm_certificate_arn=acm_certificate_arn,
-            ssl_support_method="sni-only",
-            minimum_protocol_version="TLSv1.2_2021",
+    if custom_domain and acm_certificate_arn:
+        cloudfront_kwargs["aliases"] = [custom_domain]
+        cloudfront_kwargs["viewer_certificate"] = (
+            aws.cloudfront.DistributionViewerCertificateArgs(
+                acm_certificate_arn=acm_certificate_arn,
+                ssl_support_method="sni-only",
+                minimum_protocol_version="TLSv1.2_2021",
+            )
         )
-    )
-else:
-    cloudfront_kwargs["viewer_certificate"] = (
-        aws.cloudfront.DistributionViewerCertificateArgs(
-            cloudfront_default_certificate=True,
+    else:
+        cloudfront_kwargs["viewer_certificate"] = (
+            aws.cloudfront.DistributionViewerCertificateArgs(
+                cloudfront_default_certificate=True,
+            )
         )
-    )
 
-# Add WAF only for production
-if stack == "production":
+    # WAF only for production
     cloudfront_kwargs["web_acl_id"] = waf_web_acl.arn
 
-# /sns* → S3 bucket (React SPA static files)
-# React SPA はビルド済み静的ファイルなので S3 オリジンを使用
-# CloudFront Function で /sns/ → /sns/index.html にリライト (SPA ルーティング対応)
-cf_function_name = f"spa-sns-rewrite-{stack}"
-caller_identity = aws.get_caller_identity()
-cf_function_arn = (
-    f"arn:aws:cloudfront::{caller_identity.account_id}:function/{cf_function_name}"
-)
-cloudfront_kwargs["ordered_cache_behaviors"] = [
-    aws.cloudfront.DistributionOrderedCacheBehaviorArgs(
-        path_pattern="/sns*",
-        target_origin_id=frontend_bucket.bucket_regional_domain_name,
-        viewer_protocol_policy="redirect-to-https",
-        allowed_methods=["GET", "HEAD", "OPTIONS"],
-        cached_methods=["GET", "HEAD"],
-        compress=True,
-        # Managed CachingOptimized policy (静的ファイル向けキャッシュ)
-        cache_policy_id="658327ea-f89d-4fab-a63d-7e88639e58f6",
-        response_headers_policy_id=cloudfront_response_headers_policy.id,
-        function_associations=[
-            aws.cloudfront.DistributionOrderedCacheBehaviorFunctionAssociationArgs(
-                event_type="viewer-request",
-                function_arn=cf_function_arn,
-            )
-        ],
+    # /sns* → S3 React SPA
+    cf_function_name = f"spa-sns-rewrite-{stack}"
+    caller_identity = aws.get_caller_identity()
+    cf_function_arn = (
+        f"arn:aws:cloudfront::{caller_identity.account_id}:function/{cf_function_name}"
     )
-]
+    cloudfront_kwargs["ordered_cache_behaviors"] = [
+        aws.cloudfront.DistributionOrderedCacheBehaviorArgs(
+            path_pattern="/sns*",
+            target_origin_id=frontend_bucket.bucket_regional_domain_name,
+            viewer_protocol_policy="redirect-to-https",
+            allowed_methods=["GET", "HEAD", "OPTIONS"],
+            cached_methods=["GET", "HEAD"],
+            compress=True,
+            cache_policy_id="658327ea-f89d-4fab-a63d-7e88639e58f6",
+            response_headers_policy_id=cloudfront_response_headers_policy.id,
+            function_associations=[
+                aws.cloudfront.DistributionOrderedCacheBehaviorFunctionAssociationArgs(
+                    event_type="viewer-request",
+                    function_arn=cf_function_arn,
+                )
+            ],
+        )
+    ]
 
-cloudfront_distribution = aws.cloudfront.Distribution(
-    "cloudfront-distribution", **cloudfront_kwargs
-)
+    cloudfront_distribution = aws.cloudfront.Distribution(
+        "cloudfront-distribution", **cloudfront_kwargs
+    )
+else:
+    # staging: CloudFront なし
+    cloudfront_distribution = None
+    acm_certificate_arn = None
 
-# ========================================
-# CloudTrail - Audit Logging (optional — requires cloudtrail:* IAM permissions)
-# Enable by running: pulumi config set cloudtrailEnabled true
+
 # IAM requirements: cloudtrail:CreateTrail, cloudtrail:StartLogging,
 #                   cloudtrail:GetTrail, cloudtrail:DescribeTrails,
 #                   cloudtrail:PutEventSelectors, cloudtrail:ListTags
@@ -938,7 +960,7 @@ monitoring_resources = monitoring.setup_monitoring(
     lambda_function_name=lambda_function.name,
     api_gateway_id=api_gateway.id,
     api_gateway_name=api_gateway.name,
-    cloudfront_distribution_id=cloudfront_distribution.id,
+    cloudfront_distribution_id=cloudfront_distribution.id if cloudfront_distribution else None,
     alarm_email=alarm_email,
 )
 
@@ -956,19 +978,20 @@ pulumi.export(
     "frontend_url",
     frontend_bucket.website_endpoint.apply(lambda endpoint: f"http://{endpoint}"),
 )
-pulumi.export("cloudfront_distribution_id", cloudfront_distribution.id)
-pulumi.export("cloudfront_domain", cloudfront_distribution.domain_name)
-pulumi.export(
-    "cloudfront_url",
-    cloudfront_distribution.domain_name.apply(lambda domain: f"https://{domain}"),
-)
+pulumi.export("cloudfront_distribution_id", cloudfront_distribution.id if cloudfront_distribution else "")
+pulumi.export("cloudfront_domain", cloudfront_distribution.domain_name if cloudfront_distribution else "")
+if cloudfront_distribution:
+    pulumi.export(
+        "cloudfront_url",
+        cloudfront_distribution.domain_name.apply(lambda domain: f"https://{domain}"),
+    )
 # Custom domain exports (if configured)
-if custom_domain:
+if custom_domain and use_cloudfront:
     pulumi.export("custom_domain", custom_domain)
     pulumi.export("custom_domain_url", f"https://{custom_domain}")
     pulumi.export("acm_certificate_arn", acm_certificate_arn)
 # WAF exports only for production
-if stack == "production":
+if use_cloudfront:
     pulumi.export("waf_web_acl_id", waf_web_acl.id)
     pulumi.export("waf_web_acl_arn", waf_web_acl.arn)
 pulumi.export("secret_name", app_secret.name)

@@ -56,8 +56,8 @@ jobs:
           else
             echo "environment=staging" >> $GITHUB_OUTPUT
             echo "s3_bucket=multicloud-auto-deploy-staging-frontend" >> $GITHUB_OUTPUT
-            echo "cloudfront_id=E29M67YR7ZQY5A" >> $GITHUB_OUTPUT
-            echo "url=https://staging.aws.ashnova.jp/" >> $GITHUB_OUTPUT
+            echo "cloudfront_id=" >> $GITHUB_OUTPUT
+            echo "url=http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com/" >> $GITHUB_OUTPUT
           fi
           echo "🌍 Deploying to: $ENV"
 
@@ -85,10 +85,16 @@ jobs:
 
       - name: Invalidate CloudFront Cache
         run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ steps.env.outputs.cloudfront_id }} \
-            --paths "/*" \
-            --no-cli-pager
+          CF_ID="${{ steps.env.outputs.cloudfront_id }}"
+          if [[ -n "$CF_ID" ]]; then
+            aws cloudfront create-invalidation \
+              --distribution-id "$CF_ID" \
+              --paths "/*" \
+              --no-cli-pager
+            echo "✅ CloudFront cache invalidated"
+          else
+            echo "⏭️ No CloudFront distribution — skipping invalidation"
+          fi
 
       - name: Deployment Success
         run: |
