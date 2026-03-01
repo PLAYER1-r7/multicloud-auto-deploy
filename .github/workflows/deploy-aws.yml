@@ -165,6 +165,15 @@ jobs:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           AWS_REGION: ${{ env.AWS_REGION }}
 
+      - name: Refresh Pulumi State (sync with actual AWS resources)
+        run: |
+          cd infrastructure/pulumi/aws
+          # Detect and fix state drift (e.g. CloudFront distribution replaced outside Pulumi)
+          pulumi refresh --yes --skip-preview 2>&1 | tail -20
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5
