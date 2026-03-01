@@ -142,7 +142,8 @@ jobs:
             echo "✅ Setting cloudFrontDomain = $CF_DOMAIN"
             pulumi config set multicloud-auto-deploy-aws:cloudFrontDomain "$CF_DOMAIN"
           else
-            echo "⚠️  cloudFrontDomain not set in $STACK_FILE — skipping"
+            echo "⚠️  cloudFrontDomain not set — removing from Pulumi config (staging uses S3 website directly)"
+            pulumi config rm multicloud-auto-deploy-aws:cloudFrontDomain 2>/dev/null || true
           fi
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}

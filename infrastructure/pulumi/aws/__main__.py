@@ -157,10 +157,14 @@ user_pool_client = aws.cognito.UserPoolClient(
     callback_urls=unique_urls(
         ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else [])
         + ([f"https://{custom_domain}/sns/auth/callback"] if custom_domain else [])
+        # staging: CDN/カスタムドメインなしの場合はローカル開発用フォールバック
+        + (["https://localhost:3000/sns/auth/callback"] if not cf_domain and not custom_domain else [])
     ),
     logout_urls=unique_urls(
         ([f"https://{cf_domain}/sns/"] if cf_domain else [])
         + ([f"https://{custom_domain}/sns/"] if custom_domain else [])
+        # staging: CDN/カスタムドメインなしの場合はローカル開発用フォールバック
+        + (["https://localhost:3000/sns/"] if not cf_domain and not custom_domain else [])
     ),
     access_token_validity=1,
     id_token_validity=1,
