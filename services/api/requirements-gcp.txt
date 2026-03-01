@@ -16,7 +16,7 @@ pdfminer.six==20260107
 google-cloud-firestore==2.23.0
 google-cloud-storage==3.9.0
 google-cloud-vision==3.8.1
-google-cloud-aiplatform==1.77.0
+google-cloud-aiplatform==1.139.0
 functions-framework==3.10.1
 
 # Database (optional - only if using)
