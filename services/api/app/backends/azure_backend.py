@@ -311,7 +311,7 @@ class AzureBackend(BackendBase):
 
             raise HTTPException(status_code=404, detail="Post not found")
 
-        if item.get("userId") != user.user_id:
+        if item.get("userId") != user.user_id and not user.is_admin:
             from fastapi import HTTPException
 
             raise HTTPException(status_code=403, detail="Not authorized")

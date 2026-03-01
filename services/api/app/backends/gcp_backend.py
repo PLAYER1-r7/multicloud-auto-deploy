@@ -47,6 +47,10 @@ class GcpBackend(BackendBase):
             self._gcs_credentials = None
             self._gcs_auth_request = None
 
+        # settings を __init__ でキャッシュ（テスト時のパッチ有効期間の問題を回避）
+        self._service_account = settings.gcp_service_account
+        self._presigned_url_expiry = getattr(settings, "presigned_url_expiry", 300)
+
         logger.info(
             f"GcpBackend initialized: project={project_id}, "
             f"posts={self.posts_collection}, profiles={self.profiles_collection}, "
@@ -200,7 +204,7 @@ class GcpBackend(BackendBase):
                 raise HTTPException(status_code=404, detail="Post not found")
 
             data = doc.to_dict()
-            if data.get("userId") != user.user_id:
+            if data.get("userId") != user.user_id and not user.is_admin:
                 from fastapi import HTTPException
                 raise HTTPException(status_code=403, detail="Not authorized")
 
@@ -310,8 +314,8 @@ class GcpBackend(BackendBase):
                 credentials.refresh(auth_request)
 
             access_token = credentials.token
-            # settings.gcp_service_account は環境変数 GCP_SERVICE_ACCOUNT から設定
-            sa_email = settings.gcp_service_account
+            # __init__ でキャッシュした値を使用
+            sa_email = self._service_account
             if not sa_email:
                 raise RuntimeError("GCP_SERVICE_ACCOUNT env var is not set")
 
@@ -329,7 +333,7 @@ class GcpBackend(BackendBase):
                 blob = bucket.blob(key)
                 upload_url = blob.generate_signed_url(
                     version="v4",
-                    expiration=timedelta(seconds=settings.presigned_url_expiry),
+                    expiration=timedelta(seconds=self._presigned_url_expiry),
                     method="PUT",
                     content_type=ct,
                     service_account_email=sa_email,
