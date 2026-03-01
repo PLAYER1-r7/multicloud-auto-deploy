@@ -104,6 +104,15 @@ jobs:
           pulumi stack select ${{ steps.set_stack.outputs.stack_name }} 2>/dev/null || pulumi stack init ${{ steps.set_stack.outputs.stack_name }}
           pulumi config set gcp:project ${{ secrets.GCP_PROJECT_ID }}
           pulumi config set gcp:region asia-northeast1
+          # staging: CDN ・CDN カスタムドメインなし。古い customDomain 設定を剥除する
+          CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
+          if [ -n "$CUSTOM_DOMAIN" ]; then
+            echo "✅ Setting customDomain = $CUSTOM_DOMAIN"
+            pulumi config set multicloud-auto-deploy-gcp:customDomain "$CUSTOM_DOMAIN"
+          else
+            echo "⚠️  customDomain not set — removing from Pulumi config (staging uses GCS directly)"
+            pulumi config rm multicloud-auto-deploy-gcp:customDomain 2>/dev/null || true
+          fi
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
@@ -158,7 +167,8 @@ jobs:
           echo "function_source_bucket=$(pulumi stack output function_source_bucket)" >> $GITHUB_OUTPUT
           echo "frontend_bucket=$(pulumi stack output frontend_bucket)" >> $GITHUB_OUTPUT
           echo "function_name=$(pulumi stack output function_name)" >> $GITHUB_OUTPUT
-          echo "cdn_ip_address=$(pulumi stack output cdn_ip_address)" >> $GITHUB_OUTPUT
+          echo "cdn_ip_address=$(pulumi stack output cdn_ip_address 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+          echo "frontend_url=$(pulumi stack output frontend_url 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
           echo "uploads_bucket=$(pulumi stack output uploads_bucket)" >> $GITHUB_OUTPUT
           echo "compute_sa_email=$(pulumi stack output compute_sa_email)" >> $GITHUB_OUTPUT
           echo "custom_domain=$(pulumi stack output custom_domain 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
@@ -285,11 +295,17 @@ jobs:
           # Get CDN IP from Pulumi outputs for CORS
           # GCP Classic HTTP LB serves over both HTTP and HTTPS
           CDN_URL="${{ steps.pulumi_outputs.outputs.cdn_ip_address }}"
+          FRONTEND_URL="${{ steps.pulumi_outputs.outputs.frontend_url }}"
           # Custom domain from config file (single source of truth)
           CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
-          CORS_ORIGINS="http://${CDN_URL},https://${CDN_URL},http://localhost:5173"
-          if [ -n "$CUSTOM_DOMAIN" ]; then
-            CORS_ORIGINS="${CORS_ORIGINS},https://${CUSTOM_DOMAIN}"
+          if [ -n "$CDN_URL" ]; then
+            CORS_ORIGINS="http://${CDN_URL},https://${CDN_URL},http://localhost:5173"
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              CORS_ORIGINS="${CORS_ORIGINS},https://${CUSTOM_DOMAIN}"
+            fi
+          else
+            # staging: GCS 直接配信（CDN なし）
+            CORS_ORIGINS="https://storage.googleapis.com,http://localhost:5173"
           fi
 
           echo "🔒 CORS Origins: $CORS_ORIGINS"
@@ -344,7 +360,11 @@ jobs:
 
           # Custom domain from config file (single source of truth)
           GCP_CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
-          PUBLIC_HOST="${GCP_CUSTOM_DOMAIN}"
+          FRONTEND_URL="${{ steps.pulumi_outputs.outputs.frontend_url }}"
+          # staging: GCS URL を PUBLIC_HOST のフォールバックに使用
+          GCS_HOST=$(echo "$FRONTEND_URL" | sed 's|/index.html||; s|/$||')
+          PUBLIC_HOST="${GCP_CUSTOM_DOMAIN:-${GCS_HOST}}"
+          echo "staging URL: ${FRONTEND_URL}"
 
           echo "🏗️  Building React frontend for GCP ($STACK_NAME)..."
           echo "🌐 Public host: ${PUBLIC_HOST}"
@@ -393,7 +413,14 @@ jobs:
         run: |
           echo "✅ GCP deployment succeeded!"
           echo "📍 Function URL: ${{ steps.deploy_function.outputs.api_url }}"
-          echo "🌐 Frontend Bucket: ${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
+          FRONTEND_URL="${{ steps.pulumi_outputs.outputs.frontend_url }}"
+          CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
+          if [ -n "$CUSTOM_DOMAIN" ]; then
+            echo "🌐 Frontend URL: https://${CUSTOM_DOMAIN}/sns/"
+          elif [ -n "$FRONTEND_URL" ]; then
+            echo "🌐 Frontend URL (GCS): ${FRONTEND_URL}"
+          fi
+          echo "🪣 Frontend Bucket: ${{ steps.pulumi_outputs.outputs.frontend_bucket }}"
 
       - name: Notify Failure
         if: failure()

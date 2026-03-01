@@ -39,7 +39,7 @@ custom_domain = config.get("customDomain") or ""
 
 # CloudFront / CDN: production only
 # Staging uses direct S3 static website hosting (no CDN, no custom domain)
-use_cloudfront = (stack == "production")
+use_cloudfront = stack == "production"
 
 # Common tags
 common_tags = {
@@ -158,13 +158,21 @@ user_pool_client = aws.cognito.UserPoolClient(
         ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else [])
         + ([f"https://{custom_domain}/sns/auth/callback"] if custom_domain else [])
         # staging: CDN/カスタムドメインなしの場合はローカル開発用フォールバック
-        + (["https://localhost:3000/sns/auth/callback"] if not cf_domain and not custom_domain else [])
+        + (
+            ["https://localhost:3000/sns/auth/callback"]
+            if not cf_domain and not custom_domain
+            else []
+        )
     ),
     logout_urls=unique_urls(
         ([f"https://{cf_domain}/sns/"] if cf_domain else [])
         + ([f"https://{custom_domain}/sns/"] if custom_domain else [])
         # staging: CDN/カスタムドメインなしの場合はローカル開発用フォールバック
-        + (["https://localhost:3000/sns/"] if not cf_domain and not custom_domain else [])
+        + (
+            ["https://localhost:3000/sns/"]
+            if not cf_domain and not custom_domain
+            else []
+        )
     ),
     access_token_validity=1,
     id_token_validity=1,
@@ -964,7 +972,9 @@ monitoring_resources = monitoring.setup_monitoring(
     lambda_function_name=lambda_function.name,
     api_gateway_id=api_gateway.id,
     api_gateway_name=api_gateway.name,
-    cloudfront_distribution_id=cloudfront_distribution.id if cloudfront_distribution else None,
+    cloudfront_distribution_id=cloudfront_distribution.id
+    if cloudfront_distribution
+    else None,
     alarm_email=alarm_email,
 )
 
@@ -982,8 +992,14 @@ pulumi.export(
     "frontend_url",
     frontend_bucket.website_endpoint.apply(lambda endpoint: f"http://{endpoint}"),
 )
-pulumi.export("cloudfront_distribution_id", cloudfront_distribution.id if cloudfront_distribution else "")
-pulumi.export("cloudfront_domain", cloudfront_distribution.domain_name if cloudfront_distribution else "")
+pulumi.export(
+    "cloudfront_distribution_id",
+    cloudfront_distribution.id if cloudfront_distribution else "",
+)
+pulumi.export(
+    "cloudfront_domain",
+    cloudfront_distribution.domain_name if cloudfront_distribution else "",
+)
 if cloudfront_distribution:
     pulumi.export(
         "cloudfront_url",

@@ -158,7 +158,8 @@ jobs:
             echo "✅ Setting frontendDomain = $FRONTDOOR"
             pulumi config set frontendDomain "$FRONTDOOR"
           else
-            echo "ℹ️  No existing frontdoor_hostname in stack state — skipping frontendDomain config"
+            echo "⚠️  No Front Door for staging — removing frontendDomain from Pulumi config"
+            pulumi config rm frontendDomain 2>/dev/null || true
           fi
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
@@ -210,9 +211,9 @@ jobs:
           echo "azure_openai_key=$(pulumi stack output --show-secrets azure_openai_key 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
           echo "azure_openai_deployment_name=$(pulumi stack output azure_openai_deployment_name 2>/dev/null || echo 'gpt-4o')" >> $GITHUB_OUTPUT
 
-          # Get Front Door hostname for CORS
-          echo "frontdoor_hostname=$(pulumi stack output frontdoor_hostname)" >> $GITHUB_OUTPUT
-          echo "frontdoor_endpoint_name=$(pulumi stack output frontdoor_endpoint_name)" >> $GITHUB_OUTPUT
+          # Get Front Door hostname for CORS (empty for staging: no Front Door)
+          echo "frontdoor_hostname=$(pulumi stack output frontdoor_hostname 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+          echo "frontdoor_endpoint_name=$(pulumi stack output frontdoor_endpoint_name 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
 
           # Function App name is environment-specific
           STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
@@ -223,6 +224,15 @@ jobs:
           # (Azure CLI query "contains(name, 'web')" matches multiple accounts and may pick wrong one)
           echo "frontend_storage_name=$(pulumi stack output frontend_storage_name)" >> $GITHUB_OUTPUT
           echo "functions_storage_name=$(pulumi stack output functions_storage_name)" >> $GITHUB_OUTPUT
+
+          # Get Blob Storage static website URL (staging frontend URL when no Front Door)
+          STORAGE_NAME="$(pulumi stack output frontend_storage_name)"
+          BLOB_WEB_URL=$(az storage account show \
+            --name "$STORAGE_NAME" \
+            --resource-group "$RG_NAME" \
+            --query 'primaryEndpoints.web' -o tsv 2>/dev/null | sed 's|/$||')
+          echo "frontend_blob_url=${BLOB_WEB_URL}" >> $GITHUB_OUTPUT
+          echo "🌐 Blob Storage website URL: ${BLOB_WEB_URL}"
 
           echo "📍 Function App name: ${FUNC_APP_NAME}"
           echo "🔐 Azure AD Client ID: $(pulumi stack output azure_ad_client_id)"
@@ -382,6 +392,7 @@ jobs:
           AD_APP_ID="${{ steps.cloud_config.outputs.azure_client_id }}"
           FRONTDOOR="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
           AZURE_CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
+          BLOB_WEB_URL="${{ steps.pulumi_outputs.outputs.frontend_blob_url }}"
           if [ -z "$AD_APP_ID" ]; then
             echo "⏭️  No Azure AD App ID in config file, skipping redirect URI update"
             exit 0
@@ -406,6 +417,12 @@ jobs:
           if [ -n "$AZURE_CUSTOM_DOMAIN" ]; then
             URIS+=("https://${AZURE_CUSTOM_DOMAIN}/sns/auth/callback")
             URIS+=("https://${AZURE_CUSTOM_DOMAIN}/sns/")
+          fi
+
+          # staging: Blob Storage static website URL (no Front Door / custom domain)
+          if [ -z "$FRONTDOOR" ] && [ -z "$AZURE_CUSTOM_DOMAIN" ] && [ -n "$BLOB_WEB_URL" ]; then
+            URIS+=("${BLOB_WEB_URL}/sns/auth/callback")
+            URIS+=("${BLOB_WEB_URL}/sns/")
           fi
 
           echo "🔐 Registering redirect URIs on Azure AD App (${AD_APP_ID}):"
@@ -559,7 +576,13 @@ jobs:
 
           # Get Front Door URL for CORS from Pulumi outputs
           FRONTDOOR_URL="${{ steps.pulumi_outputs.outputs.frontdoor_hostname }}"
-          CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
+          BLOB_WEB_URL="${{ steps.pulumi_outputs.outputs.frontend_blob_url }}"
+          # staging: no Front Door, use Blob Storage URL
+          if [ -n "$FRONTDOOR_URL" ]; then
+            CORS_ORIGINS="https://${FRONTDOOR_URL},http://localhost:5173"
+          else
+            CORS_ORIGINS="${BLOB_WEB_URL},http://localhost:5173"
+          fi
           # Custom domain from config file (single source of truth)
           AZURE_CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
           if [ -n "$AZURE_CUSTOM_DOMAIN" ]; then
@@ -1023,16 +1046,21 @@ jobs:
             --account-key $STORAGE_KEY \
             --services b
 
-          # Add FrontDoor hostname rule
-          az storage cors add \
-            --account-name $STORAGE_ACCOUNT \
-            --account-key $STORAGE_KEY \
-            --services b \
-            --origins "https://${FRONTDOOR_HOSTNAME}" \
-            --methods PUT GET HEAD OPTIONS DELETE \
-            --allowed-headers "*" \
-            --exposed-headers "*" \
-            --max-age 3600
+          # Add FrontDoor hostname rule (only when Front Door exists)
+          if [ -n "$FRONTDOOR_HOSTNAME" ]; then
+            az storage cors add \
+              --account-name $STORAGE_ACCOUNT \
+              --account-key $STORAGE_KEY \
+              --services b \
+              --origins "https://${FRONTDOOR_HOSTNAME}" \
+              --methods PUT GET HEAD OPTIONS DELETE \
+              --allowed-headers "*" \
+              --exposed-headers "*" \
+              --max-age 3600
+            echo "✅ Blob Storage CORS: FrontDoor added"
+          else
+            echo "ℹ️  No Front Door for staging — skipping FrontDoor CORS rule"
+          fi
 
           # Add custom domain rule if configured
           if [ -n "$AZURE_CUSTOM_DOMAIN" ]; then
@@ -1072,7 +1100,10 @@ jobs:
           AZURE_CLIENT_ID="${{ steps.cloud_config.outputs.azure_client_id }}"
           AZURE_TENANT_ID="${{ steps.cloud_config.outputs.azure_tenant_id }}"
           AZURE_CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
-          AZURE_PUBLIC_HOST="${AZURE_CUSTOM_DOMAIN:-${FRONTDOOR_HOSTNAME}}"
+          BLOB_WEB_URL="${{ steps.pulumi_outputs.outputs.frontend_blob_url }}"
+          # staging: Blob hostname fallback (no Front Door / custom domain)
+          BLOB_HOST=$(echo "$BLOB_WEB_URL" | sed 's|https://||; s|/$||')
+          AZURE_PUBLIC_HOST="${AZURE_CUSTOM_DOMAIN:-${FRONTDOOR_HOSTNAME:-${BLOB_HOST}}}"
 
           if [ -z "$AZURE_CLIENT_ID" ]; then
             echo "❌ AZURE_CLIENT_ID is empty. Check .github/config/azure.${STACK_NAME}.env"
