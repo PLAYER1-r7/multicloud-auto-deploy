@@ -7,7 +7,6 @@
 import React, { useMemo } from "react";
 import Plot from "react-plotly.js";
 import { evaluate } from "mathjs";
-import type { Data as PlotlyData } from "plotly.js";
 import type {
   PlotData,
   PlotPoint3D,
@@ -15,7 +14,11 @@ import type {
   PlotPlane3D,
   PlotSurface3D,
   PlotViewRange3D,
-} from "../types/solve";
+} from "../types/solve"
+
+// Plotly の Data 型に互換する緩い型 (react-plotly.js が内部で受け入れる)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PlotlyData = Record<string, any>;
 
 // ─── グリッド生成ヘルパー ─────────────────────────────────────
 function linspace(min: number, max: number, n = 30): number[] {

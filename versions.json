@@ -23,7 +23,7 @@
     "custom_domain": "https://www.gcp.ashnova.jp"
   },
   "simple-sns": {
-    "version": "1.0.110.300",
+    "version": "1.0.110.301",
     "description": "React SNS アプリ (Vite + TypeScript + Tailwind CSS / 全クラウド共通デプロイ)",
     "status": "stable",
     "path": "services/frontend_react"
