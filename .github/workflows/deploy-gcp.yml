@@ -380,13 +380,22 @@ jobs:
           cd services/frontend_react
           npm ci --prefer-offline
 
+          # GCS 直接配信の場合は絶対 URL base が必要 (相対パス /sns/ だと
+          # ブラウザが storage.googleapis.com/sns/... にアクセスして 403 になる)
+          if [ -n "$GCP_CUSTOM_DOMAIN" ]; then
+            VITE_BASE_PATH="/sns/"
+          else
+            VITE_BASE_PATH="https://storage.googleapis.com/${FRONTEND_BUCKET}/sns/"
+          fi
+          echo "📦 Vite base: ${VITE_BASE_PATH}"
+
           VITE_AUTH_PROVIDER=firebase \
           VITE_API_URL="${API_URL}" \
           VITE_FIREBASE_API_KEY="${{ secrets.FIREBASE_API_KEY }}" \
           VITE_FIREBASE_AUTH_DOMAIN="${{ secrets.FIREBASE_AUTH_DOMAIN }}" \
           VITE_FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}" \
           VITE_FIREBASE_APP_ID="${{ secrets.FIREBASE_APP_ID }}" \
-          npx vite build --base=/sns/
+          npx vite build --base="${VITE_BASE_PATH}"
           echo "✅ Build complete ($(du -sh dist | cut -f1))"
           cd ../..
 
