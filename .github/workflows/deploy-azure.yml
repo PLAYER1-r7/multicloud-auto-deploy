@@ -26,7 +26,9 @@ env:
   NODE_VERSION: "24"
   # Must match Azure Functions Flex Consumption runtime version.
   # The "Build and Package" step Docker image must also use this version.
-  PYTHON_VERSION: "3.13"
+  # NOTE: Existing Function App is provisioned with 3.11. Change here AND update
+  # the "Ensure Function App runtime version" step when upgrading Python.
+  PYTHON_VERSION: "3.11"
 
 # Prevent concurrent Pulumi updates on the same stack (causes 409 Conflict)
 concurrency:
@@ -250,6 +252,21 @@ jobs:
           echo "🔎 Checking Function App: ${FUNCTION_APP}"
           if az functionapp show --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
             echo "✅ Function App already exists"
+            # Ensure runtime version matches PYTHON_VERSION (existing apps may have old version)
+            SUB_ID=$(az account show --query id -o tsv)
+            CURRENT_VER=$(az rest --method GET \
+              --url "https://management.azure.com/subscriptions/${SUB_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}?api-version=2023-12-01" \
+              --query 'properties.functionAppConfig.runtime.version' -o tsv 2>/dev/null || echo '')
+            echo "  Current runtime version: ${CURRENT_VER:-unknown}"
+            if [ "$CURRENT_VER" != "${{ env.PYTHON_VERSION }}" ]; then
+              echo "⚠️  Runtime version mismatch (${CURRENT_VER} → ${{ env.PYTHON_VERSION }}). Updating..."
+              az rest --method PATCH \
+                --url "https://management.azure.com/subscriptions/${SUB_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}?api-version=2023-12-01" \
+                --body '{"properties":{"functionAppConfig":{"runtime":{"name":"python","version":"${{ env.PYTHON_VERSION }}"}}}}'
+              echo "✅ Runtime version updated to ${{ env.PYTHON_VERSION }}"
+            else
+              echo "✅ Runtime version already ${{ env.PYTHON_VERSION }}"
+            fi
           else
             echo "🛠️  Function App not found. Creating with Flex Consumption..."
             az functionapp create \
@@ -442,14 +459,14 @@ jobs:
           mkdir -p .deployment
 
           # Install dependencies using Docker with the EXACT same platform/Python as Azure Functions
-          # Azure Functions Flex Consumption uses Python 3.13 on linux/amd64.
+          # Azure Functions Flex Consumption uses Python 3.11 on linux/amd64.
           # The GitHub Actions runner may be a different arch (e.g., arm64), so using the runner's
           # native pip would produce wrong .so binaries (e.g., cpython-311-aarch64 instead of
-          # cpython-313-x86_64). Docker ensures correct platform + Python version.
-          echo "Installing Azure-specific dependencies (linux/amd64 python:3.13)..."
+          # cpython-311-x86_64). Docker ensures correct platform + Python version.
+          echo "Installing Azure-specific dependencies (linux/amd64 python:3.11)..."
           docker run --rm --platform linux/amd64 \
             -v "$(pwd):/work" \
-            python:3.13-slim \
+            python:3.11-slim \
             pip install --target /work/.deployment --no-cache-dir -q \
               --prefer-binary \
               -r /work/requirements-azure.txt
