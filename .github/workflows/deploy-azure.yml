@@ -252,16 +252,22 @@ jobs:
           if az functionapp show --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
             echo "✅ Function App already exists"
             # Ensure runtime version matches PYTHON_VERSION (existing apps may have old version)
+            # Must PATCH the full functionAppConfig (not just runtime) to avoid
+            # "FunctionAppConfig.Deployment.Storage.type is null" BadRequest error.
             SUB_ID=$(az account show --query id -o tsv)
-            CURRENT_VER=$(az rest --method GET \
-              --url "https://management.azure.com/subscriptions/${SUB_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}?api-version=2023-12-01" \
+            APP_URL="https://management.azure.com/subscriptions/${SUB_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}?api-version=2023-12-01"
+            CURRENT_VER=$(az rest --method GET --url "$APP_URL" \
               --query 'properties.functionAppConfig.runtime.version' -o tsv 2>/dev/null || echo '')
             echo "  Current runtime version: ${CURRENT_VER:-unknown}"
             if [ "$CURRENT_VER" != "${{ env.PYTHON_VERSION }}" ]; then
               echo "⚠️  Runtime version mismatch (${CURRENT_VER} → ${{ env.PYTHON_VERSION }}). Updating..."
-              az rest --method PATCH \
-                --url "https://management.azure.com/subscriptions/${SUB_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTION_APP}?api-version=2023-12-01" \
-                --body '{"properties":{"functionAppConfig":{"runtime":{"name":"python","version":"${{ env.PYTHON_VERSION }}"}}}}'
+              # GET full functionAppConfig, update only runtime.version, then PATCH
+              FUNC_APP_CONFIG=$(az rest --method GET --url "$APP_URL" \
+                --query 'properties.functionAppConfig' -o json)
+              UPDATED_CONFIG=$(echo "$FUNC_APP_CONFIG" | \
+                jq --arg ver "${{ env.PYTHON_VERSION }}" '.runtime.version = $ver')
+              az rest --method PATCH --url "$APP_URL" \
+                --body "{\"properties\":{\"functionAppConfig\":${UPDATED_CONFIG}}}"
               echo "✅ Runtime version updated to ${{ env.PYTHON_VERSION }}"
             else
               echo "✅ Runtime version already ${{ env.PYTHON_VERSION }}"
