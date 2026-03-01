@@ -134,7 +134,8 @@ jobs:
             echo "✅ Setting acmCertificateArn"
             pulumi config set multicloud-auto-deploy-aws:acmCertificateArn "$ACM_CERT_ARN"
           else
-            echo "⚠️  acmCertificateArn not set in $STACK_FILE — skipping"
+            echo "⚠️  acmCertificateArn not set — removing from Pulumi config to disable custom cert"
+            pulumi config rm multicloud-auto-deploy-aws:acmCertificateArn 2>/dev/null || true
           fi
           if [ -n "$CF_DOMAIN" ]; then
             echo "✅ Setting cloudFrontDomain = $CF_DOMAIN"
