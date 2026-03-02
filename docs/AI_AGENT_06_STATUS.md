@@ -1,9 +1,109 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> Last verified: 2026-02-28 Session 3 (Azure OpenAI o3-mini JSON 出力修正完了 ✅ / OCR→LLM パイプライン正常動作 ✅)
+> Last verified: 2026-03-02 (AI Project Management ワークフロー統合完了 ✅ / ブランチ保護 baseline 確立 ✅ / PM 出力アーティファクト初期化 ✅)
+> Previous: 2026-02-28 Session 3 (Azure OpenAI o3-mini JSON 出力修正完了 ✅ / OCR→LLM パイプライン正常動作 ✅)
 > Previous: 2026-02-28 Session 2 (Azure OpenAI 401 修正・mcad-openai-v2 再作成 ✅ / gpt-4o パイプライン HTTP 200 ✅ / o3-mini デプロイ完了 ✅)
-> Previous: 2026-02-28 Session 1 (Azure staging AFD 削除後の復旧完了 ✅ / `/exam` 自動作成導入 ✅ / Pulumi 監視アラート修正 ✅)
+
+---
+
+## Session 2026-03-02: AI Project Management Workflow Integration
+
+### Completed Work
+
+| Task                                      | Result                                                                                        | Status |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------- | ------ |
+| PM Sync ワークフロー統合 (PR #37)         | `.github/workflows/project-management-sync.yml` を main に統合                                | ✅     |
+| PM スクリプト追加                         | `scripts/agent_pm_sync.py` で GitHub データからスナップショット/ダッシュボード生成            | ✅     |
+| ワークフロー実行検証                      | 手動トリガー 2 回実行 → 両方 `completed/success` (run IDs: 22585899773, 22585988485)          | ✅     |
+| ブランチ保護 baseline 設定                | PR 必須 / 承認 0 / CodeQL 必須 (strict) / 管理者強制 有効                                     | ✅     |
+| ゲート動作検証                            | PR #38 で `mergeStateStatus: BLOCKED` 確認 → CodeQL check が正常にブロック                   | ✅     |
+| ドキュメント baseline 作成 (PR #39, #40)  | `AI_AGENT_10_TASKS.md`, `AI_AGENT_10_TASKS_JA.md`, `AI_AGENT_GUIDE.md` 更新                  | ✅     |
+| PM 出力アーティファクト初期化 (PR #41)    | `docs/generated/project-management/snapshot.json`, `dashboard.md` を main/develop に配置      | ✅     |
+
+### ワークフロー詳細
+
+**File**: `.github/workflows/project-management-sync.yml`
+
+- **トリガー**:
+  - 手動実行: `workflow_dispatch`
+  - 日次スケジュール: `cron: '15 0 * * *'` (09:15 JST / 00:15 UTC)
+- **ジョブ**: `sync`
+  - `scripts/agent_pm_sync.py` を実行して GitHub Issues/PRs データを収集
+  - `docs/generated/project-management/` に `snapshot.json` と `dashboard.md` を生成
+  - 変更があれば自動コミット (`git add → commit → push`)
+- **権限**: `contents: write`, `issues: read`, `pull-requests: read`
+
+### ブランチ保護設定 (main)
+
+**Solo Development Policy**:
+
+```json
+{
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 0,
+    "require_code_owner_reviews": true,
+    "dismiss_stale_reviews": true
+  },
+  "required_status_checks": {
+    "strict": true,
+    "checks": [
+      { "context": "CodeQL — javascript-typescript" },
+      { "context": "CodeQL — python" }
+    ]
+  },
+  "enforce_admins": true,
+  "restrictions": null
+}
+```
+
+**検証手順** (documented in `AI_AGENT_10_TASKS.md`):
+
+1. **Configure**: GitHub API で保護設定適用
+2. **Test**: テスト PR でゲート動作確認 (`mergeStateStatus: BLOCKED`)
+3. **Merge**: CodeQL 完了後にマージ
+4. **Document**: 運用基準を version-controlled docs に記録
+
+### Pull Requests Summary
+
+| PR    | ブランチ       | タイトル                                                             | マージ日時           | コミット |
+| ----- | -------------- | -------------------------------------------------------------------- | -------------------- | -------- |
+| #37   | develop → main | feat(pm): add project management sync workflow                       | 2026-03-02T18:xx:xxZ | 5a209bc3 |
+| #38   | develop        | test: validate branch protection gate enforcement                    | (closed, not merged) | -        |
+| #39   | develop        | docs(pm): add solo branch-protection baseline and navigation         | 2026-03-02T16:57:32Z | da47a738 |
+| #40   | develop → main | docs: add PM baseline and branch protection guidance (main)          | 2026-03-02T20:19:19Z | d9b2e89b |
+| #41   | develop → main | docs: initialize PM output artifacts for main                        | 2026-03-02T20:xx:xxZ | ecb5adb0 |
+
+### Artifacts Generated
+
+**Location**: `docs/generated/project-management/`
+
+- **`snapshot.json`**: GitHub Issues, PRs, milestones, labels の JSON スナップショット (11KB)
+- **`dashboard.md`**: AI PM 運用ダッシュボード (2KB)
+
+これらは日次自動更新され、変更があればリポジトリに自動コミットされます。
+
+### Documentation Updates
+
+**`AI_AGENT_10_TASKS.md`** (new):
+
+- AI-driven PM 戦略 (single source of truth, cadence-driven execution, risk-first prioritization)
+- ツール一覧 (GitHub Issues/PRs, gh CLI, agent_pm_sync.py)
+- 認証ポリシー (gh auth login request pattern)
+- ブランチ保護 baseline (solo development 向け設定・検証手順)
+
+**`AI_AGENT_GUIDE.md`** (updated):
+
+- Quick decision tree に新規エントリ追加:
+  - Q: What should I work on next? → Consult GitHub Issues + AI PM dashboard (10_TASKS)
+  - Q: Configure branch protection / merge gates → AI_AGENT_10_TASKS.md
+
+### Operational Readiness
+
+✅ **PM ワークフロー**: production (`main`) で稼働中、次回自動実行は 2026-03-03 09:15 JST
+✅ **ブランチ保護**: CodeQL ゲート有効、同時に solo-developer 向け 0 承認設定
+✅ **ドキュメント**: 運用基準が version-controlled で追跡可能
+✅ **アーティファクト**: snapshot/dashboard 初期ベースライン配置完了
 
 ---
 
