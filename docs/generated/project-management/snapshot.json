@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-03-02T16:20:35.094089+00:00",
+  "generated_at_utc": "2026-03-02T20:21:50.118998+00:00",
   "summary": {
     "issues_open": 13,
     "issues_blocked": 0,
@@ -10,8 +10,8 @@
     "prs_open": 22,
     "prs_draft": 0,
     "prs_waiting_review": 22,
-    "runs_success": 15,
-    "runs_failure": 15,
+    "runs_success": 23,
+    "runs_failure": 7,
     "runs_in_progress": 0
   },
   "labels": {
@@ -153,8 +153,8 @@
       "title": "chore(frontend): bump minimatch in /services/frontend_react",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/36",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-03-01T22:31:21Z"
     },
     {
@@ -162,8 +162,8 @@
       "title": "chore(frontend): bump rollup from 4.57.1 to 4.59.0 in /services/frontend_react",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/35",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-03-01T03:39:55Z"
     },
     {
@@ -171,8 +171,8 @@
       "title": "chore(frontend): bump @types/node from 24.10.13 to 25.3.0 in /services/frontend_react",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/28",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:23:50Z"
     },
     {
@@ -180,8 +180,8 @@
       "title": "chore(frontend): bump the tailwind group in /services/frontend_react with 2 updates",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/27",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:23:42Z"
     },
     {
@@ -189,8 +189,8 @@
       "title": "chore(frontend): bump the testing group in /services/frontend_react with 4 updates",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/26",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:23:28Z"
     },
     {
@@ -198,8 +198,8 @@
       "title": "chore(frontend): bump the vite-build group in /services/frontend_react with 4 updates",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/25",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:22:55Z"
     },
     {
@@ -207,8 +207,8 @@
       "title": "chore(api): bump uvicorn[standard] from 0.32.0 to 0.41.0 in /services/api",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/24",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T20:55:14Z"
     },
     {
@@ -216,8 +216,8 @@
       "title": "chore(ci): bump actions/setup-python from 5 to 6",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/23",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:48:50Z"
     },
     {
@@ -225,8 +225,8 @@
       "title": "chore(api): bump pydantic-settings from 2.5.2 to 2.13.1 in /services/api",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/22",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T20:55:16Z"
     },
     {
@@ -234,8 +234,8 @@
       "title": "chore(frontend): bump react-router-dom from 7.13.0 to 7.13.1 in /services/frontend_react in the react group",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/21",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:22:22Z"
     },
     {
@@ -243,8 +243,8 @@
       "title": "chore(api): bump fastapi from 0.115.0 to 0.133.0 in /services/api",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/20",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T20:55:16Z"
     },
     {
@@ -252,8 +252,8 @@
       "title": "chore(ci): bump pulumi/actions from 5 to 6",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/19",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:48:48Z"
     },
     {
@@ -261,8 +261,8 @@
       "title": "chore(infra-aws): update pulumi-aws requirement from <7.0.0,>=6.0.0 to >=6.0.0,<8.0.0 in /infrastructure/pulumi/aws",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/18",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:22:19Z"
     },
     {
@@ -270,8 +270,8 @@
       "title": "chore(infra-azure): update pulumi-azure-native requirement from <3.0.0,>=2.0.0 to >=2.0.0,<4.0.0 in /infrastructure/pulumi/azure",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/17",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:22:18Z"
     },
     {
@@ -279,8 +279,8 @@
       "title": "chore(infra-gcp): update pulumi-gcp requirement from <8.0.0,>=7.0.0 to >=7.0.0,<10.0.0 in /infrastructure/pulumi/gcp",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/16",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:22:18Z"
     },
     {
@@ -288,8 +288,8 @@
       "title": "chore(api): bump ipython from 8.26.0 to 9.10.0 in /services/api",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/15",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T20:55:17Z"
     },
     {
@@ -297,8 +297,8 @@
       "title": "chore(ci): bump google-github-actions/setup-gcloud from 2 to 3",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/14",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:48:47Z"
     },
     {
@@ -306,8 +306,8 @@
       "title": "chore(api): bump boto3 from 1.35.0 to 1.42.55 in /services/api",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/13",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T20:55:27Z"
     },
     {
@@ -315,8 +315,8 @@
       "title": "chore(ci): bump azure/login from 1 to 2",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/12",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:22:09Z"
     },
     {
@@ -324,8 +324,8 @@
       "title": "chore(ci): bump google-github-actions/auth from 2 to 3",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/11",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T19:22:04Z"
     },
     {
@@ -333,8 +333,8 @@
       "title": "chore(deps): bump requests from 2.32.3 to 2.32.4 in /services/api",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/10",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T17:22:10Z"
     },
     {
@@ -342,8 +342,8 @@
       "title": "chore(deps): bump python-multipart from 0.0.9 to 0.0.22 in /services/api",
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/9",
       "is_draft": false,
-      "review_decision": "REVIEW_REQUIRED",
-      "merge_state": "BLOCKED",
+      "review_decision": "",
+      "merge_state": "BEHIND",
       "updated_at": "2026-02-24T17:22:09Z"
     }
   ]

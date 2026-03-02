@@ -1,14 +1,14 @@
 # AI Project Management Dashboard
 
 - Repository: `PLAYER1-r7/multicloud-auto-deploy`
-- Generated (UTC): `2026-03-02T16:20:35.094089+00:00`
+- Generated (UTC): `2026-03-02T20:21:50.118998+00:00`
 
 ## Headline Metrics
 
 - Open issues: **13** (critical: 0, high: 0, blocked: 0)
 - Issue aging: **7** (>=7d), **0** (>=14d)
 - Open PRs: **22** (draft: 0, waiting review: 22)
-- CI runs (last 30): success **15**, failure **15**, in progress **0**
+- CI runs (last 30): success **23**, failure **7**, in progress **0**
 
 ## Backlog Distribution
 
