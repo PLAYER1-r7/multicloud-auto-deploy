@@ -152,3 +152,5 @@ Storage paths     : /      → landing page (static-site/)
 Auth providers    : AWS = Cognito | Azure = Azure AD | GCP = Firebase Auth
 Dev container     : linux/aarch64 (ARM)  →  cloud runtime: linux/amd64
 ```
+
+<!-- gate check -->
