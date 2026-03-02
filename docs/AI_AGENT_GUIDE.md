@@ -15,6 +15,14 @@
 | 01                  | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)               | Project overview, live endpoints, directory tree, dev env |
 | 02                  | [AI_AGENT_02_ARCHITECTURE.md](AI_AGENT_02_ARCHITECTURE.md)     | System topology, per-cloud architecture, storage paths    |
 
+### Mandatory Working Policy (AI Agents)
+
+- Implement root-cause fixes by default; do not stop at symptomatic workarounds when a permanent fix is feasible.
+- Keep backend/runtime compatibility aligned with Python 3.13 (project target), not legacy 3.11.
+- Use the most appropriate official CLI, project script, or existing workflow before manual detours.
+- If authentication is required (`gh` or any other CLI/service), request user authentication immediately with explicit commands and resume after completion; if authentication fails, do not switch to fallback alternatives unless the user explicitly asks.
+- If a temporary mitigation is unavoidable, record expiry, scope, blocker, and the exact permanent follow-up task.
+
 ---
 
 ## Part II — Technical Reference
@@ -38,11 +46,13 @@
 | 06  | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)                   | Current health of all 3 cloud environments                                   |
 | 07  | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)               | Step-by-step: deploy, rollback, check logs                                   |
 | 08  | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)               | Auth config per cloud, known security gaps                                   |
-| 09  | [AI_AGENT_09_TASKS.md](AI_AGENT_09_TASKS.md)                     | Prioritised backlog — what to work on next                                   |
-| 10  | [AI_AGENT_10_DOMAINS.md](AI_AGENT_10_DOMAINS.md)                 | Custom domain setup, DNS records, SSL certs                                  |
-| 11  | [AI_AGENT_11_BUG_FIX_REPORTS.md](AI_AGENT_11_BUG_FIX_REPORTS.md) | Consolidated bug & fix reports (all clouds, 2026-02-20 →)                    |
-| 12  | [AI_AGENT_12_OCR_MATH.md](AI_AGENT_12_OCR_MATH.md)               | `/v1/solve` OCR+math solving service — Azure DI, GCP Vision, Gemini, scoring |
-| 13  | [AI_AGENT_13_TESTING.md](AI_AGENT_13_TESTING.md)                 | Test scripts, pytest suite, auth token acquisition, CI/CD integration        |
+| 09  | [AI_AGENT_09_GITHUB_INTEGRATION.md](AI_AGENT_09_GITHUB_INTEGRATION_JA.md) | GitHub Issues/PRs workflow, branch protection, AI Agent operations           |
+| 10  | [AI_AGENT_10_TASKS.md](AI_AGENT_10_TASKS.md)                     | AI-driven backlog strategy, cadence, tools, generated PM dashboard           |
+| 11  | [AI_AGENT_11_DOMAINS.md](AI_AGENT_11_DOMAINS.md)                 | Custom domain setup, DNS records, SSL certs                                  |
+| 12  | [AI_AGENT_12_BUG_FIX_REPORTS.md](AI_AGENT_12_BUG_FIX_REPORTS.md) | Consolidated bug & fix reports (all clouds, 2026-02-20 →)                    |
+| 13  | [AI_AGENT_13_OCR_MATH.md](AI_AGENT_13_OCR_MATH.md)               | `/v1/solve` OCR+math solving service — Azure DI, GCP Vision, Gemini, scoring |
+| 14  | [AI_AGENT_14_TESTING.md](AI_AGENT_14_TESTING.md)                 | Test scripts, pytest suite, auth token acquisition, CI/CD integration        |
+| 15  | [AI_AGENT_15_WORKSPACE_CLEANUP.md](AI_AGENT_15_WORKSPACE_CLEANUP.md) | Build artifacts, cache, temporary files cleanup procedures                   |
 
 ---
 
@@ -51,6 +61,13 @@
 | Document                                                                                 | Contents                             |
 | ---------------------------------------------------------------------------------------- | ------------------------------------ |
 | [archive/AI_AGENT_11_WORKSPACE_MIGRATION.md](archive/AI_AGENT_11_WORKSPACE_MIGRATION.md) | 2026-02-21 repository cleanup record |
+| [archive/legacy-services/README.md](archive/legacy-services/README.md) | Deprecated services backup (frontend_web, frontend_reflex, etc.) |
+
+## Consolidated Guide
+
+| Document                           | Contents                                                   |
+| ---------------------------------- | ---------------------------------------------------------- |
+| [AI_AGENT_ALL.md](AI_AGENT_ALL.md) | Unified English entry point and mandatory execution policy |
 
 ---
 
@@ -60,16 +77,17 @@
 
 | #   | Date       | Summary                                                                                                                                                                          |
 | --- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| §1  | 2026-02-20 | [AWS SNS Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#1-aws-sns-fix-report-2026-02-20) — Lambda env vars, CI/CD race condition, logout 404, image upload 502                              |
-| §2  | 2026-02-21 | [AWS HTTPS Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#2-aws-production-https-fix-2026-02-21) — `ERR_CERT_COMMON_NAME_INVALID` (missing CloudFront alias + ACM cert)                     |
-| §3  | 2026-02-21 | [AWS Production SNS Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#3-aws-production-sns-fix-2026-02-21) — empty `API_BASE_URL` from unset GitHub Secret; Cognito redirect URI wrong domain  |
-| §4  | 2026-02-21 | [React SPA & CDN Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#4-react-spa-migration--cdn-routing-fix-2026-02-21) — all 3 CDNs still routing `/sns*` to old SSR origin after SPA migration |
-| §5  | 2026-02-21 | [Azure SNS Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#5-azure-sns-fix-2026-02-21) — 503/404 initial setup + AFD 502 stale TCP (Dynamic Y1 → FlexConsumption)                            |
-| §6  | 2026-02-22 | [AWS SNS 12-bug Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#6-aws-sns-fix-report-2026-02-22) — 12 bugs: auth, profile, images, nickname, presigned URLs, MIME, VITE_BASE_PATH            |
-| §7  | 2026-02-22 | [AWS+Azure Combined Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#7-aws--azure-combined-sns-fix-2026-02-22) — Cognito unauthorized_client, Azure CORS, routePrefix, AD redirect_uris       |
-| §8  | 2026-02-22 | [Refactoring & Infra Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#8-refactoring--infrastructure-fix-2026-02-22) — AFD SPA rewrite rule, CI/CD cleanup, Pulumi dead code, staging bugs     |
-| §9  | 2026-02-23 | [GCP SNS Fix](AI_AGENT_11_BUG_FIX_REPORTS.md#9-gcp-sns-fix-report-2026-02-23) — CORS, Firebase domain, /limits 404, COOP header, signed URLs, IndentationError                   |
-| §10 | 2026-02-27 | [OCR Formula Merge Bugs](AI_AGENT_11_BUG_FIX_REPORTS.md#10-ocr-formula-merge-bugs-2026-02-27) — display formula discarded, bytes serialization, polygon=None fallback            |
+| §1  | 2026-02-20 | [AWS SNS Fix](AI_AGENT_12_BUG_FIX_REPORTS.md#1-aws-sns-fix-report-2026-02-20) — Lambda env vars, CI/CD race condition, logout 404, image upload 502                              |
+| §2  | 2026-02-21 | [AWS HTTPS Fix](AI_AGENT_12_BUG_FIX_REPORTS.md#2-aws-production-https-fix-2026-02-21) — `ERR_CERT_COMMON_NAME_INVALID` (missing CloudFront alias + ACM cert)                     |
+| §3  | 2026-02-21 | [AWS Production SNS Fix](AI_AGENT_12_BUG_FIX_REPORTS.md#3-aws-production-sns-fix-2026-02-21) — empty `API_BASE_URL` from unset GitHub Secret; Cognito redirect URI wrong domain  |
+| §4  | 2026-02-21 | [React SPA & CDN Fix](AI_AGENT_12_BUG_FIX_REPORTS.md#4-react-spa-migration--cdn-routing-fix-2026-02-21) — all 3 CDNs still routing `/sns*` to old SSR origin after SPA migration |
+| §5  | 2026-02-21 | [Azure SNS Fix](AI_AGENT_12_BUG_FIX_REPORTS.md#5-azure-sns-fix-2026-02-21) — 503/404 initial setup + AFD 502 stale TCP (Dynamic Y1 → FlexConsumption)                            |
+| §6  | 2026-02-22 | [AWS SNS 12-bug Fix](AI_AGENT_12_BUG_FIX_REPORTS.md#6-aws-sns-fix-report-2026-02-22) — 12 bugs: auth, profile, images, nickname, presigned URLs, MIME, VITE_BASE_PATH            |
+| §7  | 2026-02-22 | [AWS+Azure Combined Fix](AI_AGENT_12_BUG_FIX_REPORTS.md#7-aws--azure-combined-sns-fix-2026-02-22) — Cognito unauthorized_client, Azure CORS, routePrefix, AD redirect_uris       |
+| §8  | 2026-02-22 | [Refactoring & Infra Fix](AI_AGENT_12_BUG_FIX_REPORTS.md#8-refactoring--infrastructure-fix-2026-02-22) — AFD SPA rewrite rule, CI/CD cleanup, Pulumi dead code, staging bugs     |
+| §9  | 2026-02-23 | [GCP SNS Fix](AI_AGENT_12_BUG_FIX_REPORTS.md#9-gcp-sns-fix-report-2026-02-23) — CORS, Firebase domain, /limits 404, COOP header, signed URLs, IndentationError                   |
+| §10 | 2026-02-27 | [OCR Formula Merge Bugs](AI_AGENT_12_BUG_FIX_REPORTS.md#10-ocr-formula-merge-bugs-2026-02-27) — display formula discarded, bytes serialization, polygon=None fallback            |
+| §11 | 2026-03-02 | [Workspace Cleanup & GitHub Integration](AI_AGENT_09_GITHUB_INTEGRATION_JA.md) — legacy services removed, AI Agent GitHub workflow documented                                  |
 
 ---
 
@@ -82,7 +100,7 @@ First session in this repo:
 2. AI_AGENT_01_CONTEXT.md         ← what the project is, live endpoints, tech stack, directory tree
 3. AI_AGENT_02_ARCHITECTURE.md    ← system topology, storage paths
 4. AI_AGENT_06_STATUS.md          ← current health of all 3 cloud environments
-5. AI_AGENT_09_TASKS.md           ← what to work on next (prioritised backlog)
+5. AI_AGENT_09_GITHUB_INTEGRATION.md ← GitHub Issues/PRs workflow & AI Agent operations
 ```
 
 On demand:
@@ -91,8 +109,9 @@ On demand:
 AI_AGENT_03_API.md      ← endpoint spec, request/response schema, data model
 AI_AGENT_04_INFRA.md    ← Pulumi stacks, resource names, config keys, outputs
 AI_AGENT_05_CICD.md     ← GitHub Actions workflows, secrets, branch→env mapping
-AI_AGENT_07_RUNBOOKS.md ← step-by-step procedures: deploy, rollback, check logs
-AI_AGENT_08_SECURITY.md ← auth config per cloud, current security gaps
+AI_AGENT_07_RUNBOOKS.md     ← step-by-step procedures: deploy, rollback, check logs
+AI_AGENT_08_SECURITY.md     ← auth config per cloud, current security gaps
+AI_AGENT_09_GITHUB_INTEGRATION.md ← GitHub workflow, branch protection, AI operations
 ```
 
 ---
@@ -101,7 +120,7 @@ AI_AGENT_08_SECURITY.md ← auth config per cloud, current security gaps
 
 ```
 Q: First time in this repo?
-  → 00_CRITICAL_RULES → 01_CONTEXT → 02_ARCHITECTURE → 06_STATUS → 09_TASKS
+  → 00_CRITICAL_RULES → 01_CONTEXT → 02_ARCHITECTURE → 06_STATUS → 09_GITHUB_INTEGRATION
 
 Q: Modify backend API code
   → services/api/app/routes/*.py or backends/*.py  (see 03_API for schema)
@@ -124,7 +143,7 @@ Q: Something is broken
   → 07_RUNBOOKS first, then relevant Fix Report above
 
 Q: What should I work on next?
-  → 09_TASKS
+  → Consult GitHub Issues + AI PM dashboard (10_TASKS)
 ```
 
 ---

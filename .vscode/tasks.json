@@ -20,10 +20,10 @@
 			}
 		},
 		{
-			"type": "func",
+			"type": "shell",
 			"label": "func: host start",
-			"command": "host start",
-			"problemMatcher": "$func-python-watch",
+			"command": "func host start",
+			"problemMatcher": [],
 			"isBackground": true,
 			"dependsOn": "pip install (functions)",
 			"options": {
@@ -45,6 +45,15 @@
 			"problemMatcher": [],
 			"options": {
 				"cwd": "${workspaceFolder}/services/frontend_web"
+			}
+		},
+		{
+			"label": "project-management: sync",
+			"type": "shell",
+			"command": "${workspaceFolder}/.venv/bin/python ${workspaceFolder}/scripts/agent_pm_sync.py",
+			"problemMatcher": [],
+			"options": {
+				"cwd": "${workspaceFolder}"
 			}
 		}
 	]
