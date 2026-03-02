@@ -148,6 +148,22 @@ GitHub Actions による自動更新も設定する：
 - 実行時刻: 毎日 09:15 JST（00:15 UTC）
 - 自動更新対象: `docs/generated/project-management/snapshot.json`, `docs/generated/project-management/dashboard.md`
 
+## ブランチ保護の基準（1人開発向け）
+
+`main` の推奨設定（ソロ開発）：
+
+- PR経由マージ必須: 有効
+- 必須承認数: `0`
+- 必須ステータスチェック: 有効（`strict: true`）
+  - `CodeQL — javascript-typescript`
+  - `CodeQL — python`
+
+運用確認手順：
+
+1. workflow更新PRを `main` にマージする。
+2. `Project Management Sync` を手動実行する。
+3. 最新runと `sync` ジョブが `completed/success` であることを確認する。
+
 ---
 
 ## プロジェクト管理の Done 定義
