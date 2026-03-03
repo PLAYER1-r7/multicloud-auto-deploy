@@ -76,8 +76,8 @@
 | **エラーケース** | - | - | - | - | - | ✅ テスト済 | - |
 | **網羅率** | 100% | 100% | 100% | 100% | 80% | 20% | 100% |
 
-**テスト済みパターン**: 23 個  
-**未テストパターン**: 2 個 (Azure B2C スコープ不足、全プロバイダ クレーム欠損)  
+**テスト済みパターン**: 23 個
+**未テストパターン**: 2 個 (Azure B2C スコープ不足、全プロバイダ クレーム欠損)
 **推奨対応**: Azure B2C のスコープ検証追加、汎用クレーム検証強化
 
 ---
@@ -97,9 +97,9 @@
 | **いいね機能** | ✅ テスト済 | ✅ テスト済 | ✅ テスト済 | - | - | - |
 | **網羅率** | 100% | 86% | 86% | 71% | 14% | 0% |
 
-**テスト済みパターン**: 28 個  
-**未テストパターン**: 6 個  
-**リスク**: ファイルアップロード時の MIME 型バリデーション、文字エンコード異常への対応  
+**テスト済みパターン**: 28 個
+**未テストパターン**: 6 個
+**リスク**: ファイルアップロード時の MIME 型バリデーション、文字エンコード異常への対応
 **推奨対応**: MIME 型チェック強化、UTF-8 以外の入力への例外処理
 
 ---
@@ -142,7 +142,7 @@
 | JWT-B2C-004 | Azure B2C Token | B2C固有クレーム抽出 | ✅ テスト済 |
 | JWT-B2C-005 | キャッシング機能 | 2回目リクエスト時キャッシュ使用 | ⚠️ 部分実装 |
 
-**未テストパターン**: 
+**未テストパターン**:
 - JWT-AZR-006: Azure スコープ検証
 - JWT-B2C-006: B2C スコープ検証
 - JWT-*-007: 汎用クレーム欠損検証
@@ -173,7 +173,7 @@
 | FILE-005 | `POST /upload-urls` | 未サポートMIME | 400 Bad Request | ✅ テスト済 |
 | FILE-006 | 実際のファイル送信 | UTF-8 以外エンコード | 500 Error | ⚠️ 未実装 |
 
-**未テストパターン**: 
+**未テストパターン**:
 - FILE-007: Base64 デコード失敗
 - FILE-008: ファイルサイズ 0 バイト
 - FILE-009: MinIO アップロード失敗時の再試行
@@ -747,6 +747,75 @@ jobs:
 - 📊 可視化精度 **向上** （自動 vs 手作業）
 - 🔔 品質ゲート **自動化**
 - 🤝 ステークホルダー **信頼向上**
+
+---
+
+## 📋 詳細テストケース仕様書
+
+テストケースの構成要素：
+- **テストNo.** - テストの一意なID
+- **確認観点** - 何をテストするか（目的）
+- **テスト条件** - 実施前提条件・入力値・セットアップ
+- **想定結果** - テスト実行後の期待値
+- **テスト状態** - 実装・テスト済みの状況
+
+### JWT Verifier テストケース仕様書 (10ケース)
+
+| テストNo. | 確認観点 | テスト条件 | 想定結果 | テスト状態 |
+|----------|--------|---------|--------|----------|
+| JWT-TC-001 | Cognito 有効トークンの検証 | COGNITO_PROVIDER設定 + 有効JWTトークン | {status: 200, user_id: 取得可能} | ✅ 実装済 |
+| JWT-TC-002 | Cognito 署名不正エラー検証 | COGNITO_PROVIDER設定 + 署名が不正なJWT | {status: 401, error: "Invalid signature"} | ✅ 実装済 |
+| JWT-TC-003 | Cognito 期限切れトークン検証 | COGNITO_PROVIDER設定 + expが過去のJWT | {status: 401, error: "Token expired"} | ✅ 実装済 |
+| JWT-TC-004 | Firebase トークンのカスタムクレーム抽出 | FIREBASE_PROVIDER設定 + カスタムクレーム付きJWT | {status: 200, custom_claims: 抽出可能} | ✅ 実装済 |
+| JWT-TC-005 | Azure B2C スコープ検証 | AZURE_B2C_PROVIDER設定 + scope不足JWT | {status: 403, error: "Insufficient scope"} | ⚠️ 部分実装 |
+| JWT-TC-006 | トークンキャッシング動作 | 同一トークンで連続2回API呼び出し | 1回目: DB検証、2回目: キャッシュ使用 | ✅ 実装済 |
+| JWT-TC-007 | キャッシュ有効期限切れ | キャッシュTTL超過後にAPI呼び出し | DB洗直検証が実行される | ✅ 実装済 |
+| JWT-TC-008 | Null/空トークン処理 | Authorization: Bearer 無し、または空文字 | {status: 400, error: "Missing token"} | ✅ 実装済 |
+| JWT-TC-009 | 複数プロバイダ対応 | Firebase設定時に Cognito トークンで呼び出し | エラー: "Provider mismatch" | ✅ 実装済 |
+| JWT-TC-010 | クレーム欠損時の例外処理 | 必須クレーム(email, sub)なしのJWT | {status: 400, error: "Missing required claims"} | 🔴 未実装 |
+
+### Local Backend テストケース仕様書 (10ケース)
+
+| テストNo. | 確認観点 | テスト条件 | 想定結果 | テスト状態 |
+|----------|--------|---------|--------|----------|
+| POST-TC-001 | Post 作成 - 正常系 | 有効なJSON + JWT認証 | {status: 201, id: 生成} | ✅ 実装済 |
+| POST-TC-002 | Post 作成 - Null値検証 | content: null での POST | {status: 400, error: "content is required"} | ✅ 実装済 |
+| POST-TC-003 | Post 作成 - サイズ超過 | content: 1001文字以上 | {status: 400, error: "content exceeds 1000 chars"} | ✅ 実装済 |
+| POST-TC-004 | Post 読み取り | 存在するpost_id でGET | {status: 200, post: DATA} | ✅ 実装済 |
+| POST-TC-005 | Post 更新 - 部分更新 | 空本体{}での PUT | {status: 200, post: 変更なし} | ✅ 実装済 |
+| POST-TC-006 | Post 削除 - 権限確認 | 他ユーザーの Post で DELETE | {status: 403, error: "Not authorized"} | ✅ 実装済 |
+| FILE-TC-001 | Upload URL生成 - 正常系 | 有効なcontent_type + count:1 | {status: 200, urls: [署名URL]} | ✅ 実装済 |
+| FILE-TC-002 | Upload URL生成 - MIME型検証 | 未サポートMIME (application/octet-stream) | {status: 400, error: "Unsupported MIME type"} | ✅ 実装済 |
+| FILE-TC-003 | Upload URL生成 - 数量超過 | count: 11 (max: 10) | {status: 400, error: "count exceeds 10"} | ✅ 実装済 |
+| PROF-TC-001 | Profile 更新 - ニックネーム上限 | nickname: 51文字以上 | {status: 400, error: "nickname exceeds 50 chars"} | ✅ 実装済 |
+
+**テストケース進捗サマリー:**
+- 実装済: 18 / 20 (90%)
+- 部分実装: 1 / 20 (5%)
+- 未実装: 1 / 20 (5%)
+
+---
+
+## 📊 テストケース × プロバイダー マッピング
+
+マトリックス形式で、各テストケースがどのプロバイダー・機能をカバーしているかを可視化
+
+| テストケース | Cognito | Firebase | Azure Std | Azure B2C | Local Srv | 対象モジュール |
+|-----------|---------|---------|----------|-----------|-----------|------------|
+| JWT-TC-001 | ✅ | - | - | - | - | app/jwt_verifier.py |
+| JWT-TC-004 | - | ✅ | - | - | - | app/jwt_verifier.py |
+| JWT-TC-005 | - | - | - | ✅ | - | app/jwt_verifier.py |
+| JWT-TC-006 | ✅ | ✅ | ✅ | ✅ | - | app/jwt_verifier.py |
+| POST-TC-001 | ✅ | ✅ | ✅ | ✅ | ✅ | app/backends/local_backend.py |
+| FILE-TC-001 | ✅ | ✅ | ✅ | ✅ | ✅ | app/backends/local_backend.py |
+| PROF-TC-001 | ✅ | ✅ | ✅ | ✅ | ✅ | app/backends/local_backend.py |
+
+**マトリックス網羅度:**
+- Cognito: 10/10 機能テスト カバー
+- Firebase: 8/10 機能テスト カバー
+- Azure Standard: 8/10 機能テスト カバー
+- Azure B2C: 7/10 機能テスト カバー（スコープ検証 未実装）
+- Local Server: 9/10 機能テスト カバー
 
 **スケジュール目安:**
 - 2026-Q2: フェーズ 3 実装開始
