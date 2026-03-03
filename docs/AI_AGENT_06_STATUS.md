@@ -1,8 +1,41 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> Last verified: 2026-03-02 (AI Project Management ワークフロー統合完了 ✅ / ブランチ保護 baseline 確立 ✅ / PM 出力アーティファクト初期化 ✅)
-> Previous: 2026-02-24 (コスト削減クリーンアップ実行 ✅ — GCP Cloud Run `production-frontend-web` 削除 / GCP Cloud Function `mcad-staging-api` 削除 / GCP SSL旧証明書 `ashnova-production-cert-c41311` 削除 / AWS S3 `staging/production-landing` バケット削除 / Staging 再デプロイ完全成功 ✅ — AWS#246/GCP#214/Azure#273 全成功 / FC1 deployment storage 修復 (`multicloudautodeploa752` 再作成) ✅ / 全3クラウド health check OK (`status:ok, version:3.0.0`) ✅ / E2Eテストスクリプト大幅改良 + `test-sns-all.sh` 新規追加 ✅ (commit `73af560`))
+> Last verified: 2026-03-03 (ドキュメント統合完了 ✅ — 16個の非AI_AGENTファイル削除 / AI_AGENT_* のみで統一 / PR #47)
+> Previous: 2026-03-02 (AI Project Management ワークフロー統合完了 ✅ / ブランチ保護 baseline 確立 ✅ / PM 出力アーティファクト初期化 ✅) | 2026-02-24 (コスト削減クリーンアップ実行 ✅)
+
+---
+
+## Session 2026-03-03: Documentation Consolidation & Cleanup
+
+### Completed Work
+
+| Task                                   | Result                                                           | Status |
+| -------------------------------------- | ---------------------------------------------------------------- | ------ |
+| 非AI_AGENTドキュメント分析             | 16個の非AI_AGENT ファイルが AI_AGENT_* に統合されていることを確認 | ✅     |
+| 重複ファイル同定                       | FIX_REPORT 7個, GUIDES 4個, REPORTS 2個, INFRASTRUCTURE 3個     | ✅     |
+| ドキュメント統合 (PR #47)              | 16ファイル削除 (6,600行以上), AI_AGENT_* で統一                 | ✅     |
+| 統合状態検証                           | main: AI_AGENT_* 36個のみ、非AI_AGENT 0個 → 完全統一             | ✅     |
+
+### Consolidated & Deleted Files
+
+**FIX_REPORTS (7 files)** → AI_AGENT_11_BUG_FIX_REPORTS.md:
+- AWS_HTTPS_FIX_REPORT.md, AWS_SNS_FIX_REPORT.md (2026-02-20), AWS_SNS_FIX_REPORT_20260222.md, AWS_PRODUCTION_SNS_FIX_REPORT.md, AZURE_SNS_FIX_REPORT.md, GCP_SNS_FIX_REPORT_20260223.md, SNS_FIX_REPORT_20260222.md
+
+**TEST/IMPLEMENTATION GUIDES (4 files)** → AI_AGENT_13_TESTING.md, AI_AGENT_07_RUNBOOKS.md:
+- INTEGRATION_TESTS_GUIDE.md, STAGING_TEST_GUIDE.md, IMPLEMENTATION_GUIDE.md, SOURCE_CODE_GUIDE.md
+
+**MIGRATION REPORTS (2 files)** → AI_AGENT_05_CICD.md, AI_AGENT_06_STATUS.md:
+- REACT_SPA_MIGRATION_REPORT.md, REFACTORING_REPORT_20260222.md
+
+**INFRASTRUCTURE GUIDES (3 files)** → AI_AGENT_10_DOMAINS.md, AI_AGENT_03_API.md:
+- CUSTOM_DOMAIN_SETUP.md, LAMBDA_LAYER_OPTIMIZATION.md, PDF_GENERATION_GUIDE.md
+
+### Result Summary
+
+- **Before**: 36 AI_AGENT files + 16 legacy files (52 total)
+- **After**: 36 AI_AGENT files only (unified namespace)
+- **Files deleted**: 16 | **Lines deleted**: 6,600+ | **Merge commit**: 0ef8a7aa
 
 ---
 
