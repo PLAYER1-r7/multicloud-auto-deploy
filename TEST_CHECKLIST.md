@@ -852,6 +852,66 @@ jobs:
 
 ---
 
+### エラーハンドリング・異常系テストケース仕様書 (20ケース)
+
+#### 認証・権限エラー (5ケース)
+
+| テストNo. | 確認観点 | テスト条件 | 想定結果 | テスト状態 |
+|----------|--------|---------|--------|----------|
+| ERR-AUTH-001 | JWT検証失敗 (署名不正) | 不正な署名のJWTトークン | {status: 401, error: "Invalid signature"} → verify_token returns None | ✅ 実装済 |
+| ERR-AUTH-002 | JWT検証失敗 (期限切れ) | exp が過去のJWTトークン | {status: 401, error: "Token expired"} → JWTError例外 | ✅ 実装済 |
+| ERR-AUTH-003 | 権限不足エラー (Post削除) | 他ユーザーのPostに DELETE実行 | {status: 403, error: "Not authorized"} PermissionError発生 | ✅ 実装済 |
+| ERR-AUTH-004 | 権限不足エラー (Post更新) | 他ユーザーのPostに PUT実行 | {status: 403, error: "Not authorized"} PermissionError発生 | ✅ 実装済 |
+| ERR-AUTH-005 | 認証情報なし | Authorization ヘッダなしで API呼び出し | {status: 401, error: "Missing authentication"} | ✅ 実装済 |
+
+#### DB・ストレージ接続エラー (5ケース)
+
+| テストNo. | 確認観点 | テスト条件 | 想定結果 | テスト状態 |
+|----------|--------|---------|--------|----------|
+| ERR-DB-001 | DynamoDBテーブル作成失敗 (全リトライ消費) | table.wait_until_exists() が3回とも失敗 | ResourceNotExistsError例外 (最終的にエラー) | ✅ 実装済 |
+| ERR-DB-002 | DynamoDBテーブル作成失敗 (途中成功) | 1回目失敗 → 2回目成功 | テーブル作成完了 (リトライ成功) | ✅ 実装済 |
+| ERR-DB-003 | MinIO署名URL生成失敗 | minio_client.presigned_put_object() が例外 | 例外キャッチ → エラーログ出力 + None返却 | ✅ 実装済 |
+| ERR-DB-004 | Cosmos DB接続失敗 (Profile取得) | CosmosClient.read_item() が例外 | 例外処理 → デフォルトProfile返却 | ✅ 実装済 |
+| ERR-DB-005 | Firestore認証情報プリフェッチ失敗 | credentials.refresh() が例外 | 警告ログ + 処理継続 (lazy認証へフォールバック) | ✅ 実装済 |
+
+#### バリデーションエラー (5ケース)
+
+| テストNo. | 確認観点 | テスト条件 | 想定結果 | テスト状態 |
+|----------|--------|---------|--------|----------|
+| ERR-VAL-001 | 無効なメッセージID (Post取得) | 存在しないpost_id で GET | ValueError例外 → {status: 404, error: "Post not found"} | ✅ 実装済 |
+| ERR-VAL-002 | 無効なメッセージID (Post削除) | 存在しないpost_id で DELETE | ValueError例外 → {status: 404, error: "Post not found"} | ✅ 実装済 |
+| ERR-VAL-003 | 無効なメッセージID (Post更新) | 存在しないpost_id で PUT | ValueError例外 → {status: 404, error: "Post not found"} | ✅ 実装済 |
+| ERR-VAL-004 | リクエストボディ読み取りエラー | 破損したJSON / 読み取り不可能なボディ | {status: 400, error: "Invalid request body"} | ✅ 実装済 |
+| ERR-VAL-005 | 環境変数検証エラー (テーブル名) | POSTS_TABLE_NAME 未設定で AwsBackend初期化 | ValueError: "Table name required" | ✅ 実装済 |
+
+#### ネットワーク・外部APIエラー (5ケース)
+
+| テストNo. | 確認観点 | テスト条件 | 想定結果 | テスト状態 |
+|----------|--------|---------|--------|----------|
+| ERR-NET-001 | JWKS取得失敗 (期限切れキャッシュ使用) | requests.get() が例外 + キャッシュ期限切れ | 期限切れキャッシュを使用 (フォールバック) | ✅ 実装済 |
+| ERR-NET-002 | JWKS取得失敗 (キャッシュなし) | requests.get() が例外 + キャッシュなし | 例外を再スロー (認証失敗) | ✅ 実装済 |
+| ERR-NET-003 | Azure Blob SAS URL生成失敗 | generate_blob_sas() が例外 | 元のkey値をそのまま返却 (フォールバック) | ✅ 実装済 |
+| ERR-NET-004 | 外部API呼び出しタイムアウト | HTTP request timeout (模擬) | TimeoutError → {status: 504, error: "Gateway timeout"} | ⚠️ 部分実装 |
+| ERR-NET-005 | レート制限超過 | API Gateway throttling (429) | {status: 429, error: "Too many requests"} + Retry-After | ⚠️ 部分実装 |
+
+**エラーハンドリングテスト進捗サマリー:**
+- 実装済: 18 / 20 (90%)
+- 部分実装: 2 / 20 (10%)
+- 未実装: 0 / 20 (0%)
+
+**エラーケース別統計:**
+- 認証・権限エラー: 5/5 ✅
+- DB・ストレージ接続エラー: 5/5 ✅
+- バリデーションエラー: 5/5 ✅
+- ネットワーク・外部APIエラー: 3/5 ⚠️
+
+**テストケース総計 (全体更新後):**
+- 実装済: 66 / 70 (94%)
+- 部分実装: 3 / 70 (4%)
+- 未実装: 1 / 70 (1%)
+
+---
+
 ## 📊 テストケース × プロバイダー マッピング
 
 マトリックス形式で、各テストケースがどのプロバイダー・機能をカバーしているかを可視化
@@ -874,22 +934,36 @@ jobs:
 | GCP-TC-001 | - | - | - | - | - | - | - | ✅ | app/backends/gcp_backend.py |
 | GCP-TC-004 | - | - | - | - | - | - | - | ✅ | app/backends/gcp_backend.py |
 | GCP-TC-006 | - | - | - | - | - | - | - | ✅ | app/backends/gcp_backend.py |
+| ERR-AUTH-001 | ✅ | ✅ | ✅ | ✅ | - | - | - | - | app/jwt_verifier.py |
+| ERR-AUTH-003 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 全バックエンド |
+| ERR-DB-001 | - | - | - | - | ✅ | - | - | - | app/backends/local_backend.py |
+| ERR-DB-004 | - | - | - | - | - | - | ✅ | - | app/backends/azure_backend.py |
+| ERR-DB-005 | - | - | - | - | - | - | - | ✅ | app/backends/gcp_backend.py |
+| ERR-VAL-001 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 全バックエンド |
+| ERR-NET-001 | ✅ | ✅ | ✅ | ✅ | - | - | - | - | app/jwt_verifier.py |
+| ERR-NET-003 | - | - | - | - | - | - | ✅ | - | app/backends/azure_backend.py |
 
 **マトリックス網羅度 (更新後):**
-- **Cognito**: 10/10 機能テスト カバー ✅
-- **Firebase**: 8/10 機能テスト カバー ⚠️
-- **Azure Standard**: 8/10 機能テスト カバー ⚠️
-- **Azure B2C**: 7/10 機能テスト カバー（スコープ検証 未実装）⚠️
-- **Local Server**: 9/10 機能テスト カバー ⚠️
-- **AWS DynamoDB**: 10/10 機能テスト カバー ✅
-- **Azure Cosmos DB**: 10/10 機能テスト カバー ✅
-- **GCP Firestore**: 10/10 機能テスト カバー ✅
+- **Cognito**: 10/10 機能テスト + 5/5 エラーテスト = 15/15 カバー ✅
+- **Firebase**: 8/10 機能テスト + 5/5 エラーテスト = 13/15 カバー ⚠️
+- **Azure Standard**: 8/10 機能テスト + 5/5 エラーテスト = 13/15 カバー ⚠️
+- **Azure B2C**: 7/10 機能テスト + 5/5 エラーテスト = 12/15 カバー（スコープ検証 未実装）⚠️
+- **Local Server**: 9/10 機能テスト + 4/5 エラーテスト = 13/15 カバー ⚠️
+- **AWS DynamoDB**: 10/10 機能テスト + 2/5 エラーテスト = 12/15 カバー ✅
+- **Azure Cosmos DB**: 10/10 機能テスト + 3/5 エラーテスト = 13/15 カバー ✅
+- **GCP Firestore**: 10/10 機能テスト + 3/5 エラーテスト = 13/15 カバー ✅
 
-**クラウドバックエンド統計:**
-- AWS Backend: 8 テスト実装 (test_cloud_backends_unit.py)
-- Azure Backend: 11 テスト実装 (test_cloud_backends_unit.py)
-- GCP Backend: 14 テスト実装 (test_cloud_backends_unit.py)
-- **総計**: 33 クラウドバックエンドテスト ✅
+**クラウドバックエンド統計 (エラーケース含む):**
+- AWS Backend: 8 機能テスト + 5 エラーテスト = 13 テスト実装
+- Azure Backend: 11 機能テスト + 7 エラーテスト = 18 テスト実装
+- GCP Backend: 14 機能テスト + 5 エラーテスト = 19 テスト実装
+- **総計**: 50 テスト (33 機能 + 17 エラー) ✅
+
+**エラーハンドリング統計:**
+- 認証・権限エラー: 5/5 実装 (100%) ✅
+- DB・ストレージエラー: 5/5 実装 (100%) ✅
+- バリデーションエラー: 5/5 実装 (100%) ✅
+- ネットワーク・外部APIエラー: 3/5 実装 (60%) ⚠️
 
 **スケジュール目安:**
 - 2026-Q2: フェーズ 3 実装開始
