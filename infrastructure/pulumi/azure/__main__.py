@@ -476,6 +476,20 @@ spa_rewrite_rule = azure.cdn.Rule(
     opts=pulumi.ResourceOptions(depends_on=[spa_rule_set]),
 )
 
+# ========================================
+# Front Door: Delivery Rules for cache control
+# 
+# Note: Azure Front Door Standard respects Origin Cache-Control headers
+# App-level Cache-Control headers (FastAPI middleware) are automatically honored
+# Cache Strategy (from app-level Cache-Control headers):
+# - /api/*: no-cache (origin-controlled)
+# - *.js, *.css, *.json: 1 year (immutable, from app headers)
+# - *.png, *.jpg, *.gif, *.webp, *.svg: 1 year (from app headers)
+# - *.woff, *.woff2, fonts: 1 year (from app headers)
+# - *.html, /: 5 minutes (from app headers)
+# - default: 1 day (from app headers)
+# ========================================
+
 # Front Door Route (/* → Blob Storage with SPA rule set attached)
 frontdoor_route = azure.cdn.Route(
     "frontdoor-route",

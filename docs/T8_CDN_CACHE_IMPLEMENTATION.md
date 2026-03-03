@@ -151,6 +151,6 @@ Origin (FastAPI) の Cache-Control ヘッダーに従う方式:
 
 ---
 
-**Commit**: `803ede4c`  
-**Status**: Part 1 & 2 Complete, Part 3 (Azure) Pending  
+**Commit**: `803ede4c`
+**Status**: Part 1 & 2 Complete, Part 3 (Azure) Pending
 **Timeline**: T8 実装期間: 3-5日（進行中）
