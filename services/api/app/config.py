@@ -97,6 +97,12 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     # 画像アップロード制限 (環境変数 MAX_IMAGES_PER_POST で上書き可)
     max_images_per_post: int = 10
+
+    # レート制限 (T9)
+    # 1クライアントIPあたりの制限値（60秒窓）
+    rate_limit_enabled: bool = True
+    rate_limit_requests_per_window: int = 100
+    rate_limit_window_seconds: int = 60
     
     model_config = {
         "env_file": ".env",

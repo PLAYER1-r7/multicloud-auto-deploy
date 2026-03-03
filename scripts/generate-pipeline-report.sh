@@ -75,9 +75,9 @@ MAIN_SHA=$(cd "$PROJECT_ROOT" && git rev-parse --short main 2>/dev/null || echo 
 cat > "$REPORT_FILE" << EOF
 # デプロイパイプライン実行レポート
 
-**実行日時**: ${RUN_DATE} ${RUN_TIME}  
-**総合結果**: ${OVERALL_STATUS}  
-**担当者**: 自動実行 (deploy-pipeline.sh)
+**実行日時**: ${RUN_DATE} ${RUN_TIME}
+**総合結果**: ${OVERALL_STATUS}
+**担当者**: 手動実行または運用スクリプト
 
 ---
 

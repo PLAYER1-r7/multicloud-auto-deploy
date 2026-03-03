@@ -291,147 +291,159 @@ if stack == "production":
     )
 
 # ========================================
-# Cloud CDN for Frontend with HTTPS
+# Cloud CDN for Frontend with HTTPS (Production Only)
 # ========================================
-# External IP Address for Load Balancer
-cdn_ip_address = gcp.compute.GlobalAddress(
-    "cdn-ip-address",
-    name=f"{project_name}-{stack}-cdn-ip",
-    project=project,
-    labels=common_labels,
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
-)
-
-# Backend Bucket for Cloud CDN with conditional Cloud Armor
-backend_bucket_kwargs = {
-    "name": f"{project_name}-{stack}-cdn-backend",
-    "bucket_name": frontend_bucket.name,
-    "enable_cdn": True,
-    "project": project,
-    "cdn_policy": gcp.compute.BackendBucketCdnPolicyArgs(
-        cache_mode="CACHE_ALL_STATIC",
-        default_ttl=3600,  # 1 hour
-        max_ttl=86400,  # 24 hours
-        client_ttl=3600,
-        negative_caching=True,
-        serve_while_stale=86400,
-    ),
-    # Allow popup window (Firebase signInWithPopup) to check window.closed
-    # without being blocked by Cross-Origin-Opener-Policy on the OAuth page.
-    "custom_response_headers": [
-        "Cross-Origin-Opener-Policy: same-origin-allow-popups",
-    ],
-    "opts": pulumi.ResourceOptions(depends_on=enabled_services),
-}
-
-# Attach Cloud Armor security policy only for production
+# Staging: No CDN/Load Balancer - Cloud Run direct access
 if stack == "production":
+    # External IP Address for Load Balancer
+    cdn_ip_address = gcp.compute.GlobalAddress(
+        "cdn-ip-address",
+        name=f"{project_name}-{stack}-cdn-ip",
+        project=project,
+        labels=common_labels,
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    )
+
+    # Backend Bucket for Cloud CDN with conditional Cloud Armor
+    backend_bucket_kwargs = {
+        "name": f"{project_name}-{stack}-cdn-backend",
+        "bucket_name": frontend_bucket.name,
+        "enable_cdn": True,
+        "project": project,
+        "cdn_policy": gcp.compute.BackendBucketCdnPolicyArgs(
+            cache_mode="CACHE_ALL_STATIC",
+            default_ttl=86400,  # 24 hours (increased from 1 hour) - allows longer cache for static files
+            max_ttl=2592000,  # 30 days (increased from 24 hours) - supports long-term caching of assets
+            client_ttl=86400,  # 24 hours (increased from 1 hour) - browser cache duration
+            negative_caching=True,
+            serve_while_stale=86400,
+        ),
+        # Allow popup window (Firebase signInWithPopup) to check window.closed
+        # without being blocked by Cross-Origin-Opener-Policy on the OAuth page.
+        "custom_response_headers": [
+            "Cross-Origin-Opener-Policy: same-origin-allow-popups",
+        ],
+        "opts": pulumi.ResourceOptions(depends_on=enabled_services),
+    }
+
+    # Attach Cloud Armor security policy for production
     backend_bucket_kwargs["edge_security_policy"] = armor_security_policy.self_link
 
-backend_bucket = gcp.compute.BackendBucket(
-    "cdn-backend-bucket", **backend_bucket_kwargs
-)
+    backend_bucket = gcp.compute.BackendBucket(
+        "cdn-backend-bucket", **backend_bucket_kwargs
+    )
 
-# Managed SSL Certificate (for custom domain - optional)
-# Note: This requires a custom domain. For now, we'll use HTTP only.
-# To enable HTTPS with custom domain:
-# 1. Set up a custom domain
-# 2. Create a managed SSL certificate
-# 3. Use TargetHttpsProxy instead of TargetHttpProxy
+    # Managed SSL Certificate (for custom domain - optional)
+    # Note: This requires a custom domain. For now, we'll use HTTP only.
+    # To enable HTTPS with custom domain:
+    # 1. Set up a custom domain
+    # 2. Create a managed SSL certificate
+    # 3. Use TargetHttpsProxy instead of TargetHttpProxy
 
-# URL Map for Load Balancer
-# All traffic → backend_bucket (GCS static files)
-# React SPA routing (/sns/*) is handled by the GCS bucket's not_found_page
-# (index.html fallback) and served as static files.
-url_map = gcp.compute.URLMap(
-    "cdn-url-map",
-    name=f"{project_name}-{stack}-cdn-urlmap",
-    project=project,
-    default_service=backend_bucket.self_link,
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
-)
+    # URL Map for Load Balancer
+    # All traffic → backend_bucket (GCS static files)
+    # React SPA routing (/sns/*) is handled by the GCS bucket's not_found_page
+    # (index.html fallback) and served as static files.
+    url_map = gcp.compute.URLMap(
+        "cdn-url-map",
+        name=f"{project_name}-{stack}-cdn-urlmap",
+        project=project,
+        default_service=backend_bucket.self_link,
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    )
 
-# Target HTTPS Proxy with SSL (managed certificate)
-# Custom domain configuration (optional)
-custom_domain = config.get("customDomain")  # e.g., gcp.yourdomain.com
-ssl_domains = (
-    [custom_domain] if custom_domain else [f"{project_name}-{stack}.example.com"]
-)
+    # Target HTTPS Proxy with SSL (managed certificate)
+    # Custom domain configuration (optional)
+    custom_domain = config.get("customDomain")  # e.g., gcp.yourdomain.com
+    ssl_domains = (
+        [custom_domain] if custom_domain else [f"{project_name}-{stack}.example.com"]
+    )
 
-# Use a hash of the domain list in the cert name so that changing domains
-# triggers create-before-delete (avoids "resource in use" errors).
-_ssl_domain_hash = hashlib.md5(",".join(ssl_domains).encode()).hexdigest()[:8]
-managed_ssl_cert = gcp.compute.ManagedSslCertificate(
-    "managed-ssl-cert",
-    name=f"{project_name}-{stack}-ssl-cert-{_ssl_domain_hash}",
-    project=project,
-    managed=gcp.compute.ManagedSslCertificateManagedArgs(
-        domains=ssl_domains,
-    ),
-    opts=pulumi.ResourceOptions(
-        depends_on=enabled_services,
-        # No delete_before_replace: Pulumi creates new cert first, updates the
-        # HTTPS proxy, then deletes the old cert (avoids "in use" errors).
-    ),
-)
+    # Use a hash of the domain list in the cert name so that changing domains
+    # triggers create-before-delete (avoids "resource in use" errors).
+    _ssl_domain_hash = hashlib.md5(",".join(ssl_domains).encode()).hexdigest()[:8]
+    managed_ssl_cert = gcp.compute.ManagedSslCertificate(
+        "managed-ssl-cert",
+        name=f"{project_name}-{stack}-ssl-cert-{_ssl_domain_hash}",
+        project=project,
+        managed=gcp.compute.ManagedSslCertificateManagedArgs(
+            domains=ssl_domains,
+        ),
+        opts=pulumi.ResourceOptions(
+            depends_on=enabled_services,
+            # No delete_before_replace: Pulumi creates new cert first, updates the
+            # HTTPS proxy, then deletes the old cert (avoids "in use" errors).
+        ),
+    )
 
-https_proxy = gcp.compute.TargetHttpsProxy(
-    "cdn-https-proxy",
-    name=f"{project_name}-{stack}-cdn-https-proxy",
-    project=project,
-    url_map=url_map.self_link,
-    ssl_certificates=[managed_ssl_cert.self_link],
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
-)
+    https_proxy = gcp.compute.TargetHttpsProxy(
+        "cdn-https-proxy",
+        name=f"{project_name}-{stack}-cdn-https-proxy",
+        project=project,
+        url_map=url_map.self_link,
+        ssl_certificates=[managed_ssl_cert.self_link],
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    )
 
-# URL Map for HTTP → HTTPS redirect (301 Moved Permanently)
-# All HTTP traffic is redirected to HTTPS; no content is served over HTTP.
-redirect_url_map = gcp.compute.URLMap(
-    "cdn-redirect-url-map",
-    name=f"{project_name}-{stack}-cdn-redirect",
-    project=project,
-    default_url_redirect=gcp.compute.URLMapDefaultUrlRedirectArgs(
-        https_redirect=True,
-        redirect_response_code="MOVED_PERMANENTLY_DEFAULT",
-        strip_query=False,
-    ),
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
-)
+    # URL Map for HTTP → HTTPS redirect (301 Moved Permanently)
+    # All HTTP traffic is redirected to HTTPS; no content is served over HTTP.
+    redirect_url_map = gcp.compute.URLMap(
+        "cdn-redirect-url-map",
+        name=f"{project_name}-{stack}-cdn-redirect",
+        project=project,
+        default_url_redirect=gcp.compute.URLMapDefaultUrlRedirectArgs(
+            https_redirect=True,
+            redirect_response_code="MOVED_PERMANENTLY_DEFAULT",
+            strip_query=False,
+        ),
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    )
 
-# Target HTTP Proxy — redirects HTTP → HTTPS (not serving content directly)
-http_proxy = gcp.compute.TargetHttpProxy(
-    "cdn-http-proxy",
-    name=f"{project_name}-{stack}-cdn-http-proxy",
-    project=project,
-    url_map=redirect_url_map.self_link,
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
-)
+    # Target HTTP Proxy — redirects HTTP → HTTPS (not serving content directly)
+    http_proxy = gcp.compute.TargetHttpProxy(
+        "cdn-http-proxy",
+        name=f"{project_name}-{stack}-cdn-http-proxy",
+        project=project,
+        url_map=redirect_url_map.self_link,
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    )
 
-# Global Forwarding Rule for HTTPS (443)
-https_forwarding_rule = gcp.compute.GlobalForwardingRule(
-    "cdn-https-forwarding-rule",
-    name=f"{project_name}-{stack}-cdn-lb-https",
-    project=project,
-    ip_address=cdn_ip_address.address,
-    ip_protocol="TCP",
-    port_range="443",
-    target=https_proxy.self_link,
-    load_balancing_scheme="EXTERNAL",
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
-)
+    # Global Forwarding Rule for HTTPS (443)
+    https_forwarding_rule = gcp.compute.GlobalForwardingRule(
+        "cdn-https-forwarding-rule",
+        name=f"{project_name}-{stack}-cdn-lb-https",
+        project=project,
+        ip_address=cdn_ip_address.address,
+        ip_protocol="TCP",
+        port_range="443",
+        target=https_proxy.self_link,
+        load_balancing_scheme="EXTERNAL",
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    )
 
-# Global Forwarding Rule for HTTP (80) - redirect to HTTPS
-forwarding_rule = gcp.compute.GlobalForwardingRule(
-    "cdn-forwarding-rule",
-    name=f"{project_name}-{stack}-cdn-lb",
-    project=project,
-    ip_address=cdn_ip_address.address,
-    ip_protocol="TCP",
-    port_range="80",
-    target=http_proxy.self_link,
-    load_balancing_scheme="EXTERNAL",
-    opts=pulumi.ResourceOptions(depends_on=enabled_services),
-)
+    # Global Forwarding Rule for HTTP (80) - redirect to HTTPS
+    forwarding_rule = gcp.compute.GlobalForwardingRule(
+        "cdn-forwarding-rule",
+        name=f"{project_name}-{stack}-cdn-lb",
+        project=project,
+        ip_address=cdn_ip_address.address,
+        ip_protocol="TCP",
+        port_range="80",
+        target=http_proxy.self_link,
+        load_balancing_scheme="EXTERNAL",
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
+    )
+else:
+    # Staging: No CDN/Load Balancer - Cloud Run direct access
+    cdn_ip_address = None
+    backend_bucket = None
+    url_map = None
+    managed_ssl_cert = None
+    https_proxy = None
+    redirect_url_map = None
+    http_proxy = None
+    https_forwarding_rule = None
+    forwarding_rule = None
 
 # ========================================
 # Note about Cloud Functions
@@ -451,11 +463,14 @@ forwarding_rule = gcp.compute.GlobalForwardingRule(
 pulumi.export("project_id", project)
 pulumi.export("region", region)
 
-# Custom domain exports (if configured)
-if custom_domain:
+# Custom domain exports (if configured and production)
+if custom_domain and stack == "production":
     pulumi.export("custom_domain", custom_domain)
     pulumi.export("custom_domain_url", f"https://{custom_domain}")
-    pulumi.export("ssl_certificate_domains", ssl_domains)
+    ssl_domains_export = (
+        [custom_domain] if custom_domain else [f"{project_name}-{stack}.example.com"]
+    )
+    pulumi.export("ssl_certificate_domains", ssl_domains_export)
 
 # Firebase Authentication
 pulumi.export("firebase_project_id", project)
@@ -500,17 +515,20 @@ pulumi.export(
         lambda name: f"https://storage.googleapis.com/{name}/index.html"
     ),
 )
-pulumi.export("cdn_ip_address", cdn_ip_address.address)
-pulumi.export("cdn_url", cdn_ip_address.address.apply(lambda ip: f"http://{ip}"))
-pulumi.export("cdn_https_url", cdn_ip_address.address.apply(lambda ip: f"https://{ip}"))
-pulumi.export("backend_bucket_name", backend_bucket.name)
-pulumi.export("url_map_name", url_map.name)
-pulumi.export("redirect_url_map_name", redirect_url_map.name)
+# CDN exports only for production
+if stack == "production":
+    pulumi.export("cdn_ip_address", cdn_ip_address.address)
+    pulumi.export("cdn_url", cdn_ip_address.address.apply(lambda ip: f"http://{ip}"))
+    pulumi.export("cdn_https_url", cdn_ip_address.address.apply(lambda ip: f"https://{ip}"))
+    pulumi.export("backend_bucket_name", backend_bucket.name)
+    pulumi.export("url_map_name", url_map.name)
+    pulumi.export("redirect_url_map_name", redirect_url_map.name)
+    pulumi.export("ssl_certificate_name", managed_ssl_cert.name)
+
 pulumi.export("audit_config_service", audit_config.service)
 # Cloud Armor exports only for production
 if stack == "production":
     pulumi.export("cloud_armor_policy_name", armor_security_policy.name)
-pulumi.export("ssl_certificate_name", managed_ssl_cert.name)
 
 # ========================================
 # Monitoring and Alerts

@@ -5,7 +5,7 @@ PulumiによるAWSインフラストラクチャ管理（完全Python実装）
 ## 📦 リソース
 
 - **API Gateway (HTTP API)** - RESTful API エンドポイント
-- **Lambda Function** - Python 3.12 FastAPI アプリケーション
+- **Lambda Function** - Python 3.13 FastAPI アプリケーション
 - **DynamoDB Table** - メッセージストレージ（オンデマンド）
 - **S3 Bucket** - 画像ストレージ（パブリック読み取り）
 - **IAM Roles & Policies** - 最小権限

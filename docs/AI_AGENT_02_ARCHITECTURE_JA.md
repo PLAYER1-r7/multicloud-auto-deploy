@@ -10,7 +10,7 @@
 ユーザー
   │
   ├─ [AWS]   CloudFront ──► S3（React SPA：ランディング + SNSページ）  ← 静的
-  │         API Gateway v2 ──► Lambda（Python 3.12）──► DynamoDB
+  │         API Gateway v2 ──▶ Lambda（Python 3.13）──▶ DynamoDB
   │
   ├─ [Azure] Front Door ─┬─ /sns/* ──► Blob Storage $web/sns/（React SPA ← 静的）
   │                       └─ /*     ──► Blob Storage $web（ランディング ← 静的）

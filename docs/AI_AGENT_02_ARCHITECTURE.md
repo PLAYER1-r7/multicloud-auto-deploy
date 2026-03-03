@@ -10,7 +10,7 @@
 User
   │
   ├─ [AWS]   CloudFront ──► S3 (React SPA: landing + SNS pages)  ← static
-  │         API Gateway v2 ──► Lambda (Python 3.12) ──► DynamoDB
+  │         API Gateway v2 ──▶ Lambda (Python 3.13) ──▶ DynamoDB
   │
   ├─ [Azure] Front Door ─┬─ /sns/* ──► Blob Storage $web/sns/  (React SPA ← static)
   │                       └─ /*     ──► Blob Storage $web (landing ← static)
@@ -95,11 +95,11 @@ Lambda: multicloud-auto-deploy-{env}-frontend-web  [REMOVED — Python SSR super
 React + S3 へ移行済み。Lambda 自体は削除されていない場合があるが、CloudFront の
 `/sns/*` behavior は現在 API Gateway（バックエンド API）を向いている。
 
-**Lambda Layer**: `multicloud-auto-deploy-staging-dependencies`  
-— Contains only FastAPI / Mangum / JWT dependencies; boto3 is included in the Lambda runtime.  
+**Lambda Layer**: `multicloud-auto-deploy-staging-dependencies`
+— Contains only FastAPI / Mangum / JWT dependencies; boto3 is included in the Lambda runtime.
 — App code (~78 KB) and Layer (~8-10 MB) are deployed separately.
 
-**主要環境変数**: `POSTS_TABLE_NAME`, `IMAGES_BUCKET_NAME`, `COGNITO_USER_POOL_ID`  
+**主要環境変数**: `POSTS_TABLE_NAME`, `IMAGES_BUCKET_NAME`, `COGNITO_USER_POOL_ID`
 **Observability**: AWS Lambda Powertools (Logger / Tracer / Metrics) — `SimpleSNS` namespace
 
 ---
@@ -133,7 +133,7 @@ Azure Functions: multicloud-auto-deploy-staging-func (Flex Consumption)  ← bac
              ← AZURE_STORAGE_ACCOUNT_NAME / AZURE_STORAGE_ACCOUNT_KEY / AZURE_STORAGE_CONTAINER
 ```
 
-**Resource Group**: `multicloud-auto-deploy-staging-rg` (japaneast)  
+**Resource Group**: `multicloud-auto-deploy-staging-rg` (japaneast)
 **WAF**: Not configured (Standard SKU; can be added with Premium SKU)
 
 ---
@@ -164,7 +164,7 @@ Cloud Run: multicloud-auto-deploy-staging-api  (Backend API)
        ← GCP_STORAGE_BUCKET 環境変数で参照
 ```
 
-**Note**: GCP uses a Classic External LB (`EXTERNAL` scheme).  
+**Note**: GCP uses a Classic External LB (`EXTERNAL` scheme).
 URL Map path-based routing (`/sns/*` → Cloud Run) requires `EXTERNAL_MANAGED`; currently may fall back to GCS for all paths — needs verification.
 
 ---

@@ -60,7 +60,7 @@ multicloud-auto-deploy/
 ├── infrastructure/        # インフラストラクチャコード
 │   └── pulumi/           # Pulumiコード（Python - AWS/Azure/GCP）
 ├── services/             # アプリケーションコード
-│   ├── api/              # FastAPI バックエンド（Python 3.12）
+│   ├── api/              # FastAPI バックエンド（Python 3.13）
 │   ├── frontend_react/   # React フロントエンド（Vite + TypeScript）
 │   └── frontend_reflex/  # Reflex フロントエンド（実験的）
 ├── scripts/              # デプロイ・テストスクリプト
@@ -75,7 +75,7 @@ multicloud-auto-deploy/
 
 ### 前提条件
 
-- Python 3.12+
+- Python 3.13+
 - Docker & Docker Compose
 - Pulumi 3.0+
 - AWS CLI 2.x / Azure CLI 2.x / gcloud CLI 556.0+
@@ -92,10 +92,10 @@ multicloud-auto-deploy/
 
 **Backend**
 
-- **Framework**: FastAPI 1.0+ (Python 3.12)
+- **Framework**: FastAPI 1.0+ (Python 3.13)
 - **AWS**: Lambda (x86_64) + API Gateway v2 (HTTP)
-- **Azure**: Azure Functions (Python)
-- **GCP**: Cloud Functions (Python 3.11)
+- **Azure**: Azure Functions (Python 3.13)
+- **GCP**: Cloud Functions (Python 3.13)
 
 **Database**
 
@@ -187,12 +187,13 @@ git push origin main
 
 - 📖 [セットアップガイド](docs/SETUP.md) - 初期セットアップ手順
 - 🚀 [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定
+- 🏗️ [技術スタック戦略](docs/TECH_STRATEGY_2026.md) - 言語選択・IaC戦略・実装ロードマップ 🆕
 - ✅ [CI/CDテスト結果](docs/CICD_TEST_RESULTS.md) - パイプライン検証レポート
 - 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策
 - 🌐 [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のエンドポイント情報
-- 🌍 [CDNセットアップガイド](docs/CDN_SETUP.md) - CloudFront/Front Door/Cloud CDN設定 🆕
-- � [関数サイズ最適化](docs/FUNCTION_SIZE_OPTIMIZATION.md) - デプロイパッケージサイズ削減（AWS 97%削減！） 🆕
-- �📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
+- 🌍 [CDNセットアップガイド](docs/CDN_SETUP.md) - CloudFront/Front Door/Cloud CDN設定
+- ⚡ [関数サイズ最適化](docs/FUNCTION_SIZE_OPTIMIZATION.md) - デプロイパッケージサイズ削減（AWS 97%削減！）
+- 📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
 
 ### プロバイダー別デプロイ
 
@@ -200,9 +201,10 @@ git push origin main
 - [Azure デプロイ](docs/AZURE_DEPLOYMENT.md)
 - [GCP デプロイ](docs/GCP_DEPLOYMENT.md)
 
-### アーキテクチャ
+### アーキテクチャ & 技術戦略
 
 - [システムアーキテクチャ](docs/ARCHITECTURE.md) - 完全版システム設計
+- [🎯 技術スタック戦略 2026](docs/TECH_STRATEGY_2026.md) - 言語選択（Pulumi vs Terraform、Python vs Go）、ロードマップ、コスト分析
 
 ## 🔄 GitHub Actions 自動デプロイ
 
@@ -266,7 +268,7 @@ Actions > Deploy to Multi-Cloud > Run workflow
 ### AWS (ap-northeast-1) ✅ 運用中
 
 - **Frontend**: S3 Static Website Hosting
-- **Backend**: Lambda (Python 3.12) + API Gateway v2
+- **Backend**: Lambda (Python 3.13) + API Gateway v2
 - **Database**: DynamoDB (PAY_PER_REQUEST)
 - **Infrastructure**: Pulumi 3.0+
 - **Deployment**: GitHub Actions
@@ -274,7 +276,7 @@ Actions > Deploy to Multi-Cloud > Run workflow
 ### Azure (japaneast) ✅ 運用中
 
 - **Frontend**: Blob Storage ($web) + Azure Front Door
-- **Backend**: Azure Functions (Python 3.12)
+- **Backend**: Azure Functions (Python 3.13)
 - **Database**: Cosmos DB (Serverless)
 - **Infrastructure**: Pulumi 3.0+
 - **Deployment**: GitHub Actions
@@ -283,7 +285,7 @@ Actions > Deploy to Multi-Cloud > Run workflow
 ### GCP (asia-northeast1) ✅ 運用中
 
 - **Frontend**: Cloud Storage Static Website
-- **Backend**: Cloud Functions (Python 3.12)
+- **Backend**: Cloud Functions (Python 3.13)
 - **Database**: Firestore (Native Mode)
 - **Infrastructure**: Pulumi 3.0+
 - **Deployment**: GitHub Actions
@@ -334,7 +336,7 @@ VS Codeの Dev Containerに対応しています：
 # 必要なツールが全てプリインストール
 - Pulumi 3.x
 - Node.js 18
-- Python 3.12
+- Python 3.13
 - AWS CLI, Azure CLI, gcloud CLI
 - Docker in Docker
 
@@ -613,7 +615,7 @@ zip -r layer.zip python/
 aws lambda publish-layer-version \
   --layer-name multicloud-auto-deploy-dependencies \
   --zip-file fileb://layer.zip \
-  --compatible-runtimes python3.12
+  --compatible-runtimes python3.13
 
 # Lambda関数に紐付け
 aws lambda update-function-configuration \

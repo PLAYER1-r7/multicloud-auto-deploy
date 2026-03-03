@@ -14,13 +14,13 @@
 #   Manually triggers GitHub Actions workflows and monitors execution.
 #
 # Parameters:
-#   workflow     - Workflow name: aws|azure|gcp|multicloud
+#   workflow     - Workflow name: aws|azure|gcp または workflow file名
 #   environment  - Target environment: staging (default)|production
 #
 # Examples:
 #   ./scripts/trigger-workflow.sh aws
 #   ./scripts/trigger-workflow.sh azure production
-#   ./scripts/trigger-workflow.sh multicloud staging
+#   ./scripts/trigger-workflow.sh deploy-landing-aws.yml production
 #
 # Prerequisites:
 #   - GitHub CLI (gh) installed and authenticated
@@ -55,7 +55,7 @@ if [ $# -eq 0 ]; then
     echo "  aws        - AWS デプロイ"
     echo "  azure      - Azure デプロイ"
     echo "  gcp        - GCP デプロイ"
-    echo "  multicloud - マルチクラウド デプロイ"
+    echo "  (または workflow file名: deploy-landing-aws.yml など)"
     echo ""
     echo "環境 (optional):"
     echo "  staging    - ステージング環境（デフォルト）"
@@ -64,7 +64,7 @@ if [ $# -eq 0 ]; then
     echo "例:"
     echo "  $0 aws staging"
     echo "  $0 azure"
-    echo "  $0 multicloud production"
+    echo "  $0 deploy-landing-aws.yml production"
     exit 1
 fi
 
@@ -82,8 +82,8 @@ case $WORKFLOW in
     gcp)
         WORKFLOW_FILE="deploy-gcp.yml"
         ;;
-    multicloud)
-        WORKFLOW_FILE="deploy-multicloud.yml"
+    *.yml)
+        WORKFLOW_FILE="$WORKFLOW"
         ;;
     *)
         echo -e "${RED}エラー: 不明なワークフロー: $WORKFLOW${NC}"
@@ -112,6 +112,14 @@ if ! gh auth status &> /dev/null; then
     gh auth login
 fi
 
+# ワークフロー存在確認
+if ! gh workflow view "$WORKFLOW_FILE" >/dev/null 2>&1; then
+    echo -e "${RED}エラー: ワークフローが見つかりません: $WORKFLOW_FILE${NC}"
+    echo "利用可能なワークフロー:"
+    gh workflow list
+    exit 1
+fi
+
 # リポジトリ情報取得
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 echo "リポジトリ: $REPO"
@@ -124,14 +132,14 @@ gh workflow run "$WORKFLOW_FILE" -f environment="$ENVIRONMENT"
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ ワークフロー実行をトリガーしました${NC}"
     echo ""
-    
+
     # 少し待機
     sleep 3
-    
+
     # 最新の実行状況を表示
     echo -e "${BLUE}最新の実行状況:${NC}"
     gh run list --workflow="$WORKFLOW_FILE" --limit 5
-    
+
     echo ""
     echo -e "${YELLOW}実行状況をリアルタイムで確認:${NC}"
     echo "  gh run watch"

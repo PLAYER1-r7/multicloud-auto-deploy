@@ -238,7 +238,7 @@ aws s3 cp dist/index.html s3://${BUCKET}/sns/index.html \
 | --- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | A1  | All endpoints 503                    | `host.json` extra closing brace (invalid JSON)                                                             | Fixed JSON; added `extensionBundle`                                         |
 | A2  | Functions list empty, host healthy   | `WEBSITE_RUN_FROM_PACKAGE` with external SAS URL doesn't register Python v2 functions on Consumption Linux | Switched to `az functionapp deployment source config-zip` (Kudu ZIP deploy) |
-| A3  | `ModuleNotFoundError: pydantic_core` | Dev container is `aarch64`; Azure Functions runs `x86_64` — `.so` binaries incompatible                    | Build with `docker run --platform linux/amd64 python:3.12-slim`             |
+| A3  | `ModuleNotFoundError: pydantic_core` | Dev container is `aarch64`; Azure Functions runs `x86_64` — `.so` binaries incompatible                    | Build with `docker run --platform linux/amd64 python:3.13-slim`             |
 | A4  | Static files / templates 404         | Relative paths like `StaticFiles(directory="app/static")` fail when CWD is not guaranteed                  | Use `os.path.dirname(os.path.abspath(__file__))` for absolute paths         |
 | A5  | Functions not invoked via ASGI       | `AsgiMiddleware.handle()` (sync) used                                                                      | Switched to manual async ASGI conversion                                    |
 
@@ -255,7 +255,7 @@ aws s3 cp dist/index.html s3://${BUCKET}/sns/index.html \
 az functionapp create \
   --name multicloud-auto-deploy-production-frontend-web-v2 \
   --flexconsumption-location japaneast \
-  --runtime python --runtime-version 3.12 ...
+  --runtime python --runtime-version 3.13 ...
 az functionapp scale config set --maximum-instance-count 1 ...
 az functionapp scale config always-ready set --settings "http=1" ...
 ```
@@ -458,7 +458,7 @@ curl -s -X PATCH \
 #### G3 — Cloud Function Rebuild (aarch64 → linux/amd64)
 
 ```bash
-docker run --rm --platform linux/amd64 -v /tmp/deploy_gcp:/out python:3.12-slim \
+docker run --rm --platform linux/amd64 -v /tmp/deploy_gcp:/out python:3.13-slim \
   bash -c "pip install --target /out/.deployment -r /out/requirements-gcp.txt -q"
 # CRITICAL: Copy main.py — Cloud Build requires it even if --entry-point differs
 cp services/api/function.py /tmp/deploy_gcp/.deployment/main.py
