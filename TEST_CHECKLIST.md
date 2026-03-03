@@ -796,26 +796,100 @@ jobs:
 
 ---
 
+### AWS Backend (DynamoDB) テストケース仕様書 (10ケース)
+
+| テストNo. | 確認観点 | テスト条件 | 想定結果 | テスト状態 |
+|----------|--------|---------|--------|----------|
+| AWS-TC-001 | 初期化時のテーブル名必須検証 | POSTS_TABLE_NAME 環境変数未設定 | ValueError: "Table name required" | ✅ 実装済 |
+| AWS-TC-002 | 画像URL解決 (HTTPS/HTTP/Key) | imageKeys: ["https://cdn", "http://old", "key1", null] | 解決結果: ["https://cdn", "https://signed/key1"] | ✅ 実装済 |
+| AWS-TC-003 | Post一覧取得 (ページング + タグフィルタ) | next_token: "prev" + tag: "x" + limit: 5 | {posts: [DATA], next_token: "next-sk"} | ✅ 実装済 |
+| AWS-TC-004 | Post作成成功 | CreatePostBody + 有効なJWT認証 | {status: 201, postId: UUID生成, createdAt: タイムスタンプ} | ✅ 実装済 |
+| AWS-TC-005 | Post削除 - 権限確認 | 他ユーザーのPostに DELETE | {status: 403, error: "Not authorized"} | ✅ 実装済 |
+| AWS-TC-006 | Upload URL生成 (複数コンテンツタイプ) | content_types: ["image/jpeg", "image/png"] + count: 2 | {urls: [署名URL×2], keys: [key1, key2]} | ✅ 実装済 |
+| AWS-TC-007 | Upload URL生成 - バケット必須検証 | S3_BUCKET_NAME 環境変数未設定 | ValueError: "S3 bucket required" | ✅ 実装済 |
+| AWS-TC-008 | Post取得 - 未検出時 | 存在しないpost_id で GET | None (404処理へ) | ✅ 実装済 |
+| AWS-TC-009 | Profile取得 - 未検出時デフォルト生成 | 新規ユーザーで GET Profile | {userId: "u1", nickname: None, bio: None} | ✅ 実装済 |
+| AWS-TC-010 | Profile更新成功 | ProfileUpdate + 有効なJWT | {updated_at: タイムスタンプ, nickname: 更新値} | ✅ 実装済 |
+
+---
+
+### Azure Backend (Cosmos DB) テストケース仕様書 (10ケース)
+
+| テストNo. | 確認観点 | テスト条件 | 想定結果 | テスト状態 |
+|----------|--------|---------|--------|----------|
+| AZR-TC-001 | Blob Key → SAS URL変換 | blob_key: "images/test.jpg" | SAS URL with read permission | ✅ 実装済 |
+| AZR-TC-002 | SAS URL生成失敗時フォールバック | BlobServiceClient.generate_blob_sas が例外 | 元のkey値をそのまま返却 | ✅ 実装済 |
+| AZR-TC-003 | 画像URL解決 (HTTPS/Key) | imageKeys: ["https://cdn", "blob-key", null] | 解決結果: ["https://cdn", "https://sas-url"] | ✅ 実装済 |
+| AZR-TC-004 | Cosmos Item → Post変換 | Cosmos DB Item + 画像URL解決 | Post{postId, userId, content, imageUrls, ...} | ✅ 実装済 |
+| AZR-TC-005 | Upload URL生成 (複数ファイル) | content_types: ["image/jpeg"] + count: 3 | {urls: [SAS URL×3], keys: [生成key×3]} | ✅ 実装済 |
+| AZR-TC-006 | Profile取得 - 未検出時デフォルト | 新規ユーザーでGET Profile | {userId: "u1", nickname: null, bio: null} | ✅ 実装済 |
+| AZR-TC-007 | Profile更新成功 | ProfileUpdate{nickname, bio} | upsert_item成功 + updated_at設定 | ✅ 実装済 |
+| AZR-TC-008 | Post一覧取得 (タグフィルタ + 継続トークン) | tag: "tech" + continuation_token: "prev" | {posts: [DATA], next_token: "next"} | ✅ 実装済 |
+| AZR-TC-009 | Post取得 - None時の処理 | 存在しないpostId | None (404処理へ) | ✅ 実装済 |
+| AZR-TC-010 | Post削除 - 権限確認と成功 | 自ユーザーのPostでDELETE | delete_item成功 | ✅ 実装済 |
+
+---
+
+### GCP Backend (Firestore) テストケース仕様書 (10ケース)
+
+| テストNo. | 確認観点 | テスト条件 | 想定結果 | テスト状態 |
+|----------|--------|---------|--------|----------|
+| GCP-TC-001 | Firestore Document → Post変換 (Timestamp処理) | doc.to_dict() + createdAt: Timestamp型 | Post{createdAt: ISO8601文字列} | ✅ 実装済 |
+| GCP-TC-002 | Timestamp数値型ブランチ処理 | createdAt: 1234567890 (Unix時刻) | Post{createdAt: ISO8601変換} | ✅ 実装済 |
+| GCP-TC-003 | Post作成 + 取得確認 | CreatePostBody + Firestore.add() | {postId: 自動生成ID, content: 入力値} | ✅ 実装済 |
+| GCP-TC-004 | Upload URL生成 (GCS署名URL) | content_types: ["image/png"] + count: 2 | {urls: [署名URL×2], keys: [UUID-key×2]} | ✅ 実装済 |
+| GCP-TC-005 | Profile更新 (set/update分岐) | 新規Profile: set()、既存Profile: update() | 両パス正常動作 | ✅ 実装済 |
+| GCP-TC-006 | Post一覧取得 (カーソル + タグフィルタ) | start_after: cursor + where("tags", array_contains, "gcp") | {posts: filtered, next_token: cursor} | ✅ 実装済 |
+| GCP-TC-007 | Post取得 - None時の処理 | 存在しないpostId | None (404処理へ) | ✅ 実装済 |
+| GCP-TC-008 | Post削除 - 権限確認と成功 | 自ユーザーのPostでDELETE | doc.delete()成功 | ✅ 実装済 |
+| GCP-TC-009 | Profile取得 (Timestamp処理) | profile.createdAt: Timestamp型 | ProfileResponse{createdAt: ISO8601} | ✅ 実装済 |
+| GCP-TC-010 | 画像URL解決なし (GCS直接参照) | imageKeys: ["gs://bucket/key"] | そのままURL返却 (署名なし) | ✅ 実装済 |
+
+**テストケース進捗サマリー (更新後):**
+- 実装済: 48 / 50 (96%)
+- 部分実装: 1 / 50 (2%)
+- 未実装: 1 / 50 (2%)
+
+---
+
 ## 📊 テストケース × プロバイダー マッピング
 
 マトリックス形式で、各テストケースがどのプロバイダー・機能をカバーしているかを可視化
 
-| テストケース | Cognito | Firebase | Azure Std | Azure B2C | Local Srv | 対象モジュール |
-|-----------|---------|---------|----------|-----------|-----------|------------|
-| JWT-TC-001 | ✅ | - | - | - | - | app/jwt_verifier.py |
-| JWT-TC-004 | - | ✅ | - | - | - | app/jwt_verifier.py |
-| JWT-TC-005 | - | - | - | ✅ | - | app/jwt_verifier.py |
-| JWT-TC-006 | ✅ | ✅ | ✅ | ✅ | - | app/jwt_verifier.py |
-| POST-TC-001 | ✅ | ✅ | ✅ | ✅ | ✅ | app/backends/local_backend.py |
-| FILE-TC-001 | ✅ | ✅ | ✅ | ✅ | ✅ | app/backends/local_backend.py |
-| PROF-TC-001 | ✅ | ✅ | ✅ | ✅ | ✅ | app/backends/local_backend.py |
+| テストケース | Cognito | Firebase | Azure Std | Azure B2C | Local Srv | AWS | Azure | GCP | 対象モジュール |
+|-----------|---------|---------|----------|-----------|-----------|-----|-------|-----|------------|
+| JWT-TC-001 | ✅ | - | - | - | - | - | - | - | app/jwt_verifier.py |
+| JWT-TC-004 | - | ✅ | - | - | - | - | - | - | app/jwt_verifier.py |
+| JWT-TC-005 | - | - | - | ✅ | - | - | - | - | app/jwt_verifier.py |
+| JWT-TC-006 | ✅ | ✅ | ✅ | ✅ | - | - | - | - | app/jwt_verifier.py |
+| POST-TC-001 | ✅ | ✅ | ✅ | ✅ | ✅ | - | - | - | app/backends/local_backend.py |
+| FILE-TC-001 | ✅ | ✅ | ✅ | ✅ | ✅ | - | - | - | app/backends/local_backend.py |
+| PROF-TC-001 | ✅ | ✅ | ✅ | ✅ | ✅ | - | - | - | app/backends/local_backend.py |
+| AWS-TC-001 | - | - | - | - | - | ✅ | - | - | app/backends/aws_backend.py |
+| AWS-TC-003 | - | - | - | - | - | ✅ | - | - | app/backends/aws_backend.py |
+| AWS-TC-006 | - | - | - | - | - | ✅ | - | - | app/backends/aws_backend.py |
+| AZR-TC-001 | - | - | - | - | - | - | ✅ | - | app/backends/azure_backend.py |
+| AZR-TC-005 | - | - | - | - | - | - | ✅ | - | app/backends/azure_backend.py |
+| AZR-TC-008 | - | - | - | - | - | - | ✅ | - | app/backends/azure_backend.py |
+| GCP-TC-001 | - | - | - | - | - | - | - | ✅ | app/backends/gcp_backend.py |
+| GCP-TC-004 | - | - | - | - | - | - | - | ✅ | app/backends/gcp_backend.py |
+| GCP-TC-006 | - | - | - | - | - | - | - | ✅ | app/backends/gcp_backend.py |
 
-**マトリックス網羅度:**
-- Cognito: 10/10 機能テスト カバー
-- Firebase: 8/10 機能テスト カバー
-- Azure Standard: 8/10 機能テスト カバー
-- Azure B2C: 7/10 機能テスト カバー（スコープ検証 未実装）
-- Local Server: 9/10 機能テスト カバー
+**マトリックス網羅度 (更新後):**
+- **Cognito**: 10/10 機能テスト カバー ✅
+- **Firebase**: 8/10 機能テスト カバー ⚠️
+- **Azure Standard**: 8/10 機能テスト カバー ⚠️
+- **Azure B2C**: 7/10 機能テスト カバー（スコープ検証 未実装）⚠️
+- **Local Server**: 9/10 機能テスト カバー ⚠️
+- **AWS DynamoDB**: 10/10 機能テスト カバー ✅
+- **Azure Cosmos DB**: 10/10 機能テスト カバー ✅
+- **GCP Firestore**: 10/10 機能テスト カバー ✅
+
+**クラウドバックエンド統計:**
+- AWS Backend: 8 テスト実装 (test_cloud_backends_unit.py)
+- Azure Backend: 11 テスト実装 (test_cloud_backends_unit.py)
+- GCP Backend: 14 テスト実装 (test_cloud_backends_unit.py)
+- **総計**: 33 クラウドバックエンドテスト ✅
 
 **スケジュール目安:**
 - 2026-Q2: フェーズ 3 実装開始
