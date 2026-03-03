@@ -61,9 +61,37 @@ Cache Configuration:
 
 **重要**: CloudFront はオリジン(FastAPI)の Cache-Control ヘッダーを尊重するため、アプリケーション側のヘッダー実装で自動的に最適化されます。
 
-### Part 3: Azure CDN (次フェーズ)
+### Part 3: Azure CDN Rules (🟡 進行中 — Pulumi デプロイ実行中)
 
-Azure CDN キャッシュルール設定は次のセッションで実装予定。
+Azure Front Door Standard に CDN キャッシュ規則を統合：
+
+**実装内容**:
+```python
+# Front Door Route + SPA Rule Set
+# キャッシュ戦略: Origin (FastAPI) の Cache-Control ヘッダーを尊重
+# Route: /* → Blob Storage → SPA rewrite rules
+# SPA rewrite: /sns/* (not /sns/assets/*) → /sns/index.html
+```
+
+**ステータス**: 
+- Pulumi Preview: ✅ 成功 (9 リソース作成, 3 更新予定)
+- Pulumi Up: 🟡 デプロイ実行中（プロセス確認済み）
+- 予想完了時間: 3-5分
+
+**リソース構成**:
+- Azure Front Door Profile (Standard_AzureFrontDoor)
+- Origin Group + Origin (Blob Storage)
+- Rule Set (SPA rewrite)
+- Endpoint + Route
+- Diagnostic Settings (Log Analytics)
+- Monitoring Alerts (FrontDoor error percentage)
+
+**キャッシュ戦略**: Origin の Cache-Control ヘッダー に依存
+- FastAPI ミドルウェア で設定されたヘッダー (Part 1) を自動尊重
+- Azure CDN Delivery Rules では直接指定不可（StandardSKU制限）
+- AppinsightsMonitoring で キャッシュヒット率を追跡可能
+
+**Status**: Pulumi デプロイ進行中, 完了後に frontdoor  URL を確認予定
 
 ---
 

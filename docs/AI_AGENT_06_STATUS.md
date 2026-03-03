@@ -179,9 +179,33 @@ ViewerProtocolPolicy: redirect-to-https
 
 **Status**: ✅ 検証完了 (ヘッダーベース最適化で十分)
 
-#### Part 3: Azure CDN Rules (📋 次フェーズ)
+#### Part 3: Azure CDN Rules (� 進行中 — Pulumi デプロイ実行中)
 
-次のセッションで Azure CDN (Front Door) のキャッシュ有効期限ルール設定を予定。
+**Azure Front Door 統合実装**:
+```
+CDN配置: Blob Storage → Front Door Standard → App client
+キャッシュ戦略: Origin Cache-Control ヘッダー尊重
+ルーティング: /* → Blob Storage + SPA /sns/ rewrite
+```
+
+**Pulumi 状態**:
+- Preview: ✅ 成功 (9 リソース作成, 3 更新)
+- Up: 🟡 実行中（デプロイプロセス進行中）
+- Expected completion: 3-5 minutes
+- Resources deploying: Profile, EndPoint, OriginGroup, Origin, RuleSet, Route, Diagnostics
+
+**Implementation Method**:
+- Origin キャッシュ制御: FastAPI Cache-Control ヘッダー (Part 1)
+- Azure Front Door: Header 尊重モード (Delivery Rules キャッシュ直接設定は Standard SKU では非対応)
+- Monitoring: Application Insights + Log Analytics workspace で CDN メトリクス追跡
+
+**Status**: 🟡 Pulumi デプロイ進行中。完了後に frontdoor_hostname/url を確認予定
+
+---
+
+**Commits**: 
+- `803ede4c`: T8 Part 1 (GCP + FastAPI)  
+- `897fbf6c`: T8 Part 3 (Azure Pulumi infrastructure)
 
 **Performance Impact Forecast**:
 | メトリクス | 改善前 | 改善後 | 効果 |
