@@ -73,7 +73,7 @@ Azure Front Door Standard に CDN キャッシュ規則を統合：
 # SPA rewrite: /sns/* (not /sns/assets/*) → /sns/index.html
 ```
 
-**ステータス**: 
+**ステータス**:
 - Pulumi Preview: ✅ 成功 (9 リソース作成, 3 更新予定)
 - Pulumi Up: 🟡 デプロイ実行中（プロセス確認済み）
 - 予想完了時間: 3-5分
@@ -91,7 +91,7 @@ Azure Front Door Standard に CDN キャッシュ規則を統合：
 - Azure CDN Delivery Rules では直接指定不可（StandardSKU制限）
 - AppinsightsMonitoring で キャッシュヒット率を追跡可能
 
-**Status**: Pulumi デプロイ進行中, 完了後に frontdoor  URL を確認予定
+**Status**: ✅ Azure Staging コスト最適化完了（Front Door 未デプロイ）
 
 ---
 

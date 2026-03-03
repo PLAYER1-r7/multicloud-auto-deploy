@@ -203,8 +203,8 @@ CDN配置: Blob Storage → Front Door Standard → App client
 
 ---
 
-**Commits**: 
-- `803ede4c`: T8 Part 1 (GCP + FastAPI)  
+**Commits**:
+- `803ede4c`: T8 Part 1 (GCP + FastAPI)
 - `897fbf6c`: T8 Part 3 (Azure Pulumi infrastructure)
 
 **Performance Impact Forecast**:
