@@ -3,7 +3,7 @@ AWS Simple SNS - Pulumi Infrastructure
 
 Architecture:
 - API Gateway (HTTP API)
-- Lambda Function (Python 3.12)
+- Lambda Function (Python 3.13)
 - DynamoDB Table
 - S3 Bucket for images
 - CloudFront Distribution (optional)
@@ -269,7 +269,7 @@ else:
             "dependencies-layer",
             layer_name=f"{project_name}-dependencies-{environment}",
             code=pulumi.FileArchive(layer_path),
-            compatible_runtimes=["python3.12"],
+            compatible_runtimes=["python3.13"],
             description="Dependencies layer for FastAPI, Mangum, and JWT libraries",
         )
         dependency_layers = [lambda_layer.arn]
@@ -282,7 +282,7 @@ print(f"ℹ️  Using {len(all_layers)} Lambda Layers (including Powertools)")
 lambda_function = aws.lambda_.Function(
     "api-lambda",
     name=f"{project_name}-api-{environment}",
-    runtime="python3.12",
+    runtime="python3.13",
     handler="app.main.handler",  # Using Mangum handler
     role=lambda_role.arn,
     code=pulumi.FileArchive(build_lambda_package()),

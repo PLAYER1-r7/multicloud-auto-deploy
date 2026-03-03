@@ -2,7 +2,7 @@
 Multi-Cloud Auto Deploy - AWS Pulumi Implementation
 
 Architecture:
-- Lambda Function (Python 3.12, ZIP deployment)
+- Lambda Function (Python 3.13, ZIP deployment)
 - API Gateway (HTTP API v2)
 - S3 (Static website hosting)
 - CloudFront (Optional, for custom domain)
@@ -360,7 +360,7 @@ if layer_zip_path:
         "dependencies-layer",
         layer_name=f"{project_name}-{stack}-dependencies",
         code=pulumi.FileArchive(str(layer_zip_path)),
-        compatible_runtimes=["python3.12"],
+        compatible_runtimes=["python3.13"],
         description=f"Dependencies for {project_name} {stack} (FastAPI, Mangum, Pydantic, etc.)",
         opts=pulumi.ResourceOptions(
             # Delete old versions automatically (keeps only latest)
@@ -391,7 +391,7 @@ def handler(event, context):
 lambda_function = aws.lambda_.Function(
     "api-function",
     name=f"{project_name}-{stack}-api",
-    runtime="python3.12",
+    runtime="python3.13",
     handler="app.main.handler",  # FastAPI application entry point with Mangum
     role=lambda_role.arn,
     # 512MB for both staging and production (cold start performance)

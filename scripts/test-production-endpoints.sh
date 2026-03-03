@@ -52,29 +52,29 @@ log_warn() {
 test_endpoint_health() {
     local name=$1
     local url=$2
-    
+
     log_info "Testing: $name"
     log_info "  URL: $url"
-    
+
     # Test 1: HTTP Status
     local http_code=$(curl -s -o /dev/null -w "%{http_code}" -m $TIMEOUT "$url" 2>/dev/null || echo "000")
-    
+
     if [ "$http_code" = "$EXPECTED_STATUS" ]; then
         log_pass "$name: HTTP $http_code (expected)"
     else
         log_fail "$name: HTTP $http_code (expected $EXPECTED_STATUS)"
         return 1
     fi
-    
+
     # Test 2: Response Time
     local response_time=$(curl -s -o /dev/null -w "%{time_total}" -m $TIMEOUT "$url" 2>/dev/null || echo "999")
     response_time_ms=$(echo "$response_time * 1000" | bc -l | cut -d. -f1)
-    
+
     if [ -z "$response_time" ] || [ "$response_time" = "999" ]; then
         log_fail "$name: Could not measure response time"
         return 1
     fi
-    
+
     if [ "$response_time_ms" -lt 2000 ]; then
         log_pass "$name: Response time ${response_time_ms}ms (excellent)"
     elif [ "$response_time_ms" -lt 5000 ]; then
@@ -82,7 +82,7 @@ test_endpoint_health() {
     else
         log_warn "$name: Response time ${response_time_ms}ms (slow - may indicate cold start)"
     fi
-    
+
     # Test 3: Headers (basic check)
     local has_content_type=$(curl -s -I "$url" 2>/dev/null | grep -i "Content-Type:" || echo "")
     if [ -n "$has_content_type" ]; then
@@ -90,42 +90,42 @@ test_endpoint_health() {
     else
         log_warn "$name: Content-Type header missing"
     fi
-    
+
     echo ""
 }
 
 test_api_cors() {
     local name=$1
     local url=$2
-    
+
     log_info "Testing CORS: $name"
-    
+
     local cors_header=$(curl -s -I -H "Origin: $CORS_ORIGIN" "$url" 2>/dev/null | grep -i "Access-Control-Allow-Origin:" || echo "")
-    
+
     if [ -n "$cors_header" ]; then
         log_pass "$name: CORS header present: $cors_header"
     else
         log_warn "$name: CORS header missing (may be restricted)"
     fi
-    
+
     echo ""
 }
 
 test_ssl_certificate() {
     local name=$1
     local url=$2
-    
+
     log_info "Testing SSL: $name"
-    
+
     # Extract hostname from URL
     local hostname=$(echo "$url" | sed -E 's|https://([^/]+).*|\1|')
-    
+
     if echo | openssl s_client -servername "$hostname" -connect "$hostname:443" 2>/dev/null | grep -q "Verify return code: 0"; then
         log_pass "$name: SSL certificate valid"
     else
         log_fail "$name: SSL certificate validation failed"
     fi
-    
+
     echo ""
 }
 

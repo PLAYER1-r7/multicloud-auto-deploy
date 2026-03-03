@@ -39,29 +39,29 @@ log_warn() {
 check_aws_cloudtrail() {
     echo ""
     log_info "Checking AWS CloudTrail..."
-    
+
     # Requires: aws CLI, credentials configured
     if ! command -v aws &> /dev/null; then
         log_warn "AWS CLI not found - skipping CloudTrail check"
         return 1
     fi
-    
+
     # Check if CloudTrail is enabled in ap-northeast-1
     local trail_status=$(aws cloudtrail describe-trails \
         --region ap-northeast-1 \
         --query 'trailList[?IsMultiRegionTrail==`false`] | length(@)' \
         2>/dev/null || echo "0")
-    
+
     if [ "$trail_status" -gt 0 ]; then
         log_pass "AWS CloudTrail: Enabled in ap-northeast-1"
-        
+
         # Get recent events (last 1 hour)
         local event_count=$(aws cloudtrail lookup-events \
             --region ap-northeast-1 \
             --start-time "$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S)" \
             --query 'length(Events)' \
             2>/dev/null || echo "0")
-        
+
         log_pass "AWS CloudTrail: $event_count events in last 1 hour"
     else
         log_fail "AWS CloudTrail: Not enabled or no trails found"
@@ -74,30 +74,30 @@ check_aws_cloudtrail() {
 check_azure_activity_log() {
     echo ""
     log_info "Checking Azure Activity Log..."
-    
+
     # Requires: Azure CLI, credentials configured
     if ! command -v az &> /dev/null; then
         log_warn "Azure CLI not found - skipping Activity Log check"
         return 1
     fi
-    
+
     # Check if Activity Log is enabled (stored in default Log Analytics workspace)
     local rg="multicloud-auto-deploy-production-rg"
     local law_query=$(az monitor log-analytics workspace list \
         --resource-group "$rg" \
         --query "[0].name" \
         2>/dev/null || echo "")
-    
+
     if [ -n "$law_query" ]; then
         log_pass "Azure Activity Log: Log Analytics workspace found ($law_query)"
-        
+
         # Check recent activity
         local activity_count=$(az monitor activity-log list \
             --resource-group "$rg" \
             --start-time "$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S)" \
             --query 'length(@)' \
             2>/dev/null || echo "0")
-        
+
         log_pass "Azure Activity Log: $activity_count events in last 1 hour"
     else
         log_warn "Azure Activity Log: Log Analytics workspace not found or not configured"
@@ -110,16 +110,16 @@ check_azure_activity_log() {
 check_gcp_audit_logs() {
     echo ""
     log_info "Checking GCP Cloud Audit Logs..."
-    
+
     # Requires: gcloud CLI, credentials configured
     if ! command -v gcloud &> /dev/null; then
         log_warn "gcloud CLI not found - skipping Audit Logs check"
         return 1
     fi
-    
+
     # Get current project
     local project=$(gcloud config get-value project 2>/dev/null || echo "")
-    
+
     if [ -n "$project" ]; then
         # Check audit log configuration
         local audit_config=$(gcloud projects get-iam-policy "$project" \
@@ -127,14 +127,14 @@ check_gcp_audit_logs() {
             --filter="auditConfigs.service:allServices" \
             --format="value(auditConfigs.logTypes[])" \
             2>/dev/null || echo "")
-        
+
         if [ -n "$audit_config" ]; then
             log_pass "GCP Cloud Audit Logs: Enabled for allServices"
-            
+
             # Sample log types
             local has_admin=$(echo "$audit_config" | grep -i "ADMIN_READ" || echo "")
             local has_data=$(echo "$audit_config" | grep -i "DATA_READ\|DATA_WRITE" || echo "")
-            
+
             [ -n "$has_admin" ] && log_pass "GCP Audit Logs: ADMIN_READ logs enabled"
             [ -n "$has_data" ] && log_pass "GCP Audit Logs: DATA_READ/DATA_WRITE logs enabled"
         else
@@ -156,7 +156,7 @@ print_summary() {
     echo -e "${GREEN}✅ Configured: $PASS_COUNT${NC}"
     echo -e "${RED}❌ Issues: $FAIL_COUNT${NC}"
     echo ""
-    
+
     if [ $FAIL_COUNT -eq 0 ]; then
         log_pass "All audit logs properly configured!"
     else

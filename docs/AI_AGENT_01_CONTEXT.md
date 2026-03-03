@@ -11,7 +11,7 @@
 CI/CD pipelines.
 
 - Frontend: React 18 + Vite + TypeScript + Tailwind CSS
-- Backend: FastAPI (Python 3.12) — Lambda / Azure Functions / Cloud Run
+- Backend: FastAPI (Python 3.13) — Lambda / Azure Functions / Cloud Run
 - Database: DynamoDB / Cosmos DB / Firestore (shared logical schema)
 - IaC: Pulumi Python SDK
 - CI/CD: GitHub Actions
@@ -65,10 +65,10 @@ Frontend (SNS pages)
          (Cloud Run frontend-web still exists but CDN routes to GCS bucket, not Cloud Run)
 
 Backend API
-  FastAPI 1.0 / Python 3.12 / Pydantic v2
+  FastAPI 1.0 / Python 3.13 / Pydantic v2
   AWS:   Lambda (x86_64) + API Gateway v2 (HTTP) + Lambda Layer + Mangum adapter
-  Azure: Azure Functions (Python 3.12, FC1 FlexConsumption)
-  GCP:   Cloud Run (Python 3.12, gen2)
+  Azure: Azure Functions (Python 3.13, FC1 FlexConsumption)
+  GCP:   Cloud Run (Python 3.13, gen2)
   Local: uvicorn + DynamoDB Local + MinIO
 
 Database (shared logical schema)

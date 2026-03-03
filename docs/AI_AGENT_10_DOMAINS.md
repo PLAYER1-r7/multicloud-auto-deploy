@@ -160,7 +160,7 @@ dig www.gcp.ashnova.jp
 ### Quick connectivity check (~30s, no auth required)
 
 ```bash
-./scripts/test-staging-all.sh --quick
+./scripts/test-sns-all.sh --quick
 ```
 
 Checks per cloud: landing page `/` → 200, SNS app `/sns/` → 200, API `/health` → 200.
@@ -168,7 +168,7 @@ Checks per cloud: landing page `/` → 200, SNS app `/sns/` → 200, API `/healt
 ### Full authenticated test (all 3 clouds)
 
 ```bash
-./scripts/test-staging-all.sh \
+./scripts/test-sns-all.sh \
   --aws-token   "$AWS_TOKEN" \
   --azure-token "$AZURE_TOKEN" \
   --gcp-token   "$GCP_TOKEN"
@@ -207,7 +207,7 @@ AZURE_TOKEN="<paste id_token here>"
 
 | Script                          | Purpose                                        |
 | ------------------------------- | ---------------------------------------------- |
-| `scripts/test-staging-all.sh`   | ⭐ Orchestrates all 3 clouds                   |
+| `scripts/test-sns-all.sh`       | ⭐ Orchestrates all 3 clouds                   |
 | `scripts/test-landing-pages.sh` | Landing page tests only                        |
 | `scripts/test-sns-aws.sh`       | Full AWS suite (authenticated)                 |
 | `scripts/test-sns-azure.sh`     | Full Azure suite (authenticated)               |

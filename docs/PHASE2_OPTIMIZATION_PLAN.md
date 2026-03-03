@@ -452,11 +452,11 @@ class RateLimitMiddleware:
     def __init__(self, requests_per_second=100):
         self.requests_per_second = requests_per_second
         self.client_timestamps = {}  # {ip: [ts, ts, ts]}
-        
+
     async def __call__(self, scope, receive, send):
         client_ip = scope["client"][0]
         current_time = time.time()
-        
+
         # Clean old timestamps (>1 second ago)
         if client_ip in self.client_timestamps:
             self.client_timestamps[client_ip] = [
@@ -465,7 +465,7 @@ class RateLimitMiddleware:
             ]
         else:
             self.client_timestamps[client_ip] = []
-        
+
         # Check rate limit
         if len(self.client_timestamps[client_ip]) >= self.requests_per_second:
             # Return 429 Too Many Requests
@@ -479,10 +479,10 @@ class RateLimitMiddleware:
                 "body": json.dumps({"error": "Rate limit exceeded"}).encode(),
             })
             return
-        
+
         # Record this request
         self.client_timestamps[client_ip].append(current_time)
-        
+
         # Continue with next middleware
         await send(...)
 ```
@@ -635,7 +635,7 @@ For each alert, maintain:
 Week of 2026-03-03              Week of 2026-03-10           Week of 2026-03-17          Week of 2026-03-24
 ├─ T6: GCP Prod Deploy          ├─ T7: Coldstart Reduction   ├─ T9: Rate Limiting     └─ T10: Monitoring Tuning
 │  (5-10 min)                   │  (3-5 days)                │  (2-3 days)               (2-3 days)
-│                               │                             │  
+│                               │                             │
 │  ✅ Pre-flight script          ├─ T8: CDN Caching          └─ Documentation phase
 │  ✅ Deployment plan            │  (3-5 days)
 │  ✅ Ready for execution        │

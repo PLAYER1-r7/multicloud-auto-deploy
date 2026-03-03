@@ -4,8 +4,8 @@
 
 ## 2026-02-20 — AWS Simple-SNS Full E2E (authenticated)
 
-> Test method: manual browser verification + API direct calls  
-> Fix report: [docs/AWS_SNS_FIX_REPORT.md](docs/AWS_SNS_FIX_REPORT.md)  
+> Test method: manual browser verification + API direct calls
+> Fix report: [docs/AWS_SNS_FIX_REPORT.md](docs/AWS_SNS_FIX_REPORT.md)
 > Test script: [scripts/test-sns-aws.sh](scripts/test-sns-aws.sh)
 
 ### Environment
@@ -14,8 +14,8 @@
 | --------------------- | ---------------------------------------------------------------------------- |
 | CloudFront            | `E1TBH4R432SZBZ` — `https://d1tf3uumcm4bo1.cloudfront.net`                   |
 | API Gateway           | `z42qmqdqac` — `https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com` |
-| Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, 512 MB)                   |
-| Lambda (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (Python 3.12, 512 MB)          |
+| Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.13, 512 MB)                   |
+| Lambda (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (Python 3.13, 512 MB)          |
 | DynamoDB              | `multicloud-auto-deploy-staging-posts`                                       |
 | S3 images             | `multicloud-auto-deploy-staging-images`                                      |
 | Cognito               | Pool `ap-northeast-1_AoDxOvCib` / Client `1k41lqkds4oah55ns8iod30dv2`        |

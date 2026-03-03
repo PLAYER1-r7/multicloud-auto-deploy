@@ -95,9 +95,9 @@ cd /workspaces/ashnova/multicloud-auto-deploy
 # 2. Layerをデプロイ
 aws lambda publish-layer-version \
   --layer-name multicloud-auto-deploy-staging-dependencies \
-  --description "Dependencies for FastAPI + Mangum + JWT (Python 3.12)" \
+  --description "Dependencies for FastAPI + Mangum + JWT (Python 3.13)" \
   --zip-file fileb://services/api/lambda-layer.zip \
-  --compatible-runtimes python3.12 \
+  --compatible-runtimes python3.13 \
   --region ap-northeast-1
 
 # 3. Lambda関数コードをパッケージング（アプリケーションコードのみ）

@@ -17,7 +17,7 @@
 | `scripts/test-sns-azure.sh`                       | E2E shell | Azure staging SNS app             | Optional    |
 | `scripts/test-sns-gcp.sh`                         | E2E shell | GCP staging SNS app               | Optional    |
 | `scripts/test-sns-all.sh`                         | E2E shell | All 3 clouds in sequence          | Optional    |
-| `scripts/test-staging-all.sh`                     | E2E shell | All 3 clouds + summary report     | Optional    |
+| `scripts/test-sns-all.sh`                         | E2E shell | All 3 clouds + summary report     | Optional    |
 | `scripts/test-e2e.sh`                             | Smoke     | All 3 clouds health + CRUD        | Optional    |
 | `scripts/test-endpoints.sh`                       | Health    | API health check per cloud        | No          |
 | `scripts/test-landing-pages.sh`                   | Health    | Static landing page per cloud     | No          |
@@ -69,7 +69,7 @@
 ./scripts/test-sns-gcp.sh    --token "$GCP_TOKEN"
 
 # All 3 with tokens:
-./scripts/test-staging-all.sh \
+./scripts/test-sns-all.sh \
   --aws-token   "$AWS_TOKEN"   \
   --azure-token "$AZURE_TOKEN" \
   --gcp-token   "$GCP_TOKEN"
@@ -223,7 +223,7 @@ Tests run automatically on every push via GitHub Actions:
 | `deploy-aws.yml`           | push to `develop` / `main`          | Post-deploy `./scripts/test-endpoints.sh` |
 | `deploy-azure.yml`         | push to `develop` / `main`          | Post-deploy `./scripts/test-endpoints.sh` |
 | `deploy-gcp.yml`           | push to `develop` / `main`          | Post-deploy `./scripts/test-endpoints.sh` |
-| `run-integration-tests.sh` | manual or via `test-staging-all.sh` | pytest + E2E shell                        |
+| `run-integration-tests.sh` | manual or via `test-sns-all.sh`     | pytest + E2E shell                        |
 
 ---
 

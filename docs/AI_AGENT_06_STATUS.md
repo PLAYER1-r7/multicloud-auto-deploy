@@ -162,7 +162,7 @@ API URL  : https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com
 | CloudFront RHP        | `multicloud-auto-deploy-staging-security-headers` (HSTS + CSP + 4 headers) | ✅     |
 | S3 (frontend)         | `multicloud-auto-deploy-staging-frontend`                                  | ✅     |
 | S3 (images)           | `multicloud-auto-deploy-staging-images` (CORS: \*)                         | ✅     |
-| Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.12, 512MB)                  | ✅     |
+| Lambda (API)          | `multicloud-auto-deploy-staging-api` (Python 3.13, 512MB)                  | ✅     |
 | Lambda (frontend-web) | `multicloud-auto-deploy-staging-frontend-web` (512MB, 30s)                 | ✅     |
 | API Gateway           | `z42qmqdqac` (HTTP API v2)                                                 | ✅     |
 | DynamoDB              | `multicloud-auto-deploy-staging-posts` (PAY_PER_REQUEST)                   | ✅     |
@@ -220,7 +220,7 @@ API URL  : https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneas
 | --------------- | --------------------------------------------------------------------- | ------ |
 | Front Door      | `multicloud-auto-deploy-staging-fd` / endpoint: `mcad-staging-d45ihd` | ✅     |
 | Storage Account | `mcadwebd45ihd`                                                       | ✅     |
-| Function App    | `multicloud-auto-deploy-staging-func` (Python 3.12, always-ready=1)   | ✅     |
+| Function App    | `multicloud-auto-deploy-staging-func` (Python 3.13, always-ready=1)   | ✅     |
 | Cosmos DB       | `simple-sns-cosmos` (Serverless)                                      | ✅     |
 | Resource Group  | `multicloud-auto-deploy-staging-rg`                                   | ✅     |
 
@@ -247,7 +247,7 @@ API URL : https://multicloud-auto-deploy-staging-api-899621454670.asia-northeast
 | Global IP             | `34.117.111.182`                                               | ✅     |
 | GCS Bucket (frontend) | `ashnova-multicloud-auto-deploy-staging-frontend`              | ✅     |
 | GCS Bucket (uploads)  | `ashnova-multicloud-auto-deploy-staging-uploads` (public read) | ✅     |
-| Cloud Run (API)       | `multicloud-auto-deploy-staging-api` (Python 3.12, **min=1**)  | ✅     |
+| Cloud Run (API)       | `multicloud-auto-deploy-staging-api` (Python 3.13, **min=1**)  | ✅     |
 | Firestore             | `(default)` — collections: messages, posts                     | ✅     |
 | Backend Bucket        | `multicloud-auto-deploy-staging-cdn-backend`                   | ✅     |
 
@@ -453,13 +453,13 @@ curl -s "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-
 
 1. **Layer 1** (v1.17.6で修正済み): `AzureWebJobsStorage` / `DEPLOYMENT_STORAGE_CONNECTION_STRING` が非存在ストレージ `multicloudautodeploa148` を指していた
 2. **Layer 2** (セッションv2で修正): `functionAppConfig.deployment.storage.value` が `multicloudautodeploa148.blob.core.windows.net/app-package-...a4038fa` を指していた → Kudu ValidationStep `StorageAccessibleCheck` が NXDOMAIN で失敗 → Python urllib で PATCH して `mcadfuncdiev0w.blob.core.windows.net/app-package-...a4038fa` に修正
-3. **Layer 3 (根本原因)**: `functionAppConfig.runtime.version = "3.12"` (Python 3.12) だが、デプロイ試行に使用していた `function-app-amd64.zip` は Python 3.11 (`cpython-311-x86_64`) でビルドされたパッケージを使用 → Python バージョン不一致でモジュールロード失敗 → `admin/functions = []`
+3. **Layer 3 (根本原因)**: `functionAppConfig.runtime.version = "3.13"` (Python 3.13) だが、デプロイ試行に使用していた `function-app-amd64.zip` は Python 3.11 (`cpython-311-x86_64`) でビルドされたパッケージを使用 → Python バージョン不一致でモジュールロード失敗 → `admin/functions = []`
 4. **Layer 4**: コンテナ名不一致: `app-package-multicloudautodeployproductionfr-8540439`（実際の active コンテナ、旧 frontend_web コードを保持）と `functionAppConfig.deployment.storage.value` が指す `app-package-...a4038fa`（空）が別コンテナ
 
 **最終修正 (2026-02-24)**:
 
 ```bash
-# Python 3.12 / linux/amd64 でパッケージをビルド
+# Python 3.13 / linux/amd64 でパッケージをビルド
 docker run --rm --platform linux/amd64 -v "$(pwd):/work" python:3.12-slim \
   pip install --target /work/.deployment-py312 --no-cache-dir -q -r /work/requirements-azure.txt
 # アプリコードをコピーしてzip作成

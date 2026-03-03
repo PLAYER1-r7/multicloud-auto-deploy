@@ -176,7 +176,7 @@ echo "custom_domain=$CLOUD_CUSTOM_DOMAIN" >> $GITHUB_OUTPUT
 # deploy-aws.yml ステップ (要約)
 1. Checkout
 2. AWS 認証 (aws-actions/configure-aws-credentials)
-3. Python 3.12 セットアップ
+3. Python 3.13 セットアップ
 4. Pulumi ログイン (PULUMI_ACCESS_TOKEN)
 5. Pulumi スタック名決定  →  STACK_NAME = staging | production
 6. クラウド設定を読み込む  →  source .github/config/aws.${STACK_NAME}.env
