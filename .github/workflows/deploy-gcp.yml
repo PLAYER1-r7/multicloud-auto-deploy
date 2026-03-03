@@ -314,6 +314,7 @@ jobs:
           echo "📝 Environment variables file created (ENVIRONMENT=$DEPLOY_ENV, AUTH_DISABLED=$AUTH_DISABLED_VALUE, AUTH_PROVIDER=firebase, GCP_STORAGE_BUCKET=$UPLOADS_BUCKET)"
 
           # Deploy function with env vars from file
+          # Rate limiting: max 10 instances × 50 concurrent requests/instance = 500 total concurrent requests
           gcloud functions deploy $FUNCTION_NAME \
             --gen2 \
             --region=$REGION \
@@ -324,6 +325,7 @@ jobs:
             --allow-unauthenticated \
             --min-instances=$([[ "${{ steps.set_stack.outputs.stack_name }}" == "staging" ]] && echo 0 || echo 1) \
             --max-instances=10 \
+            --concurrency=50 \
             --memory=512MB \
             --timeout=60s \
             --env-vars-file=/tmp/env-vars.yaml
