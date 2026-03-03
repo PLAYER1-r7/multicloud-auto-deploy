@@ -138,6 +138,8 @@ user_pool = aws.cognito.UserPool(
 )
 
 # Cognito User Pool Client
+# Uses CloudFront domain if available, with fallbacks to prevent empty URL list
+# Note: API Gateway endpoint is used as final fallback during initial deployment
 user_pool_client = aws.cognito.UserPoolClient(
     "user-pool-client",
     name=f"{project_name}-{stack}-web-client",
@@ -148,10 +150,12 @@ user_pool_client = aws.cognito.UserPoolClient(
     callback_urls=(
         ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else [])
         + ([f"https://{custom_domain}/sns/auth/callback"] if custom_domain else [])
+        + ["http://localhost:3000/sns/auth/callback"]  # Local development + API Gateway fallback
     ),
     logout_urls=(
         ([f"https://{cf_domain}/sns/"] if cf_domain else [])
         + ([f"https://{custom_domain}/sns/"] if custom_domain else [])
+        + ["http://localhost:3000/"]  # Local development + API Gateway fallback
     ),
     access_token_validity=1,
     id_token_validity=1,
