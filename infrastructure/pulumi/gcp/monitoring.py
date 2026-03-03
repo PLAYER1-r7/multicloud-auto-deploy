@@ -347,9 +347,13 @@ def setup_monitoring(
         notification_channels,
     )
 
-    # Create billing budget (production only)
+    # Create billing budget (production only, if enabled)
+    # Note: Disabled by default to avoid ADC quota project permission errors.
+    # To enable: set `enableBillingBudget: "true"` in Pulumi.production.yaml
+    # and ensure billingAccountId is properly configured.
     billing_budget = None
-    if stack == "production":
+    enable_billing_budget = pulumi.Config().get("enableBillingBudget") == "true"
+    if stack == "production" and enable_billing_budget:
         try:
             billing_budget = create_billing_budget(
                 project_name,

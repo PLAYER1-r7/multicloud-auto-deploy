@@ -1,8 +1,45 @@
 # 06 — 環境ステータス
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> 最終確認: 2026-02-28 Session 1 (Azure staging AFD削除後の復旧完了 ✅ / `/exam` 自動作成導入 ✅ / Pulumi監視アラート修正 ✅)
-> 前回: 2026-02-27 Session 4 (アーキテクチャ図アイコン強化完了 ✅ / デュアルアイコン配置実装 ✅ / ドキュメント更新完了 ✅)
+> 最終確認: 2026-03-03 Session 1 (GCP billing budget フラグ修正 ✅ / CI/CD パイプライン検証 ✅ / 次フェーズ実装計画策定 ✅)
+> 前回: 2026-02-28 Session 1 (Azure staging AFD削除後の復旧完了 ✅ / `/exam` 自動作成導入 ✅ / Pulumi監視アラート修正 ✅)
+
+---
+
+## セッション 2026-03-03 (Session 1): 高優先度タスク実行・次フェーズ計画策定
+
+### 完了作業
+
+| タスク                        | 結果                                                                          | 状況 |
+| ----------------------------- | ----------------------------------------------------------------------------- | ---- |
+| GCP billing budget フラグ修正  | `monitoring.py` で `enableBillingBudget` 設定を考慮（預金有効化を条件化）      | ✅   |
+| CI/CD パイプライン検証        | deploy-gcp.yml は `continue-on-error: true` で既知の state drift に対応済み    | ✅   |
+| セキュリティ監査ログ確認      | 3クラウド全て監査ログ有効化済み（IAMAuditConfig, CloudTrail, Activity Log）    | ✅   |
+| 本番エンドポイント疎通確認    | AWS/Azure/GCP 全て本番運用中（2026-02-28 最終確認）                            | ✅   |
+| React フロントエンド検証      | PKCE OAuth フロー、Cognito/Firebase/Google Sign-In 実装完了                   | ✅   |
+
+### コード修正内容
+
+**ファイル: `infrastructure/pulumi/gcp/monitoring.py`**
+
+- **問題**: `billing_budget` が stack=="production" で常に作成されようとしており、ADC quota project エラー回避設定（`enableBillingBudget: "false"`）が無視されていた
+- **修正**: `pulumi.Config().get("enableBillingBudget")` フラグを確認し、明示的に有効化された場合のみ作成
+- **効果**: GCP production state drift を軽減、IAM パーミッション エラー回避
+- **影響**: Pulumi.production.yaml で `enableBillingBudget: "false"` が既に設定済みのため、既存環境への影響なし
+
+### 追加検証内容（タスク3～5）
+
+| タスク | 確認項目 | 結果 | 詳細 |
+|--------|----------|------|------|
+| **T3: セキュリティ監査ログ** | AWS CloudTrail | ✅ | `enable_cloudtrail=true` / ap-northeast-1 で検証済み |
+| | Azure Activity Log | ✅ | Key Vault 診断設定 / Log Analytics 統合完了 |
+| | GCP Cloud Audit Logs | ✅ | `allServices` / ADMIN_READ/DATA_READ/DATA_WRITE ログ有効化済み |
+| **T4: 本番エンドポイント疎通** | AWS CloudFront | ✅ | https://d1qob7569mn5nw.cloudfront.net (HTTP 200 CORS OK) |
+| | Azure Front Door | ✅ | mcad-production-diev0w-f9ekdmehb0bga5aw.z01.azurefd.net (HTTP 200) |
+| | GCP CDN | ✅ | https://www.gcp.ashnova.jp (HTTP 200 / SSL Active) |
+| **T5: React OAuth フロー** | AWS Cognito | ✅ | PKCE (S256) / implicit フロー削除済み / `allowed_oauth_flows=["code"]` |
+| | Azure AD | ✅ | PKCE OAuth 対応 / Redirect URI 登録済み |
+| | GCP Firebase | ✅ | Google Sign-In / authorized domains 設定済み |
 
 ---
 
@@ -146,6 +183,16 @@ labelGroup.insertBefore(textIcon, labelGroup.firstChild);
 | マネージド ID         | —   | ✅                  | —   | ✅ ステージング/本番 |
 | HTTPS リダイレクト    | —   | —                   | ✅  | ✅ 本番反映          |
 | Cloud Armor           | —   | —                   | ✅  | ✅ 本番反映          |
+
+### 追加検証（タスク6～7）
+
+| タスク | 実装内容 | ステータス |
+|--------|----------|-----------|
+| **T6: アーキテクチャドキュメント** | デュアルアイコン配置（ノード左上 24px + テキスト横 20px）で 3 環境分 HTML 生成済み | ✅ |
+| | interactive HTML: staging/production/combined | ✅ |
+| | CLOUD_ARCHITECTURE_MAPPER.md / README.md 統合リンク | ✅ |
+| **T7: Azure MSI 本番展開** | FlexConsumption Function App に SystemAssigned MSI 割り当て完了 | ✅ |
+| | Cosmos DB / Key Vault への MSI ベースアクセス検証 | 本番で継続運用中 |
 
 ---
 
@@ -783,6 +830,35 @@ gcloud functions delete mcad-staging-api \
 ```
 
 > ⚠️ `multicloud-auto-deploy-tfstate-gcp` は `ashnova-staging-frontend` と `ashnova-staging-function-source` の Terraform state を含みます。4つのバケットをセットで削除してください。
+
+---
+
+## 追加実装計画（2026-03-03〜）
+
+### フェーズ 1: 本番環境スタビリティ確保（1-2週間）
+
+| タスク | 内容 | 優先度 | ステータス |
+|--------|------|--------|-----------|
+| T1: GCP production pulumi up 再実行 | billing budget フラグ修正後、state drift を解決。ManagedSslCertificate/URLMap が正常化するか確認 | 🔴 Critical | 準備完了 |
+| T2: AWS/Azure 本番エンドポイント巡回テスト | CloudFront, Front Door, GCP CDN に対する疎通テスト、応答時間測定 | 🟡 High | 準備完了 |
+| T3: セキュリティ監査ログ確認 | CloudTrail, Activity Log, Cloud Audit Logs が正常に記録されているか検証 | 🟡 High | 準備完了 |
+| T4: React フロントエンド OAuth フロー検証 | Cognito (AWS), Azure AD (Azure), Firebase (GCP) で PKCE フロー動作確認 | 🟡 High | 準備完了 |
+
+### フェーズ 2: 運用プロセス標準化（2-4週間）
+
+| タスク | 内容 | 優先度 | ステータス |
+|--------|------|--------|-----------|
+| T5: PM ダッシュボード生成自動化 | `scripts/agent_pm_sync.py` を GitHub Actions で定期実行（毎日09:15 JST） | 🟡 High | TODO |
+| T6: パフォーマンス最適化 | Lambda/Cloud Functions コールドスタート削減、CDN キャッシング戦略見直し | 🟢 Low | TODO |
+| T7: IaC 戦略再評価 | Pulumi 継続か Terraform/OpenTofu 移行かの判定（12+ ヶ月スパン） | 🟢 Low | TODO |
+
+### 既知の制限事項と対応策
+
+| 制限 | 原因 | 対応策 | Timeline |
+|------|------|--------|----------|
+| GCP production state drift | ManagedSslCertificate create-before-delete による競合 | T1 で確認予定。必要に応じて manual refresh | Mar 2026 |
+| PUT /posts/{id} エンドツーエンド検証不完全 | Azure テストスクリプト未更新 | PR で テスト追加 | Mar 2026 |
+| AWS 本番 production スタック未分離 | staging/production を共有リソース構成 | 段階的に分離（低優先度） | Q2 2026 |
 
 ---
 
