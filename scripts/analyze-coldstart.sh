@@ -45,15 +45,15 @@ calc_percentile() {
     shift
     local values=("$@")
     local count=${#values[@]}
-    
+
     if [ $count -eq 0 ]; then
         echo "0"
         return
     fi
-    
+
     # Simple percentile calculation (90th = 0.9 * count)
     local index=$(awk "BEGIN {printf \"%.0f\", $percentile * $count / 100}")
-    
+
     # Sort values and get index
     printf '%s\n' "${values[@]}" | sort -n | sed -n "$((index+1))p"
 }
@@ -81,7 +81,7 @@ GCP_LOGS=$(gcloud logging read \
 if [ -z "$GCP_LOGS" ] || [ "$GCP_LOGS" == "[]" ]; then
     log_warn "No logs found for $GCP_FUNCTION in past $DAYS days"
     log_info "Attempting to fetch from recent invocations..."
-    
+
     # Try alternative: check execution metrics
     EXEC_TIMES=$(gcloud monitoring read \
       --filter='resource.type="cloud_function" AND metric.type="cloudfunctions.googleapis.com/execution_times"' \
@@ -96,10 +96,10 @@ fi
 if [ ! -z "$EXEC_TIMES" ]; then
     EXEC_ARRAY=($EXEC_TIMES)
     COUNT=${#EXEC_ARRAY[@]}
-    
+
     if [ $COUNT -gt 0 ]; then
         log_success "Found $COUNT execution records"
-        
+
         # Calculate statistics
         MIN=$(printf '%s\n' "${EXEC_ARRAY[@]}" | sort -n | head -1)
         MAX=$(printf '%s\n' "${EXEC_ARRAY[@]}" | sort -n | tail -1)
@@ -107,7 +107,7 @@ if [ ! -z "$EXEC_TIMES" ]; then
         P50=$(calc_percentile 50 "${EXEC_ARRAY[@]}")
         P95=$(calc_percentile 95 "${EXEC_ARRAY[@]}")
         P99=$(calc_percentile 99 "${EXEC_ARRAY[@]}")
-        
+
         echo ""
         echo "GCP Cloud Functions ($GCP_FUNCTION):"
         echo "┌─── Execution Time Statistics ───────"
@@ -119,13 +119,13 @@ if [ ! -z "$EXEC_TIMES" ]; then
         echo "│ P95:           ${P95}ms"
         echo "│ P99:           ${P99}ms"
         echo "└────────────────────────────────────"
-        
+
         # Coldstart detection heuristic:
         # Cold starts typically >3x slower than warm starts
         # Usually >2000ms for Python runtime
         COLDSTART_THRESHOLD=$(awk "BEGIN {printf \"%.0f\", $AVG * 1.5}")
         ESTIMATED_COLDSTART=$(printf '%s\n' "${EXEC_ARRAY[@]}" | awk -v threshold=$COLDSTART_THRESHOLD '$1 > threshold' | wc -l)
-        
+
         echo ""
         echo "Coldstart Detection (threshold: ${COLDSTART_THRESHOLD}ms):"
         echo "├─ Estimated cold starts: $ESTIMATED_COLDSTART / $COUNT"
@@ -155,20 +155,20 @@ if [ -z "$AWS_FUNCTIONS" ]; then
 else
     for FUNC in $AWS_FUNCTIONS; do
         log_info "Analyzing $FUNC..."
-        
+
         FUNC_CONFIG=$(aws lambda get-function \
           --function-name "$FUNC" \
           --region $AWS_REGION \
           --query 'Configuration | {Runtime, MemorySize, Timeout, EphemeralStorageSize}' \
           --output json 2>/dev/null)
-        
+
         if [ ! -z "$FUNC_CONFIG" ]; then
             echo ""
             echo "AWS Lambda ($FUNC):"
             echo "┌─── Configuration ───────────────────"
             echo "$FUNC_CONFIG" | jq -r 'to_entries[] | "│ \(.key): \(.value)"'
             echo "└────────────────────────────────────"
-            
+
             # Query CloudWatch Logs for Duration metric
             DURATIONS=$(aws logs filter-log-events \
               --log-group-name "/aws/lambda/$FUNC" \
@@ -176,21 +176,21 @@ else
               --query 'events[] | map(select(.message | contains("Duration")) | .message)' \
               --output text 2>/dev/null | \
               grep -oP 'Duration: \K\d+' | head -100)
-            
+
             if [ ! -z "$DURATIONS" ]; then
                 DURATION_ARRAY=($DURATIONS)
                 COUNT=${#DURATION_ARRAY[@]}
-                
+
                 if [ $COUNT -gt 0 ]; then
                     log_success "Found $COUNT duration records"
-                    
+
                     MIN=$(printf '%s\n' "${DURATION_ARRAY[@]}" | sort -n | head -1)
                     MAX=$(printf '%s\n' "${DURATION_ARRAY[@]}" | sort -n | tail -1)
                     AVG=$(awk -v sum="$(printf '%s\n' "${DURATION_ARRAY[@]}" | paste -sd+ | bc)" -v count=$COUNT 'BEGIN {printf "%.0f", sum/count}')
                     P50=$(calc_percentile 50 "${DURATION_ARRAY[@]}")
                     P95=$(calc_percentile 95 "${DURATION_ARRAY[@]}")
                     P99=$(calc_percentile 99 "${DURATION_ARRAY[@]}")
-                    
+
                     echo ""
                     echo "  Execution Time (past 7 days):"
                     echo "  ├─ Sample Count:  $COUNT"

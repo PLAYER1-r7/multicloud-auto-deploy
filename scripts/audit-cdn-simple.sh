@@ -16,12 +16,12 @@ echo ""
 
 if command -v gcloud &> /dev/null; then
     echo "Fetching GCP backend bucket config..."
-    
+
     GCP_CONFIG=$(gcloud compute backend-buckets describe \
       "multicloud-auto-deploy-production-cdn-backend" \
       --project="ashnova" \
       --format=json 2>/dev/null)
-    
+
     if [ ! -z "$GCP_CONFIG" ]; then
         echo "✅ GCP Cloud CDN configuration:"
         echo ""
@@ -44,9 +44,9 @@ echo ""
 
 if command -v aws &> /dev/null; then
     echo "Checking AWS CloudFront distributions..."
-    
+
     DISTRIBUTIONS=$(aws cloudfront list-distributions --query 'DistributionList.Items[0]' --output json 2>/dev/null)
-    
+
     if [ ! -z "$DISTRIBUTIONS" ] && [ "$DISTRIBUTIONS" != "null" ]; then
         DIST_ID=$(echo "$DISTRIBUTIONS" | jq -r '.Id')
         echo "✅ CloudFront Distribution ID: $DIST_ID"

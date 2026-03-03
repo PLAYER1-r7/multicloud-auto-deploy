@@ -310,9 +310,9 @@ backend_bucket_kwargs = {
     "project": project,
     "cdn_policy": gcp.compute.BackendBucketCdnPolicyArgs(
         cache_mode="CACHE_ALL_STATIC",
-        default_ttl=3600,  # 1 hour
-        max_ttl=86400,  # 24 hours
-        client_ttl=3600,
+        default_ttl=86400,  # 24 hours (increased from 1 hour) - allows longer cache for static files
+        max_ttl=2592000,  # 30 days (increased from 24 hours) - supports long-term caching of assets
+        client_ttl=86400,  # 24 hours (increased from 1 hour) - browser cache duration
         negative_caching=True,
         serve_while_stale=86400,
     ),

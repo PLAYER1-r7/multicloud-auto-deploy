@@ -34,6 +34,40 @@ except ImportError:
     powertools_available = False
 
 
+# ── Cache Control Middleware ───────────────────────────────────────────────
+# T8: CDN Cache Optimization - set appropriate Cache-Control headers
+async def add_cache_control_headers(request: Request, call_next):
+    """Add Cache-Control headers based on file type and path."""
+    response = await call_next(request)
+    path = request.url.path.lower()
+    
+    # API responses: no caching
+    if path.startswith("/api/"):
+        response.headers["Cache-Control"] = "private, no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    # HTML files: short cache (5 minutes)
+    elif path.endswith(".html") or path == "/" or path == "":
+        response.headers["Cache-Control"] = "public, max-age=300, must-revalidate"
+    # JavaScript/TypeScript: long cache (1 year) - hashed filenames ensure uniqueness
+    elif path.endswith((".js", ".mjs", ".cjs")):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    # CSS: long cache (1 year) - hashed filenames ensure uniqueness
+    elif path.endswith(".css"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    # Fonts: long cache (1 year)
+    elif path.endswith((".woff", ".woff2", ".ttf", ".eot", ".otf")):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    # Images: long cache (1 year)
+    elif path.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico")):
+        response.headers["Cache-Control"] = "public, max-age=31536000"
+    # Other: moderate cache (1 day)
+    else:
+        response.headers["Cache-Control"] = "public, max-age=86400"
+    
+    return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown logic."""
@@ -73,6 +107,9 @@ app.add_middleware(
 
 # Gzip圧縮
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Cache-Control headers (T8: CDN optimization)
+app.middleware("http")(add_cache_control_headers)
 
 # ルーター登録
 app.include_router(limits.router)
