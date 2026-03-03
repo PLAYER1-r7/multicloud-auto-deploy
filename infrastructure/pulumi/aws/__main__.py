@@ -485,6 +485,10 @@ stage = aws.apigatewayv2.Stage(
     api_id=api_gateway.id,
     name="$default",
     auto_deploy=True,
+    default_route_settings=aws.apigatewayv2.StageDefaultRouteSettingsArgs(
+        throttling_burst_limit=200,
+        throttling_rate_limit=100,
+    ),
 )
 
 # Permission for API Gateway to invoke Lambda

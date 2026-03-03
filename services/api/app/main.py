@@ -1,5 +1,8 @@
 import logging
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
+from threading import Lock
 
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
@@ -32,6 +35,65 @@ except ImportError:
     )
     logger = logging.getLogger(__name__)
     powertools_available = False
+
+
+# ── Rate Limiting Middleware ───────────────────────────────────────────────
+_rate_limit_lock = Lock()
+_rate_limit_state: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _get_client_ip(request: Request) -> str:
+    """Resolve client IP with X-Forwarded-For support."""
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        first_hop = forwarded_for.split(",")[0].strip()
+        if first_hop:
+            return first_hop
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+async def add_rate_limit_headers(request: Request, call_next):
+    """Simple in-memory IP rate limiting for API routes."""
+    if not settings.rate_limit_enabled or not request.url.path.startswith("/api/"):
+        return await call_next(request)
+
+    now = time.time()
+    client_ip = _get_client_ip(request)
+    window_seconds = max(settings.rate_limit_window_seconds, 1)
+    limit = max(settings.rate_limit_requests_per_window, 1)
+
+    with _rate_limit_lock:
+        timestamps = _rate_limit_state[client_ip]
+        while timestamps and now - timestamps[0] >= window_seconds:
+            timestamps.popleft()
+
+        if len(timestamps) >= limit:
+            retry_after = max(1, int(window_seconds - (now - timestamps[0])))
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "Rate limit exceeded",
+                    "limit": limit,
+                    "window_seconds": window_seconds,
+                },
+                headers={
+                    "Retry-After": str(retry_after),
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(retry_after),
+                },
+            )
+
+        timestamps.append(now)
+        remaining = max(0, limit - len(timestamps))
+
+    response = await call_next(request)
+    response.headers["X-RateLimit-Limit"] = str(limit)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    response.headers["X-RateLimit-Window"] = str(window_seconds)
+    return response
 
 
 # ── Cache Control Middleware ───────────────────────────────────────────────
@@ -106,6 +168,9 @@ app.add_middleware(
 
 # Gzip圧縮
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# API rate limiting (T9)
+app.middleware("http")(add_rate_limit_headers)
 
 # Cache-Control headers (T8: CDN optimization)
 app.middleware("http")(add_cache_control_headers)
