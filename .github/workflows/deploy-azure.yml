@@ -5,6 +5,7 @@ on:
     branches:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
+    # Re-run deployment when workflow/config/api changes
     paths:
       - "services/api/**"
       - "infrastructure/pulumi/azure/**"
