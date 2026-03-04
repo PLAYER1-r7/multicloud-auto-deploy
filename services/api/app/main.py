@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from threading import Lock
 
-from fastapi import Depends, FastAPI, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware

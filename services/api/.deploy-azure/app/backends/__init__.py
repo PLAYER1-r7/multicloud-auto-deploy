@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from app.backends.base import BackendBase as BackendBase
+from app.backends.base import BackendBase as BackendBase  # noqa: F401
 from app.config import settings
 from app.models import CloudProvider
 

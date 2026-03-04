@@ -23,7 +23,6 @@ except ImportError:
 try:
     from azure.storage.blob import (
         BlobSasPermissions,
-        BlobServiceClient,
         generate_blob_sas,
     )
 
@@ -115,7 +114,7 @@ class AzureBackend(BackendBase):
                 continue
             if k.startswith(prefix):
                 # 既存の直接BlobURL: キーを抽出してSASを付与
-                blob_key = k[len(prefix) :].split("?")[0]
+                blob_key = k[len(prefix):].split("?")[0]
             elif k.startswith("https://"):
                 # 別のhttps URLはそのまま通す
                 result.append(k)
