@@ -43,7 +43,7 @@ class GcpBackend(BackendBase):
             self._gcs_credentials, _ = google.auth.default()
             self._gcs_auth_request = google.auth.transport.requests.Request()
         except Exception as e:
-            logger.warning(f"Could not pre-fetch GCS credentials at init: {e}")
+            logger.warning("Could not pre-fetch GCS credentials at init: %r", e)
             self._gcs_credentials = None
             self._gcs_auth_request = None
 
@@ -110,7 +110,7 @@ class GcpBackend(BackendBase):
             return posts, output_next_token
 
         except Exception as e:
-            logger.error(f"Error listing posts from Firestore: {e}")
+            logger.error("Error listing posts from Firestore: %r", e)
             raise
 
     def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
@@ -127,7 +127,7 @@ class GcpBackend(BackendBase):
                 if profile_doc.exists:
                     nickname = profile_doc.to_dict().get("nickname")
             except Exception as e:
-                logger.warning(f"Failed to fetch nickname for {user.user_id}: {e}")
+                logger.warning("Failed to fetch nickname for %r: %r", user.user_id, e)
 
             # 画像キーをURLに変換
             image_urls = []
@@ -164,7 +164,7 @@ class GcpBackend(BackendBase):
             ).model_dump()
 
         except Exception as e:
-            logger.error(f"Error creating post in Firestore: {e}")
+            logger.error("Error creating post in Firestore: %r", e)
             raise
 
     def get_post(self, post_id: str):
@@ -186,7 +186,7 @@ class GcpBackend(BackendBase):
                 imageUrls=item.get("imageUrls") or [],
             )
         except Exception as e:
-            logger.error(f"Error getting post {post_id}: {e}")
+            logger.error("Error getting post %r: %r", post_id, e)
             raise
 
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
@@ -205,11 +205,11 @@ class GcpBackend(BackendBase):
                 raise HTTPException(status_code=403, detail="Not authorized")
 
             doc_ref.delete()
-            logger.info(f"Deleted post {post_id}")
+            logger.info("Deleted post %r", post_id)
             return {"message": "Post deleted successfully", "postId": post_id}
 
         except Exception as e:
-            logger.error(f"Error deleting post {post_id} from Firestore: {e}")
+            logger.error("Error deleting post %r from Firestore: %r", post_id, e)
             raise
 
     def get_profile(self, user_id: str) -> ProfileResponse:
@@ -242,7 +242,7 @@ class GcpBackend(BackendBase):
             )
 
         except Exception as e:
-            logger.error(f"Error getting profile {user_id} from Firestore: {e}")
+            logger.error("Error getting profile %r from Firestore: %r", user_id, e)
             raise
 
     def update_profile(
@@ -276,7 +276,7 @@ class GcpBackend(BackendBase):
             return self.get_profile(user.user_id)
 
         except Exception as e:
-            logger.error(f"Error updating profile {user.user_id} in Firestore: {e}")
+            logger.error("Error updating profile %r in Firestore: %r", user.user_id, e)
             raise
 
     def generate_upload_urls(
@@ -340,5 +340,5 @@ class GcpBackend(BackendBase):
             return urls
 
         except Exception as e:
-            logger.error(f"Error generating upload URLs for GCS: {e}")
+            logger.error("Error generating upload URLs for GCS: %r", e)
             raise

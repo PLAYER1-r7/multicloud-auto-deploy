@@ -57,12 +57,12 @@ class AwsBackend(BackendBase):
                     result.append(k)
                 elif k.startswith("http://"):
                     # HTTP URL は Mixed Content 警告を引き起こすためスキップ
-                    logger.warning(f"Skipping insecure HTTP image URL (mixed content): {k[:80]}")
+                    logger.warning("Skipping insecure HTTP image URL (mixed content): %r", k[:80])
                 else:
                     try:
                         result.append(self._key_to_presigned_url(k))
                     except Exception as e:
-                        logger.warning(f"Failed to generate presigned URL for {k}: {e}")
+                        logger.warning("Failed to generate presigned URL for %r: %r", k, e)
         return result
 
     def list_posts(
@@ -114,7 +114,7 @@ class AwsBackend(BackendBase):
             return posts, next_token
 
         except Exception as e:
-            logger.error(f"Error listing posts: {e}")
+            logger.error("Error listing posts: %r", e)
             raise
 
     def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
@@ -169,7 +169,7 @@ class AwsBackend(BackendBase):
             }
 
         except Exception as e:
-            logger.error(f"Error creating post: {e}")
+            logger.error("Error creating post: %r", e)
             raise
 
     def get_post(self, post_id: str):
@@ -224,7 +224,7 @@ class AwsBackend(BackendBase):
             return {"status": "deleted", "post_id": post_id}
 
         except Exception as e:
-            logger.error(f"Error deleting post: {e}")
+            logger.error("Error deleting post: %r", e)
             raise
 
     def get_profile(self, user_id: str) -> ProfileResponse:
@@ -250,7 +250,7 @@ class AwsBackend(BackendBase):
                 updated_at=item.get("updated_at"),
             )
         except Exception as e:
-            logger.error(f"Error getting profile for {user_id}: {e}")
+            logger.error("Error getting profile for %r: %r", user_id, e)
             raise
 
     def update_profile(
@@ -289,7 +289,7 @@ class AwsBackend(BackendBase):
         try:
             self.table.put_item(Item=item)
         except Exception as e:
-            logger.error(f"Error updating profile for {user.user_id}: {e}")
+            logger.error("Error updating profile for %r: %r", user.user_id, e)
             raise
 
         return ProfileResponse(
