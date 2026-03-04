@@ -148,22 +148,6 @@ Automated refresh is also configured by GitHub Actions:
 - Schedule: daily 09:15 JST (00:15 UTC)
 - Output commit: `docs/generated/project-management/snapshot.json`, `docs/generated/project-management/dashboard.md`
 
-## Branch protection baseline (solo development)
-
-Recommended `main` policy for solo development:
-
-- Require pull request before merging: enabled
-- Required approving review count: `0`
-- Required status checks: enabled (`strict: true`)
-  - `CodeQL — javascript-typescript`
-  - `CodeQL — python`
-
-Operational verification sequence:
-
-1. Merge workflow update PR to `main`.
-2. Trigger `Project Management Sync` manually.
-3. Confirm latest run and `sync` job are `completed/success`.
-
 ---
 
 ## Definition of done (project management)

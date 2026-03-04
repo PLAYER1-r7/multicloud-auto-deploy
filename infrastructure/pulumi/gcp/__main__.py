@@ -28,11 +28,6 @@ region = gcp_config.get("region") or "asia-northeast1"
 stack = pulumi.get_stack()
 project_name = "multicloud-auto-deploy"
 
-# CDN / custom domain: production only
-# staging: direct GCS bucket website hosting (no CDN, no custom domain)
-use_cdn = (stack == "production")
-custom_domain = config.get("customDomain") if use_cdn else None
-
 # Get the service account email from environment or config (used by GitHub Actions)
 # This will be set from GCP_CREDENTIALS in the workflow
 github_actions_sa = config.get("github_actions_sa") or os.getenv("GITHUB_ACTIONS_SA")
@@ -40,11 +35,6 @@ github_actions_sa = config.get("github_actions_sa") or os.getenv("GITHUB_ACTIONS
 # CORS allowed origins (configurable per environment)
 allowed_origins = config.get("allowedOrigins") or "*"
 allowed_origins_list = allowed_origins.split(",") if allowed_origins != "*" else ["*"]
-
-# Audit logs toggle (requires project IAM policy edit permission)
-enable_audit_logs = config.get_bool("enableAuditLogs")
-if enable_audit_logs is None:
-    enable_audit_logs = True
 
 # Common labels
 common_labels = {
@@ -83,21 +73,17 @@ for service in services:
 # Enable Admin Read, Data Read, and Data Write audit logs project-wide.
 # Covers Firestore, Cloud Storage, Secret Manager, Cloud Run, and IAM.
 # Admin Read logs are free; Data Read/Write logs incur minimal ingestion cost.
-audit_config = None
-if enable_audit_logs:
-    audit_config = gcp.projects.IAMAuditConfig(
-        "audit-config",
-        project=project,
-        service="allServices",
-        audit_log_configs=[
-            gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="ADMIN_READ"),
-            gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="DATA_READ"),
-            gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="DATA_WRITE"),
-        ],
-        opts=pulumi.ResourceOptions(depends_on=enabled_services),
-    )
-else:
-    pulumi.log.warn("GCP audit logs disabled (enableAuditLogs=false).")
+audit_config = gcp.projects.IAMAuditConfig(
+    "audit-config",
+    project=project,
+    service="allServices",
+    audit_log_configs=[
+        gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="ADMIN_READ"),
+        gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="DATA_READ"),
+        gcp.projects.IAMAuditConfigAuditLogConfigArgs(log_type="DATA_WRITE"),
+    ],
+    opts=pulumi.ResourceOptions(depends_on=enabled_services),
+)
 
 # ========================================
 # Authentication Setup - Firebase Project
@@ -304,10 +290,11 @@ if stack == "production":
         opts=pulumi.ResourceOptions(depends_on=enabled_services),
     )
 
-if use_cdn:
-    # ========================================
-    # Cloud CDN for Frontend with HTTPS
-    # ========================================
+# ========================================
+# Cloud CDN for Frontend with HTTPS (Production Only)
+# ========================================
+# Staging: No CDN/Load Balancer - Cloud Run direct access
+if stack == "production":
     # External IP Address for Load Balancer
     cdn_ip_address = gcp.compute.GlobalAddress(
         "cdn-ip-address",
@@ -325,9 +312,9 @@ if use_cdn:
         "project": project,
         "cdn_policy": gcp.compute.BackendBucketCdnPolicyArgs(
             cache_mode="CACHE_ALL_STATIC",
-            default_ttl=3600,  # 1 hour
-            max_ttl=86400,  # 24 hours
-            client_ttl=3600,
+            default_ttl=86400,  # 24 hours (increased from 1 hour) - allows longer cache for static files
+            max_ttl=2592000,  # 30 days (increased from 24 hours) - supports long-term caching of assets
+            client_ttl=86400,  # 24 hours (increased from 1 hour) - browser cache duration
             negative_caching=True,
             serve_while_stale=86400,
         ),
@@ -339,9 +326,8 @@ if use_cdn:
         "opts": pulumi.ResourceOptions(depends_on=enabled_services),
     }
 
-    # Attach Cloud Armor security policy only for production
-    if stack == "production":
-        backend_bucket_kwargs["edge_security_policy"] = armor_security_policy.self_link
+    # Attach Cloud Armor security policy for production
+    backend_bucket_kwargs["edge_security_policy"] = armor_security_policy.self_link
 
     backend_bucket = gcp.compute.BackendBucket(
         "cdn-backend-bucket", **backend_bucket_kwargs
@@ -363,11 +349,12 @@ if use_cdn:
         name=f"{project_name}-{stack}-cdn-urlmap",
         project=project,
         default_service=backend_bucket.self_link,
-        opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
     )
 
     # Target HTTPS Proxy with SSL (managed certificate)
-    # Custom domain configuration is set at module level (use_cdn controls whether it is used)
+    # Custom domain configuration (optional)
+    custom_domain = config.get("customDomain")  # e.g., gcp.yourdomain.com
     ssl_domains = (
         [custom_domain] if custom_domain else [f"{project_name}-{stack}.example.com"]
     )
@@ -384,8 +371,6 @@ if use_cdn:
         ),
         opts=pulumi.ResourceOptions(
             depends_on=enabled_services,
-            # Avoid forced replacement when domain hash changes; update manually if needed.
-            ignore_changes=["name", "managed"],
             # No delete_before_replace: Pulumi creates new cert first, updates the
             # HTTPS proxy, then deletes the old cert (avoids "in use" errors).
         ),
@@ -397,7 +382,7 @@ if use_cdn:
         project=project,
         url_map=url_map.self_link,
         ssl_certificates=[managed_ssl_cert.self_link],
-        opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
     )
 
     # URL Map for HTTP → HTTPS redirect (301 Moved Permanently)
@@ -411,7 +396,7 @@ if use_cdn:
             redirect_response_code="MOVED_PERMANENTLY_DEFAULT",
             strip_query=False,
         ),
-        opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
     )
 
     # Target HTTP Proxy — redirects HTTP → HTTPS (not serving content directly)
@@ -420,7 +405,7 @@ if use_cdn:
         name=f"{project_name}-{stack}-cdn-http-proxy",
         project=project,
         url_map=redirect_url_map.self_link,
-        opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
     )
 
     # Global Forwarding Rule for HTTPS (443)
@@ -433,7 +418,7 @@ if use_cdn:
         port_range="443",
         target=https_proxy.self_link,
         load_balancing_scheme="EXTERNAL",
-        opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
     )
 
     # Global Forwarding Rule for HTTP (80) - redirect to HTTPS
@@ -446,12 +431,22 @@ if use_cdn:
         port_range="80",
         target=http_proxy.self_link,
         load_balancing_scheme="EXTERNAL",
-        opts=pulumi.ResourceOptions(depends_on=enabled_services, ignore_changes=["name"]),
+        opts=pulumi.ResourceOptions(depends_on=enabled_services),
     )
+else:
+    # Staging: No CDN/Load Balancer - Cloud Run direct access
+    cdn_ip_address = None
+    backend_bucket = None
+    url_map = None
+    managed_ssl_cert = None
+    https_proxy = None
+    redirect_url_map = None
+    http_proxy = None
+    https_forwarding_rule = None
+    forwarding_rule = None
 
-    # ========================================
-    # Note about Cloud Functions
-
+# ========================================
+# Note about Cloud Functions
 # ========================================
 # Cloud Functions Gen 2 will be deployed via gcloud CLI in the GitHub Actions workflow
 # because Pulumi requires the source ZIP to exist before creating the function.
@@ -468,11 +463,14 @@ if use_cdn:
 pulumi.export("project_id", project)
 pulumi.export("region", region)
 
-# Custom domain exports (if configured)
-if custom_domain:
+# Custom domain exports (if configured and production)
+if custom_domain and stack == "production":
     pulumi.export("custom_domain", custom_domain)
     pulumi.export("custom_domain_url", f"https://{custom_domain}")
-    pulumi.export("ssl_certificate_domains", ssl_domains)
+    ssl_domains_export = (
+        [custom_domain] if custom_domain else [f"{project_name}-{stack}.example.com"]
+    )
+    pulumi.export("ssl_certificate_domains", ssl_domains_export)
 
 # Firebase Authentication
 pulumi.export("firebase_project_id", project)
@@ -514,32 +512,28 @@ pulumi.export("secret_name", app_secret.secret_id)
 pulumi.export(
     "frontend_url",
     frontend_bucket.name.apply(
-        # staging: GCS 直接 URL (CDN なし); production: CDN URL
-        lambda name: f"https://storage.googleapis.com/{name}/sns/index.html"
+        lambda name: f"https://storage.googleapis.com/{name}/index.html"
     ),
 )
-if use_cdn:
+# CDN exports only for production
+if stack == "production":
     pulumi.export("cdn_ip_address", cdn_ip_address.address)
     pulumi.export("cdn_url", cdn_ip_address.address.apply(lambda ip: f"http://{ip}"))
     pulumi.export("cdn_https_url", cdn_ip_address.address.apply(lambda ip: f"https://{ip}"))
     pulumi.export("backend_bucket_name", backend_bucket.name)
     pulumi.export("url_map_name", url_map.name)
     pulumi.export("redirect_url_map_name", redirect_url_map.name)
-if audit_config is not None:
-    pulumi.export("audit_config_service", audit_config.service)
+    pulumi.export("ssl_certificate_name", managed_ssl_cert.name)
+
+pulumi.export("audit_config_service", audit_config.service)
 # Cloud Armor exports only for production
 if stack == "production":
     pulumi.export("cloud_armor_policy_name", armor_security_policy.name)
-if use_cdn:
-    pulumi.export("ssl_certificate_name", managed_ssl_cert.name)
 
 # ========================================
 # Monitoring and Alerts
 # ========================================
 alarm_email = config.get("alarmEmail")
-billing_account_id = config.get("billingAccountId")
-# Billing budget disabled by default due to API authentication issues
-enable_billing_budget = False
 function_name = f"{project_name}-{stack}-api"
 
 # Cloud Function memory setting (must match --memory in GitHub Actions deploy workflow)
@@ -553,7 +547,6 @@ monitoring_resources = monitoring.setup_monitoring(
     region=region,
     project_id=project,
     alarm_email=alarm_email,
-    billing_account_id=None,
     monthly_budget_usd=config.get_int("monthlyBudgetUsd") or 50,
     function_memory_mb=function_memory_mb,
 )

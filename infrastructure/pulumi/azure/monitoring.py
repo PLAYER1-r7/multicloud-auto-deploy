@@ -273,54 +273,6 @@ def create_cosmos_db_alerts(
     return alerts
 
 
-def create_frontdoor_alerts(
-    project_name: str,
-    stack: str,
-    resource_group_name: pulumi.Output[str],
-    frontdoor_profile_id: pulumi.Output[str],
-    action_group_id: pulumi.Output[str],
-) -> dict:
-    """Create Azure Monitor Alerts for Front Door"""
-
-    alerts = {}
-
-    # Alert: High error率 (5xx)
-    alerts["error_percentage"] = azure_native.insights.MetricAlert(
-        "frontdoor-error-alert",
-        resource_group_name=resource_group_name,
-        location="Global",  # Metric alerts for platform metrics must be global
-        description="Front Door 5xx error percentage is too high",
-        severity=2,
-        enabled=True,
-        scopes=[frontdoor_profile_id],
-        evaluation_frequency="PT5M",
-        window_size="PT5M",
-        criteria=azure_native.insights.MetricAlertMultipleResourceMultipleMetricCriteriaArgs(
-            odata_type="Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
-            all_of=[
-                azure_native.insights.MetricCriteriaArgs(
-                    name="BackendHealthPercentage",
-                    metric_name="Percentage5XX",
-                    metric_namespace="Microsoft.Cdn/profiles",
-                    operator="GreaterThan",
-                    threshold=5,  # More than 5%
-                    time_aggregation="Average",
-                    criterion_type="StaticThresholdCriterion",
-                )
-            ],
-        ),
-        actions=[
-            azure_native.insights.MetricAlertActionArgs(action_group_id=action_group_id)
-        ],
-        tags={
-            "Project": project_name,
-            "Environment": stack,
-        },
-    )
-
-    return alerts
-
-
 def setup_monitoring(
     project_name: str,
     stack: str,
@@ -328,7 +280,6 @@ def setup_monitoring(
     location: str,
     function_app_id: pulumi.Output[str],
     cosmos_account_id: Optional[pulumi.Output[str]],
-    frontdoor_profile_id: Optional[pulumi.Output[str]],
     alarm_email: Optional[str] = None,
     function_memory_mb: int = 2048,
 ) -> dict:
@@ -378,20 +329,9 @@ def setup_monitoring(
             action_group.id,
         )
 
-    # Create Front Door alerts (if Front Door is enabled)
-    frontdoor_alerts = {}
-    if frontdoor_profile_id:
-        frontdoor_alerts = create_frontdoor_alerts(
-            project_name,
-            stack,
-            resource_group_name,
-            frontdoor_profile_id,
-            action_group.id,
-        )
-
     return {
         "action_group": action_group,
         "function_alerts": function_alerts,
         "cosmos_alerts": cosmos_alerts,
-        "frontdoor_alerts": frontdoor_alerts,
+        "frontdoor_alerts": {},  # Front Door not deployed in staging (cost optimization)
     }

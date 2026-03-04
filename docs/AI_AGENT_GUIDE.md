@@ -144,9 +144,6 @@ Q: Something is broken
 
 Q: What should I work on next?
   → Consult GitHub Issues + AI PM dashboard (10_TASKS)
-
-Q: Configure branch protection / merge gates for solo development
-  → AI_AGENT_10_TASKS.md ("Branch protection baseline (solo development)")
 ```
 
 ---

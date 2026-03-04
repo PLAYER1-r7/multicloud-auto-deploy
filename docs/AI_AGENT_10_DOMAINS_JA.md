@@ -160,7 +160,7 @@ dig www.gcp.ashnova.jp
 ### クイック接続確認 (~30秒、認証不要)
 
 ```bash
-./scripts/test-staging-all.sh --quick
+./scripts/test-sns-all.sh --quick
 ```
 
 クラウドごとのチェック: ランディングページ `/` → 200、SNS アプリ `/sns/` → 200、API `/health` → 200。
@@ -168,7 +168,7 @@ dig www.gcp.ashnova.jp
 ### 全認証テスト (全3クラウド)
 
 ```bash
-./scripts/test-staging-all.sh \
+./scripts/test-sns-all.sh \
   --aws-token   "$AWS_TOKEN" \
   --azure-token "$AZURE_TOKEN" \
   --gcp-token   "$GCP_TOKEN"
@@ -207,7 +207,7 @@ AZURE_TOKEN="<id_token をここに貼り付け>"
 
 | スクリプト                      | 目的                                     |
 | ------------------------------- | ---------------------------------------- |
-| `scripts/test-staging-all.sh`   | ⭐ 全3クラウドを統合管理                 |
+| `scripts/test-sns-all.sh`       | ⭐ 全3クラウドを統合管理                 |
 | `scripts/test-landing-pages.sh` | ランディングページテストのみ             |
 | `scripts/test-sns-aws.sh`       | AWS 全体スイート (認証あり)              |
 | `scripts/test-sns-azure.sh`     | Azure 全体スイート (認証あり)            |

@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-03-02T20:21:50.118998+00:00",
+  "generated_at_utc": "2026-03-02T20:21:08.313776+00:00",
   "summary": {
     "issues_open": 13,
     "issues_blocked": 0,
@@ -154,7 +154,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/36",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-03-01T22:31:21Z"
     },
     {
@@ -163,7 +163,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/35",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-03-01T03:39:55Z"
     },
     {
@@ -172,7 +172,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/28",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:23:50Z"
     },
     {
@@ -181,7 +181,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/27",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:23:42Z"
     },
     {
@@ -190,7 +190,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/26",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:23:28Z"
     },
     {
@@ -199,7 +199,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/25",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:22:55Z"
     },
     {
@@ -208,7 +208,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/24",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T20:55:14Z"
     },
     {
@@ -217,7 +217,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/23",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:48:50Z"
     },
     {
@@ -226,7 +226,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/22",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T20:55:16Z"
     },
     {
@@ -235,7 +235,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/21",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:22:22Z"
     },
     {
@@ -244,7 +244,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/20",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T20:55:16Z"
     },
     {
@@ -253,7 +253,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/19",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:48:48Z"
     },
     {
@@ -262,7 +262,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/18",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:22:19Z"
     },
     {
@@ -271,7 +271,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/17",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:22:18Z"
     },
     {
@@ -280,7 +280,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/16",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:22:18Z"
     },
     {
@@ -289,7 +289,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/15",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T20:55:17Z"
     },
     {
@@ -298,7 +298,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/14",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:48:47Z"
     },
     {
@@ -307,7 +307,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/13",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T20:55:27Z"
     },
     {
@@ -316,7 +316,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/12",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:22:09Z"
     },
     {
@@ -325,7 +325,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/11",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T19:22:04Z"
     },
     {
@@ -334,7 +334,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/10",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T17:22:10Z"
     },
     {
@@ -343,7 +343,7 @@
       "url": "https://github.com/PLAYER1-r7/multicloud-auto-deploy/pull/9",
       "is_draft": false,
       "review_decision": "",
-      "merge_state": "BEHIND",
+      "merge_state": "UNKNOWN",
       "updated_at": "2026-02-24T17:22:09Z"
     }
   ]

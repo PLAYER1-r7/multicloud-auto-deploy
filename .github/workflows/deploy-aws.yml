@@ -6,9 +6,9 @@ on:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
     paths:
-      - "services/api/**"
+      - "services/**"
       - "infrastructure/pulumi/aws/**"
-      - ".github/config/aws.*.env"
+      - ".github/config/aws*.env"
       - ".github/workflows/deploy-aws.yml"
   workflow_dispatch:
     inputs:
@@ -93,10 +93,12 @@ jobs:
           echo "📄 Loaded config: $CONFIG_FILE"
           echo "  custom_domain=$CLOUD_CUSTOM_DOMAIN"
           echo "  cloudfront_domain=$CLOUD_CLOUDFRONT_DOMAIN"
+          echo "  cloudtrail_enabled=$CLOUD_CLOUDTRAIL_ENABLED"
           echo "custom_domain=$CLOUD_CUSTOM_DOMAIN" >> $GITHUB_OUTPUT
           echo "acm_cert_arn=$CLOUD_ACM_CERT_ARN" >> $GITHUB_OUTPUT
           echo "cloudfront_domain=$CLOUD_CLOUDFRONT_DOMAIN" >> $GITHUB_OUTPUT
           echo "cloudfront_distribution_id=$CLOUD_CLOUDFRONT_DISTRIBUTION_ID" >> $GITHUB_OUTPUT
+          echo "cloudtrail_enabled=$CLOUD_CLOUDTRAIL_ENABLED" >> $GITHUB_OUTPUT
 
       - name: Initialize Pulumi Stack
         run: |
@@ -123,27 +125,31 @@ jobs:
           CUSTOM_DOMAIN="${{ steps.cloud_config.outputs.custom_domain }}"
           ACM_CERT_ARN="${{ steps.cloud_config.outputs.acm_cert_arn }}"
           CF_DOMAIN="${{ steps.cloud_config.outputs.cloudfront_domain }}"
+          CLOUDTRAIL_ENABLED="${{ steps.cloud_config.outputs.cloudtrail_enabled }}"
 
           if [ -n "$CUSTOM_DOMAIN" ]; then
             echo "✅ Setting customDomain = $CUSTOM_DOMAIN"
             pulumi config set multicloud-auto-deploy-aws:customDomain "$CUSTOM_DOMAIN"
           else
-            echo "⚠️  customDomain not set — removing from Pulumi config (staging uses S3 website directly)"
-            pulumi config rm multicloud-auto-deploy-aws:customDomain 2>/dev/null || true
+            echo "⚠️  customDomain not set in $STACK_FILE — skipping"
           fi
           if [ -n "$ACM_CERT_ARN" ]; then
             echo "✅ Setting acmCertificateArn"
             pulumi config set multicloud-auto-deploy-aws:acmCertificateArn "$ACM_CERT_ARN"
           else
-            echo "⚠️  acmCertificateArn not set — removing from Pulumi config to disable custom cert"
-            pulumi config rm multicloud-auto-deploy-aws:acmCertificateArn 2>/dev/null || true
+            echo "⚠️  acmCertificateArn not set in $STACK_FILE — skipping"
           fi
           if [ -n "$CF_DOMAIN" ]; then
             echo "✅ Setting cloudFrontDomain = $CF_DOMAIN"
             pulumi config set multicloud-auto-deploy-aws:cloudFrontDomain "$CF_DOMAIN"
           else
-            echo "⚠️  cloudFrontDomain not set — removing from Pulumi config (staging uses S3 website directly)"
-            pulumi config rm multicloud-auto-deploy-aws:cloudFrontDomain 2>/dev/null || true
+            echo "⚠️  cloudFrontDomain not set in $STACK_FILE — skipping"
+          fi
+          if [ -n "$CLOUDTRAIL_ENABLED" ]; then
+            echo "✅ Setting cloudtrailEnabled = $CLOUDTRAIL_ENABLED (Task S1)"
+            pulumi config set multicloud-auto-deploy-aws:cloudtrailEnabled "$CLOUDTRAIL_ENABLED"
+          else
+            echo "⚠️  cloudtrailEnabled not set — CloudTrail disabled"
           fi
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
@@ -168,15 +174,6 @@ jobs:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           AWS_REGION: ${{ env.AWS_REGION }}
 
-      - name: Refresh Pulumi State (sync with actual AWS resources)
-        run: |
-          cd infrastructure/pulumi/aws
-          # Detect and fix state drift (e.g. CloudFront distribution replaced outside Pulumi)
-          pulumi refresh --yes --skip-preview 2>&1 | tail -20
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          AWS_REGION: ${{ env.AWS_REGION }}
-
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
         uses: pulumi/actions@v5
@@ -195,9 +192,8 @@ jobs:
           echo "lambda_function_name=$(pulumi stack output lambda_function_name)" >> $GITHUB_OUTPUT
           echo "api_gateway_endpoint=$(pulumi stack output api_gateway_endpoint)" >> $GITHUB_OUTPUT
           echo "frontend_bucket_name=$(pulumi stack output frontend_bucket_name)" >> $GITHUB_OUTPUT
-          echo "frontend_url=$(pulumi stack output frontend_url 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
-          echo "cloudfront_domain=$(pulumi stack output cloudfront_domain 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
-          echo "cloudfront_distribution_id=$(pulumi stack output cloudfront_distribution_id 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+          echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)" >> $GITHUB_OUTPUT
+          echo "cloudfront_distribution_id=$(pulumi stack output cloudfront_distribution_id)" >> $GITHUB_OUTPUT
           echo "custom_domain=$(pulumi stack output custom_domain 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$(pulumi stack output cognito_user_pool_id)" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
@@ -297,17 +293,12 @@ jobs:
           API_URL="${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}"
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
           CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
-          FRONTEND_URL="${{ steps.pulumi_outputs.outputs.frontend_url }}"
 
-          # Determine the public URL
-          # Priority: custom domain > CloudFront > S3 website endpoint
+          # Determine the public URL (prefer custom domain if set)
           if [[ -n "$CUSTOM_DOMAIN" ]]; then
             PUBLIC_ORIGIN="https://${CUSTOM_DOMAIN}"
-          elif [[ -n "$CLOUDFRONT_DOMAIN" ]]; then
-            PUBLIC_ORIGIN="https://${CLOUDFRONT_DOMAIN}"
           else
-            # staging: S3 static website hosting (no CDN)
-            PUBLIC_ORIGIN="${FRONTEND_URL}"
+            PUBLIC_ORIGIN="https://${CLOUDFRONT_DOMAIN}"
           fi
 
           echo "🏗️  Building React frontend for AWS (Cognito auth)..."
@@ -327,21 +318,18 @@ jobs:
           echo "✅ Frontend build complete. Uploading to S3..."
           cd ../..
 
-          # Upload to S3 at sns/ prefix
+          # Upload to S3 at sns/ prefix (CloudFront /sns* path pattern points here)
           aws s3 sync services/frontend_react/dist/ "s3://${FRONTEND_BUCKET}/sns/" \
             --delete \
             --region ${{ env.AWS_REGION }}
 
-          # Invalidate CloudFront cache (production only — skip if no distribution)
-          if [[ -n "$CLOUDFRONT_ID" ]]; then
-            aws cloudfront create-invalidation \
-              --distribution-id $CLOUDFRONT_ID \
-              --paths "/sns/*" \
-              --region us-east-1
-            echo "✅ Frontend deployed to S3 and CloudFront cache invalidated"
-          else
-            echo "✅ Frontend deployed to S3 (no CloudFront for this environment)"
-          fi
+          # Invalidate CloudFront cache for sns/ paths
+          aws cloudfront create-invalidation \
+            --distribution-id $CLOUDFRONT_ID \
+            --paths "/sns/*" \
+            --region us-east-1
+
+          echo "✅ Frontend deployed to S3 and CloudFront cache invalidated"
           echo "🌐 Frontend URL: ${PUBLIC_ORIGIN}/sns/"
 
       - name: Build Lambda Layer
@@ -354,18 +342,9 @@ jobs:
           echo "📦 Building Lambda Layer (dependencies)..."
           bash ../../scripts/build-lambda-layer.sh
 
-          # Capture layer info for subsequent steps
-          if [ -f lambda-layer.zip ]; then
-            LAYER_SIZE=$(du -h lambda-layer.zip | cut -f1)
-            echo "✅ Layer package created: $LAYER_SIZE"
-            ls -lh lambda-layer.zip
-
-            # Export for GitHub Actions
-            echo "layer_created=true" >> $GITHUB_OUTPUT
-          else
-            echo "❌ Layer package creation failed"
-            exit 1
-          fi
+          # Show layer info
+          echo "✅ Layer package created:"
+          ls -lh lambda-layer.zip
 
       - name: Package Backend (Application Code Only)
         run: |
@@ -404,83 +383,36 @@ jobs:
           set -e
 
           LAYER_NAME="multicloud-auto-deploy-${{ steps.set_stack.outputs.stack_name }}-dependencies"
-          LAYER_ZIP="services/api/lambda-layer.zip"
 
-          # Validate ZIP file exists and is readable
-          if [ ! -f "$LAYER_ZIP" ]; then
-            echo "❌ Layer ZIP not found: $LAYER_ZIP"
-            exit 1
-          fi
-
-          LAYER_SIZE=$(du -h "$LAYER_ZIP" | cut -f1)
-          echo "📊 Layer size: $LAYER_SIZE"
           echo "🚀 Publishing Custom Lambda Layer: $LAYER_NAME"
-
-          # Publish layer with error handling
           LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
-            --layer-name "$LAYER_NAME" \
+            --layer-name $LAYER_NAME \
             --description "Dependencies for FastAPI + Mangum + JWT (Python 3.13)" \
-            --zip-file "fileb://$LAYER_ZIP" \
+            --zip-file fileb://services/api/lambda-layer.zip \
             --compatible-runtimes python3.13 \
-            --region "${{ env.AWS_REGION }}" \
-            --query 'LayerVersionArn' \
-            --output text 2>&1) || {
-            echo "❌ Failed to publish layer"
-            echo "$LAYER_VERSION_ARN"
-            exit 1
-          }
-
-          if [ -z "$LAYER_VERSION_ARN" ]; then
-            echo "❌ Layer ARN is empty"
-            exit 1
-          fi
+            --region ${{ env.AWS_REGION }} \
+            --query LayerVersionArn \
+            --output text)
 
           echo "✅ Layer published: $LAYER_VERSION_ARN"
           echo "layer_arn=$LAYER_VERSION_ARN" >> $GITHUB_OUTPUT
 
       - name: Cleanup Old Lambda Layer Versions
-        continue-on-error: true
         run: |
-          set +e  # Continue even if cleanup fails
-
           LAYER_NAME="multicloud-auto-deploy-${{ steps.set_stack.outputs.stack_name }}-dependencies"
           echo "🧹 Cleaning up old Lambda Layer versions (keeping latest 3) for: $LAYER_NAME"
-
-          # Get layer versions (suppress errors if layer doesn't exist yet)
-          VERSIONS=$(aws lambda list-layer-versions \
-            --layer-name "$LAYER_NAME" \
-            --region "${{ env.AWS_REGION }}" \
-            --query "LayerVersions[].Version" \
-            --output text 2>/dev/null) || true
-
+          VERSIONS=$(aws lambda list-layer-versions --layer-name $LAYER_NAME \
+            --region ${{ env.AWS_REGION }} --query "LayerVersions[].Version" --output text 2>/dev/null || echo "")
           if [ -z "$VERSIONS" ]; then
-            echo "ℹ️  No versions found — skipping cleanup"
+            echo "ℹ️  No versions found or insufficient permissions — skipping cleanup"
             exit 0
           fi
-
-          # Sort and delete old versions (keep latest 3)
-          SORTED=$(echo "$VERSIONS" | tr ' ' '\n' | sort -rn | tail -n +4)
-          DELETED_COUNT=0
-
+          SORTED=$(echo $VERSIONS | tr ' ' '\n' | sort -n | head -n -3)
           for v in $SORTED; do
-            if aws lambda delete-layer-version \
-              --layer-name "$LAYER_NAME" \
-              --version-number "$v" \
-              --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
-              echo "  ✓ Deleted v$v"
-              ((DELETED_COUNT++))
-            else
-              echo "  ⚠️  Could not delete v$v (skipped)"
-            fi
+            aws lambda delete-layer-version --layer-name $LAYER_NAME --version-number $v --region ${{ env.AWS_REGION }} 2>/dev/null && echo "  Deleted $LAYER_NAME:$v" || echo "  ⚠️  Could not delete $LAYER_NAME:$v (skipped)"
           done
-
-          REMAINING=$(aws lambda list-layer-versions \
-            --layer-name "$LAYER_NAME" \
-            --region "${{ env.AWS_REGION }}" \
-            --query "length(LayerVersions)" \
-            --output text 2>/dev/null || echo "?")
-
-          echo "✅ Cleanup done ($DELETED_COUNT deleted). Remaining versions: $REMAINING"
+          REMAINING=$(aws lambda list-layer-versions --layer-name $LAYER_NAME --region ${{ env.AWS_REGION }} --query "length(LayerVersions)" --output text 2>/dev/null || echo "unknown")
+          echo "✅ Layer cleanup done. Remaining versions: $REMAINING"
 
       - name: Update Lambda Function
         id: update_lambda
@@ -518,10 +450,10 @@ jobs:
             # S3 upload for large packages
             S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
             S3_KEY="lambda-deployments/lambda-$(date +%Y%m%d-%H%M%S).zip"
-
+            
             echo "☁️  Uploading to S3: s3://$S3_BUCKET/$S3_KEY"
             aws s3 cp services/api/lambda.zip s3://$S3_BUCKET/$S3_KEY || { echo "❌ S3 upload failed!"; exit 1; }
-
+            
             echo "🚀 Updating Lambda from S3"
             aws lambda update-function-code \
               --function-name $LAMBDA_FUNCTION \
@@ -538,10 +470,9 @@ jobs:
             --region ${{ env.AWS_REGION }}
           echo "✅ Lambda ready for configuration update"
 
-          # Get origin URL for CORS (CloudFront > S3 website)
+          # Get CloudFront domain for CORS
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
           CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
-          FRONTEND_URL="${{ steps.pulumi_outputs.outputs.frontend_url }}"
 
           # Fallback: if Pulumi output is empty, use committed config file value
           if [[ -z "$CUSTOM_DOMAIN" ]]; then
@@ -549,14 +480,11 @@ jobs:
             [[ -n "$CUSTOM_DOMAIN" ]] && echo "📄 CUSTOM_DOMAIN from cloud config: $CUSTOM_DOMAIN"
           fi
 
-          # Build CORS origins list based on available URLs
+          # Include custom domain in CORS if set
           if [[ -n "$CUSTOM_DOMAIN" ]]; then
             CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},https://${CUSTOM_DOMAIN},http://localhost:5173"
-          elif [[ -n "$CLOUDFRONT_DOMAIN" ]]; then
-            CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},http://localhost:5173"
           else
-            # staging: S3 website endpoint
-            CORS_ORIGINS="${FRONTEND_URL},http://localhost:5173"
+            CORS_ORIGINS="https://${CLOUDFRONT_DOMAIN},http://localhost:5173"
           fi
 
           echo "🔒 CORS Origins: $CORS_ORIGINS"
@@ -585,11 +513,6 @@ jobs:
           echo "    \"POSTS_TABLE_NAME\": \"$POSTS_TABLE\"," >> /tmp/lambda-env.json
           echo "    \"IMAGES_BUCKET_NAME\": \"$IMAGES_BUCKET\"," >> /tmp/lambda-env.json
           echo "    \"SECRET_NAME\": \"$SECRET_NAME\"," >> /tmp/lambda-env.json
-          echo "    \"TEXTRACT_REGION\": \"ap-northeast-2\"," >> /tmp/lambda-env.json
-          echo "    \"BEDROCK_REGION\": \"us-east-1\"," >> /tmp/lambda-env.json
-          echo "    \"BEDROCK_MODEL_ID\": \"amazon.nova-pro-v1:0\"," >> /tmp/lambda-env.json
-          echo "    \"SOLVE_OCR_REVIEW_MIN_SCORE\": \"0.35\"," >> /tmp/lambda-env.json
-          echo "    \"SOLVE_OCR_REVIEW_MAX_REPLACEMENT_RATIO\": \"0.01\"," >> /tmp/lambda-env.json
           echo "    \"CORS_ORIGINS\": \"$CORS_ORIGINS\"" >> /tmp/lambda-env.json
           echo '  }' >> /tmp/lambda-env.json
           echo '}' >> /tmp/lambda-env.json
@@ -611,12 +534,7 @@ jobs:
         run: |
           echo "✅ AWS deployment succeeded!"
           echo "📍 API Endpoint: ${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}"
-          CF_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
-          if [[ -n "$CF_DOMAIN" ]]; then
-            echo "🌐 Frontend: https://${CF_DOMAIN}/sns/"
-          else
-            echo "🌐 Frontend: ${{ steps.pulumi_outputs.outputs.frontend_url }}sns/"
-          fi
+          echo "🌐 Frontend: https://${{ steps.pulumi_outputs.outputs.cloudfront_domain }}/sns/"
 
       - name: Notify Failure
         if: failure()

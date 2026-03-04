@@ -6,7 +6,7 @@
 
 ## Workflow List
 
-> ⚠️ Always edit the repo-root `.github/workflows/`.  
+> ⚠️ Always edit the repo-root `.github/workflows/`.
 > `multicloud-auto-deploy/.github/workflows/` is ignored by CI.
 
 | File                            | Trigger                    | Target                           | Environment          |
@@ -176,7 +176,7 @@ Repo-level GitHub Secrets are **environment-agnostic**. Setting `AZURE_CUSTOM_DO
 # deploy-aws.yml steps (summary)
 1. Checkout
 2. AWS auth (aws-actions/configure-aws-credentials)
-3. Set up Python 3.12
+3. Set up Python 3.13
 4. Pulumi login (PULUMI_ACCESS_TOKEN)
 5. Determine Pulumi Stack Name  →  STACK_NAME = staging | production
 6. Load Cloud Config  →  source .github/config/aws.${STACK_NAME}.env
@@ -279,8 +279,8 @@ gh run watch <run-id>
 
 ## Version Management
 
-> Each artifact is tracked with a version in **`A.B.C.D`** (4-digit) format.  
-> Version definition file: [`versions.json`](../versions.json)  
+> Each artifact is tracked with a version in **`A.B.C.D`** (4-digit) format.
+> Version definition file: [`versions.json`](../versions.json)
 > Changed from `X.Y.Z` to `A.B.C.D` (2026-02-24, commit `c2f6870`)
 
 ### Current Versions (2026-02-24)
@@ -303,7 +303,7 @@ gh run watch <run-id>
 | 3  | C    | プッシュ数 | `git push` のたびに +1 (リセットなし) | GitHub Actions `version-bump.yml` が自動実行 |
 | 4  | D    | コミット数 | `git commit` のたびに +1 (リセットなし) | `.githooks/pre-commit` が自動実行           |
 
-> **重要**: どの桁をインクリメントしても他の桁はリセットしない。  
+> **重要**: どの桁をインクリメントしても他の桁はリセットしない。
 > パスフィルタ: `static-site/aws/**` → A のみ、`services/frontend_react/**` → SNS のみ、それ以外 → 全コンポーネント
 
 ### Implementation Files

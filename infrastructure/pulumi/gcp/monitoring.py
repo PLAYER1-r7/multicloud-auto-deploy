@@ -256,7 +256,6 @@ def create_billing_budget(
     project_name: str,
     stack: str,
     project_id: str,
-    billing_account_id: str,
     monthly_budget_usd: int = 50,
     notification_channels: List[pulumi.Output[str]] = None,
 ) -> gcp.billing.Budget:
@@ -264,13 +263,14 @@ def create_billing_budget(
     Create billing budget with alerts
 
     Args:
-        billing_account_id: GCP billing account ID (e.g., "01F139-282A95-9BBA25")
         monthly_budget_usd: Monthly budget in USD (default: $50)
     """
 
+    # Get billing account (requires permission)
+    # Note: This might fail if the service account doesn't have billing.accounts.list permission
+
     budget = gcp.billing.Budget(
         "billing-budget",
-        billing_account=billing_account_id,
         display_name=f"{project_name}-{stack}-budget",
         amount=gcp.billing.BudgetAmountArgs(
             specified_amount=gcp.billing.BudgetAmountSpecifiedAmountArgs(
@@ -314,7 +314,6 @@ def setup_monitoring(
     region: str,
     project_id: str,
     alarm_email: Optional[str] = None,
-    billing_account_id: Optional[str] = None,
     monthly_budget_usd: int = 50,
     function_memory_mb: int = 512,
 ) -> dict:
@@ -353,15 +352,18 @@ def setup_monitoring(
         notification_channels,
     )
 
-    # Create billing budget (production only)
+    # Create billing budget (production only, if enabled)
+    # Note: Disabled by default to avoid ADC quota project permission errors.
+    # To enable: set `enableBillingBudget: "true"` in Pulumi.production.yaml
+    # and ensure billingAccountId is properly configured.
     billing_budget = None
-    if stack == "production" and billing_account_id:
+    enable_billing_budget = pulumi.Config().get("enableBillingBudget") == "true"
+    if stack == "production" and enable_billing_budget:
         try:
             billing_budget = create_billing_budget(
                 project_name,
                 stack,
                 project_id,
-                billing_account_id,
                 monthly_budget_usd,
                 notification_channels,
             )

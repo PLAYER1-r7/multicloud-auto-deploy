@@ -2,18 +2,11 @@
 Multi-Cloud Auto Deploy - Azure Pulumi Implementation
 
 Architecture:
-- Azure Functions (FlexConsumption)
+- Azure Functions (Consumption Plan Y1)
 - Storage Account (Functions + Frontend)
 - Application Insights (Monitoring)
-- Front Door CDN (Production only; staging: direct Blob Storage for cost efficiency)
 
-Cost:
-  - Staging (no Front Door): ~$2-8/month for low traffic
-  - Production (with Front Door): ~$35-50/month with Front Door Standard
-
-Environment Strategy:
-  - staging: Direct Blob Storage access, no CDN (cost optimized)
-  - production: Front Door for global distribution, custom domains, and security
+Cost: ~$2-8/month for low traffic
 """
 
 import monitoring
@@ -33,9 +26,6 @@ project_name = "multicloud-auto-deploy"
 #   pulumi config set frontendDomain <afd_hostname>
 # Used for Azure AD app registration redirect URIs
 frontend_domain = config.get("frontendDomain") or ""
-
-# Enable CDN only for production (staging: direct Blob Storage access)
-enable_cdn = stack != "staging"
 
 # Common tags
 common_tags = {
@@ -225,7 +215,6 @@ key_vault = azure.keyvault.Vault(
         enable_rbac_authorization=True,  # Use RBAC instead of access policies
         enable_soft_delete=True,
         soft_delete_retention_in_days=7,
-        enable_purge_protection=True,  # Defender for Cloud 推奨: purge protection有効化
         enabled_for_deployment=False,
         enabled_for_disk_encryption=False,
         enabled_for_template_deployment=True,
@@ -250,95 +239,6 @@ app_secret = azure.keyvault.Secret(
 )
 
 # ========================================
-# Azure AI Document Intelligence (OCR for university exam images)
-# ========================================
-# Uses the prebuilt-read model to extract text from exam problem images.
-# Kind "FormRecognizer" = Azure AI Document Intelligence (rebranded service name).
-# F0 free tier: 500 pages/month — upgrade to S0 for production workloads.
-document_intelligence = azure.cognitiveservices.Account(
-    "document-intelligence",
-    account_name=storage_suffix.result.apply(lambda suffix: f"mcad-di-{suffix}"),
-    resource_group_name=resource_group.name,
-    location=location,
-    kind="FormRecognizer",
-    sku=azure.cognitiveservices.SkuArgs(
-        name="F0",  # Free tier: 500 pages/month (月額¥0 when usage < 500)
-    ),
-    properties=azure.cognitiveservices.AccountPropertiesArgs(
-        public_network_access="Enabled",
-        restore=False,
-    ),
-    tags=common_tags,
-    opts=pulumi.ResourceOptions(depends_on=[resource_group]),
-)
-
-# Retrieve Document Intelligence keys for Function App configuration
-document_intelligence_keys = pulumi.Output.all(
-    resource_group.name, document_intelligence.name
-).apply(
-    lambda args: azure.cognitiveservices.list_account_keys(
-        resource_group_name=args[0],
-        account_name=args[1],
-    )
-)
-
-# ========================================
-# Azure OpenAI (GPT-4o for university exam solver LLM)
-# ========================================
-# NOTE: Azure OpenAI Cognitive Services account for LLM-based answer generation.
-# Uses GPT-4o model deployed in the same region as other resources.
-azure_openai_account = azure.cognitiveservices.Account(
-    "azure-openai",
-    account_name=storage_suffix.result.apply(lambda suffix: f"mcad-oai-{suffix}"),
-    resource_group_name=resource_group.name,
-    location=location,
-    kind="OpenAI",
-    sku=azure.cognitiveservices.SkuArgs(
-        name="S0",
-    ),
-    properties=azure.cognitiveservices.AccountPropertiesArgs(
-        public_network_access="Enabled",
-        restore=False,
-        custom_sub_domain_name=storage_suffix.result.apply(
-            lambda suffix: f"mcad-oai-{suffix}"
-        ),
-    ),
-    tags=common_tags,
-    opts=pulumi.ResourceOptions(depends_on=[resource_group]),
-)
-
-# GPT-4o model deployment
-azure_openai_deployment = azure.cognitiveservices.Deployment(
-    "gpt-4o-deploy",
-    account_name=azure_openai_account.name,
-    resource_group_name=resource_group.name,
-    deployment_name="gpt-4o",
-    properties=azure.cognitiveservices.DeploymentPropertiesArgs(
-        model=azure.cognitiveservices.DeploymentModelArgs(
-            format="OpenAI",
-            name="gpt-4o",
-            version="2024-11-20",
-        ),
-        version_upgrade_option="OnceNewDefaultVersionAvailable",
-    ),
-    sku=azure.cognitiveservices.SkuArgs(
-        name="GlobalStandard",
-        capacity=1,  # 1K tokens per minute (cost-optimized from 10K)
-    ),
-    opts=pulumi.ResourceOptions(depends_on=[azure_openai_account]),
-)
-
-# Retrieve Azure OpenAI keys
-azure_openai_keys = pulumi.Output.all(
-    resource_group.name, azure_openai_account.name
-).apply(
-    lambda args: azure.cognitiveservices.list_account_keys(
-        resource_group_name=args[0],
-        account_name=args[1],
-    )
-)
-
-# ========================================
 # Authentication Setup - Azure AD Application
 # ========================================
 # Azure AD Application for authentication (automated)
@@ -356,21 +256,12 @@ app_registration = azuread.Application(
     sign_in_audience="AzureADMyOrg",
     # Web application configuration
     web=azuread.ApplicationWebArgs(
-        redirect_uris=(
-            [
-                # Legacy / fallback
-                f"https://{project_name}-{stack}-web.azurewebsites.net/callback",
-            ]
-            + (
-                [
-                    # FrontDoor — login callback + post-logout redirect
-                    f"https://{frontend_domain}/sns/auth/callback",
-                    f"https://{frontend_domain}/sns/",
-                ]
-                if (enable_cdn and frontend_domain)
-                else []
-            )
-        ),
+        redirect_uris=[
+            # Legacy / fallback
+            f"https://{project_name}-{stack}-web.azurewebsites.net/callback",
+            # Note: FrontDoor not deployed in staging (cost optimization)
+            # Production may use Front Door with additional URIs
+        ],
         implicit_grant=azuread.ApplicationWebImplicitGrantArgs(
             access_token_issuance_enabled=True,
             id_token_issuance_enabled=True,
@@ -412,333 +303,8 @@ app_service_principal = azuread.ServicePrincipal(
 # - App Service Plan: FC1 (FlexConsumption)
 # - API URL: https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
 
-# ========================================
-# Azure Front Door for Frontend CDN (Production only)
-# ========================================
-# Staging uses direct Blob Storage access for cost efficiency
-if enable_cdn:
-    # Front Door Profile (Standard SKU - cost-effective)
-    frontdoor_profile = azure.cdn.Profile(
-        "frontdoor-profile",
-        profile_name=f"{project_name}-{stack}-fd",
-        resource_group_name=resource_group.name,
-        location="Global",  # Front Door is global
-        sku=azure.cdn.SkuArgs(
-            name="Standard_AzureFrontDoor",
-        ),
-        # Extend origin response timeout to 60s (default: 30s) to accommodate
-        # Python Dynamic Consumption cold starts which can take 10-30+ seconds.
-        # Without this, AFD times out during cold start and returns HTTP 502.
-        origin_response_timeout_seconds=60,
-        tags=common_tags,
-        # Force replacement when SKU changes (Premium -> Standard not supported)
-        opts=pulumi.ResourceOptions(replace_on_changes=["sku"]),
-    )
-
-    # Front Door Endpoint
-    frontdoor_endpoint = azure.cdn.AFDEndpoint(
-        "frontdoor-endpoint",
-        endpoint_name=storage_suffix.result.apply(
-            lambda suffix: f"mcad-{stack}-{suffix}"
-        ),
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-        location="Global",
-        enabled_state="Enabled",
-        tags=common_tags,
-    )
-
-    # Front Door Origin Group
-    frontdoor_origin_group = azure.cdn.AFDOriginGroup(
-        "frontdoor-origin-group",
-        origin_group_name=f"{project_name}-{stack}-origin-group",
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-        load_balancing_settings=azure.cdn.LoadBalancingSettingsParametersArgs(
-            sample_size=4,
-            successful_samples_required=3,
-            additional_latency_in_milliseconds=50,
-        ),
-        health_probe_settings=azure.cdn.HealthProbeParametersArgs(
-            probe_path="/",
-            probe_request_type="HEAD",
-            probe_protocol="Https",
-            probe_interval_in_seconds=100,
-        ),
-    )
-
-    # Front Door Origin (Storage Account for Frontend)
-    frontdoor_origin = azure.cdn.AFDOrigin(
-        "frontdoor-origin",
-        origin_name=f"{project_name}-{stack}-origin",
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-        origin_group_name=frontdoor_origin_group.name,
-        host_name=frontend_storage.primary_endpoints.apply(
-            lambda endpoints: (
-                endpoints.web.replace("https://", "").replace("/", "")
-                if endpoints.web
-                else ""
-            )
-        ),
-        origin_host_header=frontend_storage.primary_endpoints.apply(
-            lambda endpoints: (
-                endpoints.web.replace("https://", "").replace("/", "")
-                if endpoints.web
-                else ""
-            )
-        ),
-        http_port=80,
-        https_port=443,
-        priority=1,
-        weight=1000,
-        enabled_state="Enabled",
-    )
-
-    # Front Door Origin Group for Function App (API backend)
-    frontdoor_api_origin_group = azure.cdn.AFDOriginGroup(
-        "frontdoor-api-origin-group",
-        origin_group_name=f"{project_name}-{stack}-api-origin-group",
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-        load_balancing_settings=azure.cdn.LoadBalancingSettingsParametersArgs(
-            sample_size=1,
-            successful_samples_required=1,
-            additional_latency_in_milliseconds=0,
-        ),
-        health_probe_settings=azure.cdn.HealthProbeParametersArgs(
-            probe_path="/api/HttpTrigger",
-            probe_request_type="GET",
-            probe_protocol="Https",
-            probe_interval_in_seconds=100,
-        ),
-    )
-
-    # Front Door Origin (Function App for API)
-    # Use dynamic hostname from workflow output (resolved at deployment time)
-    frontdoor_api_origin = azure.cdn.AFDOrigin(
-        "frontdoor-api-origin",
-        origin_name=f"{project_name}-{stack}-api-origin",
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-        origin_group_name=frontdoor_api_origin_group.name,
-        host_name=pulumi.Output.concat(
-            f"{project_name}-{stack}-func",
-            "-d45ihd.japaneast-01.azurewebsites.net",
-        ),
-        origin_host_header=pulumi.Output.concat(
-            f"{project_name}-{stack}-func",
-            "-d45ihd.japaneast-01.azurewebsites.net",
-        ),
-        http_port=80,
-        https_port=443,
-        priority=1,
-        weight=1000,
-        enabled_state="Enabled",
-    )
-
-    # ========================================
-    # Front Door: Rule Set for React SPA URL rewriting
-    # /sns/<deep-link> → /sns/index.html (SPA client-side routing)
-    # ========================================
-    spa_rule_set = azure.cdn.RuleSet(
-        "spa-rule-set",
-        rule_set_name="SpaRuleSet",
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-    )
-
-    exam_shortcut_rule = azure.cdn.Rule(
-        "exam-shortcut-rule",
-        rule_name="ExamShortcut",
-        rule_set_name=spa_rule_set.name,
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-        order=10,
-        conditions=[
-            azure.cdn.DeliveryRuleUrlPathConditionArgs(
-                name="UrlPath",
-                parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
-                    type_name="DeliveryRuleUrlPathMatchConditionParameters",
-                    operator="Equal",
-                    negate_condition=False,
-                    match_values=["/exam", "/exam/"],
-                    transforms=["Lowercase"],
-                ),
-            ),
-        ],
-        actions=[
-            azure.cdn.UrlRewriteActionArgs(
-                name="UrlRewrite",
-                parameters=azure.cdn.UrlRewriteActionParametersArgs(
-                    type_name="DeliveryRuleUrlRewriteActionParameters",
-                    source_pattern="/",
-                    destination="/sns/index.html",
-                    preserve_unmatched_path=False,
-                ),
-            ),
-        ],
-        opts=pulumi.ResourceOptions(depends_on=[spa_rule_set]),
-    )
-
-    spa_rewrite_rule = azure.cdn.Rule(
-        "spa-rewrite-rule",
-        rule_name="SpaRouting",
-        rule_set_name=spa_rule_set.name,
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-        order=2,
-        conditions=[
-            # Condition 1: path begins with /sns/
-            azure.cdn.DeliveryRuleUrlPathConditionArgs(
-                name="UrlPath",
-                parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
-                    type_name="DeliveryRuleUrlPathMatchConditionParameters",
-                    operator="BeginsWith",
-                    negate_condition=False,
-                    match_values=["/sns/"],
-                    transforms=["Lowercase"],
-                ),
-            ),
-            # Condition 2: NOT /sns/assets/ (Vite bundle output)
-            azure.cdn.DeliveryRuleUrlPathConditionArgs(
-                name="UrlPath",
-                parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
-                    type_name="DeliveryRuleUrlPathMatchConditionParameters",
-                    operator="BeginsWith",
-                    negate_condition=True,
-                    match_values=["/sns/assets/"],
-                    transforms=["Lowercase"],
-                ),
-            ),
-            # Condition 3: NOT a static file (has no known extension)
-            # Azure AFD limits match_values to 10 per condition
-            azure.cdn.DeliveryRuleUrlPathConditionArgs(
-                name="UrlPath",
-                parameters=azure.cdn.UrlPathMatchConditionParametersArgs(
-                    type_name="DeliveryRuleUrlPathMatchConditionParameters",
-                    operator="EndsWith",
-                    negate_condition=True,
-                    match_values=[
-                        ".html",
-                        ".js",
-                        ".css",
-                        ".png",
-                        ".svg",
-                        ".ico",
-                        ".json",
-                        ".woff",
-                        ".woff2",
-                        ".map",
-                    ],
-                    transforms=["Lowercase"],
-                ),
-            ),
-        ],
-        actions=[
-            azure.cdn.UrlRewriteActionArgs(
-                name="UrlRewrite",
-                parameters=azure.cdn.UrlRewriteActionParametersArgs(
-                    type_name="DeliveryRuleUrlRewriteActionParameters",
-                    source_pattern="/sns/",
-                    destination="/sns/index.html",
-                    preserve_unmatched_path=False,
-                ),
-            ),
-        ],
-        opts=pulumi.ResourceOptions(depends_on=[spa_rule_set]),
-    )
-
-    # Front Door: Security Rule Set (Free Custom Rules)
-    security_rule_set = azure.cdn.RuleSet(
-        "security-rule-set",
-        rule_set_name="SecurityRules",
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-    )
-
-    # Front Door Route for API (/api/* → Function App)
-    frontdoor_api_route = azure.cdn.Route(
-        "frontdoor-api-route",
-        route_name=f"{project_name}-{stack}-api-route",
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-        endpoint_name=frontdoor_endpoint.name,
-        origin_group=azure.cdn.ResourceReferenceArgs(
-            id=frontdoor_api_origin_group.id,
-        ),
-        supported_protocols=["Http", "Https"],
-        patterns_to_match=["/api/*"],
-        forwarding_protocol="HttpsOnly",
-        link_to_default_domain="Enabled",
-        https_redirect="Enabled",
-        opts=pulumi.ResourceOptions(
-            depends_on=[
-                frontdoor_api_origin,
-            ]
-        ),
-    )
-
-    # Front Door Route
-    frontdoor_route = azure.cdn.Route(
-        "frontdoor-route",
-        route_name=f"{project_name}-{stack}-route",
-        profile_name=frontdoor_profile.name,
-        resource_group_name=resource_group.name,
-        endpoint_name=frontdoor_endpoint.name,
-        origin_group=azure.cdn.ResourceReferenceArgs(
-            id=frontdoor_origin_group.id,
-        ),
-        supported_protocols=["Http", "Https"],
-        patterns_to_match=["/*"],
-        forwarding_protocol="HttpsOnly",
-        link_to_default_domain="Enabled",
-        https_redirect="Enabled",
-        rule_sets=[
-            azure.cdn.ResourceReferenceArgs(id=spa_rule_set.id),
-            azure.cdn.ResourceReferenceArgs(id=security_rule_set.id),
-        ],
-        opts=pulumi.ResourceOptions(
-            depends_on=[
-                frontdoor_origin,
-                frontdoor_api_route,
-                exam_shortcut_rule,
-                spa_rewrite_rule,
-                security_rule_set,
-            ]
-        ),
-    )
-
-    # Front Door Diagnostic Settings (Access Logs → Log Analytics)
-    frontdoor_diagnostics = azure.insights.DiagnosticSetting(
-        "frontdoor-diagnostics",
-        name=f"{project_name}-{stack}-fd-diag",
-        resource_uri=frontdoor_profile.id,
-        workspace_id=log_analytics_workspace.id,
-        logs=[
-            azure.insights.LogSettingsArgs(
-                category_group="allLogs",
-                enabled=True,
-            ),
-        ],
-        opts=pulumi.ResourceOptions(
-            depends_on=[frontdoor_profile, log_analytics_workspace]
-        ),
-    )
-else:
-    # Staging: Use Blob Storage direct access
-    frontdoor_profile = None
-    frontdoor_endpoint = None
-    frontdoor_origin_group = None
-    frontdoor_origin = None
-    frontdoor_api_origin_group = None
-    frontdoor_api_origin = None
-    spa_rule_set = None
-    exam_shortcut_rule = None
-    spa_rewrite_rule = None
-    security_rule_set = None
-    frontdoor_route = None
-    frontdoor_diagnostics = None
+# Note: Azure Front Door ($35+/month) not deployed in staging to reduce costs
+# Frontend served directly from Blob Storage via direct HTTPS endpoint
 
 # ========================================
 # Monitoring and Alerts
@@ -770,7 +336,6 @@ monitoring_resources = monitoring.setup_monitoring(
     location=location,
     function_app_id=function_app_id,
     cosmos_account_id=cosmos_account.id,
-    frontdoor_profile_id=frontdoor_profile.id if enable_cdn else None,
     alarm_email=alarm_email,
     function_memory_mb=function_memory_mb,
 )
@@ -811,21 +376,6 @@ pulumi.export(
         lambda endpoints: endpoints.web if endpoints.web else "Not configured yet"
     ),
 )
-if enable_cdn:
-    pulumi.export("frontdoor_endpoint_name", frontdoor_endpoint.name)
-    pulumi.export("frontdoor_hostname", frontdoor_endpoint.host_name)
-    pulumi.export(
-        "frontdoor_url",
-        frontdoor_endpoint.host_name.apply(lambda hostname: f"https://{hostname}"),
-    )
-else:
-    # Staging: Direct Blob Storage access
-    pulumi.export(
-        "frontend_endpoint_url",
-        frontend_storage.primary_endpoints.apply(
-            lambda endpoints: endpoints.web if endpoints.web else "Not configured"
-        ),
-    )
 pulumi.export("app_insights_instrumentation_key", app_insights.instrumentation_key)
 pulumi.export("key_vault_name", key_vault.name)
 pulumi.export("key_vault_uri", key_vault.properties.vault_uri)
@@ -858,49 +408,6 @@ pulumi.export(
     ),
 )
 
-# Azure AI Document Intelligence exports (OCR for university exam problems)
-pulumi.export("document_intelligence_name", document_intelligence.name)
-pulumi.export(
-    "document_intelligence_endpoint",
-    document_intelligence.properties.apply(
-        lambda p: p.endpoint if p and p.endpoint else ""
-    ),
-)
-pulumi.export(
-    "document_intelligence_key",
-    pulumi.Output.secret(document_intelligence_keys.apply(lambda k: k.key1 or "")),
-)
-pulumi.export(
-    "ocr_config_instructions",
-    pulumi.Output.concat(
-        "Configure Function App with these environment variables for OCR/LLM:\\n",
-        "  AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=",
-        document_intelligence.properties.apply(
-            lambda p: p.endpoint if p and p.endpoint else "<endpoint>"
-        ),
-        "\\n",
-        "  AZURE_DOCUMENT_INTELLIGENCE_KEY=<from pulumi stack output document_intelligence_key>\\n",
-        "  AZURE_OPENAI_ENDPOINT=<from pulumi stack output azure_openai_endpoint>\\n",
-        "  AZURE_OPENAI_KEY=<from pulumi stack output azure_openai_key>\\n",
-        "  AZURE_OPENAI_DEPLOYMENT=gpt-4o\\n",
-        "  SOLVE_ENABLED=true\\n",
-    ),
-)
-
-# Azure OpenAI exports (LLM for university exam solver)
-pulumi.export("azure_openai_account_name", azure_openai_account.name)
-# customSubDomainName is set, so the per-resource endpoint https://{name}.openai.azure.com/
-# will resolve correctly for the OpenAI Python SDK.
-pulumi.export(
-    "azure_openai_endpoint",
-    azure_openai_account.name.apply(lambda name: f"https://{name}.openai.azure.com/"),
-)
-pulumi.export(
-    "azure_openai_key",
-    pulumi.Output.secret(azure_openai_keys.apply(lambda k: k.key1 or "")),
-)
-pulumi.export("azure_openai_deployment_name", azure_openai_deployment.name)
-
 # Monitoring exports
 if monitoring_resources["action_group"]:
     pulumi.export("monitoring_action_group_id", monitoring_resources["action_group"].id)
@@ -911,26 +418,13 @@ pulumi.export(
 pulumi.export(
     "monitoring_cosmos_alerts", list(monitoring_resources["cosmos_alerts"].keys())
 )
-if enable_cdn:
-    pulumi.export(
-        "monitoring_frontdoor_alerts",
-        list(monitoring_resources["frontdoor_alerts"].keys()),
-    )
-else:
-    pulumi.export("monitoring_frontdoor_alerts", [])
 
 # Cost estimation
-cost_msg = (
+pulumi.export(
+    "cost_estimate",
     "Azure Functions FlexConsumption: Pay-as-you-go. "
     "Storage: $0.02/GB/month. "
     "Application Insights: 5GB free/month. "
     "Key Vault: $0.03 per 10,000 operations (secrets are free). "
+    "Estimated: $2-8/month for low traffic (Front Door not deployed in staging).",
 )
-if enable_cdn:
-    cost_msg += "Azure Front Door Standard: $35/month + $0.01/GB. Estimated: $35-50/month with Front Door."
-else:
-    cost_msg += (
-        "Direct Blob Storage access (no CDN). Estimated: $2-8/month for low traffic."
-    )
-
-pulumi.export("cost_estimate", cost_msg)

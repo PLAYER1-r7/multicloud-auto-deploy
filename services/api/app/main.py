@@ -1,5 +1,8 @@
 import logging
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
+from threading import Lock
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
@@ -11,7 +14,7 @@ from app.auth import UserInfo, get_current_user
 from app.backends import get_backend
 from app.config import settings
 from app.models import CreatePostBody, HealthResponse, ListPostsResponse, UpdatePostBody
-from app.routes import learning, limits, posts, profile, solve, uploads
+from app.routes import limits, posts, profile, uploads
 
 # AWS Lambda Powertools (observability)
 try:
@@ -32,6 +35,99 @@ except ImportError:
     )
     logger = logging.getLogger(__name__)
     powertools_available = False
+
+
+# ── Rate Limiting Middleware ───────────────────────────────────────────────
+_rate_limit_lock = Lock()
+_rate_limit_state: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _get_client_ip(request: Request) -> str:
+    """Resolve client IP with X-Forwarded-For support."""
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        first_hop = forwarded_for.split(",")[0].strip()
+        if first_hop:
+            return first_hop
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+async def add_rate_limit_headers(request: Request, call_next):
+    """Simple in-memory IP rate limiting for API routes."""
+    if not settings.rate_limit_enabled or not request.url.path.startswith("/api/"):
+        return await call_next(request)
+
+    now = time.time()
+    client_ip = _get_client_ip(request)
+    window_seconds = max(settings.rate_limit_window_seconds, 1)
+    limit = max(settings.rate_limit_requests_per_window, 1)
+
+    with _rate_limit_lock:
+        timestamps = _rate_limit_state[client_ip]
+        while timestamps and now - timestamps[0] >= window_seconds:
+            timestamps.popleft()
+
+        if len(timestamps) >= limit:
+            retry_after = max(1, int(window_seconds - (now - timestamps[0])))
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "Rate limit exceeded",
+                    "limit": limit,
+                    "window_seconds": window_seconds,
+                },
+                headers={
+                    "Retry-After": str(retry_after),
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(retry_after),
+                },
+            )
+
+        timestamps.append(now)
+        remaining = max(0, limit - len(timestamps))
+
+    response = await call_next(request)
+    response.headers["X-RateLimit-Limit"] = str(limit)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    response.headers["X-RateLimit-Window"] = str(window_seconds)
+    return response
+
+
+# ── Cache Control Middleware ───────────────────────────────────────────────
+# T8: CDN Cache Optimization - set appropriate Cache-Control headers
+async def add_cache_control_headers(request: Request, call_next):
+    """Add Cache-Control headers based on file type and path."""
+    response = await call_next(request)
+    path = request.url.path.lower()
+
+    # API responses: no caching
+    if path.startswith("/api/"):
+        response.headers["Cache-Control"] = (
+            "private, no-cache, no-store, must-revalidate"
+        )
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    # HTML files: short cache (5 minutes)
+    elif path.endswith(".html") or path == "/" or path == "":
+        response.headers["Cache-Control"] = "public, max-age=300, must-revalidate"
+    # JavaScript/TypeScript: long cache (1 year) - hashed filenames ensure uniqueness
+    elif (
+        path.endswith((".js", ".mjs", ".cjs"))
+        or path.endswith(".css")
+        or path.endswith((".woff", ".woff2", ".ttf", ".eot", ".otf"))
+    ):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    # Images: long cache (1 year)
+    elif path.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico")):
+        response.headers["Cache-Control"] = "public, max-age=31536000"
+    # Other: moderate cache (1 day)
+    else:
+        response.headers["Cache-Control"] = "public, max-age=86400"
+
+    return response
 
 
 @asynccontextmanager
@@ -73,143 +169,17 @@ app.add_middleware(
 # Gzip圧縮
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# API rate limiting (T9)
+app.middleware("http")(add_rate_limit_headers)
 
-# ── Security Validation Middleware ──────────────────────────────────────────
-# Detect and block common attack patterns:
-#   1. SQL Injection (query strings)
-#   2. Path Traversal (URL paths)
-#   3. XSS (User-Agent headers)
-#   4. Suspicious file extensions
-# This provides WAF-like protection without Azure Front Door Premium SKU.
-@app.middleware("http")
-async def security_validation_middleware(request: Request, call_next):
-    """Block requests matching common attack patterns."""
-
-    # Check 1: SQL Injection patterns in query string
-    query_string = str(request.url.query).lower()
-    sql_patterns = [
-        "union select",
-        "union+select",
-        "' or '1'='1",
-        "' or 1=1",
-        "; drop table",
-        "; delete from",
-        "exec(",
-        "execute(",
-        "<script>",
-        "javascript:",
-    ]
-
-    for pattern in sql_patterns:
-        if pattern in query_string:
-            logger.warning(
-                f"SQL Injection attempt detected: {pattern}",
-                extra={
-                    "path": request.url.path,
-                    "query": query_string[:200],
-                    "client_ip": request.client.host if request.client else "unknown",
-                    "user_agent": request.headers.get("user-agent", "unknown")[:100],
-                },
-            )
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "detail": "Request blocked by security policy",
-                    "rule": "SQL Injection Detection",
-                },
-            )
-
-    # Check 2: Path Traversal patterns in URL path
-    path = request.url.path.lower()
-    path_traversal_patterns = [
-        "../",
-        "..\\",
-        "%2e%2e%2f",
-        "%2e%2e/",
-        "..%2f",
-        "%2e%2e%5c",
-    ]
-
-    for pattern in path_traversal_patterns:
-        if pattern in path:
-            logger.warning(
-                f"Path Traversal attempt detected: {pattern}",
-                extra={
-                    "path": request.url.path,
-                    "client_ip": request.client.host if request.client else "unknown",
-                },
-            )
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "detail": "Request blocked by security policy",
-                    "rule": "Path Traversal Detection",
-                },
-            )
-
-    # Check 3: Suspicious file extensions
-    suspicious_extensions = [
-        ".env",
-        ".git",
-        ".config",
-        ".sql",
-        ".bak",
-        ".old",
-        ".log",
-        "web.config",
-        ".htaccess",
-    ]
-
-    for ext in suspicious_extensions:
-        if path.endswith(ext):
-            logger.warning(
-                f"Suspicious file extension requested: {ext}",
-                extra={
-                    "path": request.url.path,
-                    "client_ip": request.client.host if request.client else "unknown",
-                },
-            )
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "detail": "Request blocked by security policy",
-                    "rule": "Suspicious File Detection",
-                },
-            )
-
-    # Check 4: XSS patterns in User-Agent header
-    user_agent = request.headers.get("user-agent", "").lower()
-    xss_patterns = ["<script", "javascript:", "onerror=", "onload=", "eval(", "alert("]
-
-    for pattern in xss_patterns:
-        if pattern in user_agent:
-            logger.warning(
-                f"XSS attempt detected in User-Agent: {pattern}",
-                extra={
-                    "user_agent": user_agent[:200],
-                    "client_ip": request.client.host if request.client else "unknown",
-                },
-            )
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "detail": "Request blocked by security policy",
-                    "rule": "XSS Detection",
-                },
-            )
-
-    # All checks passed - proceed with request
-    response = await call_next(request)
-    return response
-
+# Cache-Control headers (T8: CDN optimization)
+app.middleware("http")(add_cache_control_headers)
 
 # ルーター登録
 app.include_router(limits.router)
 app.include_router(posts.router)
 app.include_router(uploads.router)
 app.include_router(profile.router)
-app.include_router(solve.router)
-app.include_router(learning.router)
 
 
 # ── Validation error handler ────────────────────────────────────────────────
@@ -223,8 +193,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     except Exception:
         body_str = "(could not read body)"
     logger.error(
-        f"422 ValidationError on {request.method} {request.url.path}: "
-        f"errors={exc.errors()} body={body_str[:500]}"
+        "422 ValidationError on %s %s: errors=%r body=%r",
+        request.method,
+        request.url.path,
+        exc.errors(),
+        body_str[:500],
     )
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
 
@@ -12,106 +14,82 @@ class Settings(BaseSettings):
 
     # 認証設定
     auth_disabled: bool = False
-    auth_provider: str | None = None
-    auth_issuer: str | None = None
-    auth_jwks_url: str | None = None
-    auth_audience: str | None = None
+    auth_provider: Optional[str] = None
+    auth_issuer: Optional[str] = None
+    auth_jwks_url: Optional[str] = None
+    auth_audience: Optional[str] = None
     admin_group: str = "Admins"
 
     # ローカル開発設定 (DynamoDB Local + MinIO)
-    dynamodb_endpoint: str | None = Field(default="http://localhost:8001")
+    dynamodb_endpoint: Optional[str] = Field(default="http://localhost:8001")
     dynamodb_table_name: str = Field(default="simple-sns-local")
-    minio_endpoint: str | None = None
-    minio_access_key: str | None = None
-    minio_secret_key: str | None = None
+    minio_endpoint: Optional[str] = None
+    minio_access_key: Optional[str] = None
+    minio_secret_key: Optional[str] = None
     # Accepts both MINIO_BUCKET and MINIO_BUCKET_NAME environment variables
     minio_bucket: str = Field(
         default="images",
         validation_alias=AliasChoices("minio_bucket", "minio_bucket_name"),
     )
     # Public URL for browser-side PUT requests (falls back to minio_endpoint)
-    minio_public_endpoint: str | None = None
+    minio_public_endpoint: Optional[str] = None
 
     # AWS設定
     aws_region: str = "ap-northeast-1"
-    posts_table_name: str | None = None
-    images_bucket_name: str | None = None
-    images_cdn_url: str | None = None
-    # 入試問題解答機能の有効/無効 (コスト管理用: false でエンドポイントを停止)
-    solve_enabled: bool = False
-    solve_allow_remote_image_url: bool = True
-    solve_max_image_bytes: int = 5 * 1024 * 1024
-    solve_ocr_review_min_score: float = 0.40
-    solve_ocr_review_max_replacement_ratio: float = 0.01
+    posts_table_name: Optional[str] = None
+    images_bucket_name: Optional[str] = None
+    images_cdn_url: Optional[str] = None
     # Accepts both COGNITO_USER_POOL_ID and AWS_COGNITO_USER_POOL_ID
-    cognito_user_pool_id: str | None = Field(
+    cognito_user_pool_id: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices(
-            "cognito_user_pool_id", "aws_cognito_user_pool_id"
-        ),
+            "cognito_user_pool_id", "aws_cognito_user_pool_id"),
     )
     # Accepts both COGNITO_CLIENT_ID and AWS_COGNITO_CLIENT_ID
-    cognito_client_id: str | None = Field(
+    cognito_client_id: Optional[str] = Field(
         default=None,
-        validation_alias=AliasChoices("cognito_client_id", "aws_cognito_client_id"),
+        validation_alias=AliasChoices(
+            "cognito_client_id", "aws_cognito_client_id"),
     )
 
     # Azure設定
-    azure_tenant_id: str | None = None
-    azure_client_id: str | None = None
-    azure_storage_account_name: str | None = None
-    azure_storage_account_key: str | None = None
+    azure_tenant_id: Optional[str] = None
+    azure_client_id: Optional[str] = None
+    azure_storage_account_name: Optional[str] = None
+    azure_storage_account_key: Optional[str] = None
     azure_storage_container: str = "images"
-
-    # Azure AI Document Intelligence (OCR)
-    azure_document_intelligence_endpoint: str | None = None
-    azure_document_intelligence_key: str | None = None
-
-    # Azure OpenAI (数学解答生成)
-    azure_openai_endpoint: str | None = None
-    azure_openai_key: str | None = None
-    azure_openai_deployment: str = "gpt-4o"
-    # accurate モード用推論モデル（o3-mini 等）。未設定時は通常モデルにフォールバック
-    azure_openai_accurate_deployment: str = ""
-    azure_openai_api_version: str = "2024-12-01-preview"
 
     # Cosmos DB設定
     # NOTE: AZURE_COSMOS_DATABASE/CONTAINER names are reserved by Azure CLI/Function App
     #       and always return null values. Use COSMOS_DB_* prefix instead.
     #       Both naming conventions are supported via AliasChoices for compatibility.
-    cosmos_db_endpoint: str | None = Field(
+    cosmos_db_endpoint: Optional[str] = Field(
         default=None,
-        validation_alias=AliasChoices("cosmos_db_endpoint", "azure_cosmos_endpoint"),
+        validation_alias=AliasChoices(
+            "cosmos_db_endpoint", "azure_cosmos_endpoint")
     )
-    cosmos_db_key: str | None = Field(
-        default=None, validation_alias=AliasChoices("cosmos_db_key", "azure_cosmos_key")
+    cosmos_db_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("cosmos_db_key", "azure_cosmos_key")
     )
     cosmos_db_database: str = Field(
         default="simple-sns",
-        validation_alias=AliasChoices("cosmos_db_database", "azure_cosmos_database"),
+        validation_alias=AliasChoices(
+            "cosmos_db_database", "azure_cosmos_database")
     )
     cosmos_db_container: str = Field(
         default="items",
-        validation_alias=AliasChoices("cosmos_db_container", "azure_cosmos_container"),
+        validation_alias=AliasChoices(
+            "cosmos_db_container", "azure_cosmos_container")
     )
 
     # GCP設定
-    gcp_project_id: str | None = None
-    gcp_client_id: str | None = None
-    gcp_service_account: str | None = None
-    gcp_storage_bucket: str | None = None
+    gcp_project_id: Optional[str] = None
+    gcp_client_id: Optional[str] = None
+    gcp_service_account: Optional[str] = None
+    gcp_storage_bucket: Optional[str] = None
     gcp_posts_collection: str = "posts"
     gcp_profiles_collection: str = "profiles"
-
-    # GCP Vision API (OCR)
-    # キー不要の場合は Application Default Credentials (ADC) を使用
-    gcp_vision_api_key: str | None = None
-
-    # GCP Vertex AI (Gemini LLM)
-    gcp_vertex_location: str = "us-central1"
-    gcp_vertex_model: str = "gemini-2.0-flash-001"
-    # accurate モード用高精度モデル。未設定時は通常モデルにフォールバック
-    gcp_vertex_accurate_model: str = ""
 
     # 共通設定
     presigned_url_expiry: int = 300
@@ -120,6 +98,12 @@ class Settings(BaseSettings):
     # 画像アップロード制限 (環境変数 MAX_IMAGES_PER_POST で上書き可)
     max_images_per_post: int = 10
 
+    # レート制限 (T9)
+    # 1クライアントIPあたりの制限値（60秒窓）
+    rate_limit_enabled: bool = True
+    rate_limit_requests_per_window: int = 100
+    rate_limit_window_seconds: int = 60
+    
     model_config = {
         "env_file": ".env",
         "case_sensitive": False,

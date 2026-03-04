@@ -4,18 +4,10 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import HTTPException
-
 from app.auth import UserInfo
 from app.backends.base import BackendBase
 from app.config import settings
-from app.models import (
-    CreatePostBody,
-    Post,
-    ProfileResponse,
-    ProfileUpdateRequest,
-    UpdatePostBody,
-)
+from app.models import CreatePostBody, Post, ProfileResponse, ProfileUpdateRequest
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +23,6 @@ except ImportError:
 try:
     from azure.storage.blob import (
         BlobSasPermissions,
-        BlobServiceClient,
         generate_blob_sas,
     )
 
@@ -123,14 +114,14 @@ class AzureBackend(BackendBase):
                 continue
             if k.startswith(prefix):
                 # 既存の直接BlobURL: キーを抽出してSASを付与
-                blob_key = k[len(prefix) :].split("?")[0]
+                blob_key = k[len(prefix):].split("?")[0]
             elif k.startswith("https://"):
                 # 別のhttps URLはそのまま通す
                 result.append(k)
                 continue
             elif k.startswith("http://"):
                 logger.warning(
-                    f"Skipping insecure HTTP image URL (mixed content): {k[:80]}"
+                    "Skipping insecure HTTP image URL (mixed content): %r", k[:80]
                 )
                 continue
             else:
@@ -139,7 +130,7 @@ class AzureBackend(BackendBase):
             try:
                 result.append(self._blob_key_to_read_sas_url(blob_key))
             except Exception as e:
-                logger.warning(f"Failed to generate SAS read URL for {k}: {e}")
+                logger.warning("Failed to generate SAS read URL for %r: %r", k, e)
         return result
 
     def _item_to_post(self, item: dict) -> Post:
@@ -226,7 +217,7 @@ class AzureBackend(BackendBase):
             return posts, output_next_token
 
         except Exception as e:
-            logger.error(f"Error listing posts from Cosmos DB: {e}")
+            logger.error("Error listing posts from Cosmos DB: %r", e)
             raise
 
     def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
@@ -244,7 +235,7 @@ class AzureBackend(BackendBase):
                 if profile_item:
                     nickname = profile_item.get("nickname")
             except Exception as e:
-                logger.warning(f"Failed to fetch nickname for {user.user_id}: {e}")
+                logger.warning("Failed to fetch nickname for %r: %r", user.user_id, e)
 
             # 画像キーをそのまま保存 (取得時にSAS URLに変換)
             image_keys = list(body.image_keys) if body.image_keys else []
@@ -263,7 +254,7 @@ class AzureBackend(BackendBase):
             }
 
             self.posts_container.create_item(body=item)
-            logger.info(f"Created post {post_id} by user {user.user_id}")
+            logger.info("Created post %r by user %r", post_id, user.user_id)
 
             presigned_urls = self._resolve_image_urls(image_keys)
 
@@ -279,7 +270,7 @@ class AzureBackend(BackendBase):
             ).model_dump()
 
         except Exception as e:
-            logger.error(f"Error creating post in Cosmos DB: {e}")
+            logger.error("Error creating post in Cosmos DB: %r", e)
             raise
 
     def get_post(self, post_id: str):
@@ -311,42 +302,14 @@ class AzureBackend(BackendBase):
 
             raise HTTPException(status_code=404, detail="Post not found")
 
-        if item.get("userId") != user.user_id and not user.is_admin:
+        if item.get("userId") != user.user_id:
             from fastapi import HTTPException
 
             raise HTTPException(status_code=403, detail="Not authorized")
 
         self.posts_container.delete_item(item=post_id, partition_key=post_id)
-        logger.info(f"Deleted post {post_id}")
+        logger.info("Deleted post %r", post_id)
         return {"message": "Post deleted successfully", "postId": post_id}
-
-    def update_post(self, post_id: str, body: UpdatePostBody, user: UserInfo) -> dict:
-        """Cosmos DBの投稿を更新"""
-        try:
-            item = self.posts_container.read_item(item=post_id, partition_key=post_id)
-        except cosmos_exceptions.CosmosResourceNotFoundError:
-            raise HTTPException(status_code=404, detail="Post not found")
-
-        if item.get("userId") != user.user_id and not user.is_admin:
-            raise HTTPException(
-                status_code=403, detail="You can only update your own posts"
-            )
-
-        now_str = datetime.now(timezone.utc).isoformat()
-
-        if body.content is not None:
-            item["content"] = body.content
-        if body.is_markdown is not None:
-            item["isMarkdown"] = body.is_markdown
-        if body.tags is not None:
-            item["tags"] = body.tags
-        if body.image_keys is not None:
-            item["imageKeys"] = list(body.image_keys)
-
-        item["updatedAt"] = now_str
-
-        updated_item = self.posts_container.replace_item(item=post_id, body=item)
-        return self._item_to_post(updated_item).model_dump(by_alias=True)
 
     def get_profile(self, user_id: str) -> ProfileResponse:
         """Cosmos DBからプロフィールを取得"""
@@ -365,7 +328,7 @@ class AzureBackend(BackendBase):
         except cosmos_exceptions.CosmosResourceNotFoundError:
             return ProfileResponse(userId=user_id)
         except Exception as e:
-            logger.error(f"Error getting profile {user_id}: {e}")
+            logger.error("Error getting profile %r: %r", user_id, e)
             raise
 
     def update_profile(
@@ -404,7 +367,7 @@ class AzureBackend(BackendBase):
             return self.get_profile(user_id)
 
         except Exception as e:
-            logger.error(f"Error updating profile {user.user_id}: {e}")
+            logger.error("Error updating profile %r: %r", user.user_id, e)
             raise
 
     def generate_upload_urls(

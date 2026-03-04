@@ -17,7 +17,7 @@
 | `scripts/test-sns-azure.sh`                       | E2E shell | Azure staging SNS アプリ                  | オプション |
 | `scripts/test-sns-gcp.sh`                         | E2E shell | GCP staging SNS アプリ                    | オプション |
 | `scripts/test-sns-all.sh`                         | E2E shell | 全3クラウド順次実行                       | オプション |
-| `scripts/test-staging-all.sh`                     | E2E shell | 全3クラウド + サマリーレポート            | オプション |
+| `scripts/test-sns-all.sh`                         | E2E shell | 全3クラウド + サマリーレポート            | オプション |
 | `scripts/test-e2e.sh`                             | Smoke     | 全3クラウド health + CRUD                 | オプション |
 | `scripts/test-endpoints.sh`                       | Health    | クラウド別 API ヘルスチェック             | 不要       |
 | `scripts/test-landing-pages.sh`                   | Health    | クラウド別静的ランディングページ          | 不要       |
@@ -69,7 +69,7 @@
 ./scripts/test-sns-gcp.sh    --token "$GCP_TOKEN"
 
 # トークン付き全3クラウド:
-./scripts/test-staging-all.sh \
+./scripts/test-sns-all.sh \
   --aws-token   "$AWS_TOKEN"   \
   --azure-token "$AZURE_TOKEN" \
   --gcp-token   "$GCP_TOKEN"
@@ -223,7 +223,7 @@ MINIO_ENDPOINT=http://minio:9000
 | `deploy-aws.yml`           | `develop` / `main` への push          | デプロイ後 `./scripts/test-endpoints.sh` |
 | `deploy-azure.yml`         | `develop` / `main` への push          | デプロイ後 `./scripts/test-endpoints.sh` |
 | `deploy-gcp.yml`           | `develop` / `main` への push          | デプロイ後 `./scripts/test-endpoints.sh` |
-| `run-integration-tests.sh` | 手動または `test-staging-all.sh` 経由 | pytest + E2E shell                       |
+| `run-integration-tests.sh` | 手動または `test-sns-all.sh` 経由     | pytest + E2E shell                       |
 
 ---
 

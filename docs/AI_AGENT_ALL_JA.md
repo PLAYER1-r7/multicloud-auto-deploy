@@ -4185,7 +4185,7 @@ dig www.gcp.ashnova.jp
 ### クイック接続確認 (~30秒、認証不要)
 
 ```bash
-./scripts/test-staging-all.sh --quick
+./scripts/test-sns-all.sh --quick
 ```
 
 クラウドごとのチェック: ランディングページ `/` → 200、SNS アプリ `/sns/` → 200、API `/health` → 200。
@@ -4193,7 +4193,7 @@ dig www.gcp.ashnova.jp
 ### 全認証テスト (全3クラウド)
 
 ```bash
-./scripts/test-staging-all.sh \
+./scripts/test-sns-all.sh \
   --aws-token   "$AWS_TOKEN" \
   --azure-token "$AZURE_TOKEN" \
   --gcp-token   "$GCP_TOKEN"
@@ -4232,7 +4232,7 @@ AZURE_TOKEN="<id_token をここに貼り付け>"
 
 | スクリプト                      | 目的                                     |
 | ------------------------------- | ---------------------------------------- |
-| `scripts/test-staging-all.sh`   | ⭐ 全3クラウドを統合管理                 |
+| `scripts/test-sns-all.sh`       | ⭐ 全3クラウドを統合管理                 |
 | `scripts/test-landing-pages.sh` | ランディングページテストのみ             |
 | `scripts/test-sns-aws.sh`       | AWS 全体スイート (認証あり)              |
 | `scripts/test-sns-azure.sh`     | Azure 全体スイート (認証あり)            |
@@ -5200,8 +5200,7 @@ _最終更新: 2026-02-27_
 | `scripts/test-sns-aws.sh`                         | E2E shell | AWS staging SNS アプリ                    | オプション |
 | `scripts/test-sns-azure.sh`                       | E2E shell | Azure staging SNS アプリ                  | オプション |
 | `scripts/test-sns-gcp.sh`                         | E2E shell | GCP staging SNS アプリ                    | オプション |
-| `scripts/test-sns-all.sh`                         | E2E shell | 全3クラウド順次実行                       | オプション |
-| `scripts/test-staging-all.sh`                     | E2E shell | 全3クラウド + サマリーレポート            | オプション |
+| `scripts/test-sns-all.sh`                         | E2E shell | 全3クラウド順次実行 + サマリーレポート  | オプション |
 | `scripts/test-e2e.sh`                             | Smoke     | 全3クラウド health + CRUD                 | オプション |
 | `scripts/test-endpoints.sh`                       | Health    | クラウド別 API ヘルスチェック             | 不要       |
 | `scripts/test-landing-pages.sh`                   | Health    | クラウド別静的ランディングページ          | 不要       |
@@ -5253,7 +5252,7 @@ _最終更新: 2026-02-27_
 ./scripts/test-sns-gcp.sh    --token "$GCP_TOKEN"
 
 # トークン付き全3クラウド:
-./scripts/test-staging-all.sh \
+./scripts/test-sns-all.sh \
   --aws-token   "$AWS_TOKEN"   \
   --azure-token "$AZURE_TOKEN" \
   --gcp-token   "$GCP_TOKEN"
@@ -5407,7 +5406,7 @@ MINIO_ENDPOINT=http://minio:9000
 | `deploy-aws.yml`           | `develop` / `main` への push          | デプロイ後 `./scripts/test-endpoints.sh` |
 | `deploy-azure.yml`         | `develop` / `main` への push          | デプロイ後 `./scripts/test-endpoints.sh` |
 | `deploy-gcp.yml`           | `develop` / `main` への push          | デプロイ後 `./scripts/test-endpoints.sh` |
-| `run-integration-tests.sh` | 手動または `test-staging-all.sh` 経由 | pytest + E2E shell                       |
+| `run-integration-tests.sh` | 手動または `test-sns-all.sh` 経由 | pytest + E2E shell                       |
 
 ---
 
