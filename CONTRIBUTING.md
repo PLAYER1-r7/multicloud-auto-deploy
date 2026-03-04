@@ -2,25 +2,9 @@
 
 Multi-Cloud Auto Deploy Platform へのコントリビューションをありがとうございます！
 
-> **🤖 AI エージェント向けガイド**: 本リポジトリで作業を行う前に、以下のドキュメントを**必ず**読んでください：
->
-> 1. **最初に必ず読むこと**（重要ルール）: [docs/AI_AGENT_00_CRITICAL_RULES_JA.md](docs/AI_AGENT_00_CRITICAL_RULES_JA.md)
-> 2. **このドキュメント**: 開発環境セットアップ、GitHub ワークフロー、GitHub Features の使い方
-> 3. **GitHub Features の使用方法**: [docs/GITHUB_FEATURES_GUIDE.md](docs/GITHUB_FEATURES_GUIDE.md)
-> 4. **プロジェクト全体概要**: [docs/AI_AGENT_01_CONTEXT_JA.md](docs/AI_AGENT_01_CONTEXT_JA.md)
->
-> **GitHub Features を積極活用すること**（ルール16参照）：
-> - 🐛 バグ発見 → `gh issue create` で Issue を作成
-> - ✨ 機能改善 → `gh issue create` で提案を Issue に記録
-> - 📝 出力結果 → `gh issue comment` で Issue に進捗コメント
-> - 🔀 コード変更 → Pull Request 経由（`main` への直接 push は禁止）
-> - ⚙️ 必要なツール → 自由にインストール OK（ルール17参照）
-
----
-
 ## 開発環境のセットアップ
 
-> **推奨環境**: VS Code Dev Container（`.devcontainer/`）を使用してください。  
+> **推奨環境**: VS Code Dev Container（`.devcontainer/`）を使用してください。
 > ホストマシン: **ARM (Apple Silicon M-series Mac)** 対応済み。
 
 1. **リポジトリをフォーク**
@@ -56,11 +40,20 @@ open http://localhost:3000/sns/      # SNS フロントエンド
 
 ## ブランチ戦略
 
-- `main`: 本番環境
-- `develop`: 開発環境
+- `main`: 本番環境（タグ付きでリリース）
+- `develop`: 統合・検証環境（次バージョン開発）
 - `feature/*`: 新機能
-- `bugfix/*`: バグ修正
-- `hotfix/*`: 緊急修正
+- `fix/*`: バグ修正
+- `docs/*`: ドキュメント更新
+- `chore/*`: メンテナンス・依存関係更新
+- `hotfix/*`: 緊急修正（本番障害時、main から切り出す）
+
+> 📖 **詳細なワークフローガイド**: [docs/AI_AGENT_14_GIT_WORKFLOW_JA.md](docs/AI_AGENT_14_GIT_WORKFLOW_JA.md)
+> 
+> **基本原則**:
+> - ✅ すべての作業は `develop` から切り出し、`develop` にマージ
+> - ✅ `main` へのマージは計画的（リリース時のみ）
+> - ❌ `main` / `develop` への直接コミット禁止
 
 ## コミットメッセージ
 
@@ -98,12 +91,13 @@ Closes #123
 
 ## プルリクエスト
 
-1. **最新のmainから作業ブランチを作成**
+1. **最新の develop から作業ブランチを作成**
 
 ```bash
-git checkout main
-git pull origin main
-git checkout -b feature/your-feature
+git checkout develop
+git pull origin develop
+git checkout -b fix/your-fix        # バグ修正の場合
+git checkout -b feature/your-feature # 新機能の場合
 ```
 
 2. **変更を加える**
@@ -132,39 +126,6 @@ git push origin feature/your-feature
    - わかりやすいタイトルと説明
    - 関連するイシューを参照
    - スクリーンショット（UI変更の場合）
-
-```bash
-# GitHub CLI で PR を作成（推奨）
-gh pr create --base develop --head feature/your-feature \
-  --title "feat: your feature description" \
-  --body "詳細説明
-
-Closes #123
-Reviewers: @PLAYER1-r7"
-```
-
-6. **Branch Protection Rules に従う**
-   - `develop` → PR 必須、CI テスト自動実行
-   - `main` → PR 必須、1 approval 必須、Code Owner review 必須
-   - 詳細: [docs/BRANCH_PROTECTION_SETUP.md](docs/BRANCH_PROTECTION_SETUP.md)
-
-7. **GitHub Issues と連携**
-   - PR 説明に `Closes #<ISSUE_NUMBER>` を記載すると、マージ時に自動クローズ
-   - `gh pr comment` で PR にコメントを追加し、進捗を共有
-   - レビューコメントには `gh pr review` で対応
-
-```bash
-# Issue へのコメント（進捗更新）
-gh issue comment 123 --body "WIP: API エンドポイント実装中"
-
-# PR への approval
-gh pr review <PR_NUMBER> --approve
-
-# PR をマージ
-gh pr merge <PR_NUMBER> --squash --delete-branch
-```
-
----
 
 ## コーディング規約
 
@@ -242,50 +203,6 @@ pytest --cov=src          # With coverage
 
 ## 質問？
 
-- GitHub Discussions: https://github.com/PLAYER1-r7/multicloud-auto-deploy/discussions
-- Issues: https://github.com/PLAYER1-r7/multicloud-auto-deploy/issues
+- GitHub Discussions
+- Issues
 - メール: support@example.com
-
----
-
-## 📚 GitHub Features リソース
-
-このプロジェクトでは、GitHub の機能を積極的に活用しています。以下のドキュメントで詳細を確認してください：
-
-| 機能 | 説明 | 詳細ドキュメント |
-|------|------|-----------------|
-| **GitHub Issues** | タスク管理、バグ報告、機能提案 | [docs/GITHUB_FEATURES_GUIDE.md](docs/GITHUB_FEATURES_GUIDE.md) |
-| **Pull Requests** | コード変更の審査・マージ | [docs/BRANCH_PROTECTION_SETUP.md](docs/BRANCH_PROTECTION_SETUP.md) |
-| **Branch Protection** | `main`/`develop` ブランチの保護ルール設定 | [docs/BRANCH_PROTECTION_SETUP.md](docs/BRANCH_PROTECTION_SETUP.md) |
-| **GitHub Releases** | Version タグ付けとリリースノート自動生成 | [docs/GITHUB_FEATURES_GUIDE.md](docs/GITHUB_FEATURES_GUIDE.md) |
-| **Dependabot** | 依存関係の自動更新と脆弱性検査 | [docs/GITHUB_FEATURES_GUIDE.md](docs/GITHUB_FEATURES_GUIDE.md) |
-| **GitHub Discussions** | Q&A、知見共有、アナウンス | [docs/github-discussions-setup.md](docs/github-discussions-setup.md) |
-| **GitHub Pages** | ドキュメント自動公開 | [docs/index.md](docs/index.md) |
-
-### よく使うコマンド
-
-```bash
-# Issue の作成
-gh issue create --title "タイトル" --body "説明" --label bug
-
-# Issue へのコメント
-gh issue comment <ISSUE_NUMBER> --body "コメント"
-
-# PR の作成
-gh pr create --base develop --title "タイトル"
-
-# PR の確認・マージ
-gh pr view <PR_NUMBER>
-gh pr merge <PR_NUMBER> --squash
-
-# Discussions の確認（Web UI）
-open https://github.com/PLAYER1-r7/multicloud-auto-deploy/discussions
-```
-
-### 重要なルール
-
-- ✅ **GitHub Features を活用する**: Issues, PR, Discussions で全て記録を残す
-- ✅ **議論は GitHub で**: コード・設計・プロセスについての議論は Issues/Discussions/PR comments で可視化
-- ✅ **必要なツールはインストール OK**: dev container で Python、Node.js、サードパーティ CLI など自由にインストール可能
-
-詳細は [docs/AI_AGENT_00_CRITICAL_RULES_JA.md](docs/AI_AGENT_00_CRITICAL_RULES_JA.md)（ルール16・17）を参照。
