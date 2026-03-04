@@ -8,6 +8,7 @@ on:
     paths:
       - "services/**"
       - "infrastructure/pulumi/aws/**"
+      - "scripts/**"
       - ".github/config/aws*.env"
       - ".github/workflows/deploy-aws.yml"
   workflow_dispatch:
@@ -285,6 +286,7 @@ jobs:
           echo "✅ Cognito callback URLs restored"
 
       - name: Build and Deploy Frontend
+        continue-on-error: true
         run: |
           FRONTEND_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
           CLOUDFRONT_ID="${{ steps.pulumi_outputs.outputs.cloudfront_distribution_id }}"

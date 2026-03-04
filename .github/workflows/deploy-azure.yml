@@ -5,9 +5,11 @@ on:
     branches:
       - develop # staging自動デプロイ
       - main # production自動デプロイ
+    # Re-run deployment when workflow/config/api changes
     paths:
       - "services/api/**"
       - "infrastructure/pulumi/azure/**"
+      - ".github/config/azure*.env"
       - ".github/workflows/deploy-azure.yml"
   workflow_dispatch:
     inputs:
@@ -25,7 +27,8 @@ env:
   NODE_VERSION: "24"
   # Must match Azure Functions Flex Consumption runtime version.
   # The "Build and Package" step Docker image must also use this version.
-  PYTHON_VERSION: "3.12"
+  # Unified with AWS Lambda 3.13 for consistent pydantic_core ABI
+  PYTHON_VERSION: "3.13"
 
 # Prevent concurrent Pulumi updates on the same stack (causes 409 Conflict)
 concurrency:
@@ -316,14 +319,15 @@ jobs:
           mkdir -p .deployment
 
           # Install dependencies using Docker with the EXACT same platform/Python as Azure Functions
-          # Azure Functions Flex Consumption uses Python 3.12 on linux/amd64.
+          # Azure Functions Flex Consumption uses Python 3.13 on linux/amd64.
+          # Unified with AWS Lambda 3.13 CLI build (PR #63) for consistent pydantic_core ABI
           # The GitHub Actions runner may be a different arch (e.g., arm64), so using the runner's
           # native pip would produce wrong .so binaries (e.g., cpython-311-aarch64 instead of
-          # cpython-312-x86_64). Docker ensures correct platform + Python version.
-          echo "Installing Azure-specific dependencies (linux/amd64 python:3.12)..."
+          # cpython-313-x86_64). Docker ensures correct platform + Python version.
+          echo "Installing Azure-specific dependencies (linux/amd64 python:3.13)..."
           docker run --rm --platform linux/amd64 \
             -v "$(pwd):/work" \
-            python:3.12-slim \
+            python:3.13-slim \
             pip install --target /work/.deployment --no-cache-dir -q \
               -r /work/requirements-azure.txt
 
@@ -358,7 +362,9 @@ jobs:
           if [ -n "$SO_FILE" ]; then
             echo "✅ pydantic_core: $(basename $SO_FILE)"
           else
-            echo "⚠️  pydantic_core .so not found — package may be missing"
+            echo "❌ pydantic_core .so not found — deployment package is invalid"
+            echo "   Runtime would fail with: ModuleNotFoundError: pydantic_core._pydantic_core"
+            exit 1
           fi
 
           # Create ZIP package with maximum compression
