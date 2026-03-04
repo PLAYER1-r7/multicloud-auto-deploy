@@ -8,6 +8,7 @@ on:
     paths:
       - "services/api/**"
       - "infrastructure/pulumi/azure/**"
+      - ".github/config/azure*.env"
       - ".github/workflows/deploy-azure.yml"
   workflow_dispatch:
     inputs:
@@ -358,7 +359,9 @@ jobs:
           if [ -n "$SO_FILE" ]; then
             echo "✅ pydantic_core: $(basename $SO_FILE)"
           else
-            echo "⚠️  pydantic_core .so not found — package may be missing"
+            echo "❌ pydantic_core .so not found — deployment package is invalid"
+            echo "   Runtime would fail with: ModuleNotFoundError: pydantic_core._pydantic_core"
+            exit 1
           fi
 
           # Create ZIP package with maximum compression
