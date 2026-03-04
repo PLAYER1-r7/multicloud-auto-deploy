@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from threading import Lock
 
-from fastapi import Depends, FastAPI, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -193,8 +193,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     except Exception:
         body_str = "(could not read body)"
     logger.error(
-        f"422 ValidationError on {request.method} {request.url.path}: "
-        f"errors={exc.errors()} body={body_str[:500]}"
+        "422 ValidationError on %s %s: errors=%r body=%r",
+        request.method,
+        request.url.path,
+        exc.errors(),
+        body_str[:500],
     )
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 

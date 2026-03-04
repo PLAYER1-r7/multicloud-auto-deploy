@@ -1,16 +1,15 @@
 """AWS Backend Implementation with DynamoDB Single Table Design"""
 
+import logging
 import os
-import boto3
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Tuple
-from decimal import Decimal
-import logging
 
-from app.backends.base import BackendBase
-from app.models import Post, CreatePostBody, ProfileResponse, ProfileUpdateRequest
+import boto3
+
 from app.auth import UserInfo
+from app.backends.base import BackendBase
+from app.models import CreatePostBody, Post, ProfileResponse, ProfileUpdateRequest
 
 logger = logging.getLogger(__name__)
 
@@ -57,20 +56,24 @@ class AwsBackend(BackendBase):
                     result.append(k)
                 elif k.startswith("http://"):
                     # HTTP URL は Mixed Content 警告を引き起こすためスキップ
-                    logger.warning(f"Skipping insecure HTTP image URL (mixed content): {k[:80]}")
+                    logger.warning(
+                        "Skipping insecure HTTP image URL (mixed content): %r", k[:80]
+                    )
                 else:
                     try:
                         result.append(self._key_to_presigned_url(k))
                     except Exception as e:
-                        logger.warning(f"Failed to generate presigned URL for {k}: {e}")
+                        logger.warning(
+                            "Failed to generate presigned URL for %r: %r", k, e
+                        )
         return result
 
     def list_posts(
         self,
         limit: int,
-        next_token: Optional[str],
-        tag: Optional[str],
-    ) -> Tuple[list[Post], Optional[str]]:
+        next_token: str | None,
+        tag: str | None,
+    ) -> tuple[list[Post], str | None]:
         """投稿一覧を取得 (DynamoDB Query)"""
         try:
             query_kwargs = {
@@ -114,7 +117,7 @@ class AwsBackend(BackendBase):
             return posts, next_token
 
         except Exception as e:
-            logger.error(f"Error listing posts: {e}")
+            logger.error("Error listing posts: %r", e)
             raise
 
     def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
@@ -169,7 +172,7 @@ class AwsBackend(BackendBase):
             }
 
         except Exception as e:
-            logger.error(f"Error creating post: {e}")
+            logger.error("Error creating post: %r", e)
             raise
 
     def get_post(self, post_id: str):
@@ -224,15 +227,13 @@ class AwsBackend(BackendBase):
             return {"status": "deleted", "post_id": post_id}
 
         except Exception as e:
-            logger.error(f"Error deleting post: {e}")
+            logger.error("Error deleting post: %r", e)
             raise
 
     def get_profile(self, user_id: str) -> ProfileResponse:
         """プロフィールを取得 (DynamoDB)"""
         try:
-            result = self.table.get_item(
-                Key={"PK": "PROFILES", "SK": user_id}
-            )
+            result = self.table.get_item(Key={"PK": "PROFILES", "SK": user_id})
             item = result.get("Item")
             if not item:
                 return ProfileResponse(
@@ -250,7 +251,7 @@ class AwsBackend(BackendBase):
                 updated_at=item.get("updated_at"),
             )
         except Exception as e:
-            logger.error(f"Error getting profile for {user_id}: {e}")
+            logger.error("Error getting profile for %r: %r", user_id, e)
             raise
 
     def update_profile(
@@ -262,9 +263,9 @@ class AwsBackend(BackendBase):
         now = datetime.now(timezone.utc).isoformat()
 
         # 既存プロフィールを取得して created_at を保持し、未指定フィールドをマージ
-        existing = self.table.get_item(
-            Key={"PK": "PROFILES", "SK": user.user_id}
-        ).get("Item")
+        existing = self.table.get_item(Key={"PK": "PROFILES", "SK": user.user_id}).get(
+            "Item"
+        )
         created_at = existing.get("created_at", now) if existing else now
 
         item: dict = {
@@ -289,7 +290,7 @@ class AwsBackend(BackendBase):
         try:
             self.table.put_item(Item=item)
         except Exception as e:
-            logger.error(f"Error updating profile for {user.user_id}: {e}")
+            logger.error("Error updating profile for %r: %r", user.user_id, e)
             raise
 
         return ProfileResponse(
@@ -305,7 +306,7 @@ class AwsBackend(BackendBase):
         self,
         count: int,
         user: UserInfo,
-        content_types: Optional[list[str]] = None,
+        content_types: list[str] | None = None,
     ) -> list[dict[str, str]]:
         """画像アップロード用の署名付きURLを生成"""
         if not self.bucket_name:
@@ -324,9 +325,7 @@ class AwsBackend(BackendBase):
         urls = []
         for i in range(count):
             ct = (
-                content_types[i]
-                if content_types and i < len(content_types)
-                else None
+                content_types[i] if content_types and i < len(content_types) else None
             ) or "image/jpeg"
             ext = ext_map.get(ct, "jpg")
             image_id = str(uuid.uuid4())

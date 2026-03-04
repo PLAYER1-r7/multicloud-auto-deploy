@@ -1,21 +1,21 @@
 """GCP Backend Implementation using Firestore + Cloud Storage"""
 
-import uuid
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Tuple
+import uuid
+from datetime import datetime, timedelta, timezone
 
-from app.backends.base import BackendBase
-from app.models import Post, CreatePostBody, ProfileResponse, ProfileUpdateRequest
 from app.auth import UserInfo
+from app.backends.base import BackendBase
 from app.config import settings
+from app.models import CreatePostBody, Post, ProfileResponse, ProfileUpdateRequest
 
 logger = logging.getLogger(__name__)
 
 try:
-    from google.cloud import firestore, storage
     import google.auth
     import google.auth.transport.requests
+    from google.cloud import firestore, storage
+
     _gcp_available = True
 except ImportError:
     _gcp_available = False
@@ -27,7 +27,9 @@ class GcpBackend(BackendBase):
 
     def __init__(self):
         if not _gcp_available:
-            raise ImportError("google-cloud-firestore and google-cloud-storage are required")
+            raise ImportError(
+                "google-cloud-firestore and google-cloud-storage are required"
+            )
 
         project_id = settings.gcp_project_id
         self.db = firestore.Client(project=project_id)
@@ -43,7 +45,7 @@ class GcpBackend(BackendBase):
             self._gcs_credentials, _ = google.auth.default()
             self._gcs_auth_request = google.auth.transport.requests.Request()
         except Exception as e:
-            logger.warning(f"Could not pre-fetch GCS credentials at init: {e}")
+            logger.warning("Could not pre-fetch GCS credentials at init: %r", e)
             self._gcs_credentials = None
             self._gcs_auth_request = None
 
@@ -58,13 +60,15 @@ class GcpBackend(BackendBase):
         data = doc.to_dict()
 
         # Firestore Timestamp → ISO文字列
-        def ts_to_str(ts) -> Optional[str]:
+        def ts_to_str(ts) -> str | None:
             if ts is None:
                 return None
             if hasattr(ts, "isoformat"):
                 return ts.isoformat()
             if hasattr(ts, "timestamp"):
-                return datetime.fromtimestamp(ts.timestamp(), tz=timezone.utc).isoformat()
+                return datetime.fromtimestamp(
+                    ts.timestamp(), tz=timezone.utc
+                ).isoformat()
             return str(ts)
 
         return Post(
@@ -75,20 +79,23 @@ class GcpBackend(BackendBase):
             isMarkdown=data.get("isMarkdown", False),
             imageUrls=data.get("imageUrls", []),
             tags=data.get("tags", []),
-            createdAt=ts_to_str(data.get("createdAt")) or datetime.now(timezone.utc).isoformat(),
+            createdAt=ts_to_str(data.get("createdAt"))
+            or datetime.now(timezone.utc).isoformat(),
             updatedAt=ts_to_str(data.get("updatedAt")),
         )
 
     def list_posts(
         self,
         limit: int,
-        next_token: Optional[str],
-        tag: Optional[str],
-    ) -> Tuple[list[Post], Optional[str]]:
+        next_token: str | None,
+        tag: str | None,
+    ) -> tuple[list[Post], str | None]:
         """Firestore から投稿一覧を取得"""
         try:
             col = self.db.collection(self.posts_collection)
-            query = col.order_by("createdAt", direction=firestore.Query.DESCENDING).limit(limit + 1)
+            query = col.order_by(
+                "createdAt", direction=firestore.Query.DESCENDING
+            ).limit(limit + 1)
 
             if next_token:
                 # next_token はドキュメントIDとして使用
@@ -97,7 +104,9 @@ class GcpBackend(BackendBase):
                     query = query.start_after(cursor_doc)
 
             if tag:
-                query = query.where(filter=firestore.FieldFilter("tags", "array_contains", tag))
+                query = query.where(
+                    filter=firestore.FieldFilter("tags", "array_contains", tag)
+                )
 
             docs = list(query.stream())
 
@@ -110,7 +119,7 @@ class GcpBackend(BackendBase):
             return posts, output_next_token
 
         except Exception as e:
-            logger.error(f"Error listing posts from Firestore: {e}")
+            logger.error("Error listing posts from Firestore: %r", e)
             raise
 
     def create_post(self, body: CreatePostBody, user: UserInfo) -> dict:
@@ -123,11 +132,15 @@ class GcpBackend(BackendBase):
             # プロフィールからnicknameを取得
             nickname = None
             try:
-                profile_doc = self.db.collection(self.profiles_collection).document(user.user_id).get()
+                profile_doc = (
+                    self.db.collection(self.profiles_collection)
+                    .document(user.user_id)
+                    .get()
+                )
                 if profile_doc.exists:
                     nickname = profile_doc.to_dict().get("nickname")
             except Exception as e:
-                logger.warning(f"Failed to fetch nickname for {user.user_id}: {e}")
+                logger.warning("Failed to fetch nickname for %r: %r", user.user_id, e)
 
             # 画像キーをURLに変換
             image_urls = []
@@ -164,7 +177,7 @@ class GcpBackend(BackendBase):
             ).model_dump()
 
         except Exception as e:
-            logger.error(f"Error creating post in Firestore: {e}")
+            logger.error("Error creating post in Firestore: %r", e)
             raise
 
     def get_post(self, post_id: str):
@@ -175,6 +188,7 @@ class GcpBackend(BackendBase):
                 return None
             item = doc.to_dict()
             from app.models import Post
+
             return Post(
                 postId=post_id,
                 userId=item["userId"],
@@ -186,7 +200,7 @@ class GcpBackend(BackendBase):
                 imageUrls=item.get("imageUrls") or [],
             )
         except Exception as e:
-            logger.error(f"Error getting post {post_id}: {e}")
+            logger.error("Error getting post %r: %r", post_id, e)
             raise
 
     def delete_post(self, post_id: str, user: UserInfo) -> dict:
@@ -197,19 +211,21 @@ class GcpBackend(BackendBase):
 
             if not doc.exists:
                 from fastapi import HTTPException
+
                 raise HTTPException(status_code=404, detail="Post not found")
 
             data = doc.to_dict()
             if data.get("userId") != user.user_id:
                 from fastapi import HTTPException
+
                 raise HTTPException(status_code=403, detail="Not authorized")
 
             doc_ref.delete()
-            logger.info(f"Deleted post {post_id}")
+            logger.info("Deleted post %r", post_id)
             return {"message": "Post deleted successfully", "postId": post_id}
 
         except Exception as e:
-            logger.error(f"Error deleting post {post_id} from Firestore: {e}")
+            logger.error("Error deleting post %r from Firestore: %r", post_id, e)
             raise
 
     def get_profile(self, user_id: str) -> ProfileResponse:
@@ -223,13 +239,15 @@ class GcpBackend(BackendBase):
 
             data = doc.to_dict()
 
-            def ts_to_str(ts) -> Optional[str]:
+            def ts_to_str(ts) -> str | None:
                 if ts is None:
                     return None
                 if hasattr(ts, "isoformat"):
                     return ts.isoformat()
                 if hasattr(ts, "timestamp"):
-                    return datetime.fromtimestamp(ts.timestamp(), tz=timezone.utc).isoformat()
+                    return datetime.fromtimestamp(
+                        ts.timestamp(), tz=timezone.utc
+                    ).isoformat()
                 return str(ts)
 
             return ProfileResponse(
@@ -242,7 +260,7 @@ class GcpBackend(BackendBase):
             )
 
         except Exception as e:
-            logger.error(f"Error getting profile {user_id} from Firestore: {e}")
+            logger.error("Error getting profile %r from Firestore: %r", user_id, e)
             raise
 
     def update_profile(
@@ -252,7 +270,9 @@ class GcpBackend(BackendBase):
     ) -> ProfileResponse:
         """Firestoreのプロフィールを更新"""
         try:
-            doc_ref = self.db.collection(self.profiles_collection).document(user.user_id)
+            doc_ref = self.db.collection(self.profiles_collection).document(
+                user.user_id
+            )
             now_str = datetime.now(timezone.utc).isoformat()
 
             update_data: dict = {"updatedAt": now_str}
@@ -276,20 +296,24 @@ class GcpBackend(BackendBase):
             return self.get_profile(user.user_id)
 
         except Exception as e:
-            logger.error(f"Error updating profile {user.user_id} in Firestore: {e}")
+            logger.error("Error updating profile %r in Firestore: %r", user.user_id, e)
             raise
 
     def generate_upload_urls(
         self,
         count: int,
         user: UserInfo,
-        content_types: Optional[list[str]] = None,
+        content_types: list[str] | None = None,
     ) -> list[dict[str, str]]:
         """Cloud Storage の署名付きURLを生成"""
         ext_map = {
-            "image/jpeg": "jpg", "image/jpg": "jpg",
-            "image/png": "png", "image/gif": "gif",
-            "image/webp": "webp", "image/heic": "heic", "image/heif": "heif",
+            "image/jpeg": "jpg",
+            "image/jpg": "jpg",
+            "image/png": "png",
+            "image/gif": "gif",
+            "image/webp": "webp",
+            "image/heic": "heic",
+            "image/heif": "heif",
         }
         try:
             # Cloud Functions / Cloud Run は Compute Engine 認証情報(トークンのみ)を持つ。
@@ -340,5 +364,5 @@ class GcpBackend(BackendBase):
             return urls
 
         except Exception as e:
-            logger.error(f"Error generating upload URLs for GCS: {e}")
+            logger.error("Error generating upload URLs for GCS: %r", e)
             raise
