@@ -95,6 +95,119 @@ frontend_storage = azure.storage.StorageAccount(
 
 # ========================================
 # Log Analytics Workspace (Centralized audit & security logging)
+# Azure Front Door (CDN + Custom Domain)
+# ========================================
+# Production only: Front Door provides CDN and custom domain support
+# Staging uses direct Storage Account URL for cost optimization
+
+if stack == "production":
+    # Front Door Profile
+    front_door_profile = azure.cdn.Profile(
+        "front-door-profile",
+        profile_name=f"{project_name}-fd",
+        resource_group_name=resource_group.name,
+        location="global",  # Front Door is a global resource
+        sku=azure.cdn.SkuArgs(
+            name="Premium_AzureFrontDoor",
+        ),
+        tags=common_tags,
+    )
+    
+    # Front Door Endpoint
+    front_door_endpoint = azure.cdn.FrontDoorEndpoint(
+        "front-door-endpoint",
+        resource_group_name=resource_group.name,
+        profile_name=front_door_profile.name,
+        endpoint_name=f"mcad-{stack}",
+        enabled=True,
+    )
+    
+    # Origin Group: Health probes + load balancing configuration
+    origin_group = azure.cdn.OriginGroup(
+        "origin-group",
+        resource_group_name=resource_group.name,
+        profile_name=front_door_profile.name,
+        origin_group_name="app-origins",
+        session_affinity_enabled=False,
+        load_balancing=azure.cdn.LoadBalancingSettingsParametersArgs(
+            additional_latency_milliseconds=0,
+            sample_size=4,
+            successful_samples_required=3,
+        ),
+        health_probes=[
+            azure.cdn.HealthProbeParametersArgs(
+                protocol="Https",
+                request_type="GET",
+                path="/",  # Check root for static website
+                interval_in_seconds=100,
+            )
+        ],
+    )
+    
+    # Origin: Storage Account for static website
+    storage_origin = azure.cdn.Origin(
+        "storage-origin",
+        resource_group_name=resource_group.name,
+        profile_name=front_door_profile.name,
+        origin_group_name=origin_group.name,
+        origin_name="static-site",
+        enabled=True,
+        host_name=frontend_storage.primary_endpoints.apply(
+            lambda endpoints: endpoints.web.replace("https://", "").replace("/", "")
+        ),
+        http_port=80,
+        https_port=443,
+        origin_host_header=frontend_storage.primary_endpoints.apply(
+            lambda endpoints: endpoints.web.replace("https://", "").replace("/", "")
+        ),
+        certificate_name_check_enabled=True,
+    )
+    
+    # Routing Rule: Forward all traffic to origin group
+    routing_rule = azure.cdn.Route(
+        "catch-all-route",
+        resource_group_name=resource_group.name,
+        profile_name=front_door_profile.name,
+        endpoint_name=front_door_endpoint.name,
+        route_name="all-traffic",
+        origin_group_name=origin_group.name,
+        patterns_to_match=["/*"],
+        https_redirect_enabled="Enabled",
+        forwarding_protocol="HttpsOnly",
+        cache_configuration=azure.cdn.RouteUpdatePropertiesCacheConfigurationArgs(
+            query_string_caching_behavior="UseQueryString",
+            compression_enabled="Enabled",
+        ),
+    )
+    
+    # Custom Domain: www.azure.ashnova.jp
+    custom_domain = azure.cdn.FrontDoorCustomDomain(
+        "custom-domain",
+        resource_group_name=resource_group.name,
+        profile_name=front_door_profile.name,
+        custom_domain_name="www-azure-ashnova",
+        host_name="www.azure.ashnova.jp",
+    )
+    
+    # Associate custom domain with Front Door endpoint
+    custom_domain_https = azure.cdn.FrontDoorCustomDomainAssociation(
+        "custom-domain-assoc",
+        resource_group_name=resource_group.name,
+        profile_name=front_door_profile.name,
+        custom_domain_name=custom_domain.name,
+        association_name="endpoint-assoc",
+        certificate=azure.cdn.FrontDoorCertificateInfoArgs(
+            type="ManagedCertificate",
+        ),
+    )
+
+else:
+    # Staging environment: Direct Storage Account URL (no Front Door)
+    front_door_profile = None
+    front_door_endpoint = None
+
+# ========================================
+# Log Analytics Workspace (Centralized audit & security logging)
 # ========================================
 # Workspace for aggregating logs from Front Door, Function App, Cosmos DB, and Azure AD
 log_analytics_workspace = azure.operationalinsights.Workspace(
@@ -346,6 +459,32 @@ monitoring_resources = monitoring.setup_monitoring(
 pulumi.export("resource_group_name", resource_group.name)
 pulumi.export("functions_storage_name", functions_storage.name)
 pulumi.export("frontend_storage_name", frontend_storage.name)
+# Azure Front Door (production only)
+if stack == "production":
+    pulumi.export("front_door_profile_name", front_door_profile.name)
+    pulumi.export(
+        "front_door_host",
+        front_door_endpoint.host_name,
+    )
+    pulumi.export(
+        "front_door_custom_domain",
+        "www.azure.ashnova.jp",
+    )
+    pulumi.export(
+        "front_door_dns_instructions",
+        pulumi.Output.concat(
+            "Add CNAME record in Route 53:\\n",
+            "  Name: www.azure.ashnova.jp\\n",
+            "  Type: CNAME\\n",
+            "  Value: ",
+            front_door_endpoint.host_name,
+            "\\n\\n",
+            "After DNS propagates, verify with:\\n",
+            "  curl https://www.azure.ashnova.jp/",
+        ),
+    )
+else:
+    pulumi.export("front_door_note", "Front Door not deployed in staging (cost optimization)")
 
 # Azure AD Authentication
 pulumi.export("azure_ad_client_id", app_registration.client_id)
