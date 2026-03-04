@@ -335,13 +335,19 @@ jobs:
             --delete \
             --region ${{ env.AWS_REGION }}
 
-          # Invalidate CloudFront cache for sns/ paths
-          aws cloudfront create-invalidation \
-            --distribution-id $CLOUDFRONT_ID \
-            --paths "/sns/*" \
-            --region us-east-1
+          # Invalidate CloudFront cache (only if CloudFront exists - production has it, staging doesn't)
+          if [[ -n "$CLOUDFRONT_ID" ]]; then
+            echo "🔄 Invalidating CloudFront cache..."
+            aws cloudfront create-invalidation \
+              --distribution-id $CLOUDFRONT_ID \
+              --paths "/sns/*" \
+              --region us-east-1
+            echo "✅ CloudFront cache invalidated"
+          else
+            echo "⚠️  No CloudFront distribution (staging mode - using S3 static website)"
+          fi
 
-          echo "✅ Frontend deployed to S3 and CloudFront cache invalidated"
+          echo "✅ Frontend deployed to S3"
           echo "🌐 Frontend URL: ${PUBLIC_ORIGIN}/sns/"
 
       - name: Build Lambda Layer
