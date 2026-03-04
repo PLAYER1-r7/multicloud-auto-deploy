@@ -1,26 +1,32 @@
 """Azure Backend Implementation using Cosmos DB + Blob Storage"""
 
-import uuid
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Tuple
+import uuid
+from datetime import datetime, timedelta, timezone
 
-from app.backends.base import BackendBase
-from app.models import Post, CreatePostBody, ProfileResponse, ProfileUpdateRequest
 from app.auth import UserInfo
+from app.backends.base import BackendBase
 from app.config import settings
+from app.models import CreatePostBody, Post, ProfileResponse, ProfileUpdateRequest
 
 logger = logging.getLogger(__name__)
 
 try:
-    from azure.cosmos import CosmosClient, PartitionKey, exceptions as cosmos_exceptions
+    from azure.cosmos import CosmosClient, PartitionKey
+    from azure.cosmos import exceptions as cosmos_exceptions
+
     _cosmos_available = True
 except ImportError:
     _cosmos_available = False
     logger.warning("azure-cosmos not available")
 
 try:
-    from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+    from azure.storage.blob import (
+        BlobSasPermissions,
+        BlobServiceClient,
+        generate_blob_sas,
+    )
+
     _blob_available = True
 except ImportError:
     _blob_available = False
@@ -109,13 +115,15 @@ class AzureBackend(BackendBase):
                 continue
             if k.startswith(prefix):
                 # 既存の直接BlobURL: キーを抽出してSASを付与
-                blob_key = k[len(prefix):].split("?")[0]
+                blob_key = k[len(prefix) :].split("?")[0]
             elif k.startswith("https://"):
                 # 別のhttps URLはそのまま通す
                 result.append(k)
                 continue
             elif k.startswith("http://"):
-                logger.warning("Skipping insecure HTTP image URL (mixed content): %r", k[:80])
+                logger.warning(
+                    "Skipping insecure HTTP image URL (mixed content): %r", k[:80]
+                )
                 continue
             else:
                 # 生のBlobキー
@@ -144,9 +152,9 @@ class AzureBackend(BackendBase):
     def list_posts(
         self,
         limit: int,
-        next_token: Optional[str],
-        tag: Optional[str],
-    ) -> Tuple[list[Post], Optional[str]]:
+        next_token: str | None,
+        tag: str | None,
+    ) -> tuple[list[Post], str | None]:
         """Cosmos DBから投稿一覧を取得"""
         try:
             if tag:
@@ -159,7 +167,9 @@ class AzureBackend(BackendBase):
                     {"name": "@limit", "value": limit + 1},
                 ]
             else:
-                query = "SELECT * FROM c ORDER BY c.createdAt DESC OFFSET 0 LIMIT @limit"
+                query = (
+                    "SELECT * FROM c ORDER BY c.createdAt DESC OFFSET 0 LIMIT @limit"
+                )
                 parameters = [{"name": "@limit", "value": limit + 1}]
 
             # next_token (offset) を数値トークンとして扱う
@@ -191,11 +201,13 @@ class AzureBackend(BackendBase):
                         {"name": "@limit", "value": limit + 1},
                     ]
 
-            items = list(self.posts_container.query_items(
-                query=query,
-                parameters=parameters,
-                enable_cross_partition_query=True,
-            ))
+            items = list(
+                self.posts_container.query_items(
+                    query=query,
+                    parameters=parameters,
+                    enable_cross_partition_query=True,
+                )
+            )
 
             output_next_token = None
             if len(items) > limit:
@@ -236,7 +248,7 @@ class AzureBackend(BackendBase):
                 "nickname": nickname,
                 "content": body.content,
                 "isMarkdown": body.is_markdown,
-                "imageKeys": image_keys,   # 生のBlobキーを保存 (SASなし)
+                "imageKeys": image_keys,  # 生のBlobキーを保存 (SASなし)
                 "tags": body.tags or [],
                 "createdAt": now_str,
                 "updatedAt": None,
@@ -269,6 +281,7 @@ class AzureBackend(BackendBase):
         except Exception:
             return None
         from app.models import Post
+
         raw_urls = item.get("imageKeys") or item.get("imageUrls") or []
         return Post(
             postId=item["id"],
@@ -287,10 +300,12 @@ class AzureBackend(BackendBase):
             item = self.posts_container.read_item(item=post_id, partition_key=post_id)
         except cosmos_exceptions.CosmosResourceNotFoundError:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404, detail="Post not found")
 
         if item.get("userId") != user.user_id:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=403, detail="Not authorized")
 
         self.posts_container.delete_item(item=post_id, partition_key=post_id)
@@ -300,7 +315,9 @@ class AzureBackend(BackendBase):
     def get_profile(self, user_id: str) -> ProfileResponse:
         """Cosmos DBからプロフィールを取得"""
         try:
-            item = self.profiles_container.read_item(item=user_id, partition_key=user_id)
+            item = self.profiles_container.read_item(
+                item=user_id, partition_key=user_id
+            )
             return ProfileResponse(
                 userId=user_id,
                 nickname=item.get("nickname"),
@@ -358,16 +375,20 @@ class AzureBackend(BackendBase):
         self,
         count: int,
         user: UserInfo,
-        content_types: Optional[list[str]] = None,
+        content_types: list[str] | None = None,
     ) -> list[dict[str, str]]:
         """Azure Blob Storage の SAS URLを生成"""
         if not _blob_available:
             raise ImportError("azure-storage-blob is required")
 
         ext_map = {
-            "image/jpeg": "jpg", "image/jpg": "jpg",
-            "image/png": "png", "image/gif": "gif",
-            "image/webp": "webp", "image/heic": "heic", "image/heif": "heif",
+            "image/jpeg": "jpg",
+            "image/jpg": "jpg",
+            "image/png": "png",
+            "image/gif": "gif",
+            "image/webp": "webp",
+            "image/heic": "heic",
+            "image/heif": "heif",
         }
         urls = []
         account = self.storage_account
@@ -376,9 +397,7 @@ class AzureBackend(BackendBase):
 
         for i in range(count):
             ct = (
-                content_types[i]
-                if content_types and i < len(content_types)
-                else None
+                content_types[i] if content_types and i < len(content_types) else None
             ) or "image/jpeg"
             ext = ext_map.get(ct, "jpg")
             # blob_name must NOT include the container name prefix.
@@ -392,12 +411,11 @@ class AzureBackend(BackendBase):
                 blob_name=blob_name,
                 account_key=key,
                 permission=BlobSasPermissions(write=True, create=True),
-                expiry=datetime.now(timezone.utc) + timedelta(seconds=settings.presigned_url_expiry),
+                expiry=datetime.now(timezone.utc)
+                + timedelta(seconds=settings.presigned_url_expiry),
                 content_type=ct,
             )
-            upload_url = (
-                f"https://{account}.blob.core.windows.net/{container}/{blob_name}?{sas_token}"
-            )
+            upload_url = f"https://{account}.blob.core.windows.net/{container}/{blob_name}?{sas_token}"
             urls.append({"url": upload_url, "key": blob_name})
 
         return urls
