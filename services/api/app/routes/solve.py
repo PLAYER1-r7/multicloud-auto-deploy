@@ -166,7 +166,7 @@ def _run_azure_ocr(request: SolveRequest) -> str:
 
     analyze_response = requests.post(url, headers=headers, json=body, timeout=30)
     if analyze_response.status_code not in (200, 202):
-        logger.error("Azure OCR analyze failed: %s", analyze_response.text[:500])
+        logger.error("Azure OCR analyze failed: %r", analyze_response.text[:500])
         raise HTTPException(status_code=502, detail="Failed to start OCR analysis")
 
     if analyze_response.status_code == 200:
@@ -253,7 +253,7 @@ def _run_azure_openai(
 
     response = requests.post(url, headers=headers, json=payload, timeout=60)
     if response.status_code >= 400:
-        logger.error("Azure OpenAI failed: %s", response.text[:500])
+        logger.error("Azure OpenAI failed: %r", response.text[:500])
         raise HTTPException(status_code=502, detail="Failed to generate answer")
 
     result = response.json()
