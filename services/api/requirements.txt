@@ -18,7 +18,7 @@ pydantic-core==2.23.2
 annotated-types>=0.4.0
 typing-extensions>=4.6.1
 pydantic-settings==2.5.2
-uvicorn[standard]==0.32.0
+uvicorn[standard]==0.41.0
 python-jose[cryptography]==3.5.0
 python-multipart==0.0.22
 pyjwt==2.9.0
