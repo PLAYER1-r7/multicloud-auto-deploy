@@ -83,12 +83,22 @@ cat "$BUILD_DIR/requirements-layer.txt"
 echo ""
 
 # Lambda Layerの構造に従ってインストール (python/ ディレクトリに配置)
+# IMPORTANT: Lambda runtime is python3.13. Build wheels for the same ABI.
 pip3 install -r "$BUILD_DIR/requirements-layer.txt" \
     -t "$BUILD_DIR/python/" \
     --upgrade \
     --platform manylinux2014_x86_64 \
-    --python-version 3.12 \
+    --python-version 3.13 \
     --only-binary=:all: 2>&1 | tee /tmp/pip-install.log
+
+# pydantic_core is a compiled extension and must exist in the layer.
+PYDANTIC_SO=$(find "$BUILD_DIR/python" -name '_pydantic_core*.so' | head -1)
+if [ -z "$PYDANTIC_SO" ]; then
+    echo -e "${RED}❌ pydantic_core compiled library not found in layer build output${NC}"
+    echo -e "${RED}   This would cause runtime error: ModuleNotFoundError: pydantic_core._pydantic_core${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ pydantic_core detected: $(basename "$PYDANTIC_SO")${NC}"
 
 # 不要なファイルを削除してサイズを削減
 echo -e "${YELLOW}4. 不要なファイルの削除...${NC}"
