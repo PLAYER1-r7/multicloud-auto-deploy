@@ -152,7 +152,8 @@ if [[ $_ENV_ == production ]]; then
   [[ $_CF_URL_EXPLICIT  == false ]] && CF_URL="${CF_URL:-https://www.aws.ashnova.jp}"
   [[ $_API_URL_EXPLICIT == false ]] && API_URL="${API_URL:-https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com}"
 else
-  CF_URL="${CF_URL:-https://d1tf3uumcm4bo1.cloudfront.net}"
+  # Staging uses S3 static website hosting (no CloudFront for cost reduction)
+  CF_URL="${CF_URL:-http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com}"
   API_URL="${API_URL:-https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com}"
 fi
 [[ $READ_ONLY == true ]] && SKIP_CLEANUP=true
