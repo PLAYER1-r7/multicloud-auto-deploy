@@ -1,0 +1,157 @@
+name: コマンドエラー報告
+description: コマンド実行時のエラーを報告し、ドキュメント化
+labels: ["type:command-error"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # 🔴 コマンドエラー報告フォーム
+
+        エラーが発生したコマンドの詳細情報を記入してください。
+        このフォーム送信後、チームがドキュメント化・解決策を記載します。
+
+        📚 **ドキュメント化ルール**：
+        - パス誤り → `AI_AGENT_14_COMMAND_USAGE_AND_DIRECTORY_JA.md` の「よくあるエラー」に追記
+        - 新規エラー → `AI_AGENT_COMMAND_ERROR_REGISTRY.md` に ERROR-### として記録
+        - 運用レベル → `TROUBLESHOOTING.md` に追記
+
+  - type: input
+    id: title_summary
+    attributes:
+      label: "エラータイトル（自動入力予定）"
+      description: "[Command Error] <コマンド名> - <エラー要約>"
+      placeholder: "[Command Error] npm install - module not found"
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: "実行したコマンド"
+      description: "エラーが発生した完全なコマンドを記入してください。ディレクトリ移動も含めて。"
+      placeholder: |
+        $ cd services/frontend
+        $ npm install
+      value: ""
+    validations:
+      required: true
+
+  - type: textarea
+    id: error_message
+    attributes:
+      label: "エラーメッセージ"
+      description: "ターミナルに表示されたエラーメッセージ全体をコピーしてペーストしてください。"
+      placeholder: |
+        npm ERR! code ENOENT
+        npm ERR! syscall open
+        npm ERR! path /workspaces/multicloud-auto-deploy/services/frontend/package.json
+        npm ERR! errno -2
+      value: ""
+    validations:
+      required: true
+
+  - type: input
+    id: cwd
+    attributes:
+      label: "エラー発生時の現在のディレクトリ"
+      description: "pwd の出力値を記入してください"
+      placeholder: "/workspaces/multicloud-auto-deploy"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: "OS 名とバージョン"
+      placeholder: "Ubuntu 24.04 LTS / macOS 14.2 (Sonoma) / Windows 11"
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: "Python バージョン（Python コマンド実行時エラーの場合）"
+      description: "`python3 --version` の出力値"
+      placeholder: "Python 3.13.1"
+    validations:
+      required: false
+
+  - type: input
+    id: node_version
+    attributes:
+      label: "Node.js バージョン（npm/Node コマンド実行時エラーの場合）"
+      description: "`node -v` `npm -v` の出力値"
+      placeholder: "node v20.10.0, npm 10.2.3"
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnosis
+    attributes:
+      label: "発生原因と推定（わかれば）"
+      description: "エラーの根本原因について、思い当たることを記入してください"
+      placeholder: |
+        - 仮想環境が有効化されていないかもしれない
+        - ディレクトリ名が異なる可能性
+        - 環境変数が設定されていない
+    validations:
+      required: false
+
+  - type: textarea
+    id: tried_solutions
+    attributes:
+      label: "試したこと"
+      description: "これまでに実施した解決策を記入してください"
+      placeholder: |
+        - pip cache clean --force
+        - rm -rf node_modules && npm install
+        - 環境変数を再設定
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "関連情報"
+      description: "その他、問題解決に役立つ情報があれば記入してください"
+      placeholder: |
+        - 最後に成功したコマンドは何か
+        - 最近プロジェクトに加えた変更は何か
+        - CI で成功しているのに、ローカルで失敗するなど、特殊な状況
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "チェックリスト"
+      description: "報告前に確認してください"
+      options:
+        - label: "コマンド全体を正確に記入した"
+          required: true
+        - label: "エラーメッセージ全体をコピーした"
+          required: true
+        - label: "現在のディレクトリを記入した"
+          required: true
+        - label: "AI_AGENT_14 の「よくあるエラー」セクションで同様のエラーを確認した"
+          required: false
+        - label: "Google / Stack Overflow で検索した"
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        ## 📝 ドキュメント化のお願い
+
+        このエラーが解決したら、チームが以下の対応を行います：
+
+        ✅ エラーの原因を特定
+        ✅ 解決策を実装・テスト
+        ✅ ドキュメントを更新：
+        - `docs/AI_AGENT_14_COMMAND_USAGE_AND_DIRECTORY_JA.md`（よくあるエラー）
+        - または `docs/AI_AGENT_COMMAND_ERROR_REGISTRY.md`（新規エラー記録）
+
+        次のユーザーが同じエラーで困らないように、ドキュメント化が重要です。
