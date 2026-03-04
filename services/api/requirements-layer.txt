@@ -12,7 +12,7 @@ fastapi==0.115.0
 pydantic==2.9.0
 pydantic-core==2.23.2
 annotated-types>=0.4.0
-pydantic-settings==2.5.2
+pydantic-settings==2.13.1
 
 # Lambda adapter (FastAPI -> Lambda)
 mangum==0.17.0
