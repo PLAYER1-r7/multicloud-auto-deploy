@@ -105,7 +105,12 @@ jobs:
 
       - name: Install dependencies
         working-directory: services/frontend_react
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci || npm install
+          else
+            npm install
+          fi
 
       - name: Build React SPA
         working-directory: services/frontend_react

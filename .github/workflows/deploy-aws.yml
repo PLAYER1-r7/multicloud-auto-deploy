@@ -194,6 +194,7 @@ jobs:
           echo "frontend_bucket_name=$(pulumi stack output frontend_bucket_name)" >> $GITHUB_OUTPUT
           echo "cloudfront_domain=$(pulumi stack output cloudfront_domain)" >> $GITHUB_OUTPUT
           echo "cloudfront_distribution_id=$(pulumi stack output cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+          echo "frontend_url=$(pulumi stack output frontend_url 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
           echo "custom_domain=$(pulumi stack output custom_domain 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$(pulumi stack output cognito_user_pool_id)" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$(pulumi stack output cognito_client_id)" >> $GITHUB_OUTPUT
@@ -293,18 +294,29 @@ jobs:
           API_URL="${{ steps.pulumi_outputs.outputs.api_gateway_endpoint }}"
           CLOUDFRONT_DOMAIN="${{ steps.pulumi_outputs.outputs.cloudfront_domain }}"
           CUSTOM_DOMAIN="${{ steps.pulumi_outputs.outputs.custom_domain }}"
+          FRONTEND_URL="${{ steps.pulumi_outputs.outputs.frontend_url }}"
 
-          # Determine the public URL (prefer custom domain if set)
+          # Determine public origin: custom domain > CloudFront > frontend_url
           if [[ -n "$CUSTOM_DOMAIN" ]]; then
             PUBLIC_ORIGIN="https://${CUSTOM_DOMAIN}"
-          else
+          elif [[ -n "$CLOUDFRONT_DOMAIN" ]]; then
             PUBLIC_ORIGIN="https://${CLOUDFRONT_DOMAIN}"
+          elif [[ -n "$FRONTEND_URL" ]]; then
+            PUBLIC_ORIGIN="${FRONTEND_URL%/}"
+          else
+            echo "❌ Failed to determine PUBLIC_ORIGIN (custom domain / CloudFront / frontend_url all empty)"
+            exit 1
           fi
 
           echo "🏗️  Building React frontend for AWS (Cognito auth)..."
+          echo "🌐 Public origin: $PUBLIC_ORIGIN"
           cd services/frontend_react
 
-          npm ci --prefer-offline
+          if [ -f package-lock.json ]; then
+            npm ci --prefer-offline || npm install --prefer-offline
+          else
+            npm install --prefer-offline
+          fi
 
           VITE_AUTH_PROVIDER=aws \
           VITE_API_URL="${API_URL}" \
@@ -450,10 +462,10 @@ jobs:
             # S3 upload for large packages
             S3_BUCKET="${{ steps.pulumi_outputs.outputs.frontend_bucket_name }}"
             S3_KEY="lambda-deployments/lambda-$(date +%Y%m%d-%H%M%S).zip"
-            
+
             echo "☁️  Uploading to S3: s3://$S3_BUCKET/$S3_KEY"
             aws s3 cp services/api/lambda.zip s3://$S3_BUCKET/$S3_KEY || { echo "❌ S3 upload failed!"; exit 1; }
-            
+
             echo "🚀 Updating Lambda from S3"
             aws lambda update-function-code \
               --function-name $LAMBDA_FUNCTION \

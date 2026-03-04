@@ -339,7 +339,10 @@ jobs:
           echo "📝 Environment variables file created (ENVIRONMENT=$DEPLOY_ENV, AUTH_DISABLED=$AUTH_DISABLED_VALUE, AUTH_PROVIDER=firebase, GCP_STORAGE_BUCKET=$UPLOADS_BUCKET)"
 
           # Deploy function with env vars from file
-          # Rate limiting: max 10 instances × 50 concurrent requests/instance = 500 total concurrent requests
+          # Rate limiting:
+          # - production: 10 instances × 50 concurrent requests/instance = 500 total concurrent requests
+          # - staging: use concurrency=1 to avoid Cloud Run validation error when CPU < 1
+          CONCURRENCY=$([[ "${{ steps.set_stack.outputs.stack_name }}" == "staging" ]] && echo 1 || echo 50)
           gcloud functions deploy $FUNCTION_NAME \
             --gen2 \
             --region=$REGION \
@@ -350,7 +353,7 @@ jobs:
             --allow-unauthenticated \
             --min-instances=$([[ "${{ steps.set_stack.outputs.stack_name }}" == "staging" ]] && echo 0 || echo 1) \
             --max-instances=10 \
-            --concurrency=50 \
+            --concurrency=$CONCURRENCY \
             --memory=512MB \
             --timeout=60s \
             --env-vars-file=/tmp/env-vars.yaml
@@ -380,7 +383,11 @@ jobs:
           echo "🌐 Public host: ${PUBLIC_HOST}"
           echo "🔗 API URL: ${API_URL}"
           cd services/frontend_react
-          npm ci --prefer-offline
+          if [ -f package-lock.json ]; then
+            npm ci --prefer-offline || npm install --prefer-offline
+          else
+            npm install --prefer-offline
+          fi
 
           # GCS 直接配信の場合は絶対 URL base が必要 (相対パス /sns/ だと
           # ブラウザが storage.googleapis.com/sns/... にアクセスして 403 になる)
