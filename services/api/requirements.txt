@@ -9,6 +9,7 @@
 #   - Local development
 #   - Testing
 #   - Docker builds
+#   - CI redeploy trigger (non-functional comment)
 
 # FastAPI Core
 fastapi==0.115.0
