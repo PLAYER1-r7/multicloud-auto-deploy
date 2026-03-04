@@ -4,6 +4,9 @@
 # FastAPI Core
 fastapi==0.115.0
 pydantic==2.9.0
+pydantic-core==2.23.2
+annotated-types>=0.4.0
+typing-extensions>=4.6.1
 pydantic-settings==2.5.2
 python-jose[cryptography]==3.5.0
 python-multipart==0.0.22
