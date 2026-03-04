@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import UserInfo, require_user
 from app.backends import get_backend
-from app.models import CreatePostBody, ListPostsResponse
+from app.config import settings
+from app.models import CreatePostBody, ListPostsResponse, Post, UpdatePostBody
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
@@ -18,12 +19,28 @@ def list_posts(
     return ListPostsResponse(items=posts, limit=limit, nextToken=output_next_token)
 
 
+@router.get("/{post_id}")
+def get_post(post_id: str) -> Post:
+    """投稿を1件取得"""
+    backend = get_backend()
+    post = backend.get_post(post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return post
+
+
 @router.post("", status_code=201)
 def create_post(
     body: CreatePostBody,
     user: UserInfo = Depends(require_user),
 ) -> dict:
     """投稿を作成"""
+    limit = settings.max_images_per_post
+    if body.image_keys and len(body.image_keys) > limit:
+        raise HTTPException(
+            status_code=400,
+            detail=f"画像は1投稿あたり{limit}枚までです（送信: {len(body.image_keys)}枚）",
+        )
     backend = get_backend()
     return backend.create_post(body, user)
 
@@ -36,3 +53,14 @@ def delete_post(
     """投稿を削除"""
     backend = get_backend()
     return backend.delete_post(post_id, user)
+
+
+@router.put("/{post_id}")
+def update_post(
+    post_id: str,
+    body: UpdatePostBody,
+    user: UserInfo = Depends(require_user),
+) -> dict:
+    """投稿を更新"""
+    backend = get_backend()
+    return backend.update_post(post_id, body, user)

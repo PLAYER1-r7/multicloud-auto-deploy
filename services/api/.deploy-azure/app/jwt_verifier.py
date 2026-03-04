@@ -8,11 +8,12 @@ Supports:
 """
 
 import logging
-from typing import Optional, Dict, Any
-from jose import jwt, JWTError
-import requests
-from functools import lru_cache
 from datetime import datetime, timedelta
+from functools import lru_cache
+from typing import Any, Optional
+
+import requests
+from jose import JWTError, jwt
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 class JWTVerifier:
     """JWT verification for multiple cloud providers"""
 
-    def __init__(self, provider: str, config: Dict[str, Any]):
+    def __init__(self, provider: str, config: dict[str, Any]):
         """
         Initialize JWT verifier
 
@@ -30,11 +31,11 @@ class JWTVerifier:
         """
         self.provider = provider
         self.config = config
-        self._jwks_cache: Optional[Dict] = None
+        self._jwks_cache: Optional[dict] = None
         self._jwks_cache_time: Optional[datetime] = None
         self._jwks_cache_duration = timedelta(hours=1)
 
-    @lru_cache(maxsize=10)
+    @lru_cache(maxsize=10)  # noqa: B019
     def get_jwks_uri(self) -> str:
         """Get JWKS URI based on provider"""
         if self.provider == "cognito":
@@ -60,7 +61,7 @@ class JWTVerifier:
 
         raise ValueError(f"Unsupported provider: {self.provider}")
 
-    def get_jwks(self) -> Dict:
+    def get_jwks(self) -> dict:
         """Get JWKS with caching"""
         now = datetime.now()
 
@@ -122,7 +123,7 @@ class JWTVerifier:
             return self.config["client_id"]
         raise ValueError(f"Unsupported provider: {self.provider}")
 
-    def verify_token(self, token: str) -> Optional[Dict[str, Any]]:
+    def verify_token(self, token: str) -> Optional[dict[str, Any]]:
         """
         Verify JWT token and return claims
 
@@ -159,22 +160,35 @@ class JWTVerifier:
             issuer = self.get_issuer()
             audience = self.get_audience()
 
+            # Check if token has 'aud' claim before verifying it.
+            # Cognito access tokens may omit 'aud'; in that case relax audience verification.
+            try:
+                unverified_claims = jwt.get_unverified_claims(token)
+            except Exception:
+                unverified_claims = {}
+            has_aud = "aud" in unverified_claims
+
             claims = jwt.decode(
                 token,
                 key,
                 algorithms=["RS256"],
-                audience=audience,
+                audience=audience if has_aud else None,
                 issuer=issuer,
                 options={
                     "verify_signature": True,
-                    "verify_aud": True,
+                    "verify_aud": has_aud,
                     "verify_iat": True,
                     "verify_exp": True,
                     "verify_iss": True,
+                    # id_token contains at_hash (hash of access_token).
+                    # We decode id_token standalone (no access_token companion),
+                    # so disable at_hash verification.
+                    "verify_at_hash": False,
                 },
             )
 
-            logger.info(f"Token verified successfully for user: {claims.get('sub')}")
+            logger.info(
+                f"Token verified successfully for user: {claims.get('sub')}")
             return claims
 
         except JWTError as e:
@@ -184,7 +198,7 @@ class JWTVerifier:
             logger.error(f"Token verification error: {e}")
             return None
 
-    def extract_user_info(self, claims: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_user_info(self, claims: dict[str, Any]) -> dict[str, Any]:
         """
         Extract user information from token claims
 
@@ -198,6 +212,9 @@ class JWTVerifier:
 
         if self.provider == "cognito":
             user_info["email"] = claims.get("email")
+            # access_token uses 'username', id_token uses 'cognito:username'
+            if not user_info["user_id"]:
+                user_info["user_id"] = claims.get("username")
             user_info["groups"] = claims.get("cognito:groups", [])
 
         elif self.provider == "firebase":
@@ -206,7 +223,8 @@ class JWTVerifier:
             user_info["groups"] = claims.get("groups", [])
 
         elif self.provider == "azure":
-            user_info["email"] = claims.get("preferred_username") or claims.get("email")
+            user_info["email"] = claims.get(
+                "preferred_username") or claims.get("email")
             user_info["groups"] = claims.get("groups", [])
 
         return user_info

@@ -1,8 +1,9 @@
-from typing import Optional
-from dataclasses import dataclass
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
+from dataclasses import dataclass
+from typing import Optional
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
@@ -45,7 +46,7 @@ def get_jwt_verifier():
         config = {
             "tenant_id": settings.azure_tenant_id,
             "client_id": settings.azure_client_id,
-            "is_b2c": True,  # Assuming B2C for now
+            "is_b2c": False,  # Standard Azure AD (Entra ID), not B2C
             "tenant_name": (
                 settings.azure_tenant_id.split(".")[0]
                 if settings.azure_tenant_id
