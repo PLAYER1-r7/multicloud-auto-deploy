@@ -50,8 +50,8 @@
 | 10  | [AI_AGENT_10_TASKS.md](AI_AGENT_10_TASKS.md)                     | AI-driven backlog strategy, cadence, tools, generated PM dashboard           |
 | 11  | [AI_AGENT_11_DOMAINS.md](AI_AGENT_11_DOMAINS.md)                 | Custom domain setup, DNS records, SSL certs                                  |
 | 12  | [AI_AGENT_12_BUG_FIX_REPORTS.md](AI_AGENT_12_BUG_FIX_REPORTS.md) | Consolidated bug & fix reports (all clouds, 2026-02-20 →)                    |
-| 13  | [AI_AGENT_13_OCR_MATH.md](AI_AGENT_13_OCR_MATH.md)               | `/v1/solve` OCR+math solving service — Azure DI, GCP Vision, Gemini, scoring |
-| 14  | [AI_AGENT_14_TESTING.md](AI_AGENT_14_TESTING.md)                 | Test scripts, pytest suite, auth token acquisition, CI/CD integration        |
+| 13  | [AI_AGENT_13_TESTING.md](AI_AGENT_13_TESTING.md)                 | Test scripts, pytest suite, auth token acquisition, CI/CD integration        |
+| 14  | [AI_AGENT_14_GIT_WORKFLOW.md](AI_AGENT_14_GIT_WORKFLOW.md)       | Git branching strategy, commit conventions, PR workflow for AI agents        |
 | 15  | [AI_AGENT_15_WORKSPACE_CLEANUP.md](AI_AGENT_15_WORKSPACE_CLEANUP.md) | Build artifacts, cache, temporary files cleanup procedures                   |
 
 ---
