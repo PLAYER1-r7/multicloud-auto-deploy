@@ -1,6 +1,25 @@
 import azure.functions as func
 import logging
-from app.main import app as fastapi_app
+import traceback
+from urllib.parse import urlparse
+
+# Safe import: インポート失敗時も関数を登録し、503でエラー内容を返す
+_IMPORT_ERROR: str | None = None
+fastapi_app = None
+try:
+    from app.main import app as fastapi_app
+except Exception as _e:
+    _IMPORT_ERROR = traceback.format_exc()
+    logging.error(f"Failed to import FastAPI app: {_IMPORT_ERROR}")
+
+# -------------------------------------------------------------------
+# Azure Functions Flex Consumption は同一インスタンスで複数リクエストを処理する。
+# インポートをモジュールレベルに移動することで:
+#   - リクエスト毎のモジュール解決コスト排除
+#   - メモリ断片化リスクを抑制
+#   - Application Insights への不要なオーバーヘッド削減
+# (旧: from fastapi import Request / Response / BytesIO は未使用のため削除)
+# -------------------------------------------------------------------
 
 # Azure Functions のエントリーポイント
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
@@ -10,13 +29,19 @@ app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 @app.route(route="{*route}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def main(req: func.HttpRequest) -> func.HttpResponse:
     """Azure Functions HTTP trigger that forwards to FastAPI"""
-    logging.info(f"Python HTTP trigger function processed a request. URL: {req.url}")
-    logging.info(f"Route params: {req.route_params}")
-    logging.info(f"Method: {req.method}")
+    logging.debug(f"HTTP trigger: {req.method} {req.url}")
+
+    # インポート失敗時は503でエラー内容を返す
+    if fastapi_app is None:
+        import json
+        return func.HttpResponse(
+            body=json.dumps({"error": "Service unavailable", "detail": _IMPORT_ERROR}),
+            status_code=503,
+            headers={"Content-Type": "application/json"},
+        )
 
     # CORS Preflight (OPTIONS) リクエストを直接処理
     if req.method == "OPTIONS":
-        logging.info("Handling CORS preflight request")
         return func.HttpResponse(
             body="",
             status_code=204,
@@ -29,8 +54,6 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     # FastAPI ASGIアプリケーションをAzure Functionsで実行
-    from fastapi import Request
-    from starlette.responses import Response
 
     # Azure Functions Request → FastAPI Request 変換
     # route_params には "HttpTrigger/api/messages" のような値が入っている
@@ -39,25 +62,15 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
 
     # "HttpTrigger/" プレフィックスを削除
     if route_path.startswith("HttpTrigger/"):
-        route_path = route_path[len("HttpTrigger/") :]
+        route_path = route_path[len("HttpTrigger/"):]
     elif route_path == "HttpTrigger":
         route_path = ""
 
-    # FastAPIルーターのパス処理:
-    # - "/", "/health", "/docs", "/redoc" などはそのまま
-    # - "/messages/", "/uploads/" などは "/api/" プレフィックスを追加
-    if route_path and not route_path.startswith("api/"):
-        # ルートパスやヘルスチェック、ドキュメントはそのまま
-        if route_path not in ["", "health", "docs", "redoc", "openapi.json"]:
-            route_path = "api/" + route_path
-
     path = "/" + route_path if route_path else "/"
 
-    logging.info(f"Converted path for FastAPI: {path}")
+    logging.debug(f"Converted path for FastAPI: {path}")
 
     # クエリ文字列を正しく抽出
-    from urllib.parse import urlparse, parse_qs
-
     parsed = urlparse(req.url)
     query_string = parsed.query.encode("utf-8") if parsed.query else b""
 
@@ -76,28 +89,36 @@ async def main(req: func.HttpRequest) -> func.HttpResponse:
     }
 
     # FastAPI を ASGI で実行
-    from io import BytesIO
-
     async def receive():
         return {"type": "http.request", "body": req.get_body()}
 
-    response_started = False
     status_code = 200
     headers = []
     body_parts = []
 
     async def send(message):
-        nonlocal response_started, status_code, headers, body_parts
+        nonlocal status_code, headers, body_parts
 
         if message["type"] == "http.response.start":
-            response_started = True
             status_code = message["status"]
             headers = message.get("headers", [])
         elif message["type"] == "http.response.body":
             body_parts.append(message.get("body", b""))
 
     # FastAPI アプリケーション実行
-    await fastapi_app(scope, receive, send)
+    try:
+        await fastapi_app(scope, receive, send)
+    except Exception as e:
+        logging.error(
+            f"Error in FastAPI application: {type(e).__name__}: {e}", exc_info=True)
+        return func.HttpResponse(
+            body=f'{{"error": "{type(e).__name__}", "message": "{str(e)}"}}',
+            status_code=500,
+            headers={
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+            },
+        )
 
     # レスポンス構築
     response_body = b"".join(body_parts)
