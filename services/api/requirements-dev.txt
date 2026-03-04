@@ -4,7 +4,7 @@
 black==24.8.0
 ruff==0.6.0
 mypy==1.11.0
-ipython==8.26.0
+ipython==9.10.0
 
 # Testing
 pytest-cov==4.1.0
