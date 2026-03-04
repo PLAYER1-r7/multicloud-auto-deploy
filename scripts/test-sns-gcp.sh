@@ -130,7 +130,8 @@ if [[ $_ENV_ == production ]]; then
   [[ $_CDN_URL_EXPLICIT == false ]] && CDN_URL="${CDN_URL:-https://www.gcp.ashnova.jp}"
   [[ $_API_URL_EXPLICIT == false ]] && API_URL="${API_URL:-https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app}"
 else
-  CDN_URL="${CDN_URL:-https://www.gcp.ashnova.jp}"
+  # GCP staging: Cloud Function serves both frontend (Cloud Storage) and API
+  CDN_URL="${CDN_URL:-https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app}"
   API_URL="${API_URL:-https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app}"
 fi
 [[ $READ_ONLY == true ]] && SKIP_CLEANUP=true

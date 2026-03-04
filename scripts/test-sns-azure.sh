@@ -127,9 +127,9 @@ if [[ $_ENV_ == production ]]; then
   [[ $_FD_URL_EXPLICIT  == false ]] && FD_URL="${FD_URL:-https://www.azure.ashnova.jp}"
   [[ $_API_URL_EXPLICIT == false ]] && API_URL="${API_URL:-https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net/api}"
 else
-  FD_URL="${FD_URL:-https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net}"
+  FD_URL="${FD_URL:-https://mcadwebd45ihd.z11.web.core.windows.net}"
   # Azure Functions default routePrefix is "api", so /health is at /api/health
-  API_URL="${API_URL:-https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net/api}"
+  API_URL="${API_URL:-https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net}"
 fi
 [[ $READ_ONLY == true ]] && SKIP_CLEANUP=true
 
@@ -252,7 +252,7 @@ echo -e "${BOLD}Section 2 — API Function App (direct)${NC}"
 sep
 
 run_test "API /health returns 200" \
-  GET "$API_URL/health"
+  GET "$API_URL/api/health"
 
 if echo "$LAST_BODY" | jq -e '.status == "ok"' >/dev/null 2>&1; then
   ok "  .provider=$(echo "$LAST_BODY" | jq -r '.provider // "unknown"')"

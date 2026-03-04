@@ -276,11 +276,11 @@ run_cloud() {
 run_quick_check() {
   local _env="$1"
 
-  local aws_cf="${AWS_CF_URL:-$([[ "$_env" == "production" ]] && echo "https://www.aws.ashnova.jp" || echo "https://d1tf3uumcm4bo1.cloudfront.net") }"
+  local aws_cf="${AWS_CF_URL:-$([[ "$_env" == "production" ]] && echo "https://www.aws.ashnova.jp" || echo "http://multicloud-auto-deploy-staging-frontend.s3-website-ap-northeast-1.amazonaws.com") }"
   local aws_api="${AWS_API_URL:-$([[ "$_env" == "production" ]] && echo "https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com" || echo "https://z42qmqdqac.execute-api.ap-northeast-1.amazonaws.com") }"
-  local azure_fd="${AZURE_FD_URL:-$([[ "$_env" == "production" ]] && echo "https://www.azure.ashnova.jp" || echo "https://mcad-staging-d45ihd-dseygrc9c3a3htgj.z01.azurefd.net") }"
+  local azure_fd="${AZURE_FD_URL:-$([[ "$_env" == "production" ]] && echo "https://www.azure.ashnova.jp" || echo "https://mcadwebd45ihd.z11.web.core.windows.net") }"
   local azure_api="${AZURE_API_URL:-$([[ "$_env" == "production" ]] && echo "https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net/api" || echo "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net") }"
-  local gcp_cdn="${GCP_CDN_URL:-https://www.gcp.ashnova.jp}"
+  local gcp_cdn="${GCP_CDN_URL:-$([[ "$_env" == "production" ]] && echo "https://www.gcp.ashnova.jp" || echo "https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app") }"
   local gcp_api="${GCP_API_URL:-$([[ "$_env" == "production" ]] && echo "https://multicloud-auto-deploy-production-api-son5b3ml7a-an.a.run.app" || echo "https://multicloud-auto-deploy-staging-api-son5b3ml7a-an.a.run.app") }"
 
   local total=0 passed=0 failed=0
