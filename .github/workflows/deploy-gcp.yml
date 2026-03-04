@@ -60,7 +60,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Pulumi CLI
-        uses: pulumi/actions@v5
+        uses: pulumi/actions@v6
 
       - name: Install Pulumi Python Dependencies
         run: |
@@ -139,7 +139,7 @@ jobs:
         # outputs are still valid. Subsequent steps (Cloud Run update, frontend deploy) should
         # proceed regardless of this known non-blocking Pulumi error.
         continue-on-error: true
-        uses: pulumi/actions@v5
+        uses: pulumi/actions@v6
         with:
           command: up
           stack-name: ${{ steps.set_stack.outputs.stack_name }}

@@ -64,7 +64,7 @@ jobs:
           cache-dependency-path: infrastructure/pulumi/azure/requirements.txt
 
       - name: Install Pulumi CLI
-        uses: pulumi/actions@v5
+        uses: pulumi/actions@v6
 
       - name: Install Pulumi Python Dependencies
         run: |
@@ -171,7 +171,7 @@ jobs:
 
       - name: Deploy Infrastructure with Pulumi
         id: pulumi
-        uses: pulumi/actions@v5
+        uses: pulumi/actions@v6
         with:
           command: up
           stack-name: ${{ steps.set_stack.outputs.stack_name }}

@@ -68,7 +68,7 @@ jobs:
           python-version: ${{ env.PULUMI_PYTHON_VERSION }}
 
       - name: Install Pulumi CLI
-        uses: pulumi/actions@v5
+        uses: pulumi/actions@v6
 
       - name: Install Pulumi Python Dependencies
         run: |
