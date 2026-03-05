@@ -70,7 +70,7 @@ jobs:
 
           echo "📦 Building Exam Solver API package for Cloud Functions..."
           cp -r app .deployment/
-          cp function.py .deployment/
+          cp function.py .deployment/main.py
           cp requirements.txt .deployment/
 
           cd .deployment
@@ -94,10 +94,9 @@ jobs:
             --trigger-http \
             --allow-unauthenticated \
             --entry-point handler \
-            --source services/${{ env.SERVICE }} \
+            --source services/${{ env.SERVICE }}/.deployment \
             --region ${{ env.GCP_REGION }} \
-            --set-env-vars CLOUD_PROVIDER=gcp,SOLVE_ENABLED=true \
-            || echo "⏳ First deployment may require Pulumi infrastructure setup"
+            --set-env-vars CLOUD_PROVIDER=gcp,SOLVE_ENABLED=true
 
           echo "✅ Exam Solver API deployed"
 
