@@ -519,7 +519,9 @@ pulumi.export(
 if stack == "production":
     pulumi.export("cdn_ip_address", cdn_ip_address.address)
     pulumi.export("cdn_url", cdn_ip_address.address.apply(lambda ip: f"http://{ip}"))
-    pulumi.export("cdn_https_url", cdn_ip_address.address.apply(lambda ip: f"https://{ip}"))
+    pulumi.export(
+        "cdn_https_url", cdn_ip_address.address.apply(lambda ip: f"https://{ip}")
+    )
     pulumi.export("backend_bucket_name", backend_bucket.name)
     pulumi.export("url_map_name", url_map.name)
     pulumi.export("redirect_url_map_name", redirect_url_map.name)
@@ -551,8 +553,20 @@ monitoring_resources = monitoring.setup_monitoring(
     function_memory_mb=function_memory_mb,
 )
 
-# Function name for gcloud deployment (fixed name)
-pulumi.export("function_name", f"{project_name}-{stack}-api")
+# Function names for gcloud deployment (fixed names)
+# SNS API
+pulumi.export("sns_api_function_name", f"{project_name}-{stack}-api")
+pulumi.export(
+    "sns_api_function_url",
+    f"https://{region}-{project}.cloudfunctions.net/{project_name}-{stack}-api",
+)
+
+# Exam Solver API
+pulumi.export("solver_api_function_name", f"{project_name}-{stack}-solver")
+pulumi.export(
+    "solver_api_function_url",
+    f"https://{region}-{project}.cloudfunctions.net/{project_name}-{stack}-solver",
+)
 
 # Monitoring exports
 if monitoring_resources["notification_channel"]:

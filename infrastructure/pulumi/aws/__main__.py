@@ -318,84 +318,123 @@ lambda_policy = aws.iam.RolePolicy(
 )
 
 # ========================================
-# Lambda Layer (Dependencies)
+# Lambda Layers (Dependencies)
 # ========================================
-# Lambda Layer with all dependencies (FastAPI, Pydantic, Mangum, etc.)
-# Build with: ./scripts/build-lambda-layer.sh
-# The layer ZIP is automatically managed by Pulumi
+# Lambda Layers with dependencies for SNS API and Exam Solver API
+# Build with: ./scripts/build-lambda-layer.sh (builds both sns-api and exam-solver-api layers)
+# The layers are automatically managed by Pulumi
 
 
-# Path to Lambda Layer ZIP
+# Path to Lambda Layer ZIPs
 # Strategy: Use GITHUB_WORKSPACE env var in CI, fallback to relative path for local development
 workspace_root = os.environ.get("GITHUB_WORKSPACE")
-if workspace_root:
-    # GitHub Actions: GITHUB_WORKSPACE points to repository root (/home/runner/work/multicloud-auto-deploy/multicloud-auto-deploy)
-    # Build step creates ZIP at services/api/lambda-layer.zip (relative to repository root)
-    layer_zip_path = (
-        pathlib.Path(workspace_root) / "services" / "api" / "lambda-layer.zip"
-    )
-else:
-    # Local development: Calculate relative path from this file
-    # __file__ -> infrastructure/pulumi/aws/__main__.py
-    # Go up 3 levels to reach project root, then down to services/api
-    layer_zip_path = (
-        pathlib.Path(__file__).parent.parent.parent
-        / "services"
-        / "api"
-        / "lambda-layer.zip"
-    )
 
-# Check if layer ZIP exists
-if not layer_zip_path.exists():
+
+def _get_layer_zip_path(service_name: str) -> pathlib.Path:
+    """Get Lambda Layer ZIP path for a given service"""
+    if workspace_root:
+        # GitHub Actions: GITHUB_WORKSPACE points to repository root
+        # Build step creates ZIPs at services/{service_name}/lambda-layer.zip
+        return (
+            pathlib.Path(workspace_root)
+            / "services"
+            / service_name
+            / "lambda-layer.zip"
+        )
+    else:
+        # Local development: Calculate relative path from this file
+        # __file__ -> infrastructure/pulumi/aws/__main__.py
+        # Go up 3 levels to reach project root, then down to services/{service_name}
+        return (
+            pathlib.Path(__file__).parent.parent.parent
+            / "services"
+            / service_name
+            / "lambda-layer.zip"
+        )
+
+
+# SNS API Layer
+sns_layer_zip_path = _get_layer_zip_path("sns-api")
+if not sns_layer_zip_path.exists():
     pulumi.log.warn(
-        f"Lambda Layer ZIP not found at {layer_zip_path}. "
+        f"SNS API Lambda Layer ZIP not found at {sns_layer_zip_path}. "
         "Run './scripts/build-lambda-layer.sh' to build the layer. "
         "Using placeholder for now."
     )
-    # Create a minimal placeholder if ZIP doesn't exist
-    layer_zip_path = None
+    sns_layer_zip_path = None
 else:
     pulumi.log.info(
-        f"Lambda Layer ZIP found: {layer_zip_path} ({os.path.getsize(layer_zip_path) / 1024 / 1024:.2f} MB)"
+        f"SNS API Lambda Layer ZIP found: {sns_layer_zip_path} ({os.path.getsize(sns_layer_zip_path) / 1024 / 1024:.2f} MB)"
     )
 
-# Create Lambda Layer (only if ZIP exists)
-lambda_layer = None
-if layer_zip_path:
-    lambda_layer = aws.lambda_.LayerVersion(
-        "dependencies-layer",
-        layer_name=f"{project_name}-{stack}-dependencies",
-        code=pulumi.FileArchive(str(layer_zip_path)),
+# Exam Solver API Layer
+solver_layer_zip_path = _get_layer_zip_path("exam-solver-api")
+if not solver_layer_zip_path.exists():
+    pulumi.log.warn(
+        f"Exam Solver API Lambda Layer ZIP not found at {solver_layer_zip_path}. "
+        "Run './scripts/build-lambda-layer.sh' to build the layer. "
+        "Using placeholder for now."
+    )
+    solver_layer_zip_path = None
+else:
+    pulumi.log.info(
+        f"Exam Solver API Lambda Layer ZIP found: {solver_layer_zip_path} ({os.path.getsize(solver_layer_zip_path) / 1024 / 1024:.2f} MB)"
+    )
+
+# Create Lambda Layer for SNS API (only if ZIP exists)
+sns_lambda_layer = None
+if sns_layer_zip_path:
+    sns_lambda_layer = aws.lambda_.LayerVersion(
+        "sns-dependencies-layer",
+        layer_name=f"{project_name}-{stack}-sns-dependencies",
+        code=pulumi.FileArchive(str(sns_layer_zip_path)),
         compatible_runtimes=["python3.13"],
-        description=f"Dependencies for {project_name} {stack} (FastAPI, Mangum, Pydantic, etc.)",
+        description=f"Dependencies for SNS API {project_name} {stack} (FastAPI, Mangum, Pydantic, etc.)",
         opts=pulumi.ResourceOptions(
             # Delete old versions automatically (keeps only latest)
             delete_before_replace=True,
         ),
     )
-    pulumi.export("lambda_layer_arn", lambda_layer.arn)
-    pulumi.export("lambda_layer_version", lambda_layer.version)
+    pulumi.export("sns_lambda_layer_arn", sns_lambda_layer.arn)
+    pulumi.export("sns_lambda_layer_version", sns_lambda_layer.version)
+
+# Create Lambda Layer for Exam Solver API (only if ZIP exists)
+solver_lambda_layer = None
+if solver_layer_zip_path:
+    solver_lambda_layer = aws.lambda_.LayerVersion(
+        "solver-dependencies-layer",
+        layer_name=f"{project_name}-{stack}-solver-dependencies",
+        code=pulumi.FileArchive(str(solver_layer_zip_path)),
+        compatible_runtimes=["python3.13"],
+        description=f"Dependencies for Exam Solver API {project_name} {stack} (FastAPI, Mangum, Pydantic, Azure DI, Vertex AI, etc.)",
+        opts=pulumi.ResourceOptions(
+            # Delete old versions automatically (keeps only latest)
+            delete_before_replace=True,
+        ),
+    )
+    pulumi.export("solver_lambda_layer_arn", solver_lambda_layer.arn)
+    pulumi.export("solver_lambda_layer_version", solver_lambda_layer.version)
 
 # ========================================
-# Lambda Function (FastAPI with Mangum)
+# Lambda Function - SNS API (FastAPI with Mangum)
 # ========================================
-# Note: Lambda function code is deployed separately using deploy-lambda-aws.sh script
+# Note: Lambda function code is deployed separately using CI/CD workflows
 # Pulumi manages the function configuration, but not the code itself
 
 # Create a minimal placeholder Lambda function
-# The actual code will be deployed via CI/CD or deploy script
+# The actual code will be deployed via CI/CD or deploy-sns-aws.yml workflow
 
 placeholder_code = """
 import json
 def handler(event, context):
     return {
         'statusCode': 200,
-        'body': json.dumps({'message': 'Please deploy actual code using deploy-lambda-aws.sh'})
+        'body': json.dumps({'message': 'Please deploy actual code using deploy-sns-aws.yml'})
     }
 """
 
 lambda_function = aws.lambda_.Function(
-    "api-function",
+    "sns-api-function",
     name=f"{project_name}-{stack}-api",
     runtime="python3.13",
     handler="app.main.handler",  # FastAPI application entry point with Mangum
@@ -408,11 +447,11 @@ lambda_function = aws.lambda_.Function(
     # Lambda Layer is automatically managed by Pulumi
     # If lambda-layer.zip exists, it will be deployed as a Layer Version
     # and automatically attached to this function
-    layers=[lambda_layer.arn] if lambda_layer else [],
+    layers=[sns_lambda_layer.arn] if sns_lambda_layer else [],
     # Use inline code or skip code updates
-    # Code will be uploaded separately via deploy-lambda-aws.sh
+    # Code will be uploaded separately via deploy-sns-aws.yml workflow
     code=pulumi.AssetArchive({"index.py": pulumi.StringAsset(placeholder_code)}),
-    # Skip code and layer updates: deployed by deploy-aws.yml workflow
+    # Skip code and layer updates: deployed by deploy-sns-aws.yml workflow
     # Layers are managed by the CI/CD pipeline (lambda-layer.zip is built at deploy time)
     # Also skip environment: CI/CD (Update Lambda step) sets CORS_ORIGINS with the correct
     # custom domain. If Pulumi manages environment, it sets CORS_ORIGINS from allowedOrigins
@@ -438,10 +477,103 @@ lambda_function = aws.lambda_.Function(
     tags=common_tags,
 )
 
-# Lambda Function URL (no API Gateway needed for simple HTTP)
-lambda_url = aws.lambda_.FunctionUrl(
-    "api-function-url",
+# Lambda Function URL for SNS API (no API Gateway needed for simple HTTP)
+sns_lambda_url = aws.lambda_.FunctionUrl(
+    "sns-api-function-url",
     function_name=lambda_function.name,
+    authorization_type="NONE",  # Public access
+    cors={
+        "allow_origins": allowed_origins_list,
+        "allow_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+        "max_age": 3600,
+    },
+)
+
+# ========================================
+# Lambda Function - Exam Solver API (FastAPI with Mangum)
+# ========================================
+# Note: Lambda function code is deployed separately using CI/CD workflows
+# Pulumi manages the function configuration, but not the code itself
+
+# Create Solver Lambda Role (if different from SNS)
+solver_lambda_role = aws.iam.Role(
+    "solver-lambda-role",
+    name=f"{project_name}-{stack}-solver-lambda-role",
+    assume_role_policy=json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Principal": {"Service": "lambda.amazonaws.com"},
+                    "Effect": "Allow",
+                }
+            ],
+        }
+    ),
+    tags=common_tags,
+)
+
+# Attach basic Lambda execution policy to Solver role
+aws.iam.RolePolicyAttachment(
+    "solver-lambda-basic-execution",
+    role=solver_lambda_role.name,
+    policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+)
+
+# Attach Secrets Manager read policy for Solver Lambda
+aws.iam.RolePolicyAttachment(
+    "solver-lambda-secrets-manager",
+    role=solver_lambda_role.name,
+    policy_arn="arn:aws:iam::aws:policy/SecretsManagerReadWrite",
+)
+
+# Solver Lambda function
+solver_placeholder_code = """
+import json
+def handler(event, context):
+    return {
+        'statusCode': 200,
+        'body': json.dumps({'message': 'Please deploy actual code using deploy-exam-solver-aws.yml'})
+    }
+"""
+
+solver_lambda_function = aws.lambda_.Function(
+    "solver-api-function",
+    name=f"{project_name}-{stack}-solver",
+    runtime="python3.13",
+    handler="app.main.handler",  # FastAPI application entry point with Mangum
+    role=solver_lambda_role.arn,
+    # 1024MB for Solver (OCR + AI requires more memory)
+    memory_size=1024,
+    timeout=60,  # Longer timeout for exam solving
+    # Use x86_64 for compatibility with custom layers
+    architectures=["x86_64"],
+    # Lambda Layer for Exam Solver dependencies
+    layers=[solver_lambda_layer.arn] if solver_lambda_layer else [],
+    # Code will be deployed separately via deploy-exam-solver-aws.yml workflow
+    code=pulumi.AssetArchive({"index.py": pulumi.StringAsset(solver_placeholder_code)}),
+    # Skip code and layer updates: deployed by deploy-exam-solver-aws.yml workflow
+    opts=pulumi.ResourceOptions(
+        ignore_changes=["code", "source_code_hash", "layers", "environment"]
+    ),
+    environment={
+        "variables": {
+            "ENVIRONMENT": stack,
+            "CLOUD_PROVIDER": "aws",
+            "SOLVE_ENABLED": "true",
+            "SECRET_NAME": app_secret.name,
+            "CORS_ORIGINS": allowed_origins,
+        }
+    },
+    tags=common_tags,
+)
+
+# Lambda Function URL for Exam Solver API
+solver_lambda_url = aws.lambda_.FunctionUrl(
+    "solver-api-function-url",
+    function_name=solver_lambda_function.name,
     authorization_type="NONE",  # Public access
     cors={
         "allow_origins": allowed_origins_list,
@@ -467,9 +599,9 @@ api_gateway = aws.apigatewayv2.Api(
     tags=common_tags,
 )
 
-# API Gateway Integration with Lambda (backend api)
-integration = aws.apigatewayv2.Integration(
-    "lambda-integration",
+# API Gateway Integration with SNS Lambda (backend api)
+sns_integration = aws.apigatewayv2.Integration(
+    "sns-lambda-integration",
     api_id=api_gateway.id,
     integration_type="AWS_PROXY",
     integration_uri=lambda_function.arn,
@@ -477,12 +609,79 @@ integration = aws.apigatewayv2.Integration(
     payload_format_version="2.0",
 )
 
-# API Gateway Route
-route = aws.apigatewayv2.Route(
+# API Gateway Integration with Solver Lambda (backend solver)
+solver_integration = aws.apigatewayv2.Integration(
+    "solver-lambda-integration",
+    api_id=api_gateway.id,
+    integration_type="AWS_PROXY",
+    integration_uri=solver_lambda_function.arn,
+    integration_method="POST",
+    payload_format_version="2.0",
+)
+
+# API Gateway Routes with path-based routing
+# SNS API routes: /posts/*, /uploads/*, /profiles/*, /limits/*
+sns_routes = [
+    aws.apigatewayv2.Route(
+        "route-posts",
+        api_id=api_gateway.id,
+        route_key="POST /posts",
+        target=sns_integration.id.apply(lambda id: f"integrations/{id}"),
+    ),
+    aws.apigatewayv2.Route(
+        "route-posts-wildcard",
+        api_id=api_gateway.id,
+        route_key="ANY /posts/{proxy+}",
+        target=sns_integration.id.apply(lambda id: f"integrations/{id}"),
+    ),
+    aws.apigatewayv2.Route(
+        "route-uploads-wildcard",
+        api_id=api_gateway.id,
+        route_key="ANY /uploads/{proxy+}",
+        target=sns_integration.id.apply(lambda id: f"integrations/{id}"),
+    ),
+    aws.apigatewayv2.Route(
+        "route-profiles",
+        api_id=api_gateway.id,
+        route_key="ANY /profiles/{proxy+}",
+        target=sns_integration.id.apply(lambda id: f"integrations/{id}"),
+    ),
+    aws.apigatewayv2.Route(
+        "route-limits",
+        api_id=api_gateway.id,
+        route_key="ANY /limits/{proxy+}",
+        target=sns_integration.id.apply(lambda id: f"integrations/{id}"),
+    ),
+]
+
+# Exam Solver API routes: /v1/solve*, /learning/*
+solver_routes = [
+    aws.apigatewayv2.Route(
+        "route-solve",
+        api_id=api_gateway.id,
+        route_key="POST /v1/solve",
+        target=solver_integration.id.apply(lambda id: f"integrations/{id}"),
+    ),
+    aws.apigatewayv2.Route(
+        "route-solve-debug",
+        api_id=api_gateway.id,
+        route_key="GET /v1/ocr-debug",
+        target=solver_integration.id.apply(lambda id: f"integrations/{id}"),
+    ),
+    aws.apigatewayv2.Route(
+        "route-learning-wildcard",
+        api_id=api_gateway.id,
+        route_key="ANY /learning/{proxy+}",
+        target=solver_integration.id.apply(lambda id: f"integrations/{id}"),
+    ),
+]
+
+# Catch-all route for health check
+default_route = aws.apigatewayv2.Route(
     "default-route",
     api_id=api_gateway.id,
-    route_key="$default",  # Catch all routes
-    target=integration.id.apply(lambda id: f"integrations/{id}"),
+    route_key="$default",
+    target=sns_integration.id.apply(lambda id: f"integrations/{id}"),
 )
 
 # API Gateway Stage
@@ -497,11 +696,20 @@ stage = aws.apigatewayv2.Stage(
     ),
 )
 
-# Permission for API Gateway to invoke Lambda
+# Permission for API Gateway to invoke SNS Lambda
 aws.lambda_.Permission(
-    "api-gateway-invoke",
+    "api-gateway-sns-invoke",
     action="lambda:InvokeFunction",
     function=lambda_function.name,
+    principal="apigateway.amazonaws.com",
+    source_arn=api_gateway.execution_arn.apply(lambda arn: f"{arn}/*/*"),
+)
+
+# Permission for API Gateway to invoke Solver Lambda
+aws.lambda_.Permission(
+    "api-gateway-solver-invoke",
+    action="lambda:InvokeFunction",
+    function=solver_lambda_function.name,
     principal="apigateway.amazonaws.com",
     source_arn=api_gateway.execution_arn.apply(lambda arn: f"{arn}/*/*"),
 )
@@ -994,7 +1202,10 @@ monitoring_resources = monitoring.setup_monitoring(
 # ========================================
 pulumi.export("lambda_function_name", lambda_function.name)
 pulumi.export("lambda_function_arn", lambda_function.arn)
-pulumi.export("lambda_function_url", lambda_url.function_url)
+pulumi.export("lambda_function_url", sns_lambda_url.function_url)
+pulumi.export("solver_lambda_function_name", solver_lambda_function.name)
+pulumi.export("solver_lambda_function_arn", solver_lambda_function.arn)
+pulumi.export("solver_lambda_function_url", solver_lambda_url.function_url)
 pulumi.export("api_gateway_id", api_gateway.id)
 pulumi.export("api_gateway_endpoint", api_gateway.api_endpoint)
 pulumi.export("api_url", api_gateway.api_endpoint)  # For workflow

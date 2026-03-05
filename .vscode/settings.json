@@ -45,34 +45,22 @@
     "*.mmd": "markdown"
   },
   "terminal.integrated.defaultProfile.linux": "bash",
-  // ─── Terminal stability (dev container) ─────────────────────────────────────
-  // Disable GPU acceleration to prevent rendering crashes inside dev containers
   "terminal.integrated.gpuAcceleration": "off",
-  // Disable persistent sessions to avoid zombie processes after window reload
   "terminal.integrated.enablePersistentSessions": false,
-  // Limit scrollback buffer to reduce memory pressure during long-running tasks
   "terminal.integrated.scrollback": 3000,
-  // Suppress decoration rendering that can cause flicker
   "terminal.integrated.shellIntegration.decorationsEnabled": "never",
-  // Warn before killing terminals with running processes
   "terminal.integrated.confirmOnKill": "editor",
-  // On host machine: set warp-terminal as the external terminal
   "terminal.external.linuxExec": "warp-terminal",
   "terminal.external.osxExec": "Warp.app",
-  // Open external terminal (Warp) when clicking "Open in Terminal" from Explorer
   "terminal.explorerKind": "external",
-  // Tailwind CSS
   "tailwindCSS.includeLanguages": {
     "typescriptreact": "html"
   },
-  // Vitest
   "vitest.enable": true,
   "vitest.workspaceConfig": "services/frontend_react/vite.config.ts",
-  // TOML
   "[toml]": {
     "editor.defaultFormatter": "tamasfe.even-better-toml"
   },
-  // Search / watcher exclusions (keep build artifacts out)
   "search.exclude": {
     "**/.build-layer": true,
     "**/.deployment*": true,

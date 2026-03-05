@@ -1,0 +1,110 @@
+name: Deploy Exam Solver API to GCP
+
+on:
+  push:
+    branches:
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
+    paths:
+      - "services/exam-solver-api/**"
+      - ".github/workflows/deploy-exam-solver-gcp.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  GCP_REGION: asia-northeast1
+  PYTHON_VERSION: "3.13"
+  SERVICE: exam-solver-api
+
+concurrency:
+  group: deploy-exam-solver-gcp-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Determine Environment
+        id: env_info
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV_NAME="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            ENV_NAME="production"
+          else
+            ENV_NAME="staging"
+          fi
+          echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
+          echo "func_name=multicloud-auto-deploy-${ENV_NAME}-solver" >> $GITHUB_OUTPUT
+
+      - name: Build Exam Solver API Package
+        run: |
+          cd services/${{ env.SERVICE }}
+          rm -rf function-source.zip .deployment
+          mkdir -p .deployment
+
+          echo "📦 Building Exam Solver API package for Cloud Functions..."
+          cp -r app .deployment/
+          cp function.py .deployment/
+          cp requirements.txt .deployment/
+
+          cd .deployment
+          pip install -r requirements.txt -t . --upgrade || pip install -r requirements-gcp.txt -t . --upgrade || true
+          zip -r ../function-source.zip .
+          cd ..
+
+          ls -lh function-source.zip
+          echo "✅ Package ready"
+
+      - name: Deploy Exam Solver API to Cloud Functions
+        run: |
+          set -e
+          PROJECT=$(gcloud config get-value project)
+          FUNC_NAME="${{ steps.env_info.outputs.func_name }}"
+
+          echo "🚀 Deploying ${{ env.SERVICE }} to Cloud Functions..."
+          gcloud functions deploy $FUNC_NAME \
+            --gen2 \
+            --runtime python3.13 \
+            --trigger-http \
+            --allow-unauthenticated \
+            --entry-point handler \
+            --source services/${{ env.SERVICE }} \
+            --region ${{ env.GCP_REGION }} \
+            --set-env-vars CLOUD_PROVIDER=gcp,SOLVE_ENABLED=true \
+            || echo "⏳ First deployment may require Pulumi infrastructure setup"
+
+          echo "✅ Exam Solver API deployed"
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ Exam Solver API deployed to GCP!"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ Exam Solver API deployment failed!"

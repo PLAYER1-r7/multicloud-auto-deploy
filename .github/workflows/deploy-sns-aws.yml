@@ -1,0 +1,144 @@
+name: Deploy SNS API to AWS
+
+on:
+  push:
+    branches:
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
+    paths:
+      - "services/sns-api/**"
+      - "infrastructure/pulumi/aws/**"
+      - ".github/config/aws*.env"
+      - ".github/workflows/deploy-sns-aws.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  AWS_REGION: ap-northeast-1
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.13"
+  SERVICE: sns-api
+
+concurrency:
+  group: deploy-sns-aws-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Determine Stack Name
+        id: set_stack
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            STACK_NAME="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            STACK_NAME="production"
+          else
+            STACK_NAME="staging"
+          fi
+          echo "stack_name=$STACK_NAME" >> $GITHUB_OUTPUT
+
+      - name: Build SNS API Layer
+        id: build_layer
+        run: |
+          cd services/${{ env.SERVICE }}
+          rm -rf .build-layer lambda-layer.zip
+
+          echo "📦 Building Lambda Layer for ${{ env.SERVICE }}..."
+          bash ../../scripts/build-lambda-layer.sh
+
+          ls -lh lambda-layer.zip
+          echo "✅ Layer created"
+
+      - name: Package SNS API
+        run: |
+          cd services/${{ env.SERVICE }}
+          rm -rf .build lambda.zip
+          mkdir -p .build/package
+
+          echo "📁 Copying application code..."
+          cp -r app .build/package/
+          cp index.py .build/package/
+
+          echo "🗜️  Creating package..."
+          cd .build/package
+          zip -r ../../lambda.zip .
+          cd ../..
+
+          ls -lh lambda.zip
+          SIZE_MB=$(du -m lambda.zip | cut -f1)
+          echo "📊 Package size: ${SIZE_MB}MB"
+
+      - name: Deploy SNS API (Lambda + Layer)
+        run: |
+          set -e
+          STACK_NAME="${{ steps.set_stack.outputs.stack_name }}"
+          LAMBDA_FUNCTION="multicloud-auto-deploy-${STACK_NAME}-api"
+          LAYER_NAME="multicloud-auto-deploy-${STACK_NAME}-dependencies"
+
+          # Layer
+          echo "🚀 Publishing Lambda Layer: $LAYER_NAME"
+          LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
+            --layer-name $LAYER_NAME \
+            --description "FastAPI + dependencies for SNS API" \
+            --zip-file fileb://services/${{ env.SERVICE }}/lambda-layer.zip \
+            --compatible-runtimes python3.13 \
+            --region ${{ env.AWS_REGION }} \
+            --query LayerVersionArn \
+            --output text)
+          echo "✅ Layer: $LAYER_VERSION_ARN"
+
+          # Lambda
+          echo "🚀 Updating Lambda: $LAMBDA_FUNCTION"
+          aws lambda update-function-code \
+            --function-name $LAMBDA_FUNCTION \
+            --region ${{ env.AWS_REGION }} \
+            --zip-file fileb://services/${{ env.SERVICE }}/lambda.zip
+
+          # Wait for code update
+          aws lambda wait function-updated \
+            --function-name $LAMBDA_FUNCTION \
+            --region ${{ env.AWS_REGION }}
+
+          # Update configuration with Layer
+          aws lambda update-function-configuration \
+            --function-name $LAMBDA_FUNCTION \
+            --region ${{ env.AWS_REGION }} \
+            --layers $LAYER_VERSION_ARN \
+            --environment '{"Variables": {"CLOUD_PROVIDER": "aws", "AUTH_DISABLED": "false"}}' \
+            --output json
+
+          echo "✅ SNS API deployed"
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ SNS API deployed to AWS!"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ SNS API deployment failed!"

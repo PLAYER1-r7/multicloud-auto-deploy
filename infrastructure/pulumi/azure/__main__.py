@@ -112,7 +112,7 @@ if stack == "production":
         ),
         tags=common_tags,
     )
-    
+
     # Front Door Endpoint
     front_door_endpoint = azure.cdn.FrontDoorEndpoint(
         "front-door-endpoint",
@@ -121,7 +121,7 @@ if stack == "production":
         endpoint_name=f"mcad-{stack}",
         enabled=True,
     )
-    
+
     # Origin Group: Health probes + load balancing configuration
     origin_group = azure.cdn.OriginGroup(
         "origin-group",
@@ -143,7 +143,7 @@ if stack == "production":
             )
         ],
     )
-    
+
     # Origin: Storage Account for static website
     storage_origin = azure.cdn.Origin(
         "storage-origin",
@@ -162,7 +162,7 @@ if stack == "production":
         ),
         certificate_name_check_enabled=True,
     )
-    
+
     # Routing Rule: Forward all traffic to origin group
     routing_rule = azure.cdn.Route(
         "catch-all-route",
@@ -179,7 +179,7 @@ if stack == "production":
             compression_enabled="Enabled",
         ),
     )
-    
+
     # Custom Domain: www.azure.ashnova.jp
     custom_domain = azure.cdn.FrontDoorCustomDomain(
         "custom-domain",
@@ -188,7 +188,7 @@ if stack == "production":
         custom_domain_name="www-azure-ashnova",
         host_name="www.azure.ashnova.jp",
     )
-    
+
     # Associate custom domain with Front Door endpoint
     custom_domain_https = azure.cdn.FrontDoorCustomDomainAssociation(
         "custom-domain-assoc",
@@ -408,16 +408,83 @@ app_service_principal = azuread.ServicePrincipal(
 )
 
 # ========================================
-# Note: Function App is managed manually
+# Function Apps (Flex Consumption Plan)
 # ========================================
-# Function App and App Service Plan are created and managed manually
-# Existing resources:
-# - Function App: multicloud-auto-deploy-staging-func
-# - App Service Plan: FC1 (FlexConsumption)
-# - API URL: https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net
+# Two separate Function Apps for SNS API and Exam Solver API
+# Flex Consumption Plan: Auto-scaling, pay-per-execution
 
-# Note: Azure Front Door ($35+/month) not deployed in staging to reduce costs
-# Frontend served directly from Blob Storage via direct HTTPS endpoint
+# App Service Plan (Flex Consumption) for both Function Apps
+app_service_plan = azure.web.AppServicePlan(
+    "app-service-plan",
+    resource_group_name=resource_group.name,
+    location=location,
+    kind="FunctionApp",
+    sku=azure.web.SkuDescriptionArgs(
+        name="FC1",  # Flex Consumption Plan
+        tier="FlexConsumption",
+    ),
+    tags=common_tags,
+)
+
+# SNS API Function App
+sns_function_app = azure.web.WebApp(
+    "sns-function-app",
+    resource_group_name=resource_group.name,
+    location=location,
+    server_farm_id=app_service_plan.id,
+    kind="FunctionApp",
+    identity=azure.web.ManagedServiceIdentityIdArgs(type="SystemAssigned"),
+    https_only=True,
+    app_settings=azure.web.NameValuePairArgs(
+        name="AzureWebJobsStorage",
+        value=pulumi.Output.concat(
+            "DefaultEndpointsProtocol=https;AccountName=",
+            functions_storage.name,
+            ";AccountKey=",
+            functions_storage.primary_endpoints.apply(lambda _: "placeholder"),
+            ";EndpointSuffix=core.windows.net",
+        ),
+    ),
+    site_config=azure.web.SiteConfigResourceArgs(
+        runtime="PYTHON|3.13",
+        runtime_version="3.13",
+        python_version="3.13",
+        cors=azure.web.CorsSettingsArgs(
+            allowed_origins=["*"],
+        ),
+    ),
+    tags=common_tags,
+)
+
+# Solver API Function App
+solver_function_app = azure.web.WebApp(
+    "solver-function-app",
+    resource_group_name=resource_group.name,
+    location=location,
+    server_farm_id=app_service_plan.id,
+    kind="FunctionApp",
+    identity=azure.web.ManagedServiceIdentityIdArgs(type="SystemAssigned"),
+    https_only=True,
+    app_settings=azure.web.NameValuePairArgs(
+        name="AzureWebJobsStorage",
+        value=pulumi.Output.concat(
+            "DefaultEndpointsProtocol=https;AccountName=",
+            functions_storage.name,
+            ";AccountKey=",
+            functions_storage.primary_endpoints.apply(lambda _: "placeholder"),
+            ";EndpointSuffix=core.windows.net",
+        ),
+    ),
+    site_config=azure.web.SiteConfigResourceArgs(
+        runtime="PYTHON|3.13",
+        runtime_version="3.13",
+        python_version="3.13",
+        cors=azure.web.CorsSettingsArgs(
+            allowed_origins=["*"],
+        ),
+    ),
+    tags=common_tags,
+)
 
 # ========================================
 # Monitoring and Alerts
@@ -431,23 +498,17 @@ alarm_email = config.get("alarmEmail")
 # unconditionally on a 2048MB instance (800MB = only 39% of limit).
 function_memory_mb = config.get_int("functionMemoryMb") or 2048
 
-# Note: Function App ID is derived from the manually-managed app
-client_config = azure.authorization.get_client_config()
-function_app_id = pulumi.Output.concat(
-    "/subscriptions/",
-    client_config.subscription_id,
-    "/resourceGroups/",
-    resource_group.name,
-    "/providers/Microsoft.Web/sites/",
-    f"{project_name}-{stack}-func",
-)
+# Function App IDs for monitoring
+sns_function_app_id = sns_function_app.id
+solver_function_app_id = solver_function_app.id
 
+# Setup monitoring for both Function Apps
 monitoring_resources = monitoring.setup_monitoring(
     project_name=project_name,
     stack=stack,
     resource_group_name=resource_group.name,
     location=location,
-    function_app_id=function_app_id,
+    function_app_id=sns_function_app_id,  # SNS API monitoring
     cosmos_account_id=cosmos_account.id,
     alarm_email=alarm_email,
     function_memory_mb=function_memory_mb,
@@ -459,6 +520,20 @@ monitoring_resources = monitoring.setup_monitoring(
 pulumi.export("resource_group_name", resource_group.name)
 pulumi.export("functions_storage_name", functions_storage.name)
 pulumi.export("frontend_storage_name", frontend_storage.name)
+# Function Apps
+pulumi.export("sns_function_app_name", sns_function_app.name)
+pulumi.export(
+    "sns_function_app_url",
+    sns_function_app.default_host_name.apply(lambda name: f"https://{name}"),
+)
+pulumi.export("solver_function_app_name", solver_function_app.name)
+pulumi.export(
+    "solver_function_app_url",
+    solver_function_app.default_host_name.apply(lambda name: f"https://{name}"),
+)
+pulumi.export(
+    "api_url", sns_function_app.default_host_name.apply(lambda name: f"https://{name}")
+)  # Default to SNS API
 # Azure Front Door (production only)
 if stack == "production":
     pulumi.export("front_door_profile_name", front_door_profile.name)
@@ -484,7 +559,9 @@ if stack == "production":
         ),
     )
 else:
-    pulumi.export("front_door_note", "Front Door not deployed in staging (cost optimization)")
+    pulumi.export(
+        "front_door_note", "Front Door not deployed in staging (cost optimization)"
+    )
 
 # Azure AD Authentication
 pulumi.export("azure_ad_client_id", app_registration.client_id)
@@ -493,20 +570,13 @@ pulumi.export("azure_ad_object_id", app_registration.id)
 pulumi.export(
     "auth_config_instructions",
     pulumi.Output.concat(
-        "Configure Function App with these environment variables:\\n",
+        "Configure Function Apps with these environment variables:\\n",
         "  AUTH_PROVIDER=azure\\n",
         "  AZURE_TENANT_ID=<your-tenant-id>\\n",
         "  AZURE_CLIENT_ID=",
         app_registration.client_id,
         "\\n",
     ),
-)
-
-# Existing manually-managed Function App
-pulumi.export("function_app_name", f"{project_name}-{stack}-func")
-pulumi.export(
-    "api_url",
-    "https://multicloud-auto-deploy-staging-func-d8a2guhfere0etcq.japaneast-01.azurewebsites.net",
 )
 
 pulumi.export(

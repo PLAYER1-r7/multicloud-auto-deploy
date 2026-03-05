@@ -1,0 +1,118 @@
+name: Deploy SNS API to Azure
+
+on:
+  push:
+    branches:
+      - develop # staging自動デプロイ
+      - main # production自動デプロイ
+    paths:
+      - "services/sns-api/**"
+      - "infrastructure/pulumi/azure/**"
+      - ".github/config/azure.*.env"
+      - ".github/workflows/deploy-sns-azure.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  AZURE_REGION: japaneast
+  PYTHON_VERSION: "3.13"
+  SERVICE: sns-api
+
+concurrency:
+  group: deploy-sns-azure-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure Azure Credentials
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Determine Environment
+        id: env_info
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV_NAME="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            ENV_NAME="production"
+          else
+            ENV_NAME="staging"
+          fi
+          echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
+          echo "func_app=multicloud-auto-deploy-${ENV_NAME}-api" >> $GITHUB_OUTPUT
+          echo "rg=multicloud-auto-deploy-${ENV_NAME}-rg" >> $GITHUB_OUTPUT
+
+      - name: Build SNS API Package
+        run: |
+          cd services/${{ env.SERVICE }}
+          rm -rf function-app.zip .deployment
+          mkdir -p .deployment/package
+
+          echo "📦 Building SNS API package..."
+          cp -r app .deployment/package/
+          cp function_app.py .deployment/package/
+          cp requirements.txt .deployment/package/
+          cp -r requirements-*.txt .deployment/package/ 2>/dev/null || true
+
+          cd .deployment/package
+          pip install -r requirements.txt -t . --upgradeor pip install -r requirements-azure.txt -t . --upgrade || true
+          zip -r ../../function-app.zip .
+          cd ../../..
+
+          ls -lh services/${{ env.SERVICE }}/function-app.zip
+          echo "✅ Package ready"
+
+      - name: Deploy SNS to Azure Functions
+        run: |
+          set -e
+          FUNC_APP="${{ steps.env_info.outputs.func_app }}"
+          RG="${{ steps.env_info.outputs.rg }}"
+
+          echo "🚀 Deploying ${{ env.SERVICE }} to $FUNC_APP..."
+          az functionapp deployment source config-zip \
+            --resource-group $RG \
+            --name $FUNC_APP \
+            --src services/${{ env.SERVICE }}/function-app.zip
+
+          echo "✅ SNS API deployed to Azure"
+
+      - name: Verify Deployment
+        run: |
+          FUNC_APP="${{ steps.env_info.outputs.func_app }}"
+          RG="${{ steps.env_info.outputs.rg }}"
+
+          HTTP_TRIGGER_URL=$(az functionapp show --resource-group $RG --name $FUNC_APP \
+            --query 'defaultHostName' --output tsv)
+
+          echo "🌐 Function App: https://$HTTP_TRIGGER_URL/"
+          echo "✅ Deployment complete"
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ SNS API deployed to Azure!"
+
+      - name: Notify Failure
+        if: failure()
+        run: echo "❌ SNS API deployment failed!"

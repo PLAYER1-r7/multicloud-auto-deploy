@@ -186,8 +186,7 @@ git push origin main
 ### 必読ガイド
 
 - 📖 [セットアップガイド](docs/SETUP.md) - 初期セットアップ手順
-- 🚀 [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定
-- � [Gitワークフローガイド](docs/AI_AGENT_14_GIT_WORKFLOW_JA.md) - ブランチ戦略・コミット規約・PR運用 🆕
+- 🚀 [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定- 🏗️ [サービス分離アーキテクチャ](SERVICES_SEPARATION.md) - SNS API vs Exam Solver API - **新規** 🆕- � [Gitワークフローガイド](docs/AI_AGENT_14_GIT_WORKFLOW_JA.md) - ブランチ戦略・コミット規約・PR運用 🆕
 - �🏗️ [技術スタック戦略](docs/TECH_STRATEGY_2026.md) - 言語選択・IaC戦略・実装ロードマップ 🆕
 - ✅ [CI/CDテスト結果](docs/CICD_TEST_RESULTS.md) - パイプライン検証レポート
 - 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策

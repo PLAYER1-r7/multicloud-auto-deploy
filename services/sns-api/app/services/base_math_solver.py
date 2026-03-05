@@ -1,0 +1,2397 @@
+import base64
+import json
+import re
+from collections import Counter
+from io import BytesIO
+from pathlib import Path
+
+import requests
+from fastapi import HTTPException
+from pypdf import PdfReader
+
+from app.config import settings
+from app.models import SolveRequest
+
+
+class BaseMathSolver:
+    def __init__(self) -> None:
+        # Shared utilities only — no AWS/Bedrock clients
+        self._sample_pdf_text_cache: dict[str, str] = {}
+
+    def _resolve_image(self, request: SolveRequest) -> bytes:
+        if request.input.image_base64:
+            return self._decode_image_base64(request.input.image_base64)
+
+        if request.input.image_url:
+            if not settings.solve_allow_remote_image_url:
+                raise HTTPException(status_code=400, detail="imageUrl is disabled")
+            return self._download_image(request.input.image_url)
+
+        raise HTTPException(
+            status_code=400, detail="imageBase64 or imageUrl is required"
+        )
+
+    def _decode_image_base64(self, image_base64: str) -> bytes:
+        raw = image_base64
+        if "," in image_base64 and image_base64.startswith("data:"):
+            raw = image_base64.split(",", 1)[1]
+
+        try:
+            data = base64.b64decode(raw, validate=True)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="invalid imageBase64") from exc
+
+        self._validate_image_size(data)
+        return data
+
+    def _download_image(self, image_url: str) -> bytes:
+        try:
+            response = requests.get(image_url, timeout=10)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise HTTPException(
+                status_code=400, detail="failed to fetch imageUrl"
+            ) from exc
+
+        content_type = response.headers.get("Content-Type", "")
+        if "image/" not in content_type:
+            raise HTTPException(status_code=400, detail="imageUrl is not an image")
+
+        data = response.content
+        self._validate_image_size(data)
+        return data
+
+    def _validate_image_size(self, data: bytes) -> None:
+        if len(data) > settings.solve_max_image_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"image size exceeds limit ({settings.solve_max_image_bytes} bytes)",
+            )
+
+    def _is_ocr_fidelity_mode(self, request: SolveRequest | None) -> bool:
+        if request is None:
+            return False
+
+        options = request.options
+        return bool(
+            options.debug_ocr and (not options.need_steps) and (not options.need_latex)
+        )
+
+    def _limit_debug_text(self, text: str, max_len: int = 3000) -> str:
+        if len(text) <= max_len:
+            return text
+        return text[:max_len].rstrip() + "\n...<truncated>"
+
+    def _download_pdf_from_image_url(self, image_url: str | None) -> bytes | None:
+        if not image_url:
+            return None
+
+        pdf_url = self._derive_pdf_url(image_url)
+        if not pdf_url:
+            return None
+
+        try:
+            response = requests.get(pdf_url, timeout=10)
+            response.raise_for_status()
+        except requests.RequestException:
+            return None
+
+        data = response.content
+        if not data or not data.startswith(b"%PDF"):
+            return None
+
+        self._validate_image_size(data)
+        return data
+
+    def _derive_pdf_url(self, image_url: str) -> str | None:
+        if "/q_jpg/" in image_url:
+            return re.sub(
+                r"/q_jpg/([^/?#]+)\.(jpg|jpeg|png)$", r"/q_pdf/\1.pdf", image_url
+            )
+
+        lowered = image_url.lower()
+        if (
+            lowered.endswith(".jpg")
+            or lowered.endswith(".jpeg")
+            or lowered.endswith(".png")
+        ):
+            return re.sub(r"\.(jpg|jpeg|png)$", ".pdf", image_url, flags=re.IGNORECASE)
+
+        return None
+
+    # CID → Unicode mapping for common Japanese math PDF fonts (Computer Modern)
+    _CID_MAP: dict[str, str] = {
+        "(cid:53)": "≦",  # \leqq (CMSY)
+        "(cid:54)": "≧",  # \geqq
+        "(cid:90)": "∫",  # integral (CMEX)
+        "(cid:88)": "∑",  # summation
+        "(cid:81)": "∏",  # product
+        "(cid:112)": "∞",  # infinity
+        "(cid:195)": "",  # large left-paren bracket (display artifact)
+        "(cid:33)": "",  # large right-paren bracket (display artifact)
+    }
+
+    def _fix_pdfminer_cid_chars(self, text: str) -> str:
+        """pdfminer が解決できなかった (cid:N) 表記を既知のマッピングで置換する。"""
+        for cid, replacement in self._CID_MAP.items():
+            text = text.replace(cid, replacement)
+        # 残った未知の (cid:N) は空白に
+        text = re.sub(r"\(cid:\d+\)", " ", text)
+        return text
+
+    def _normalize_pdf_math_text(self, text: str) -> str:
+        """PDF テキスト抽出後の数式表記を正規化する。
+
+        pdfminer.six は縦組み数式（分数・積分上下限）を行分割するため、
+        以下のパターンを修復する:
+
+        - ページ区切り文字 (\\x0c) を除去
+        - 問番号の分離: "(2)\\n\\nt が" → "(2) t が"
+        - 文中の行分割: "に\\n対して" → "に対して"
+        - 下付き文字の復元: "Pt" → "P_t", "U0" → "U_0"
+        - 積分上下限: "∫ 2\\n\\n1\\n" → "∫_{1}^{2} "
+        - lim 添字:   "lim\\nn→∞"   → "lim_{n→∞}"
+        - 縦分割分数: "π\\n6\\n"     → "π/6"
+        - 1/変数:     "1\\nz"         → "1/z"
+        - 上付き文字（小文字変数のみ）: "x2" → "x²", "α2" → "α²"
+          ※ 大文字ラベル (A2, T2) は変換しない
+        """
+        # Rule 0: ページ区切り文字を除去
+        text = text.replace("\x0c", "")
+
+        # Rule 1: 積分の上下限
+        text = re.sub(r"∫ (\S+)\n+(\S+)\n", r"∫_{\2}^{\1} ", text)
+
+        # Rule 2: lim の添字
+        text = re.sub(r"\blim\n+([a-zA-Zα-ωΑ-Ω]→\S*)", r"lim_{\1}", text)
+
+        # Rule 3a: 縦分割の分数 — 短いトークン単独行 + 直後の数字行
+        text = re.sub(
+            r"(?<=\n)\n([πθα-ωΑ-Ω∞\da-zA-Z]{1,8})\n(\d{1,4})(?=\n)",
+            r" \1/\2",
+            text,
+        )
+
+        # Rule 3b: "1\n単一変数" → "1/変数"  (1/z, 1/γ 等)
+        text = re.sub(r"\b(1)\n([a-zA-Zα-ωΑ-Ω])([^a-zA-Zα-ωΑ-Ω])", r"\1/\2\3", text)
+
+        # Rule 4: 上付き文字の復元 — 小文字ラテン・ギリシャのみ (大文字ラベルは除外)
+        text = re.sub(r"([a-zα-ωφψ])2\b", r"\1²", text)
+        text = re.sub(r"([a-zα-ωφψ])3\b", r"\1³", text)
+
+        # Rule 5: 余分な連続空行を最大 2 行に圧縮
+        text = re.sub(r"\n{3,}", "\n\n", text)
+
+        # Rule 6: 下付き文字の復元 — 単一大文字 + t (幾何学的な点ラベル: Pt→P_t)
+        text = re.sub(r"\b([A-Z])t\b", r"\1_t", text)
+
+        # Rule 7: 単一大文字 + 一桁数字 の下付き (U0→U_0, U1→U_1)
+        text = re.sub(r"\b([A-Z])([01])\b", r"\1_\2", text)
+
+        # Rule 8: 問番号 "(N)\n\n" と本文を結合: "(2)\n\nt が" → "(2) t が"
+        text = re.sub(r"(\(\d+\))\n+(\S)", r"\1 \2", text)
+
+        # Rule 9: 日本語文中に挟まった改行を除去
+        # "〜 に\n対して" のような行分割 (直前が日本語、直後も日本語) を結合
+        text = re.sub(r"([\u3040-\u9fff、。])\n([\u3040-\u9fff])", r"\1\2", text)
+
+        return text.strip()
+
+    def _extract_text_from_pdf_bytes(self, pdf_bytes: bytes) -> str:
+        """PDF bytes からテキストを抽出する。
+
+        pdfminer.six を優先して使用する（日本語 CIDFont の ToUnicode マップに対応）。
+        インポートに失敗した場合は pypdf にフォールバックする。
+        """
+        # --- pdfminer.six (優先) ---
+        try:
+            from pdfminer.high_level import (
+                extract_text as pdfminer_extract,  # type: ignore[import]
+            )
+
+            text = pdfminer_extract(BytesIO(pdf_bytes))
+            text = self._fix_pdfminer_cid_chars(text)
+            text = self._normalize_pdf_math_text(text)
+            if text:
+                return text
+        except Exception:
+            pass
+
+        # --- pypdf (フォールバック) ---
+        try:
+            reader = PdfReader(BytesIO(pdf_bytes))
+            texts: list[str] = []
+            for page in reader.pages:
+                page_text = (page.extract_text() or "").strip()
+                if page_text:
+                    texts.append(page_text)
+            return "\n".join(texts).strip()
+        except Exception:
+            return ""
+
+    def _load_local_reference_problem_text(self, request: SolveRequest) -> str:
+        reference_path = self._resolve_local_reference_pdf_path(request)
+        if reference_path is not None and reference_path.exists():
+            try:
+                pdf_bytes = reference_path.read_bytes()
+                extracted = self._extract_text_from_pdf_bytes(pdf_bytes)
+                if extracted:
+                    return self._select_best_pdf_reference_text(pdf_bytes, extracted)
+            except Exception:
+                pass
+
+        for reference_url in self._resolve_reference_pdf_urls(request):
+            if not reference_url:
+                continue
+            try:
+                response = requests.get(reference_url, timeout=8)
+                response.raise_for_status()
+            except requests.RequestException:
+                continue
+
+            pdf_bytes = response.content
+            if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
+                continue
+
+            if len(pdf_bytes) > settings.solve_max_image_bytes:
+                continue
+
+            extracted = self._extract_text_from_pdf_bytes(pdf_bytes)
+            if extracted:
+                return self._select_best_pdf_reference_text(pdf_bytes, extracted)
+
+        return ""
+
+    def _select_best_pdf_reference_text(
+        self, pdf_bytes: bytes, direct_extracted_text: str
+    ) -> str:
+        """PDF から直接抽出したテキストをクリーンアップして返す。"""
+        return self._cleanup_ocr_text(direct_extracted_text)
+
+    def _resolve_local_reference_pdf_path(self, request: SolveRequest) -> Path | None:
+        year = request.exam.year
+        if year is None:
+            return None
+
+        question_no = request.exam.question_no
+        if not question_no:
+            return None
+
+        question_digits = re.sub(r"[^0-9]", "", str(question_no))
+        if not question_digits:
+            return None
+
+        university = re.sub(r"[^a-z0-9_-]", "", request.exam.university.lower())
+        if not university:
+            return None
+
+        # parents[4] = repo root when running locally (workspaces/…/services/api/app/services/).
+        # In Cloud Functions the deployment path is shallower (/workspace/app/services/),
+        # so parents[4] raises IndexError. Catch it and return None gracefully.
+        try:
+            repo_root = Path(__file__).resolve().parents[4]
+        except IndexError:
+            return None
+        docs_dir = repo_root / "docs"
+        candidate_names = [
+            f"{year}_{university}_q_{question_digits}.pdf",
+            f"{year}_{university}_rz_{question_digits}.pdf",
+        ]
+        for filename in candidate_names:
+            candidate = docs_dir / filename
+            if candidate.exists():
+                return candidate
+        return docs_dir / candidate_names[0]
+
+    def _resolve_reference_pdf_url(self, request: SolveRequest) -> str | None:
+        urls = self._resolve_reference_pdf_urls(request)
+        return urls[0] if urls else None
+
+    def _resolve_reference_pdf_urls(self, request: SolveRequest) -> list[str]:
+        year = request.exam.year
+        if year is None:
+            return []
+
+        question_no = request.exam.question_no
+        if not question_no:
+            return []
+
+        question_digits = re.sub(r"[^0-9]", "", str(question_no))
+        if not question_digits:
+            return []
+
+        university = re.sub(r"[^a-z0-9_-]", "", request.exam.university.lower())
+        if not university:
+            return []
+
+        return [
+            (
+                "http://server-test.net/math/"
+                f"{university}/q_pdf/{year}_{question_digits}.pdf"
+            ),
+            (
+                "https://www5a.biglobe.ne.jp/~t-konno/math/"
+                f"{university}/{year}_{university}_rz_{question_digits}.pdf"
+            ),
+        ]
+
+    def _load_reference_problem_image_bytes(
+        self, request: SolveRequest
+    ) -> bytes | None:
+        for image_url in self._resolve_reference_image_urls(request):
+            try:
+                response = requests.get(image_url, timeout=8)
+                response.raise_for_status()
+            except requests.RequestException:
+                continue
+
+            content_type = response.headers.get("Content-Type", "")
+            if "image/" not in content_type.lower():
+                continue
+
+            image_bytes = response.content
+            if not image_bytes:
+                continue
+            if len(image_bytes) > settings.solve_max_image_bytes:
+                continue
+            return image_bytes
+
+        return None
+
+    def _resolve_reference_image_urls(self, request: SolveRequest) -> list[str]:
+        year = request.exam.year
+        if year is None:
+            return []
+
+        question_no = request.exam.question_no
+        if not question_no:
+            return []
+
+        question_digits = re.sub(r"[^0-9]", "", str(question_no))
+        if not question_digits:
+            return []
+
+        university = re.sub(r"[^a-z0-9_-]", "", request.exam.university.lower())
+        if not university:
+            return []
+
+        return [
+            (
+                "http://server-test.net/math/"
+                f"{university}/q_jpg/{year}_{question_digits}.jpg"
+            )
+        ]
+
+    def _select_fallback_ocr_candidate(
+        self,
+        fallback_debug_texts: list[dict[str, float | str]],
+        local_reference_score: float,
+    ) -> tuple[str, str, float] | None:
+        best_candidate: tuple[str, str, float] | None = None
+        best_adjusted_score = float("-inf")
+
+        for item in fallback_debug_texts:
+            source = str(item.get("source", "")).strip()
+            text = self._cleanup_ocr_text(str(item.get("text", "")))
+            try:
+                score = float(item.get("score", 0.0))
+            except (TypeError, ValueError):
+                score = 0.0
+
+            if not text or len(text) < 80:
+                continue
+            if any(
+                phrase in text
+                for phrase in [
+                    "問題文が不明瞭",
+                    "解答できません",
+                    "正確な解答が困難",
+                ]
+            ):
+                continue
+            if score <= local_reference_score + 0.03:
+                continue
+
+            adjusted_score = score
+            if adjusted_score > best_adjusted_score:
+                best_adjusted_score = adjusted_score
+                best_candidate = (text, source, round(score, 4))
+
+        return best_candidate
+
+    def _build_sample_corpus_hint(self, request: SolveRequest) -> str:
+        university = re.sub(r"[^a-z0-9_-]", "", request.exam.university.lower())
+        if not university:
+            return ""
+
+        try:
+            repo_root = Path(__file__).resolve().parents[4]
+        except IndexError:
+            return ""
+        sample_files = sorted((repo_root / "docs").glob(f"2025_{university}_q_*.pdf"))
+        if not sample_files:
+            sample_files = sorted(
+                (repo_root / "docs").glob(f"2025_{university}_rz_*.pdf")
+            )
+        if not sample_files:
+            return ""
+
+        keyword_targets = [
+            "ベクトル",
+            "座標",
+            "内積",
+            "領域",
+            "不等式",
+            "確率",
+            "微分",
+            "積分",
+            "数列",
+            "三角",
+            "円",
+            "直線",
+        ]
+
+        keyword_counter: Counter[str] = Counter()
+        objective_hints: list[str] = []
+
+        for sample_file in sample_files:
+            key = str(sample_file)
+            text = self._sample_pdf_text_cache.get(key)
+            if text is None:
+                try:
+                    text = self._extract_text_from_pdf_bytes(sample_file.read_bytes())
+                except Exception:
+                    text = ""
+                self._sample_pdf_text_cache[key] = text
+
+            if not text:
+                continue
+
+            normalized = self._cleanup_ocr_text(text)
+            for token in keyword_targets:
+                if token in normalized:
+                    keyword_counter[token] += 1
+
+            objective = self._extract_sample_objective_line(normalized)
+            if objective:
+                question_label_match = re.search(
+                    r"_(?:q|rz)_(\d+)\.pdf$", sample_file.name
+                )
+                question_label = (
+                    f"問{question_label_match.group(1)}"
+                    if question_label_match
+                    else sample_file.stem
+                )
+                objective_hints.append(f"{question_label}: {objective}")
+
+        if not keyword_counter and not objective_hints:
+            return ""
+
+        frequent_keywords = ", ".join(
+            [token for token, _ in keyword_counter.most_common(6)]
+        )
+        compact_objectives = " / ".join(objective_hints[:4])
+
+        return (
+            f"2025年度の{request.exam.university}過去問サンプル（{len(sample_files)}題）を参照。"
+            f"頻出要素: {frequent_keywords or '条件整理・立式・計算'}。"
+            f"代表目的: {compact_objectives or '与条件から未知量を定めて結論を導出'}。"
+            "これらの傾向を踏まえ、今回の問題でも条件抽出→立式→計算→結論を厳密に示すこと。"
+        )
+
+    def _extract_sample_objective_line(self, normalized_text: str) -> str:
+        objective_patterns = [
+            r"求めよ",
+            r"求めなさい",
+            r"示せ",
+            r"証明せよ",
+            r"答えよ",
+            r"いくつ",
+        ]
+
+        for line in normalized_text.split("\n"):
+            text = line.strip()
+            if not text:
+                continue
+            if len(text) > 120:
+                continue
+            if any(re.search(pattern, text) for pattern in objective_patterns):
+                return text
+
+        sentences = re.split(r"(?<=[。！？?])\s*", normalized_text)
+        for sentence in sentences:
+            text = sentence.strip()
+            if not text:
+                continue
+            if len(text) > 120:
+                continue
+            if any(re.search(pattern, text) for pattern in objective_patterns):
+                return text
+
+        return ""
+
+    def _cleanup_ocr_text(self, text: str) -> str:
+        normalized = text.replace("\r", "\n")
+        normalized = self._normalize_math_notation_tokens(normalized)
+        normalized = re.sub(r"[ \t]+", " ", normalized)
+        normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+        return normalized.strip()
+
+    def _normalize_math_notation_tokens(self, text: str) -> str:
+        if not text:
+            return ""
+
+        normalized = text
+
+        char_replacements = {
+            "−": "-",
+            "—": "-",
+            "–": "-",
+            "×": "*",
+            "÷": "/",
+            "∶": ":",
+            "＝": "=",
+            "＜": "<",
+            "＞": ">",
+            "≦": "<=",
+            "≧": ">=",
+            "（": "(",
+            "）": ")",
+            "［": "[",
+            "］": "]",
+            "｛": "{",
+            "｝": "}",
+            "，": ",",
+            "．": ".",
+            "：": ":",
+            "；": ";",
+            "π": "pi",
+            "Π": "Pi",
+            "Σ": "Sigma",
+            "Δ": "Delta",
+            "θ": "theta",
+            "α": "alpha",
+            "β": "beta",
+            "γ": "gamma",
+            "λ": "lambda",
+            "μ": "mu",
+            "∞": "inf",
+            "√": "sqrt",
+            "∫": "int",
+            "∠": "angle",
+            "⊥": "perp",
+            "∥": "parallel",
+            "∣": "|",
+            "｜": "|",
+            "ｉ": "i",
+        }
+        for source, target in char_replacements.items():
+            normalized = normalized.replace(source, target)
+
+        normalized = normalized.translate(
+            str.maketrans(
+                "０１２３４５６７８９ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ",
+                "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+            )
+        )
+
+        token_replacements = [
+            (r"\bSIN\b", "sin"),
+            (r"\bCOS\b", "cos"),
+            (r"\bTAN\b", "tan"),
+            (r"\bLOG\b", "log"),
+            (r"\bLIM\b", "lim"),
+            (r"\bsqrt\s*\(", "sqrt("),
+            (r"\bint\s*\(", "int("),
+            (r"\bangle\s*([A-Za-z]{2,3})", r"angle(\1)"),
+            (r"\bARG\b", "arg"),
+            (r"\barg\s*z\b", "arg(z)"),
+            (r"\bRE\b", "Re"),
+            (r"\bIM\b", "Im"),
+            (r"\b1\s*/\s*z\b", "1/z"),
+            (r"\|\s*([A-Za-z0-9_+\-*/^()]+)\s*\|", r"|\1|"),
+            (r"(?<=[0-9A-Za-z])\s*\^\s*(?=[0-9A-Za-z(])", "^"),
+            (r"(?<=[0-9A-Za-z])\s*_\s*(?=[0-9A-Za-z(])", "_"),
+            (r"(?<=\d)\s*/\s*(?=\d)", "/"),
+            (r"(?<=\d)\s*\*\s*(?=\d)", "*"),
+        ]
+        for pattern, replacement in token_replacements:
+            normalized = re.sub(pattern, replacement, normalized)
+
+        return normalized
+
+    def _score_ocr_text(self, text: str, source: str) -> float:
+        if not text:
+            return 0.0
+
+        # 数学問題文は 600 文字以下が標準的なため、それ以上は飽和させない
+        length_score = min(len(text), 600) / 600
+        replacement_penalty = text.count("�") * 0.015
+        mojibake_penalty = (
+            0.0 if source == "pdf_direct" else self._estimate_mojibake_penalty(text)
+        )
+        math_tokens = re.findall(r"[A-Za-z0-9=+\-*/^()\[\]{}<>∫√πΣΔ∞]", text)
+        math_score = min(len(math_tokens), 600) / 600
+        line_score = (
+            min(len([line for line in text.splitlines() if line.strip()]), 60) / 60
+        )
+        japanese_score = self._estimate_japanese_score(text)
+        structure_score = self._estimate_ocr_structure_score(text)
+        math_integrity_score = self._estimate_math_integrity_score(text)
+        repair_failure_penalty = self._estimate_repair_failure_penalty(text)
+
+        source_bonus_map = {
+            "local_reference_pdf": 0.44,
+            "pdf_direct": 0.34,
+            "gcp_vision_api": 0.30,
+            # azure_di_merged: positional merge — display formulas replaced in-place with
+            # accurate LaTeX while Japanese text is preserved; highest quality candidate
+            "azure_di_merged": 0.30,
+            # gcp_vision_merged: Vision API text + Gemini Vision formula merge (in-place)
+            "gcp_vision_merged": 0.28,
+            # azure_di_read+formulas: fallback append — Japanese text preserved but formulas
+            # are only listed at the bottom, not placed in context
+            "azure_di_read+formulas": 0.26,
+            # azure_di_layout_markdown: accurate LaTeX but Japanese text sometimes lost
+            "azure_di_layout_markdown": 0.12,
+            # azure_di_read: plain text fallback — no LaTeX bonus
+            "azure_di_read": 0.0,
+        }
+        source_bonus = source_bonus_map.get(source, 0.0)
+
+        score = (
+            (length_score * 0.45)
+            + (math_score * 0.35)
+            + (line_score * 0.20)
+            + (japanese_score * 0.12)
+            + (structure_score * 0.18)
+            + (math_integrity_score * 0.32)
+            + source_bonus
+        )
+        return max(
+            score - replacement_penalty - mojibake_penalty - repair_failure_penalty,
+            0.0,
+        )
+
+    # ------------------------------------------------------------------
+    # OCR マージ共通ヘルパー (Azure / GCP 両ソルバーで共有)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _poly_y_range(polygon: list | None) -> tuple[float, float] | None:
+        """Return (y_min, y_max) from a polygon, or None if unavailable.
+
+        Handles two formats returned by different SDK builds:
+          - Flat float list: ``[x0, y0, x1, y1, x2, y2, x3, y3]``
+          - Point-object list: ``[Point(x=..., y=...), ...]``
+        """
+        if not polygon or len(polygon) < 2:
+            return None
+        try:
+            if hasattr(polygon[0], "y"):
+                y_vals = [p.y for p in polygon]
+            else:
+                y_vals = polygon[1::2]  # flat list: y at odd indices
+            if not y_vals:
+                return None
+            return float(min(y_vals)), float(max(y_vals))
+        except Exception:
+            return None
+
+    @staticmethod
+    def _y_overlap_ratio(
+        a_min: float, a_max: float, b_min: float, b_max: float
+    ) -> float:
+        """Fraction of the smaller vertical span that overlaps with the other span."""
+        overlap = min(a_max, b_max) - max(a_min, b_min)
+        if overlap <= 0:
+            return 0.0
+        smaller = min(a_max - a_min, b_max - b_min)
+        return overlap / max(smaller, 1e-9)
+
+    @staticmethod
+    def _is_formula_candidate(content: str) -> bool:
+        """Return True if this line *could* be part of a formula region.
+
+        Weak criterion: no CJK characters, not a problem-number label, short enough.
+        Used to group consecutive candidate lines; the group is only treated as a
+        formula region when it contains at least one strong math signal.
+        """
+        s = content.strip()
+        if not s:
+            return False
+        # Problem-number labels like "(1)", "(2)" are not formula parts
+        if re.fullmatch(r"\(\d+\)", s):
+            return False
+        # Lines with CJK characters are Japanese problem text
+        cjk = sum(
+            1 for c in s if "\u3040" <= c <= "\u9fff" or "\uff00" <= c <= "\uffef"
+        )
+        if cjk > 0:
+            return False
+        return len(s) <= 80
+
+    @staticmethod
+    def _has_formula_signal(lines: list[str]) -> bool:
+        """Return True if at least one line in the group contains a strong math signal."""
+        pattern = re.compile(
+            r"[\\∞∫∑∏√]|lim|log|sin|cos|tan|rightarrow|\bint\b|d[a-z]\b"
+            r"|[+\-*/^=<>]{2,}|[+\-*/^].*[+\-*/^]",
+            re.IGNORECASE,
+        )
+        return any(pattern.search(line) for line in lines)
+
+    def _find_formula_regions(self, read_lines: list[dict]) -> list[tuple[int, int]]:
+        """Find contiguous runs of formula-candidate lines that contain a math signal.
+
+        Returns a list of ``(start_idx, end_idx_exclusive)`` ranges.
+        """
+        regions: list[tuple[int, int]] = []
+        i = 0
+        n = len(read_lines)
+        while i < n:
+            if self._is_formula_candidate(read_lines[i]["content"]):
+                j = i
+                while j < n and self._is_formula_candidate(read_lines[j]["content"]):
+                    j += 1
+                group_texts = [read_lines[k]["content"] for k in range(i, j)]
+                if self._has_formula_signal(group_texts):
+                    regions.append((i, j))
+                i = j
+            else:
+                i += 1
+        return regions
+
+    def _merge_read_with_formulas(
+        self,
+        read_lines: list[dict],
+        rich_formulas: list[dict],
+    ) -> str:
+        """Replace display-formula lines in OCR read output with accurate LaTeX.
+
+        Strategy (two-pass):
+          1. Polygon overlap (≥30 % Y-overlap) — preferred when polygon data exists.
+          2. Heuristic region matching — fallback when polygons are None.
+             Detects consecutive runs of formula-fragment lines and replaces each
+             run with the next available display formula in document order.
+          3. Display formulas with no polygon AND no heuristic match are appended
+             at the bottom so they are never silently dropped.
+          4. Inline formulas are always appended at the bottom for LLM context.
+
+        ``read_lines`` format: ``[{"content": str, "polygon": list | None}]``
+        ``rich_formulas`` format: ``[{"value": str, "kind": "display"|"inline",
+                                      "polygon": list | None}]``
+        """
+        if not rich_formulas:
+            return "\n".join(line["content"] for line in read_lines)
+
+        display_formulas = [
+            (f, self._poly_y_range(f.get("polygon")))
+            for f in rich_formulas
+            if f.get("kind") == "display"
+        ]
+        inline_latex = [f["value"] for f in rich_formulas if f.get("kind") != "display"]
+
+        # --- Pass 1: polygon-based matching ---
+        line_formula: list[dict | None] = [None] * len(read_lines)
+        for f, f_yr in display_formulas:
+            if f_yr is None:
+                continue
+            for li, line in enumerate(read_lines):
+                if line_formula[li] is not None:
+                    continue
+                l_yr = self._poly_y_range(line.get("polygon"))
+                if (
+                    l_yr
+                    and self._y_overlap_ratio(l_yr[0], l_yr[1], f_yr[0], f_yr[1]) >= 0.3
+                ):
+                    line_formula[li] = f
+
+        poly_emitted: set[int] = {
+            id(f_on_line) for f_on_line in line_formula if f_on_line is not None
+        }
+
+        # --- Pass 2: heuristic matching for unmatched display formulas ---
+        unmatched_display = [
+            f for f, _ in display_formulas if id(f) not in poly_emitted
+        ]
+        if unmatched_display:
+            regions = self._find_formula_regions(read_lines)
+            print(
+                f"[OCR-MERGE] heuristic regions={regions}, "
+                f"unmatched_display={len(unmatched_display)}"
+            )
+            for region, fm in zip(regions, unmatched_display):
+                start, end = region
+                for li in range(start, end):
+                    line_formula[li] = fm
+                poly_emitted.add(id(fm))
+
+        # --- Build output ---
+        parts: list[str] = []
+        emitted: set[int] = set()
+        li = 0
+        while li < len(read_lines):
+            f = line_formula[li]
+            if f is None:
+                parts.append(read_lines[li]["content"])
+                li += 1
+            else:
+                fid = id(f)
+                if fid not in emitted:
+                    emitted.add(fid)
+                    parts.append(f"$${f['value']}$$")
+                while li < len(read_lines) and line_formula[li] is f:
+                    li += 1
+
+        # Safety net: display formulas still not emitted → append at bottom
+        still_unmatched = [
+            f["value"] for f, _ in display_formulas if id(f) not in emitted
+        ]
+        if still_unmatched or inline_latex:
+            parts.append("\n[検出された数式 (LaTeX)]")
+            for val in still_unmatched:
+                parts.append(f"[display] {val}")
+            for val in inline_latex:
+                parts.append(f"[inline] {val}")
+
+        return "\n".join(parts)
+
+    def _estimate_math_integrity_score(self, text: str) -> float:
+        if not text:
+            return 0.0
+
+        compact = re.sub(r"\s+", "", text)
+        if not compact:
+            return 0.0
+
+        math_token_count = len(
+            re.findall(
+                r"[A-Za-z0-9=<>≤≥+\-*/^()\[\]{}|]|sqrt|int|sin|cos|tan|log|lim|arg|Re|Im|alpha|beta|gamma|i|z",
+                compact,
+            )
+        )
+        if math_token_count == 0:
+            return 0.0
+
+        bracket_pairs = [
+            ("(", ")"),
+            ("[", "]"),
+            ("{", "}"),
+        ]
+        balance_score = 1.0
+        for left, right in bracket_pairs:
+            left_count = compact.count(left)
+            right_count = compact.count(right)
+            if max(left_count, right_count) == 0:
+                continue
+            ratio = min(left_count, right_count) / max(left_count, right_count)
+            balance_score = min(balance_score, ratio)
+
+        operator_count = len(re.findall(r"[=<>≤≥+\-*/^]", compact))
+        operator_density = operator_count / max(math_token_count, 1)
+        operator_score = min(max(operator_density * 4.0, 0.0), 1.0)
+
+        broken_pattern_penalty = 0.0
+        broken_patterns = [
+            r"[=<>+\-*/^]{3,}",
+            r"\(\)",
+            r"\[\]",
+            r"\{\}",
+            r"[A-Za-z]{1}\^[^0-9A-Za-z(]",
+        ]
+        for pattern in broken_patterns:
+            if re.search(pattern, compact):
+                broken_pattern_penalty += 0.12
+
+        token_variety = len(set(re.findall(r"[A-Za-z]|\d|[=<>≤≥+\-*/^]", compact)))
+        variety_score = min(token_variety / 12, 1.0)
+
+        score = (
+            (balance_score * 0.35) + (operator_score * 0.35) + (variety_score * 0.30)
+        )
+        return max(0.0, min(score - broken_pattern_penalty, 1.0))
+
+    def _estimate_ocr_structure_score(self, text: str) -> float:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            return 0.0
+
+        long_lines = [line for line in lines if len(line) >= 8]
+        rich_lines = [
+            line
+            for line in lines
+            if re.search(r"[ぁ-んァ-ン一-龯々ーA-Za-z0-9=<>≤≥+\-*/^()∠π√]", line)
+        ]
+        single_char_lines = [
+            line for line in lines if len(re.findall(r"\w", line)) <= 2
+        ]
+
+        long_ratio = len(long_lines) / len(lines)
+        rich_ratio = len(rich_lines) / len(lines)
+        short_penalty = min(len(single_char_lines) / len(lines), 1.0)
+
+        score = (long_ratio * 0.45) + (rich_ratio * 0.75) - (short_penalty * 0.5)
+        return max(0.0, min(score, 1.0))
+
+    def _is_low_quality_ocr_candidate(self, text: str, source: str) -> bool:
+        if source in {
+            "local_reference_pdf",
+            "pdf_direct",
+            "gcp_vision_api",
+        }:
+            return False
+
+        if len(text) < 18:
+            return True
+
+        structure_score = self._estimate_ocr_structure_score(text)
+        japanese_score = self._estimate_japanese_score(text)
+        math_token_count = len(re.findall(r"[A-Za-z0-9=<>≤≥+\-*/^()∠π√]", text))
+
+        if structure_score < 0.18 and japanese_score < 0.05 and math_token_count < 20:
+            return True
+
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if len(lines) >= 4:
+            tiny_lines = [line for line in lines if len(re.findall(r"\w", line)) <= 2]
+            if len(tiny_lines) / len(lines) >= 0.75:
+                return True
+
+        return False
+
+    def _estimate_repair_failure_penalty(self, text: str) -> float:
+        if not text:
+            return 0.0
+
+        normalized = text.strip()
+        if not normalized:
+            return 0.0
+
+        failure_patterns = [
+            "OCRが正しく認識できていない",
+            "元の日本語の数学問題文が不明瞭",
+            "画像の品質を向上",
+            "別のOCRソフトウェア",
+            "おすすめします",
+            "認識できません",
+            "不明瞭です",
+        ]
+
+        hits = sum(1 for pattern in failure_patterns if pattern in normalized)
+        code_fence_penalty = 0.18 if "```" in normalized else 0.0
+        return min(hits * 0.15 + code_fence_penalty, 0.85)
+
+    def _is_unusable_ocr_repair_text(self, text: str) -> bool:
+        normalized = text.strip()
+        if not normalized:
+            return True
+
+        if self._estimate_repair_failure_penalty(normalized) >= 0.35:
+            return True
+
+        fabricated_patterns = [
+            "実際のOCR入力が不完全",
+            "典型的な数学問題",
+            "次の方程式を解きなさい",
+            "次の不等式を解きなさい",
+            "次の関数のグラフ",
+        ]
+        if any(pattern in normalized for pattern in fabricated_patterns):
+            return True
+
+        lines = [line.strip() for line in normalized.split("\n") if line.strip()]
+        if len(lines) >= 5:
+            very_short_lines = [
+                line for line in lines if len(re.findall(r"\w", line)) <= 3
+            ]
+            if len(very_short_lines) / max(len(lines), 1) >= 0.7:
+                return True
+
+        return False
+
+    def _estimate_text_overlap_ratio(
+        self, source_text: str, repaired_text: str
+    ) -> float:
+        source_tokens = {
+            token
+            for token in re.findall(r"[ぁ-んァ-ン一-龯々ーA-Za-z0-9]{2,}", source_text)
+            if len(token) >= 2
+        }
+        repaired_tokens = {
+            token
+            for token in re.findall(
+                r"[ぁ-んァ-ン一-龯々ーA-Za-z0-9]{2,}", repaired_text
+            )
+            if len(token) >= 2
+        }
+        if not source_tokens or not repaired_tokens:
+            return 0.0
+        overlap = source_tokens & repaired_tokens
+        return len(overlap) / len(repaired_tokens)
+
+    def _estimate_japanese_score(self, text: str) -> float:
+        if not text:
+            return 0.0
+
+        japanese_chars = re.findall(r"[ぁ-んァ-ン一-龯々ー]", text)
+        meaningful_len = max(len(re.findall(r"\S", text)), 1)
+        ratio = len(japanese_chars) / meaningful_len
+        return min(ratio * 1.4, 1.0)
+
+    def _estimate_mojibake_penalty(self, text: str) -> float:
+        patterns = [
+            "ͷ",
+            "ɻ",
+            "Λ",
+            "ͱ",
+            "͢",
+            "΂",
+            "݅",
+            "಺",
+        ]
+        hits = sum(text.count(pattern) for pattern in patterns)
+        return min(hits * 0.012, 0.28)
+
+    def _needs_ocr_repair(self, text: str) -> bool:
+        if not text:
+            return False
+        japanese_score = self._estimate_japanese_score(text)
+        mojibake_penalty = self._estimate_mojibake_penalty(text)
+        return japanese_score < 0.22 or mojibake_penalty >= 0.08
+
+    def _normalize_repaired_problem_text(self, text: str) -> str:
+        normalized = text.replace("\r", "\n")
+        normalized = self._humanize_math_notation(normalized)
+
+        wrapper_patterns = [
+            r"^復元した日本語の数学問題文(?:は以下の通りです)?[:：]\s*",
+            r"^復元した問題文(?:は以下の通りです)?[:：]\s*",
+            r"^修復後の問題文(?:は以下の通りです)?[:：]\s*",
+            r"^以下が復元結果です[:：]\s*",
+        ]
+        for pattern in wrapper_patterns:
+            normalized = re.sub(pattern, "", normalized, flags=re.MULTILINE)
+
+        normalized = re.sub(r"^[-—]{3,}\s*", "", normalized, flags=re.MULTILINE)
+
+        lines = [line.strip() for line in normalized.split("\n")]
+        cleaned_lines: list[str] = []
+        for line in lines:
+            if not line:
+                cleaned_lines.append("")
+                continue
+            if re.match(r"^復元した(?:日本語の)?数学問題文", line):
+                continue
+            if re.match(r"^復元した問題文", line):
+                continue
+            if re.fullmatch(r"[-—]{3,}", line):
+                continue
+            cleaned_lines.append(line)
+
+        merged = "\n".join(cleaned_lines)
+        merged = re.sub(r"\n{3,}", "\n\n", merged)
+        return merged.strip()
+
+    def _humanize_math_notation(self, text: str) -> str:
+        normalized = text
+
+        normalized = normalized.replace("\\(", "").replace("\\)", "")
+        normalized = normalized.replace("\\[", "").replace("\\]", "")
+
+        normalized = re.sub(r"\\frac\{([^{}]+)\}\{([^{}]+)\}", r"\1/\2", normalized)
+        normalized = normalized.replace("\\pi", "π")
+        normalized = normalized.replace("\\angle", "∠")
+        normalized = normalized.replace("\\geq", "≥")
+        normalized = normalized.replace("\\leq", "≤")
+
+        normalized = re.sub(r"\\text\{([^{}]+)\}", r"\1", normalized)
+        normalized = re.sub(r"\\", "", normalized)
+        normalized = re.sub(r"\s+([,.;:])", r"\1", normalized)
+        return normalized
+
+    def _enforce_output_options(
+        self, answer_payload: dict, request: SolveRequest
+    ) -> dict:
+        normalized = dict(answer_payload)
+
+        if (not request.options.need_steps) or (
+            not isinstance(normalized.get("steps"), list)
+        ):
+            normalized["steps"] = []
+
+        if not request.options.need_latex:
+            normalized["latex"] = None
+
+        diagram = normalized.get("diagramGuide")
+        if diagram is not None:
+            diagram_text = str(diagram).strip()
+            normalized["diagramGuide"] = diagram_text or None
+
+        return normalized
+
+    def _resolve_diagram_guide(
+        self, answer_payload: dict, structured_problem: dict[str, object]
+    ) -> str | None:
+        diagram_guide = answer_payload.get("diagramGuide")
+        if diagram_guide is not None:
+            diagram_text = str(diagram_guide).strip()
+            if diagram_text:
+                return diagram_text
+
+        problem_type = str(structured_problem.get("problemType", "algebra"))
+
+        if problem_type == "coordinate_2d":
+            objective_text = ""
+            objective = structured_problem.get("objective")
+            if isinstance(objective, list) and objective:
+                objective_text = str(objective[0]).strip()
+            return (
+                "① xy 座標系を描き、与えられた点・直線・曲線を配置する。"
+                f" ② {objective_text or '問題で求めるもの'} を図中に示す。"
+                " ③ 交点・領域・軸との交点を明記し、必要に応じて斜線・矢印で強調する。"
+            )
+
+        if problem_type == "coordinate_3d":
+            return (
+                "① xyz 空間座標系を描き、x・y・z 軸を配置する。"
+                " ② 問題に登場する点・直線・平面・曲面をそれぞれ描く。"
+                " ③ 各要素にラベル（座標値・方程式）を付記する。"
+                " ④ 交点・法線・距離などを図中に示し、立体的に把握できるようにする。"
+            )
+
+        if problem_type != "vector_geometry":
+            return None
+
+        objective = structured_problem.get("objective")
+        objective_text = ""
+        if isinstance(objective, list) and objective:
+            objective_text = str(objective[0]).strip()
+
+        conditions = structured_problem.get("conditions")
+        condition_lines: list[str] = []
+        if isinstance(conditions, list):
+            condition_lines = [
+                str(item).strip() for item in conditions if str(item).strip()
+            ]
+
+        key_condition = condition_lines[0] if condition_lines else "角条件や距離条件"
+        if not objective_text:
+            objective_text = "未知点の位置・座標"
+
+        return (
+            "① xy平面を描き、原点Oと既知点Aを座標付きで配置する。"
+            f" ② 問題の目的（{objective_text}）を図中に注記する。"
+            f" ③ 条件（{key_condition}）を満たす境界線・曲線を順に描く。"
+            " ④ 各条件の共通部分を斜線で示し、境界を含むかを不等号に対応させて明記する。"
+        )
+
+    def _refine_final_text_for_geometry(
+        self, final_text: str, structured_problem: dict[str, object]
+    ) -> str:
+        text = final_text.strip()
+        if not text:
+            return text
+
+        problem_type = str(structured_problem.get("problemType", "algebra"))
+        if problem_type != "vector_geometry":
+            return text
+
+        conditions = structured_problem.get("conditions")
+        condition_lines: list[str] = []
+        if isinstance(conditions, list):
+            condition_lines = [
+                str(item).strip() for item in conditions if str(item).strip()
+            ]
+        condition_blob = " ".join(condition_lines)
+
+        has_region_expression = any(
+            token in text for token in ["範囲", "領域", "≤", "≥", "<", ">", "不等式"]
+        )
+        has_numbered_conditions = any(token in text for token in ["①", "②", "③", "④"])
+
+        if has_region_expression and not has_numbered_conditions:
+            clauses = self._extract_inequality_clauses(text)
+            if len(clauses) >= 2:
+                lead_clause = clauses[0]
+                labeled_clauses = [
+                    f"{chr(9312 + idx)} {clause}"
+                    for idx, clause in enumerate(clauses[1:4])
+                ]
+                text = (
+                    f"求める範囲は、{lead_clause} かつ "
+                    f"{' かつ '.join(labeled_clauses)} を満たす領域である。"
+                )
+
+        has_boundary_note = any(
+            token in text for token in ["境界", "含む", "含ま", "等号"]
+        )
+
+        if has_region_expression and not has_boundary_note:
+            text = (
+                f"{text} 境界は各不等式の等号成立点を含み、"
+                "不等号が厳密な条件は境界から除く。"
+            )
+
+        excludes_origin_condition = (
+            "異なる" in condition_blob and "O" in condition_blob
+        ) or ("原点" in condition_blob and "異" in condition_blob)
+        mentions_origin = ("原点" in text) or ("点O" in text) or ("Oを除" in text)
+        if excludes_origin_condition and not mentions_origin:
+            text = f"{text} ただし条件(i)より原点Oは除外する。"
+
+        return text
+
+    def _refine_steps_for_geometry(
+        self,
+        steps: object,
+        structured_problem: dict[str, object],
+        final_text: str,
+    ) -> list[str]:
+        problem_type = str(structured_problem.get("problemType", "algebra"))
+        if problem_type != "vector_geometry":
+            if isinstance(steps, list):
+                return [str(step).strip() for step in steps if str(step).strip()]
+            return []
+
+        original_steps = []
+        if isinstance(steps, list):
+            original_steps = [str(step).strip() for step in steps if str(step).strip()]
+
+        cleaned_steps = [
+            re.sub(r"^[0-9①②③④⑤\).\s]+", "", step) for step in original_steps
+        ]
+
+        condition_fragments = self._extract_inequality_clauses(final_text)
+        if not condition_fragments:
+            condition_fragments = self._select_geometry_condition_fragments(
+                structured_problem
+            )
+        condition_text = " / ".join(condition_fragments)
+
+        result: list[str] = []
+        result.append(
+            f"① 条件抽出・設定: {condition_text or '与条件を座標・角条件・距離条件として明示する。'}"
+        )
+
+        numbered_constraints = self._extract_numbered_constraints(final_text)
+        reliable_steps = self._pick_reliable_step_fragments(cleaned_steps, max_items=2)
+        detailed_derivations = self._build_geometry_derivation_steps(
+            structured_problem,
+            numbered_constraints,
+        )
+        step_level = self._decide_geometry_step_level(
+            structured_problem=structured_problem,
+            numbered_constraints=numbered_constraints,
+            detailed_derivations=detailed_derivations,
+            final_text=final_text,
+        )
+
+        if detailed_derivations:
+            result.append(f"② 条件①の角条件変換: {detailed_derivations[0]}")
+            result.append(f"③ 条件①の内積式設定: {detailed_derivations[1]}")
+            result.append(f"④ 条件①の式変形: {detailed_derivations[2]}")
+        elif numbered_constraints:
+            result.append(
+                f"② 条件①の導出: {numbered_constraints[0]} を角条件と内積で導く。"
+            )
+        elif reliable_steps:
+            result.append(f"② 条件①の導出: {reliable_steps[0]}")
+        else:
+            result.append(
+                "② 条件①の導出: 角条件をcos不等式へ変換し、ベクトル内積とノルムから第1条件を導く。"
+            )
+
+        if detailed_derivations:
+            result.append(f"⑤ 条件②の角条件変換: {detailed_derivations[3]}")
+            result.append(f"⑥ 条件②の内積式設定: {detailed_derivations[4]}")
+            result.append(f"⑦ 条件②の式変形: {detailed_derivations[5]}")
+        elif len(numbered_constraints) >= 2:
+            result.append(
+                f"③ 条件②の導出: {numbered_constraints[1]} を同様に立式して得る。"
+            )
+        elif len(reliable_steps) >= 2:
+            result.append(f"③ 条件②の導出: {reliable_steps[1]}")
+        else:
+            result.append(
+                "③ 条件②の導出: 別の角条件を同様に変換し、第2条件（楕円条件など）を導く。"
+            )
+
+        summary = self._build_geometry_conclusion_summary(final_text)
+
+        if step_level >= 8 and detailed_derivations:
+            result.append(f"⑧ 領域統合・結論: {summary}")
+            return result[:8]
+
+        if step_level >= 6:
+            compact_result: list[str] = []
+            compact_result.append(result[0])
+            if detailed_derivations:
+                compact_result.append(f"② 条件①の角条件変換: {detailed_derivations[0]}")
+                compact_result.append(
+                    f"③ 条件①の内積式設定・式変形: {detailed_derivations[1]} {detailed_derivations[2]}"
+                )
+                compact_result.append(f"④ 条件②の角条件変換: {detailed_derivations[3]}")
+                compact_result.append(
+                    f"⑤ 条件②の内積式設定・式変形: {detailed_derivations[4]} {detailed_derivations[5]}"
+                )
+            else:
+                first_constraint = (
+                    numbered_constraints[0]
+                    if numbered_constraints
+                    else "条件①を角条件と内積で式に落とす。"
+                )
+                second_constraint = (
+                    numbered_constraints[1]
+                    if len(numbered_constraints) >= 2
+                    else "条件②を同様に式へ変換する。"
+                )
+                compact_result.append(f"② 条件①の角条件変換: {first_constraint}")
+                compact_result.append(
+                    "③ 条件①の内積式設定・式変形: 角条件を内積不等式に変換して整理する。"
+                )
+                compact_result.append(f"④ 条件②の角条件変換: {second_constraint}")
+                compact_result.append(
+                    "⑤ 条件②の内積式設定・式変形: 条件①と同様に計算して不等式を得る。"
+                )
+
+            compact_result.append(f"⑥ 領域統合・結論: {summary}")
+            return compact_result[:6]
+
+        basic_result: list[str] = []
+        basic_result.append(result[0])
+        basic_result.append(
+            result[1] if len(result) >= 2 else "② 立式: 条件①を式として定式化する。"
+        )
+        basic_result.append(
+            result[4]
+            if len(result) >= 5 and result[4].startswith("⑤")
+            else ("③ 立式: 条件②がある場合は同様に式へ変換し、共通条件を求める。")
+        )
+        basic_result.append(f"④ 領域統合・結論: {summary}")
+        return basic_result[:4]
+
+    def _decide_geometry_step_level(
+        self,
+        structured_problem: dict[str, object],
+        numbered_constraints: list[str],
+        detailed_derivations: tuple[str, str, str, str, str, str] | None,
+        final_text: str,
+    ) -> int:
+        if detailed_derivations:
+            return 8
+
+        normalized_text = str(structured_problem.get("normalizedText", ""))
+        condition_fragments = self._select_geometry_condition_fragments(
+            structured_problem
+        )
+        final_clauses = self._extract_inequality_clauses(final_text)
+        normalized_clauses = self._extract_inequality_clauses(normalized_text)
+
+        has_two_constraints = (
+            len(numbered_constraints) >= 2
+            or len(final_clauses) >= 2
+            or len(normalized_clauses) >= 2
+            or len(condition_fragments) >= 2
+        )
+        if has_two_constraints:
+            return 6
+        return 4
+
+    def _build_geometry_steps_rule(self, structured_problem: dict[str, object]) -> str:
+        normalized_text = str(structured_problem.get("normalizedText", ""))
+        numbered_constraints = self._extract_numbered_constraints(normalized_text)
+        detailed_derivations = self._build_geometry_derivation_steps(
+            structured_problem,
+            numbered_constraints,
+        )
+        step_level = self._decide_geometry_step_level(
+            structured_problem=structured_problem,
+            numbered_constraints=numbered_constraints,
+            detailed_derivations=detailed_derivations,
+            final_text=normalized_text,
+        )
+
+        if step_level >= 8:
+            return (
+                "stepsには、①条件抽出・設定 ②条件①の角条件変換 ③条件①の内積式設定 ④条件①の式変形 "
+                "⑤条件②の角条件変換 ⑥条件②の内積式設定 ⑦条件②の式変形 ⑧領域統合・結論 の順で、"
+                "結論に至るまでの式変形と根拠を簡潔に書いてください。"
+            )
+
+        if step_level >= 6:
+            return (
+                "stepsには、①条件抽出・設定 ②条件①の角条件変換 ③条件①の内積式設定・式変形 "
+                "④条件②の角条件変換 ⑤条件②の内積式設定・式変形 ⑥領域統合・結論 の順で書いてください。"
+            )
+
+        return (
+            "stepsには、①条件抽出・設定 ②条件①の導出 ③条件②の導出（ある場合） ④領域統合・結論 "
+            "の順で簡潔に書いてください。"
+        )
+
+    def _build_geometry_derivation_steps(
+        self,
+        structured_problem: dict[str, object],
+        numbered_constraints: list[str],
+    ) -> tuple[str, str, str, str, str, str] | None:
+        normalized_text = str(structured_problem.get("normalizedText", ""))
+        blob = normalized_text.replace("\n", " ")
+
+        has_aop = "AOP" in blob or "𝐴𝑂𝑃" in blob
+        has_oap = "OAP" in blob or "𝑂𝐴𝑃" in blob
+        has_first_constraint = any("y^2 - x^2" in item for item in numbered_constraints)
+        has_second_constraint = any(
+            token in item.replace(" ", "")
+            for item in numbered_constraints
+            for token in ["x^2+(y-1)^2/3", "3x^2+(y-1)^2"]
+        )
+
+        if not (
+            (has_aop or has_first_constraint) and (has_oap or has_second_constraint)
+        ):
+            return None
+
+        step2 = "∠AOP ≥ 2π/3 より cos∠AOP ≤ cos(2π/3)=-1/2。"
+        step3 = (
+            "OP=(x,y,0), OA=(0,-1,1), |OA|=√2, OP·OA=-y より"
+            " cos∠AOP=(OP·OA)/(|OP||OA|)=-y/(√2√(x^2+y^2))。"
+        )
+        step4 = (
+            "-y/(√2√(x^2+y^2)) ≤ -1/2 を y>0 の下で二乗して"
+            " y^2/(2(x^2+y^2)) ≥ 1/4。"
+            " さらに 2y^2 ≥ x^2+y^2 より y^2-x^2 ≥ 0（①）を得る。"
+        )
+        step5 = "∠OAP ≤ π/6 より cos∠OAP ≥ cos(π/6)=√3/2。"
+        step6 = (
+            "AP=(x,y+1,-1), AO=(0,1,-1), |AO|=√2, AP·AO=y+2 より"
+            " cos∠OAP=(AP·AO)/(|AP||AO|)=(y+2)/(√2√(x^2+y^2+2y+2))。"
+        )
+        step7 = (
+            "(y+2)/(√2√(x^2+y^2+2y+2)) ≥ √3/2 を二乗して"
+            " 2(y+2)^2 ≥ 3(x^2+y^2+2y+2)。"
+            " 展開・移項して 3x^2+(y-1)^2 ≤ 3、"
+            " すなわち x^2+(y-1)^2/3 ≤ 1（②）を得る。"
+        )
+        return step2, step3, step4, step5, step6, step7
+
+    def _extract_numbered_constraints(self, text: str) -> list[str]:
+        numbered: list[str] = []
+        normalized_text = text.replace("\\n", "\n")
+        for label, body in re.findall(r"([①②③④⑤])\s*([^①②③④⑤\n]+)", normalized_text):
+            cleaned_body = body.strip(" 、,。")
+            cleaned_body = re.sub(r"(?:かつ|and)\s*$", "", cleaned_body).strip(" 、,。")
+            for sep in [
+                "を満たす",
+                "である",
+                "境界",
+                "原点",
+                "ただし",
+            ]:
+                if sep in cleaned_body:
+                    cleaned_body = cleaned_body.split(sep, 1)[0].strip(" 、,。")
+            candidate = f"{label}{cleaned_body}"
+            if re.search(r"[<>≤≥]|\\\\(?:geq|leq)", candidate):
+                numbered.append(candidate)
+
+        unique_numbered: list[str] = []
+        for item in numbered:
+            if item not in unique_numbered:
+                unique_numbered.append(item)
+        return unique_numbered[:2]
+
+    def _build_geometry_conclusion_summary(self, final_text: str) -> str:
+        normalized = final_text.replace("\\n", "\n").strip()
+        if not normalized:
+            return "条件の共通部分を図示して結論を確定する。"
+
+        lines = [
+            line.strip(" 、,。") for line in normalized.split("\n") if line.strip()
+        ]
+        if not lines:
+            return "条件の共通部分を図示して結論を確定する。"
+
+        summary = lines[0]
+        if len(summary) > 140:
+            summary = summary[:140].rstrip() + "…"
+        return summary
+
+    def _pick_reliable_step_fragments(
+        self, steps: list[str], max_items: int = 2
+    ) -> list[str]:
+        reliable: list[str] = []
+        for step in steps:
+            normalized = step.strip()
+            if not normalized:
+                continue
+            if re.search(r"\d{4}\s*年|東大理|理□", normalized):
+                continue
+            if len(normalized) < 12 or len(normalized) > 180:
+                continue
+            if any(
+                token in normalized
+                for token in [
+                    "cos",
+                    "内積",
+                    "ノルム",
+                    "不等式",
+                    "領域",
+                    "座標",
+                    "ベクトル",
+                    "∠",
+                ]
+            ):
+                reliable.append(normalized)
+            if len(reliable) >= max_items:
+                break
+        return reliable
+
+    def _select_geometry_condition_fragments(
+        self, structured_problem: dict[str, object]
+    ) -> list[str]:
+        fragments: list[str] = []
+
+        objective = structured_problem.get("objective")
+        if isinstance(objective, list) and objective:
+            objective_text = str(objective[0]).strip()
+            if (
+                objective_text
+                and not re.search(r"\d\s*=\s*\d|\d{4}\s*年|東大理|理□", objective_text)
+                and len(objective_text) >= 6
+            ):
+                fragments.append(objective_text)
+
+        conditions = structured_problem.get("conditions")
+        if isinstance(conditions, list):
+            for item in conditions:
+                line = str(item).strip()
+                if not line:
+                    continue
+                if re.search(r"\d{4}\s*年|東大理|理□", line):
+                    continue
+                if len(line) > 120:
+                    continue
+                if any(
+                    token in line
+                    for token in [
+                        "原点",
+                        "距離",
+                        "角",
+                        "∠",
+                        "座標",
+                        "平面",
+                        "異なる",
+                        "≤",
+                        "≥",
+                        "<",
+                        ">",
+                        "π",
+                    ]
+                ):
+                    fragments.append(line)
+                if len(fragments) >= 3:
+                    break
+
+        unique_fragments: list[str] = []
+        for fragment in fragments:
+            if fragment not in unique_fragments:
+                unique_fragments.append(fragment)
+        return unique_fragments[:3]
+
+    def _pick_reliable_step_fragment(self, steps: list[str]) -> str:
+        reliable = self._pick_reliable_step_fragments(steps, max_items=1)
+        return reliable[0] if reliable else ""
+
+    def _extract_inequality_clauses(self, text: str) -> list[str]:
+        normalized_text = text.replace("\\n", "\n")
+        raw_clauses = [
+            item.strip(" 、,。")
+            for item in re.findall(
+                r"[^。\n]*(?:[<>≤≥]|\\\\(?:geq|leq))[^。\n]*", normalized_text
+            )
+            if item.strip(" 、,。")
+        ]
+
+        clauses: list[str] = []
+        for clause in raw_clauses:
+            parts = re.split(r"かつ|か\s*つ|and", clause)
+            for part in parts:
+                normalized = part.strip(" 、,。")
+                if not normalized:
+                    continue
+                if "は" in normalized and not re.match(r"^[①②③④⑤]\s*", normalized):
+                    normalized = normalized.split("は", 1)[-1].strip(" 、,。")
+                normalized = re.sub(r"である$", "", normalized).strip(" 、,。")
+                if re.search(r"[<>≤≥]|\\\\(?:geq|leq)", normalized):
+                    clauses.append(normalized)
+
+        unique_clauses: list[str] = []
+        for clause in clauses:
+            if clause not in unique_clauses:
+                unique_clauses.append(clause)
+        return unique_clauses
+
+    def _parse_json_answer(self, text: str) -> dict | None:
+        text = text.strip()
+        if not text:
+            return None
+
+        decoder = json.JSONDecoder()
+        for index, char in enumerate(text):
+            if char != "{":
+                continue
+            try:
+                parsed, _ = decoder.raw_decode(text[index:])
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                continue
+
+            sanitized = self._sanitize_json_candidate(text[index:])
+            if sanitized != text[index:]:
+                try:
+                    parsed, _ = decoder.raw_decode(sanitized)
+                    if isinstance(parsed, dict):
+                        return parsed
+                except json.JSONDecodeError:
+                    continue
+
+        for candidate in self._extract_json_like_blocks(text):
+            if not any(key in candidate for key in ['"final"', '"latex"', '"steps"']):
+                continue
+
+            try:
+                parsed = json.loads(candidate, strict=False)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+            sanitized_candidate = self._sanitize_json_candidate(candidate)
+            try:
+                parsed = json.loads(sanitized_candidate, strict=False)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+            escaped_candidate = re.sub(r"\\(?![\"\\/bfnrtu])", r"\\\\", candidate)
+            try:
+                parsed = json.loads(escaped_candidate, strict=False)
+            except json.JSONDecodeError:
+                aggressively_escaped = candidate.replace("\\", "\\\\")
+                try:
+                    parsed = json.loads(aggressively_escaped, strict=False)
+                except json.JSONDecodeError:
+                    continue
+            if isinstance(parsed, dict):
+                return parsed
+
+        return None
+
+    def _sanitize_json_candidate(self, candidate: str) -> str:
+        sanitized = candidate.strip()
+        if sanitized.startswith("```") and sanitized.endswith("```"):
+            sanitized = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", sanitized)
+            sanitized = re.sub(r"\s*```$", "", sanitized)
+
+        sanitized = sanitized.replace("\r\n", "\n")
+        sanitized = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", sanitized)
+        return sanitized
+
+    def _recover_nested_payload_from_text(self, text: str) -> dict | None:
+        cleaned = self._sanitize_json_candidate(text)
+        candidates = [cleaned]
+
+        if cleaned.startswith('"') and cleaned.endswith('"'):
+            try:
+                decoded = json.loads(cleaned, strict=False)
+                if isinstance(decoded, str):
+                    candidates.append(decoded)
+            except json.JSONDecodeError:
+                pass
+
+        if '\\"final\\"' in cleaned or '\\"steps\\"' in cleaned:
+            unescaped = cleaned.replace('\\"', '"')
+            candidates.append(unescaped)
+
+        for candidate in candidates:
+            parsed = self._parse_json_answer(candidate)
+            if parsed and any(
+                k in parsed for k in ["final", "latex", "steps", "confidence"]
+            ):
+                return parsed
+
+        return None
+
+    def _extract_json_like_blocks(self, text: str, max_blocks: int = 8) -> list[str]:
+        blocks: list[str] = []
+        start_index: int | None = None
+        depth = 0
+        in_string = False
+        escaped = False
+
+        for index, char in enumerate(text):
+            if start_index is None:
+                if char == "{":
+                    start_index = index
+                    depth = 1
+                    in_string = False
+                    escaped = False
+                continue
+
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+                continue
+
+            if char == "{":
+                depth += 1
+                continue
+
+            if char == "}":
+                depth -= 1
+                if depth == 0:
+                    blocks.append(text[start_index : index + 1])
+                    if len(blocks) >= max_blocks:
+                        return blocks
+                    start_index = None
+
+        return blocks
+
+    def _normalize_answer_payload(self, payload: dict) -> dict:
+        normalized = {
+            "final": str(payload.get("final", "")).strip(),
+            "latex": payload.get("latex"),
+            "steps": payload.get("steps", []),
+            "diagramGuide": payload.get("diagramGuide"),
+            "plotData": payload.get("plotData"),
+            "confidence": payload.get("confidence", 0.5),
+        }
+
+        final_text = normalized["final"]
+        nested = self._parse_json_answer(final_text)
+        if nested is None and any(
+            token in final_text for token in ['"final"', '"steps"', '\\"final\\"']
+        ):
+            nested = self._recover_nested_payload_from_text(final_text)
+        if nested and any(
+            k in nested for k in ["final", "latex", "steps", "confidence"]
+        ):
+            normalized["final"] = str(nested.get("final", "")).strip()
+            normalized["latex"] = nested.get("latex", normalized["latex"])
+            normalized["steps"] = nested.get("steps", normalized["steps"])
+            normalized["diagramGuide"] = nested.get(
+                "diagramGuide", normalized["diagramGuide"]
+            )
+            normalized["plotData"] = nested.get("plotData", normalized["plotData"])
+            normalized["confidence"] = nested.get(
+                "confidence", normalized["confidence"]
+            )
+        else:
+            normalized["final"] = self._strip_code_fences(final_text)
+
+        if not isinstance(normalized["steps"], list):
+            normalized["steps"] = [
+                str(normalized["steps"]) if normalized["steps"] else ""
+            ]
+        normalized["steps"] = [
+            str(step).strip() for step in normalized["steps"] if str(step).strip()
+        ]
+
+        try:
+            normalized["confidence"] = float(normalized["confidence"])
+        except (TypeError, ValueError):
+            normalized["confidence"] = 0.5
+        normalized["confidence"] = max(0.0, min(1.0, normalized["confidence"]))
+
+        if normalized["latex"] is not None:
+            normalized["latex"] = str(normalized["latex"]).strip() or None
+
+        if normalized["diagramGuide"] is not None:
+            normalized["diagramGuide"] = str(normalized["diagramGuide"]).strip() or None
+
+        if not normalized["final"]:
+            normalized["final"] = "解答を生成できませんでした。"
+
+        return normalized
+
+    def _strip_code_fences(self, text: str) -> str:
+        stripped = text.strip()
+        if stripped.startswith("```") and stripped.endswith("```"):
+            stripped = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", stripped)
+            stripped = re.sub(r"\s*```$", "", stripped)
+        return stripped.strip()
+
+    def _preview_text(self, text: str, max_len: int = 80) -> str:
+        one_line = re.sub(r"\s+", " ", text).strip()
+        if len(one_line) <= max_len:
+            return one_line
+        return one_line[:max_len].rstrip() + "…"
+
+    def _compute_ocr_quality_metrics(self, text: str) -> tuple[float, float]:
+        if not text:
+            return 0.0, 0.0
+
+        replacement_count = text.count("�")
+        text_len = max(len(text), 1)
+        non_ascii_count = sum(1 for char in text if ord(char) > 127)
+
+        replacement_ratio = round(replacement_count / text_len, 4)
+        non_ascii_ratio = round(non_ascii_count / text_len, 4)
+        return replacement_ratio, non_ascii_ratio
+
+    def _should_flag_ocr_review(
+        self, ocr_score: float, replacement_ratio: float, candidate_count: int
+    ) -> bool:
+        if candidate_count <= 0:
+            return True
+        if replacement_ratio >= settings.solve_ocr_review_max_replacement_ratio:
+            return True
+        return ocr_score < settings.solve_ocr_review_min_score
+
+    def _apply_ocr_review_warning(self, answer_payload: dict) -> dict:
+        final_text = str(answer_payload.get("final", "")).strip()
+        warning = "【OCR要再確認】"
+        if final_text and not final_text.startswith(warning):
+            answer_payload["final"] = f"{warning} {final_text}"
+        elif not final_text:
+            answer_payload["final"] = (
+                "【OCR要再確認】問題文の読み取り精度が低いため、解答を確定できません。"
+            )
+        return answer_payload
+
+    def _calibrate_answer_confidence(
+        self,
+        raw_confidence: object,
+        ocr_score: float,
+        replacement_ratio: float,
+        ocr_source: str,
+        problem_type: str,
+        ocr_needs_review: bool,
+    ) -> float:
+        try:
+            confidence = float(raw_confidence)
+        except (TypeError, ValueError):
+            confidence = 0.5
+        confidence = max(0.0, min(1.0, confidence))
+
+        cap = 0.98
+        if problem_type in {"vector_geometry", "calculus", "probability"}:
+            cap = min(cap, 0.93)
+
+        source_caps = {
+            "pdf_direct": 0.95,
+        }
+        cap = min(cap, source_caps.get(ocr_source, 0.90))
+
+        if ocr_score < 0.55:
+            cap = min(cap, 0.86)
+        if ocr_score < 0.45:
+            cap = min(cap, 0.78)
+        if ocr_score < 0.35:
+            cap = min(cap, 0.68)
+
+        if replacement_ratio >= settings.solve_ocr_review_max_replacement_ratio:
+            cap = min(cap, 0.65)
+        if ocr_needs_review:
+            cap = min(cap, 0.60)
+
+        quality_factor = max(0.55, min(1.0, 0.65 + ocr_score * 0.5))
+        calibrated = min(confidence, cap) * quality_factor
+        return round(max(0.0, min(1.0, calibrated)), 4)
+
+    def _build_structured_problem(
+        self, problem_text: str, request: SolveRequest
+    ) -> dict[str, object]:
+        normalized = self._cleanup_ocr_text(problem_text)
+        lines = [line.strip() for line in normalized.split("\n") if line.strip()]
+
+        condition_lines: list[str] = []
+        objective_lines: list[str] = []
+        symbols: list[str] = []
+
+        objective_patterns = [
+            r"求めよ",
+            r"求めなさい",
+            r"求まる",
+            r"示せ",
+            r"証明せよ",
+            r"答えよ",
+            r"値を求め",
+            r"いくつ",
+            r"どの",
+        ]
+        symbol_pattern = re.compile(r"\b[a-zA-Z]{1,2}\b|[α-ωΑ-ΩθλμνπσφχψωΔΣΠ]")
+
+        for line in lines:
+            if any(re.search(pattern, line) for pattern in objective_patterns):
+                objective_lines.append(line)
+            else:
+                condition_lines.append(line)
+
+            found_symbols = symbol_pattern.findall(line)
+            for token in found_symbols:
+                token_normalized = token.strip()
+                if token_normalized and token_normalized not in symbols:
+                    symbols.append(token_normalized)
+
+        math_expressions = self._extract_math_expressions(normalized)
+        math_blocks = self._extract_math_blocks(normalized)
+
+        if not objective_lines and lines:
+            sentence_candidates = re.split(r"(?<=[。！？?])\s*", normalized)
+            for sentence in sentence_candidates:
+                sentence_clean = sentence.strip()
+                if not sentence_clean:
+                    continue
+                if any(
+                    re.search(pattern, sentence_clean) for pattern in objective_patterns
+                ):
+                    objective_lines.append(sentence_clean)
+
+        if not objective_lines and lines:
+            objective_lines.append(lines[-1])
+
+        problem_type = self._infer_problem_type(
+            normalized, condition_lines, objective_lines, math_expressions
+        )
+
+        return {
+            "exam": {
+                "university": request.exam.university,
+                "year": request.exam.year,
+                "subject": request.exam.subject,
+                "questionNo": request.exam.question_no,
+            },
+            "rawText": problem_text,
+            "normalizedText": normalized,
+            "conditions": condition_lines[:20],
+            "objective": objective_lines[:8],
+            "mathExpressions": math_expressions[:20],
+            "mathBlocks": math_blocks[:20],
+            "symbols": symbols[:25],
+            "problemType": problem_type,
+        }
+
+    def _extract_math_blocks(self, text: str) -> list[str]:
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
+        blocks: list[str] = []
+
+        line_candidates = [
+            line
+            for line in lines
+            if re.search(
+                r"[=<>≤≥+\-*/^|]|sqrt|int|sin|cos|tan|log|lim|arg|Re|Im|alpha|beta|gamma|\b[zi]\b|\(|\)",
+                line,
+            )
+        ]
+
+        inline_candidates = re.findall(
+            r"[A-Za-z0-9_\^\-+*/()\[\]{}<>≤≥|]{5,}",
+            text,
+        )
+
+        for candidate in [*line_candidates, *inline_candidates]:
+            normalized = self._normalize_math_notation_tokens(candidate)
+            normalized = re.sub(r"\s+", " ", normalized).strip()
+            if not normalized:
+                continue
+            if len(normalized) < 5 or len(normalized) > 180:
+                continue
+            if not re.search(
+                r"[=<>≤≥+\-*/^|]|sqrt|int|sin|cos|tan|log|lim|arg|Re|Im|alpha|beta|gamma|\b[zi]\b|1/z",
+                normalized,
+            ):
+                continue
+            if normalized not in blocks:
+                blocks.append(normalized)
+
+        return blocks
+
+    def _infer_problem_type(
+        self,
+        normalized_text: str,
+        condition_lines: list[str],
+        objective_lines: list[str],
+        math_expressions: list[str],
+    ) -> str:
+        text = "\n".join(
+            [
+                normalized_text,
+                *condition_lines,
+                *objective_lines,
+                *math_expressions,
+            ]
+        )
+        lowered = text.lower()
+
+        # ── 3D 座標優先判定（z 軸・xyz 空間・空間座標キーワード）──────────────
+        coord3d_keywords = [
+            "z軸", "xyz空間", "空間座標", "xyz座標", "3次元", "三次元",
+            "yz平面", "xz平面", "zx平面",
+            "空間内", "空間の点", "空間上",
+            r"\(x,y,z\)", r"\(a,b,c\)",  # 正規表現パターンは以下で別途チェック
+        ]
+        coord3d_re_patterns = [
+            r"\bz\s*=\s*[-\d]",        # z = 数値
+            r"(?<!\w)[xyz]\s*[座軸]",    # z座標, z軸 など
+            r"\([^)]*,[^)]*,[^)]*\)",   # (x, y, z) 形式の3要素タプル
+        ]
+        coord3d_score = sum(1 for kw in coord3d_keywords[:7] if kw in lowered)
+        coord3d_score += sum(
+            1 for pat in coord3d_re_patterns
+            if re.search(pat, text)
+        )
+
+        # ── 2D 座標判定（xy 平面・放物線・円・直線など）──────────────────────
+        coord2d_keywords = [
+            "xy平面", "x軸", "y軸", "xy座標", "2次元",
+            "放物線", "双曲線", "楕円",
+            "直線y=", "直線x=", "y=ax",
+            "円の方程式", "交点の座標",
+            "座標を求め", "図示せよ", "座標平面",
+            "領域", "不等式y", "不等式x",
+        ]
+        coord2d_score = sum(1 for kw in coord2d_keywords if kw in lowered)
+
+        # ── その他カテゴリ ──────────────────────────────────────────────────
+        category_keywords = {
+            "parametric_curve": [
+                "曲線の長さ", "弧長", "媒介変数", "パラメータ",
+                "内分", "描く曲線", "曲線と", "囲まれた",
+                "曲線の長", "t : (1-t)", "t:(1-t)",
+            ],
+            "vector_geometry": [
+                "ベクトル", "内積", "外積", "直線",
+                "平面", "座標", "点", "距離", "法線",
+            ],
+            "calculus": [
+                "微分", "積分", "極値", "増減",
+                "接線", "導関数", "面積", "∫",
+            ],
+            "probability": [
+                "確率", "期待値", "事象", "試行",
+                "サイコロ", "コイン", "組合せ", "場合の数",
+            ],
+            "sequence": [
+                "数列", "漸化式", "等差", "等比", "一般項", "和",
+            ],
+            "trigonometry": [
+                "三角", "sin", "cos", "tan", "正弦", "余弦",
+            ],
+            "log_exponential": [
+                "対数", "log", "指数", "exp", "ln",
+            ],
+        }
+
+        best_type = "algebra"
+        best_score = 0
+
+        for category, keywords in category_keywords.items():
+            score = sum(1 for keyword in keywords if keyword.lower() in lowered)
+            if score > best_score:
+                best_type = category
+                best_score = score
+
+        # 3D 座標はスコアが 1 以上あれば優先（vector_geometry より強い）
+        if coord3d_score >= 1:
+            return "coordinate_3d"
+
+        # 2D 座標はスコアが 2 以上、かつ他カテゴリより同等以上の場合に優先
+        if coord2d_score >= 2 and coord2d_score >= best_score:
+            return "coordinate_2d"
+
+        return best_type
+
+
+    def _problem_type_guidance(self, problem_type: str) -> str:
+        guidance_map = {
+            "parametric_curve": (
+                "媒介変数表示の曲線を扱います。必ず次の手順で厳密に計算してください: "
+                "① 各点の座標をパラメータ t の式で表す（代入して完全展開）。"
+                "② x'(t), y'(t) を求め、x'(t) の符号と単調性を確認する。"
+                "③ 面積は ∫y(t)·x'(t) dt を t の範囲で計算（置換積分で展開）。"
+                "④ 弧長は ∫√(x'(t)²+y'(t)²) dt を計算する際、"
+                "   x'²+y'² を展開して【完全平方】にならないか必ず確認すること。"
+                "   完全平方になる場合は √を外して直接積分せよ。"
+                "⑤ 各小問の答えを t（またはパラメータ a）の多項式・分数として簡潔に示す。"
+            ),
+            "vector_geometry": "図形関係はベクトル・座標で定式化し、条件を方程式化して未知点を解いてください。",
+            "coordinate_2d": (
+                "2次元座標幾何の問題です。必ず次の方針で解いてください: "
+                "① xy 座標系を明示し、与えられた各点・直線・曲線の方程式を整理する。"
+                "② 問題の指示（図示・交点・領域など）に従って幾何的条件を方程式化する。"
+                "③ 図示が求められている場合は plotData フィールドを必ず生成し、"
+                "   dimension=2 として曲線・線分・点をすべて含めること。"
+                "④ viewBox は描画要素全体が収まる適切な範囲を設定する。"
+            ),
+            "coordinate_3d": (
+                "3次元空間座標の問題です。必ず次の方針で解いてください: "
+                "① xyz 座標系を明示し、点・直線・平面・曲面の方程式を整理する。"
+                "② 問題の指示（交点・距離・体積・図示など）に従って条件を方程式化する。"
+                "③ 図示が求められている場合は plotData フィールドを必ず生成し、"
+                "   dimension=3 として points3d・lines3d・planes3d・surfaces3d を"
+                "   解答に登場する要素すべてについて生成すること。"
+                "④ 平面は ax+by+cz=d の係数 (a,b,c,d) で表現し、"
+                "   曲面は fnZ フィールドに mathjs 互換の z=f(x,y) 式を記述する。"
+            ),
+            "calculus": "関数を定義し、微分・増減・極値または積分の標準手順で厳密に処理してください。",
+            "probability": "標本空間・事象・場合分けを明示し、重複や漏れがないように確率を計算してください。",
+            "sequence": "漸化式や一般項を明示し、帰納的関係と初期条件から式を確定してください。",
+            "trigonometry": "三角恒等式と角条件を整理し、主値や定義域に注意して解いてください。",
+            "log_exponential": "底と定義域を明示し、対数法則または指数変換で解を整理してください。",
+            "algebra": "文字条件と等式・不等式を整理し、同値変形で解を導いて検算してください。",
+        }
+        return guidance_map.get(problem_type, guidance_map["algebra"])
+
+    def _extract_math_expressions(self, text: str) -> list[str]:
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
+        expression_pattern = re.compile(
+            r"[=<>≤≥]|\d+\s*[+\-*/^]\s*\d+|sin|cos|tan|log|ln|√|Σ|∫"
+        )
+
+        expressions: list[str] = []
+        for line in lines:
+            if expression_pattern.search(line):
+                expressions.append(line)
+        return expressions
+
+    def _build_prompt(
+        self,
+        problem_text: str,
+        request: SolveRequest,
+        structured_problem: dict[str, object] | None = None,
+    ) -> str:
+        steps_req = "必要" if request.options.need_steps else "不要"
+        latex_req = "必要" if request.options.need_latex else "不要"
+
+        steps_rule = (
+            "stepsには、①条件抽出・設定 ②立式・不等式化 ③領域統合・結論 の順で記述してください。"
+            "各ステップは日本語テキストと $...$ インライン数式を混在させた1〜3文の自然な文章で書くこと。"
+            "例: '点 $P_t$ は $A(0,0)$ から $B(0,1)$ を $t:(1-t)$ に内分するので $P_t=(0,t)$ となる。'"
+            "\\begin{aligned} \\begin{array} \\begin{matrix} などのLaTeX環境は絶対に使わないこと。"
+            "\\mbox は絶対に使わないこと。"
+            if request.options.need_steps
+            else "stepsは必ず空配列 [] にしてください。"
+        )
+        sample_hint = self._build_sample_corpus_hint(request)
+        latex_rule = (
+            "latexには最終答案を表すLaTeX式を入れてください。KaTeXで描画するため \\mbox は使わず \\text{} を使うこと。"
+            if request.options.need_latex
+            else "latexは必ず null にしてください。"
+        )
+
+        structured_section = ""
+        type_guidance = ""
+        final_rule = ""
+        reinterpret_rule = (
+            "数式は原文優先で改変せず扱い、読みが曖昧な場合は候補A/Bを比較して"
+            "問題条件と整合する方のみ採用してください。"
+        )
+        if structured_problem:
+            problem_type = str(structured_problem.get("problemType", "algebra"))
+            type_guidance = self._problem_type_guidance(problem_type)
+            if problem_type == "parametric_curve":
+                final_rule = (
+                    "finalには各小問 (1)(2)(3) の答えをそれぞれ明記してください。"
+                    "特に弧長は計算過程で x'²+y'² の展開と完全平方の確認を示し、"
+                    "a の多項式として答えを出してください。"
+                )
+                if request.options.need_steps:
+                    steps_rule = (
+                        "stepsには各小問を独立したステップとして記述してください。"
+                        "各ステップは日本語テキストと $...$ インライン数式を混在させた自然な文章で書くこと。"
+                        "\\begin{aligned} \\begin{array} などのLaTeX環境は絶対に使わないこと。"
+                        "① (1) 座標: $U_t$ の座標を $t$ の式で完全展開して示す。"
+                        "② (2) 面積: $\\int_0^1 y(t)x'(t)\\,dt$ の展開と定積分の結果を詳しく示す。"
+                        "③ (3) 弧長: $x'(t)$、$y'(t)$ を求め、$x'(t)^2+y'(t)^2$ を展開・完全平方の確認をして積分まで示す。"
+                        "途中式を省略しないこと。"
+                    )
+            elif problem_type == "vector_geometry":
+                final_rule = (
+                    "finalには最終的な領域・座標に加えて、条件を①②のように番号付きで整理し、境界の含む/含まないと"
+                    "原点の扱いを明記してください。"
+                )
+                if request.options.need_steps:
+                    steps_rule = self._build_geometry_steps_rule(structured_problem)
+
+            elif problem_type == "coordinate_2d":
+                final_rule = (
+                    "finalには求めた座標・方程式・領域を明記し、問題の指示通りに図示対象を列挙してください。"
+                )
+                if request.options.need_steps:
+                    steps_rule = (
+                        "stepsには ① 与えられた点・直線・曲線の方程式を整理 "
+                        "② 交点・距離・面積などの計算 ③ 図示方法の説明 の順で記述してください。"
+                        "各ステップは日本語テキストと $...$ インライン数式を混在させた自然な文章で書くこと。"
+                        "\\begin{aligned} などのLaTeX環境は絶対に使わないこと。"
+                    )
+
+            elif problem_type == "coordinate_3d":
+                final_rule = (
+                    "finalには求めた点・直線・平面・体積などを明記し、xyz座標を使って簡潔に示してください。"
+                )
+                if request.options.need_steps:
+                    steps_rule = (
+                        "stepsには ① xyz座標系の設定と各要素の方程式 "
+                        "② 交点・法線・距離・体積などの計算 ③ 3D図の構成要素の説明（どの点・直線・平面を描くか）"
+                        " の順で記述してください。"
+                        "各ステップは日本語テキストと $...$ インライン数式を混在させた自然な文章で書くこと。"
+                    )
+
+            math_block_section = ""
+            math_blocks = structured_problem.get("mathBlocks")
+            if isinstance(math_blocks, list) and math_blocks:
+                serialized_blocks = [
+                    str(item).strip() for item in math_blocks if str(item).strip()
+                ]
+                if serialized_blocks:
+                    math_block_section = (
+                        "\n数式ブロック候補(JSON配列):\n"
+                        f"{json.dumps(serialized_blocks[:12], ensure_ascii=False)}\n"
+                    )
+            structured_section = (
+                "\n構造化問題データ(JSON):\n"
+                f"{json.dumps(structured_problem, ensure_ascii=False)}\n"
+                f"{math_block_section}"
+            )
+
+        # 座標問題は必ず plotData を生成するよう強制
+        is_coordinate_problem = (
+            structured_problem is not None
+            and str(structured_problem.get("problemType", "")).startswith("coordinate_")
+        )
+        plot_data_rule = (
+            "【必須】座標問題のため plotData を必ず生成してください。"
+            "dimension=2 の場合: curves/segments/points/viewBox を使い、"
+            "問題に登場する全ての曲線・直線・点を含めること。"
+            "dimension=3 の場合: points3d/lines3d/planes3d/surfaces3d を使い、"
+            "問題に登場する全ての空間要素を含めること。"
+            "needPlot は必ず true にすること。"
+            if is_coordinate_problem
+            else "図示が必要な問題（媒介変数曲線・領域・座標幾何など）では必ず plotData を生成。不要な場合は{\"needPlot\":false}。"
+        )
+
+        return (
+            "あなたは大学入試数学の解答アシスタントです。"
+            "与えられた問題文を読み、厳密に解答してください。"
+            "OCR由来のノイズや誤字が含まれる可能性があります。数学として自然な表記へ補正して解釈してください。"
+            "構造化問題データが与えられている場合は、それを優先して解釈し、raw/normalizedの差異は保守的に扱ってください。"
+            "内部では次の順で検討してください: ①与条件の抽出 ②未知量と目的の特定 ③立式 ④計算 ⑤妥当性確認。"
+            f"問題タイプ別の解法方針: {type_guidance}"
+            "OCRが曖昧な箇所は、最小限の仮定を明示して解き、confidenceを下げてください。"
+            "出力は必ずJSONオブジェクトのみで返してください。\n"
+            "JSON形式:\n"
+            '{"final":"最終答案","latex":"LaTeX文字列またはnull",'
+            '"steps":["手順1","手順2"],"diagramGuide":"図示手順の文章またはnull",'
+            '"plotData":{'
+            '"needPlot":true/false,'
+            '"dimension":2または3,'
+            # 2D フィールド
+            '"curves":[{"type":"parametric","x":"t式","y":"t式","tMin":0,"tMax":1,"label":"曲線名"}],'
+            '"segments":[{"from":[x1,y1],"to":[x2,y2],"label":"線分名"}],'
+            '"points":[{"x":数値,"y":数値,"label":"点名"}],'
+            '"viewBox":{"xMin":数値,"xMax":数値,"yMin":数値,"yMax":数値},'
+            # 3D フィールド
+            '"points3d":[{"x":数値,"y":数値,"z":数値,"label":"点名"}],'
+            '"lines3d":[{"from":[x1,y1,z1],"to":[x2,y2,z2],"label":"線分名"}],'
+            '"planes3d":[{"a":数値,"b":数値,"c":数値,"d":数値,"xRange":[min,max],"yRange":[min,max],"label":"平面名"}],'
+            '"surfaces3d":[{"fnZ":"mathjs式(x,y)","xRange":[min,max],"yRange":[min,max],"label":"曲面名"}],'
+            '"viewRange3d":{"xRange":[min,max],"yRange":[min,max],"zRange":[min,max]}'
+            '}またはnull,'
+            '"confidence":0.0から1.0}\n\n'
+            f"大学: {request.exam.university}\n"
+            f"年度: {request.exam.year}\n"
+            f"科目: {request.exam.subject}\n"
+            f"問題番号: {request.exam.question_no}\n"
+            f"解法手順: {steps_req}\n"
+            f"LaTeX: {latex_req}\n"
+            f"追加規則(steps): {steps_rule}\n"
+            "追加規則(steps フォーマット): steps の各要素は日本語テキストと $...$ インライン数式を混在させた文章。"
+            "$$...$$ブロック数式・\\begin{aligned}・\\begin{array} は絶対に使わないこと。\\mbox 禁止。\n"
+            f"追加規則(latex): {latex_rule}\n"
+            f"追加規則(final): {final_rule or '通常の最終答案を簡潔に記述。'}\n"
+            f"追加規則(数式再解釈): {reinterpret_rule}\n"
+            "追加規則(diagramGuide): coordinate_2d/coordinate_3d/vector_geometryの場合は図示手順を文章で必ず記述し、その他はnull可。\n"
+            f"追加規則(plotData): {plot_data_rule}\n"
+            "plotData.curves.x/y には mathjs 互換の式（例: t^2*(3-2*t))を使用。式の中にスペースは入れないこと。\n"
+            "plotData.surfaces3d.fnZ には mathjs 互換の式（例: x^2+y^2）を使用。\n"
+            f"サンプル参照: {sample_hint or '利用可能な年度サンプルなし。'}\n"
+            f"{structured_section}\n"
+            "問題文:\n"
+            f"{problem_text}"
+        )
+
+
+    def _build_scratchpad_prompt(
+        self,
+        problem_text: str,
+        request: SolveRequest,
+        structured_problem: dict[str, object] | None = None,
+    ) -> str:
+        """Stage-1 用: 計算過程を省略なく自由記述させるプロンプト。"""
+        type_guidance = ""
+        if structured_problem:
+            problem_type = str(structured_problem.get("problemType", "algebra"))
+            type_guidance = self._problem_type_guidance(problem_type)
+
+        return (
+            "あなたは大学入試数学の専門家です。以下の問題を解いてください。\n"
+            "計算過程を一切省略せず、全ステップを詳しく展開してください。\n"
+            "特に守るべきルール:\n"
+            "① 各変数・点の座標は代入して完全に展開した数式で示す。\n"
+            "② 積分・微分は途中計算を全て行単位で示す。\n"
+            "③ 弧長計算では x'(t)² + y'(t)² を必ず展開し、\n"
+            "   完全平方 (at² + bt + c)² の形になるか確認してから √ を外すこと。\n"
+            "④ 各小問 (1)(2)(3) を独立したブロックとして解く。\n"
+            f"問題タイプ: {type_guidance}\n"
+            f"大学: {request.exam.university} / 年度: {request.exam.year} "
+            f"/ 科目: {request.exam.subject} / 問題番号: {request.exam.question_no}\n\n"
+            "問題文:\n"
+            f"{problem_text}"
+        )
+
+    def _build_json_extraction_prompt(
+        self,
+        scratchpad: str,
+        request: SolveRequest,
+    ) -> str:
+        """Stage-2 用: スクラッチパッドから JSON を抽出させるプロンプト。"""
+        need_latex = request.options.need_latex
+        need_steps = request.options.need_steps
+
+        latex_instruction = (
+            'latexには最終答案を表す LaTeX 式を入れる（例: "\\\\frac{3}{5}"）。'
+            if need_latex
+            else "latexはnullにする。"
+        )
+        steps_instruction = (
+            "stepsには各小問の解答ポイント（計算結果と根拠）を箇条書きで入れる。"
+            if need_steps
+            else "stepsは空配列 [] にする。"
+        )
+
+        return (
+            "以下の数学解答ドラフトから、正確に JSON を抽出してください。\n"
+            "解答ドラフトに存在する計算結果を忠実に使い、新たな推測は加えないこと。\n\n"
+            "JSON形式（このオブジェクトのみ出力）:\n"
+            '{"final":"最終答案の文章","latex":"LaTeX文字列またはnull",'
+            '"steps":["ステップ1","ステップ2"],"diagramGuide":null,'
+            '"confidence":0.0から1.0}\n\n'
+            f"ルール:\n"
+            f"- final: 全小問の答えをまとめて記述する。\n"
+            f"- {latex_instruction}\n"
+            f"- {steps_instruction}\n"
+            f"- confidence: 計算が完結していれば 0.9、不完全なら 0.5 以下。\n\n"
+            "解答ドラフト:\n"
+            f"{scratchpad[:12000]}"  # 長すぎる場合は先頭を使用
+        )

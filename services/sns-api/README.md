@@ -37,7 +37,7 @@ docker run -p 8000:8000 simple-sns-api
 ## 📁 プロジェクト構造
 
 ```
-services/api/
+services/sns-api/          ← SNS サービス（リネーム済み）
 ├── app/
 │   ├── __init__.py
 │   ├── main.py          # FastAPIアプリケーション
