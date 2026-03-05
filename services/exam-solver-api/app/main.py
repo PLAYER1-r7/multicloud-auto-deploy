@@ -9,7 +9,12 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.models import HealthResponse
-from app.routes import learning, solve
+from app.routes import solve
+
+try:
+    from app.routes import learning
+except ImportError:
+    learning = None
 
 # AWS Lambda Powertools (observability)
 try:
@@ -111,7 +116,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # ── ルーター登録 ───────────────────────────────────────────────────────────
 app.include_router(solve.router)
-app.include_router(learning.router)
+if learning is not None:
+    app.include_router(learning.router)
+else:
+    logger.warning("Learning router is unavailable and will be skipped")
 
 
 # ── Health Check ───────────────────────────────────────────────────────────
