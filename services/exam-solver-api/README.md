@@ -2,7 +2,7 @@
 
 大学入試解答サポートサービス - OCR・AI解答の独立マイクロサービス
 
-**Status**: Ready for deployment (Workflow trigger)
+**Status**: Deploying with Solver Lambda (Pulumi created)
 
 ## 🎯 特徴
 
