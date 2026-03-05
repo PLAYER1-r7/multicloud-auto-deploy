@@ -108,6 +108,28 @@ gh run watch
 
 認証エラーが解消されていれば、`Configure Azure Credentials` ステップを通過する。
 
+## 6) Azure Function App の事前存在チェック
+
+Azure はシークレットが揃っていても、Function App 自体が未作成だとデプロイは失敗する。
+
+追加済みスクリプト:
+
+- `scripts/check-azure-function-apps.sh`
+
+実行例:
+
+```bash
+bash scripts/check-azure-function-apps.sh staging
+bash scripts/check-azure-function-apps.sh production
+```
+
+`❌ ... (not found)` が出る場合は、先にインフラ更新を実施:
+
+```bash
+cd infrastructure/pulumi/azure
+pulumi up
+```
+
 ## よくある失敗と対処
 
 - `Login failed ... Not all values are present`（Azure）
