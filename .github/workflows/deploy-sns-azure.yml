@@ -112,9 +112,9 @@ jobs:
           cd .deployment/package
           pip install -r requirements.txt -t . --upgrade || pip install -r requirements-azure.txt -t . --upgrade || true
           zip -r ../../function-app.zip .
-          cd ../../..
+          cd ../..
 
-          ls -lh services/${{ env.SERVICE }}/function-app.zip
+          ls -lh function-app.zip
           echo "✅ Package ready"
 
       - name: Deploy SNS to Azure Functions
