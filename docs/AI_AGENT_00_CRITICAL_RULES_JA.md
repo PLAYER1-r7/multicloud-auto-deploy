@@ -402,50 +402,6 @@ Dependabot が週次で依存関係をチェックし、セキュリティアッ
 
 ---
 
-## ルール18 — Git ワークフロー：develop ブランチから切り出し、develop にマージ
-
-**すべてのコード修正・機能追加は以下のワークフローに従う：**
-
-1. **develop ブランチから機能ブランチを切り出す**
-   ```bash
-   git checkout develop
-   git pull origin develop
-   git checkout -b fix/issue-name    # バグ修正
-   git checkout -b feature/name      # 新機能
-   git checkout -b docs/update       # ドキュメント更新
-   ```
-
-2. **修正・テストを実施**
-   ```bash
-   # コード修正
-   git add .
-   git commit -m "fix: 説明"
-   
-   # テスト実行（マージ前必須）
-   pytest services/api/tests/ -v
-   ```
-
-3. **develop にマージ**
-   ```bash
-   git checkout develop
-   git merge --no-ff fix/issue-name
-   git push origin develop
-   
-   # ブランチ削除（必須）
-   git push origin --delete fix/issue-name
-   git branch -d fix/issue-name
-   ```
-
-**禁止事項：**
-- ❌ `main` / `develop` への直接コミット
-- ❌ `main` から直接ブランチを切る（常に `develop` から）
-- ❌ テスト未実施でのマージ
-- ❌ マージ後のブランチ削除忘れ
-
-**詳細は [AI_AGENT_14_GIT_WORKFLOW_JA.md](AI_AGENT_14_GIT_WORKFLOW_JA.md) を参照。**
-
----
-
 ## クイックリファレンス：何がどこにあるか
 
 | トピック                       | ファイル                                                   |
@@ -459,6 +415,5 @@ Dependabot が週次で依存関係をチェックし、セキュリティアッ
 | 現在の環境健全性               | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)             |
 | ステップバイステップランブック | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)         |
 | セキュリティ設定               | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)         |
-| Git ワークフロー（重要）       | [AI_AGENT_14_GIT_WORKFLOW_JA.md](AI_AGENT_14_GIT_WORKFLOW_JA.md) |
 | 残りのタスク / バックログ      | [AI_AGENT_09_TASKS.md](AI_AGENT_09_TASKS.md)               |
 | すべて — エントリーポイント    | [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)                     |

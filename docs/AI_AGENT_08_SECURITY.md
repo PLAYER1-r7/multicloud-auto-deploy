@@ -8,21 +8,21 @@
 
 > Last updated: 2026-02-24 (Defender for Cloud セキュアスコア分析・新規タスク追加)
 
-| Feature                   | AWS                      | Azure                          | GCP                          | Notes                                                                                   |
-| ------------------------- | ------------------------ | ------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------- |
-| HTTPS enforced            | ✅                       | ✅                             | ✅ Pulumi済 (要 pulumi up)   | GCP: HTTP→HTTPS リダイレクト用 URLMap を分離。ポート80は301 redirect のみ               |
-| WAF                       | ✅ WebACL (CloudFront)   | ❌                             | ✅ Cloud Armor               | Azure: Front Door Standard SKU では WAF Policy 未設定 (要 Premium SKU or WAF Policy)    |
-| Rate limiting             | ❌                       | ❌                             | ✅ 100req/min/IP             |                                                                                         |
-| SQLi / XSS protection     | ❌                       | ❌                             | ✅                           |                                                                                         |
-| Data encryption (at rest) | ✅ SSE-S3                | ✅ Azure SSE                   | ✅ Google-managed            |                                                                                         |
-| Versioning                | ✅                       | ✅                             | ✅                           |                                                                                         |
-| Access logs (CDN)         | ✅ CloudFront            | ✅ Front Door → Log Analytics  | ✅ Cloud CDN                 | Azure: DiagnosticSetting 追加 (2026-02-24, 要 pulumi up)                                |
-| Security headers          | ✅ CloudFront RHP        | ❌                             | ❌                           | HSTS/CSP/X-Frame/X-Content/Referrer/XSS (AWS のみ, 2026-02-23)                          |
-| Soft delete / retention   | ❌                       | ✅ 7 days                      | ❌                           |                                                                                         |
-| CORS config               | ✅ 実ドメイン (Pulumi済) | ✅ 実ドメイン (Pulumi済)       | ✅ 実ドメイン (Pulumi済)     | production `*` → 実ドメイン絞り込み完了 (2026-02-24, 要 pulumi up)                      |
-| Audit logging             | ✅ CloudTrail (Pulumi済) | ✅ Log Analytics (Pulumi済)    | ✅ IAMAuditConfig (Pulumi済) | 全項目 Pulumi コード実装済み。各クラウドで `pulumi up` により有効化される               |
-| Managed Identity          | N/A                      | ❌ 未設定 (staging/production) | N/A (Cloud Run SA)           | Azure Function App にシステム割り当てマネージドIDが未設定 (Defender 指摘 2026-02-24)    |
-| Key Vault 消去保護        | N/A                      | ❌ 未設定                      | N/A                          | `enable_purge_protection=True` を Pulumi に追加が必要 (Defender 指摘 2026-02-24)        |
+| Feature                   | AWS                      | Azure                         | GCP                          | Notes                                                                                |
+| ------------------------- | ------------------------ | ----------------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
+| HTTPS enforced            | ✅                       | ✅                            | ✅ Pulumi済 (要 pulumi up)   | GCP: HTTP→HTTPS リダイレクト用 URLMap を分離。ポート80は301 redirect のみ            |
+| WAF                       | ✅ WebACL (CloudFront)   | ❌                            | ✅ Cloud Armor               | Azure: Front Door Standard SKU では WAF Policy 未設定 (要 Premium SKU or WAF Policy) |
+| Rate limiting             | ❌                       | ❌                            | ✅ 100req/min/IP             |                                                                                      |
+| SQLi / XSS protection     | ❌                       | ❌                            | ✅                           |                                                                                      |
+| Data encryption (at rest) | ✅ SSE-S3                | ✅ Azure SSE                  | ✅ Google-managed            |                                                                                      |
+| Versioning                | ✅                       | ✅                            | ✅                           |                                                                                      |
+| Access logs (CDN)         | ✅ CloudFront            | ✅ Front Door → Log Analytics | ✅ Cloud CDN                 | Azure: DiagnosticSetting 追加 (2026-02-24, 要 pulumi up)                             |
+| Security headers          | ✅ CloudFront RHP        | ❌                            | ❌                           | HSTS/CSP/X-Frame/X-Content/Referrer/XSS (AWS のみ, 2026-02-23)                       |
+| Soft delete / retention   | ❌                       | ✅ 7 days                     | ❌                           |                                                                                      |
+| CORS config               | ✅ 実ドメイン (Pulumi済) | ✅ 実ドメイン (Pulumi済)      | ✅ 実ドメイン (Pulumi済)     | production `*` → 実ドメイン絞り込み完了 (2026-02-24, 要 pulumi up)                   |
+| Audit logging             | ✅ CloudTrail (Pulumi済) | ✅ Log Analytics (Pulumi済)   | ✅ IAMAuditConfig (Pulumi済) | 全項目 Pulumi コード実装済み。各クラウドで `pulumi up` により有効化される            |
+| Managed Identity          | N/A                      | ❌ 未設定 (staging/production) | N/A (Cloud Run SA)          | Azure Function App にシステム割り当てマネージドIDが未設定 (Defender 指摘 2026-02-24)  |
+| Key Vault 消去保護        | N/A                      | ❌ 未設定                      | N/A                          | `enable_purge_protection=True` を Pulumi に追加が必要 (Defender 指摘 2026-02-24)     |
 | Key Vault 診断ログ        | N/A                      | ❌ 未設定                      | N/A                          | DiagnosticSetting → Log Analytics Workspace への転送が未設定 (Defender 指摘 2026-02-24) |
 
 ---
@@ -280,15 +280,15 @@ Token refresh:
 
 > 下記はいずれも VNet 構築・有料プラン追加・大規模アーキテクチャ変更を伴うため、現時点では対応見送り推奨。
 
-| 項目                                                                           | 重大度 | 対応困難な理由                                                  |
-| ------------------------------------------------------------------------------ | ------ | --------------------------------------------------------------- |
-| Cosmos DB ファイアウォール規則                                                 | Medium | Consumption Plan は固定IP なし。特定IP での絞り込み不可         |
-| Cosmos DB AAD 唯一認証                                                         | Medium | 接続文字列→MSI+RBAC への API 全書き直しが必要                   |
-| Cosmos DB / Key Vault プライベートリンク                                       | Medium | VNet 新規構築が前提                                             |
-| Cosmos DB パブリックネットワークアクセス無効化                                 | Medium | VNet 統合なしでは API が完全停止                                |
-| Storage プライベートリンク / VNet 規則 (mcadweb/mcadfunc)                      | Medium | 静的ウェブサイト用途では不可。Front Door Premium SKU 移行が前提 |
-| Storage パブリックアクセス禁止 (mcadweb)                                       | Medium | 静的ウェブサイトホスティングには公開アクセスが必須              |
-| Microsoft Defender CSPM / App Service / Key Vault / Resource Manager / Storage | High   | 有料プラン。追加費用が発生するため要予算判断                    |
+| 項目 | 重大度 | 対応困難な理由 |
+| ---- | ------ | -------------- |
+| Cosmos DB ファイアウォール規則 | Medium | Consumption Plan は固定IP なし。特定IP での絞り込み不可 |
+| Cosmos DB AAD 唯一認証 | Medium | 接続文字列→MSI+RBAC への API 全書き直しが必要 |
+| Cosmos DB / Key Vault プライベートリンク | Medium | VNet 新規構築が前提 |
+| Cosmos DB パブリックネットワークアクセス無効化 | Medium | VNet 統合なしでは API が完全停止 |
+| Storage プライベートリンク / VNet 規則 (mcadweb/mcadfunc) | Medium | 静的ウェブサイト用途では不可。Front Door Premium SKU 移行が前提 |
+| Storage パブリックアクセス禁止 (mcadweb) | Medium | 静的ウェブサイトホスティングには公開アクセスが必須 |
+| Microsoft Defender CSPM / App Service / Key Vault / Resource Manager / Storage | High | 有料プラン。追加費用が発生するため要予算判断 |
 
 ---
 
@@ -457,307 +457,6 @@ Cloud Logging のログエクスプローラ (`https://console.cloud.google.com/
 | ------------------------------ | ----------------------------------- |
 | `log_analytics_workspace_name` | Workspace 名 (`mcad-logs-{suffix}`) |
 | `log_analytics_workspace_id`   | ARM リソース ID                     |
-
----
-
-## Identity & Access Management (IAM/RBAC)
-
-> **⚠️ CRITICAL:** This section describes security-critical rules that must never be violated.
-> See [AI_AGENT_00_CRITICAL_RULES.md — Rule 16](AI_AGENT_00_CRITICAL_RULES.md#rule-16--iamrbac-principle-of-least-privilege--deploy-users-never-get-admin-rights)
-> for the mandatory enforcement policy.
-
-### 基本原則 — Principle of Least Privilege (最小権限の法則)
-
-すべてのユーザーおよびサービスアカウントには、その職務を遂行するために**最小限の権限のみ**を付与します。
-
-- **デプロイユーザー** — デプロイ実行に必要な権限のみ（管理者権限なし）
-- **管理者ユーザー** — 権限付与の実施のみ（デプロイ権限なし）
-- **サービスアカウント** — 特定の機能制限（読み取り / 特定リソースアクセス）
-
-#### 権限分離マトリックス
-
-| ユーザー/サービスアカウント   | AWS                 | Azure                 | GCP                       | 権限種別       |
-| ----------------------------- | ------------------- | --------------------- | ------------------------- | -------------- |
-| **satoshi** (デプロイ)        | デプロイ権限        | 未割り当て（要設定）  | Cloud Run / Storage Admin | デプロイ実行   |
-| **administrator** (管理者)    | AdministratorAccess | Owner（Azure 管理者） | N/A                       | 権限付与のみ   |
-| **sat0sh1kawada00@gmail.com** | N/A                 | N/A                   | Owner / ProjectIamAdmin   | 権限付与のみ   |
-| **sat0sh1kawada01@gmail.com** | N/A                 | N/A                   | Cloud Run / Storage Admin | デプロイ実行   |
-| **github-actions-deploy**     | N/A (IAM認証)       | Managed Identity      | Service Account           | CI/CD デプロイ |
-
----
-
-### AWS IAM 権限構成 (2026-02-27 更新)
-
-#### デプロイユーザー: **satoshi**
-
-**付与済みポリシー:**
-
-1. **GitHubActionsDeploymentPolicy** （カスタムポリシー, v5 — 2026-02-27 更新）
-   - Lambda 関数の更新コード・設定変更
-   - Lambda レイヤーの公開・削除
-   - S3 バケット（フロントエンド）へのオブジェクトアップロード
-   - CloudFront キャッシュ無効化・オリジンアクセスコントロール管理
-   - API Gateway 操作（GET / POST のみ）
-   - CloudFront 関数の作成・更新・削除・公開
-   - **IAM ロールインラインポリシー管理**（`multicloud-auto-deploy-*` ロール限定）
-
-2. **SNSUnsubscribePermission** （インラインポリシー、ユーザーポリシー）
-   - SNS トピック管理（作成・削除・属性取得・タグ付与）
-   - SNS サブスクリプション管理（購読・購読解除）
-
-**削除済みポリシー:**
-
-- ❌ `MultiCloudAutoDeployPhase1` — 古い Terraform ベースポリシー（不要）
-- ❌ `APIGatewayV2FullAccess` — 過度な権限（デプロイに不要）
-
-**権限スコープ:**
-
-- AWS アカウント: `278280499340`
-- リージョン: `ap-northeast-1`（メイン）、`us-east-1`（CloudFront）
-- リソース名パターン: `multicloud-auto-deploy-*`
-
-#### 管理者ユーザー: **administrator**
-
-**付与済みポリシー:**
-
-1. **AdministratorAccess** （AWS マネージドポリシー）
-   - すべてのサービスに対する読み書き権限
-   - IAM ユーザー・ロール・ポリシーの管理
-
-**削除済みポリシー:**
-
-- ❌ `APIGatewayV2FullAccess` — 管理者権限で不要
-- ❌ `LambdaLayerFullAccess` — 管理者権限で不要
-
-**用途:** 権限付与・取り消し、緊急対応、ポリシー更新など
-
----
-
-### Azure RBAC 権限構成 (2026-02-27 更新)
-
-#### デプロイユーザー: **satoshi** (satoshi@sat0sh1kawadaoutlook.onmicrosoft.com)
-
-**現在の権限:** ❌ **未割り当て** （Contributor ロールを削除済み 2026-02-27）
-
-**推奨割り当て（実装待機中）:**
-
-デプロイに必要な権限は、使用するサービスに応じて異なります。現在の architecture では以下が推奨されます：
-
-- **Website Contributor** — App Service / Static Web Apps でのデプロイ
-- **Storage Account Contributor** — Blob Storage へのアップロード
-- **User Access Administrator** — Azure Managed Identity 管理（Function App の Managed Identity 設定用）
-- カスタムロール: `Deployment Contributor` (実装予定)
-
-割り当てコマンド例:
-
-```bash
-az role assignment create \
-  --assignee satoshi@sat0sh1kawadaoutlook.onmicrosoft.com \
-  --role "Website Contributor" \
-  --scope "/subscriptions/29031d24-d41a-4f97-8362-46b40129a7e8"
-```
-
-#### 管理者ユーザー: **administrator** (administrator@sat0sh1kawadaoutlook.onmicrosoft.com)
-
-**付与済み権限:**
-
-- **Owner** ロール（サブスクリプション全体）✓
-
-**用途:** 権限付与・取り消し、リソース管理、緊急対応
-
-**権限スコープ:** サブスクリプション `29031d24-d41a-4f97-8362-46b40129a7e8` レベル
-
----
-
-### GCP IAM 権限構成 (2026-02-27 更新)
-
-#### デプロイユーザー: **sat0sh1kawada01@gmail.com**
-
-**付与済みポリシー:**
-
-1. **roles/run.admin** — Cloud Run の完全管理
-2. **roles/storage.admin** — Cloud Storage の完全管理
-
-**削除済みポリシー:**
-
-- ❌ `roles/editor` — 過度な権限（2026-02-27 削除）
-
-**権限スコープ:** プロジェクト `ashnova` レベル
-
-#### 管理者ユーザー: **sat0sh1kawada00@gmail.com**
-
-**付与済みポリシー:**
-
-1. **roles/owner** — プロジェクト所有者（全権限）
-2. **roles/resourcemanager.projectIamAdmin** — IAM ポリシー管理
-3. **roles/editor** — リソース読み書き（owner によってカバーされるが、明示的に設定済み）
-
-**用途:** 権限付与・取り消し、プロジェクト設定、緊急対応
-
-#### CI/CD サービスアカウント: **github-actions-deploy@ashnova.iam.gserviceaccount.com**
-
-**付与済みポリシー:**
-
-1. **roles/run.admin** — Cloud Run デプロイ
-2. **roles/datastore.owner** — Firestore 管理
-
----
-
-### ポリシー定義詳細
-
-#### AWS: GitHubActionsDeploymentPolicy
-
-**リソース ARN パターン:**
-
-```json
-Lambda:         arn:aws:lambda:ap-northeast-1:278280499340:function:multicloud-auto-deploy-*
-Lambda Layer:   arn:aws:lambda:ap-northeast-1:278280499340:layer:multicloud-auto-deploy-*
-S3:             arn:aws:s3:::multicloud-auto-deploy-*
-S3 Objects:     arn:aws:s3:::multicloud-auto-deploy-*/*
-API Gateway:    arn:aws:apigateway:ap-northeast-1::/apis/*
-CloudFront:     * (リソースベースの制限なし)
-IAM Role:       arn:aws:iam::278280499340:role/multicloud-auto-deploy-*
-Cognito:        arn:aws:cognito-idp:ap-northeast-1:278280499340:userpool/*
-```
-
-**アクション:**
-
-```json
-{
-  "Lambda": [
-    "lambda:UpdateFunctionCode",
-    "lambda:UpdateFunctionConfiguration",
-    "lambda:GetFunction",
-    "lambda:GetFunctionConfiguration"
-  ],
-  "LambdaLayer": [
-    "lambda:PublishLayerVersion",
-    "lambda:GetLayerVersion",
-    "lambda:DeleteLayerVersion"
-  ],
-  "S3": [
-    "s3:PutObject",
-    "s3:GetObject",
-    "s3:DeleteObject",
-    "s3:ListBucket",
-    "s3:PutObjectAcl"
-  ],
-  "CloudFront": [
-    "cloudfront:CreateInvalidation",
-    "cloudfront:GetInvalidation",
-    "cloudfront:ListInvalidations",
-    "cloudfront:CreateOriginAccessControl",
-    "cloudfront:UpdateOriginAccessControl",
-    "cloudfront:DeleteOriginAccessControl",
-    "cloudfront:ListOriginAccessControls",
-    "cloudfront:CreateFunction",
-    "cloudfront:UpdateFunction",
-    "cloudfront:DeleteFunction",
-    "cloudfront:PublishFunction",
-    "cloudfront:GetFunction",
-    "cloudfront:DescribeFunction",
-    "cloudfront:ListFunctions",
-    "cloudfront:GetDistribution",
-    "cloudfront:GetDistributionConfig",
-    "cloudfront:UpdateDistribution",
-    "cloudfront:ListDistributions",
-    "cloudfront:CreateDistribution"
-  ],
-  "APIGateway": ["apigateway:GET", "apigateway:POST"],
-  "IAMRolePolicy": [
-    "iam:PutRolePolicy",
-    "iam:GetRolePolicy",
-    "iam:DeleteRolePolicy"
-  ],
-  "Cognito": [
-    "cognito-idp:DescribeUserPool",
-    "cognito-idp:DescribeUserPoolClient",
-    "cognito-idp:UpdateUserPoolClient",
-    "cognito-idp:ListUserPools",
-    "cognito-idp:ListUserPoolClients"
-  ],
-  "LambdaList": [
-    "lambda:ListLayerVersions",
-    "lambda:ListLayers"
-  ]
-}
-```
-
-#### AWS: SNSUnsubscribePermission
-
-**リソース:** `arn:aws:sns:*:278280499340:multicloud-auto-deploy-*`
-
-**アクション:**
-
-```json
-[
-  "sns:CreateTopic",
-  "sns:DeleteTopic",
-  "sns:GetTopicAttributes",
-  "sns:SetTopicAttributes",
-  "sns:ListTopics",
-  "sns:TagResource",
-  "sns:UntagResource",
-  "sns:ListTagsForResource",
-  "sns:Subscribe",
-  "sns:Unsubscribe",
-  "sns:GetSubscriptionAttributes",
-  "sns:SetSubscriptionAttributes",
-  "sns:ListSubscriptions",
-  "sns:ListSubscriptionsByTopic"
-]
-```
-
----
-
-### チェックリスト — 権限設定検証
-
-#### AWS
-
-- [ ] satoshi: `AdministratorAccess` がアタッチされていない ✓
-- [ ] satoshi: `GitHubActionsDeploymentPolicy` がアタッチされている ✓
-- [ ] satoshi: `SNSUnsubscribePermission` がアタッチされている ✓
-- [ ] administrator: `AdministratorAccess` がアタッチされている ✓
-- [ ] administrator: デプロイ権限ポリシーがアタッチされていない ✓
-
-検証コマンド:
-
-```bash
-# satoshi の確認
-aws iam list-attached-user-policies --user-name satoshi
-
-# administrator の確認
-aws iam list-attached-user-policies --user-name administrator
-```
-
-#### Azure
-
-- [ ] satoshi: Contributor / Owner ロールがアタッチされていない ✓
-- [ ] satoshi: Website Contributor または Deployment Contributor がアタッチされている (要実装)
-- [ ] administrator@sat0sh1kawadaoutlook.onmicrosoft.com: Owner ロールがアタッチされている ✓
-
-検証コマンド:
-
-```bash
-az role assignment list --assignee satoshi@sat0sh1kawadaoutlook.onmicrosoft.com
-az role assignment list --assignee sat0sh1kawada@outlook.com
-az role assignment list --assignee administrator@sat0sh1kawadaoutlook.onmicrosoft.com
-```
-
-#### GCP
-
-- [ ] sat0sh1kawada01@gmail.com: Editor / Owner ロールがアタッチされていない ✓
-- [ ] sat0sh1kawada01@gmail.com: Cloud Run Admin がアタッチされている ✓
-- [ ] sat0sh1kawada01@gmail.com: Storage Admin がアタッチされている ✓
-- [ ] sat0sh1kawada00@gmail.com: Owner ロールがアタッチされている ✓
-- [ ] sat0sh1kawada00@gmail.com: projectIamAdmin ロールがアタッチされている ✓
-
-検証コマンド:
-
-```bash
-gcloud projects get-iam-policy ashnova --flatten="bindings[].members" --filter="bindings.members:sat0sh1kawada01@gmail.com"
-gcloud projects get-iam-policy ashnova --flatten="bindings[].members" --filter="bindings.members:sat0sh1kawada00@gmail.com"
-```
 
 ---
 

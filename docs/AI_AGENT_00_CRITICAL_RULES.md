@@ -1,6 +1,6 @@
 # 00 — Critical Rules: Read This First
 
-> **This document MUST be read before any other document in this repository.**
+> **This document MUST be read before any other document in this repository.**  
 > It contains the minimum set of rules that, if violated, will cause data loss, production outages,
 > or hours of wasted debugging. Every point here was learned from a past incident.
 
@@ -324,50 +324,6 @@ az ad app update \
 
 ---
 
-## Rule 18 — Git Workflow: Branch from develop, merge to develop
-
-**All code fixes and feature additions must follow this workflow:**
-
-1. **Create feature branch from develop**
-   ```bash
-   git checkout develop
-   git pull origin develop
-   git checkout -b fix/issue-name    # For bug fixes
-   git checkout -b feature/name      # For new features
-   git checkout -b docs/update       # For documentation
-   ```
-
-2. **Implement and test**
-   ```bash
-   # Make changes
-   git add .
-   git commit -m "fix: description"
-   
-   # Run tests (mandatory before merge)
-   pytest services/api/tests/ -v
-   ```
-
-3. **Merge to develop**
-   ```bash
-   git checkout develop
-   git merge --no-ff fix/issue-name
-   git push origin develop
-   
-   # Delete branch (mandatory)
-   git push origin --delete fix/issue-name
-   git branch -d fix/issue-name
-   ```
-
-**Prohibited:**
-- ❌ Direct commits to `main` / `develop`
-- ❌ Branching from `main` (always branch from `develop`)
-- ❌ Merging without tests
-- ❌ Forgetting to delete branch after merge
-
-**See [AI_AGENT_14_GIT_WORKFLOW.md](AI_AGENT_14_GIT_WORKFLOW.md) for details.**
-
----
-
 ## Quick Reference: Where to Find What
 
 | Topic                      | File                                                       |
@@ -381,6 +337,5 @@ az ad app update \
 | Current environment health | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)             |
 | Step-by-step runbooks      | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)         |
 | Security configuration     | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)         |
-| Git workflow (important)   | [AI_AGENT_14_GIT_WORKFLOW.md](AI_AGENT_14_GIT_WORKFLOW.md) |
 | Remaining tasks / backlog  | [AI_AGENT_09_TASKS.md](AI_AGENT_09_TASKS.md)               |
 | Everything — entry point   | [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)                     |

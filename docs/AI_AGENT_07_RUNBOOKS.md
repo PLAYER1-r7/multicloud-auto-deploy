@@ -1,6 +1,6 @@
 # 07 — Runbooks
 
-> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)  
 > Step-by-step procedures for common tasks and incident response
 
 ---
@@ -288,7 +288,7 @@ The dev container is `aarch64`; Cloud Functions runs `linux/amd64`. Always use D
 mkdir -p /tmp/deploy_gcp/.deployment
 docker run --rm --platform linux/amd64 \
   -v /tmp/deploy_gcp:/out \
-  python:3.13-slim \
+  python:3.12-slim \
   bash -c "pip install --no-cache-dir --target /out/.deployment \
            -r /workspaces/multicloud-auto-deploy/services/api/requirements-gcp.txt -q"
 
@@ -342,7 +342,7 @@ az functionapp create \
   --name multicloud-auto-deploy-production-frontend-web-v2 \
   --resource-group "$RG" \
   --flexconsumption-location japaneast \
-  --runtime python --runtime-version 3.13 \
+  --runtime python --runtime-version 3.12 \
   --storage-account mcadfuncdiev0w
 
 # 2. Fix instance count to 1 (no recycling)
@@ -440,10 +440,10 @@ pulumi config set acmCertificateArn \
 
 ## [RB-16] Fix Azure FC1 InaccessibleStorageException (deployment storage account deleted)
 
-**Trigger:** `az functionapp deployment source config-zip` fails immediately with
+**Trigger:** `az functionapp deployment source config-zip` fails immediately with  
 `InaccessibleStorageException: BlobUploadFailedException: Name or service not known (xxxxx.blob.core.windows.net:443)`
 
-**Root cause:** The `functionAppConfig.deployment.storage` account linked to the FC1 function app has been deleted.
+**Root cause:** The `functionAppConfig.deployment.storage` account linked to the FC1 function app has been deleted.  
 Kudu's `StorageAccessibleCheck` blocks **all** zip deploys until the storage account is restored.
 
 ```bash
@@ -512,106 +512,6 @@ curl -s "https://<func-hostname>/api/HttpTrigger/health" | jq .
 
 - `deploy-azure.yml` contains a "Ensure deployment storage account exists" step that runs this logic automatically on every deployment.
 - Do **not** delete storage accounts that share a resource group with FC1 function apps without first checking dependencies.
-
----
-
-## [RB-17] Multi-Cloud Cost Monitoring
-
-### ターミナルでのフルレポート
-
-```bash
-cd /workspaces/multicloud-auto-deploy
-
-# 3クラウド + GitHub 当月コストを表示 (デフォルト: 過去3ヶ月)
-python3 scripts/cost_report.py
-
-# オプション
-python3 scripts/cost_report.py --months 6        # 過去6ヶ月
-python3 scripts/cost_report.py --json            # JSON 出力 (jq と組み合わせ可)
-python3 scripts/cost_report.py --aws-only        # AWS のみ
-python3 scripts/cost_report.py --azure-only      # Azure のみ
-```
-
-**出力例 (2026-02)**
-
-```
- ★ Multi-Cloud Cost Report
-────────────────────────────────────────────────────────────
-Provider               Period               Cost  Note
-────────────────────────────────────────────────────────────
-  AWS                  2026-02    ¥18,040 (JPY)  $115.41 × ¥156
-  Azure                2026-02   ¥6,970 (JPY)   JPY 建て請求
-  GCP                  2026-02         N/A       BQ billing export 参照
-  GitHub Actions       2026-02         N/A       1298 runs / cache 1.49 GB
-────────────────────────────────────────────────────────────
-  TOTAL USD                               0.0000
-  TOTAL JPY                              ¥25,010  (円建ての請求)
-```
-
-### 認証情報の設定
-
-`scripts/mac-widget/.env` が自動参照されます（なければ `scripts/mac-widget/cost-monitor.env.sample` をコピー）:
-
-```bash
-cp scripts/mac-widget/cost-monitor.env.sample scripts/mac-widget/.env
-# 必要な値を記入
-```
-
-| 環境変数                | 用途                      | 取得方法                          |
-| ----------------------- | ------------------------- | --------------------------------- |
-| `AZURE_SUBSCRIPTION_ID` | Azure Cost Management API | `az account show --query id`      |
-| `GCP_BILLING_ACCOUNT`   | GCP Billing               | `gcloud billing accounts list`    |
-| `GCP_PROJECT_ID`        | GCP プロジェクト          | `gcloud config get-value project` |
-| `GITHUB_TOKEN`          | GitHub Actions 使用量     | `gh auth token`                   |
-| `GH_ORG` or `GH_REPO`   | GitHub 対象               | Org 名 or `owner/repo`            |
-
-AWS は `aws configure` 済みのデフォルトプロファイルを使用（追加設定不要）。
-
-### 為替レート
-
-AWS は USD 建てのため、[open.er-api.com](https://open.er-api.com/v6/latest/USD) からリアルタイムの USD/JPY レートを取得して円換算します。API 障害時は **¥150 固定** にフォールバックします。
-
-### macOS メニューバーウィジェット (xbar)
-
-xbar (<https://xbarapp.com>) を使ってメニューバーに常時表示できます。
-
-```bash
-# 1. xbar をインストール
-brew install --cask xbar
-
-# 2. インストール (シンボリックリンク作成 + .env 初期化)
-bash scripts/mac-widget/install.sh
-
-# 3. .env に認証情報を記入
-open -e scripts/mac-widget/.env
-```
-
-**メニューバー表示例**:
-
-```
-☁ ¥25,010
-────────────────
-🟠 AWS    ¥18,040  ($115.41 × ¥156)
-🔵 Azure  ¥6,970
-🟡 GCP    N/A  [請求先アカウント]
-⚫ GitHub   N/A  1298 runs / cache 1.49 GB
-────────────────
-TOTAL  ¥25,010
-```
-
-- 更新間隔: **1時間ごと**（ファイル名 `cost-monitor.1h.py` の `.1h.` で制御）
-- 金額の色: `green` < ¥750（$5相当）/ `orange` < ¥4,500（$30相当）/ `red` それ以上
-- クリックでそれぞれのコンソールに直接遷移
-
-### ファイル構成
-
-| ファイル                                     | 役割                                                     |
-| -------------------------------------------- | -------------------------------------------------------- |
-| `scripts/cost_report.py`                     | ターミナル用月次レポート（`--months N` / `--json` 対応） |
-| `scripts/mac-widget/cost-monitor.1h.py`      | xbar プラグイン本体                                      |
-| `scripts/mac-widget/cost-monitor.env.sample` | 認証情報テンプレート                                     |
-| `scripts/mac-widget/install.sh`              | xbar セットアップスクリプト                              |
-| `scripts/mac-widget/.env`                    | 認証情報（**git 管理外**）                               |
 
 ---
 

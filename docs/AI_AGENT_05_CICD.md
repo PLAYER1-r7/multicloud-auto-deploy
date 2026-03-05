@@ -37,42 +37,13 @@ main     →  production  ⚠️ goes live immediately
 
 ## Trigger Conditions (path filters)
 
-> ⚠️ **Cloud-specific deployments**: Each workflow monitors only cloud-specific paths to prevent unnecessary deployments.
-
-### Backend API (`deploy-{aws,azure,gcp}.yml`)
-
-| Changed path                         | Workflow triggered      |
-| ------------------------------------ | ----------------------- |
-| `services/api/**`                    | All clouds (shared API) |
-| `infrastructure/pulumi/aws/**`       | AWS only                |
-| `infrastructure/pulumi/azure/**`     | Azure only              |
-| `infrastructure/pulumi/gcp/**`       | GCP only                |
-| `.github/config/aws.*.env`           | AWS only                |
-| `.github/config/azure.*.env`         | Azure only              |
-| `.github/config/gcp.*.env`           | GCP only                |
-| `.github/workflows/deploy-aws.yml`   | AWS only                |
-| `.github/workflows/deploy-azure.yml` | Azure only              |
-| `.github/workflows/deploy-gcp.yml`   | GCP only                |
-
-### Frontend React SPA (`deploy-frontend-web-{aws,azure,gcp}.yml`)
-
-| Changed path                              | Workflow triggered      |
-| ----------------------------------------- | ----------------------- |
-| `services/frontend_react/**`              | All clouds (shared)     |
-| `.github/config/aws.*.env`                | AWS only                |
-| `.github/config/azure.*.env`              | Azure only              |
-| `.github/config/gcp.*.env`                | GCP only                |
-| `.github/workflows/deploy-frontend-web-*` | Respective cloud only   |
-
-### Landing Page (`deploy-landing-{aws,azure,gcp}.yml`)
-
-| Changed path                           | Workflow triggered      |
-| -------------------------------------- | ----------------------- |
-| `static-site/**`                       | All clouds (shared)     |
-| `.github/config/aws.*.env`             | AWS only                |
-| `.github/config/azure.*.env`           | Azure only              |
-| `.github/config/gcp.*.env`             | GCP only                |
-| `.github/workflows/deploy-landing-*`   | Respective cloud only   |
+| Changed path                 | Workflow triggered                      |
+| ---------------------------- | --------------------------------------- |
+| `services/api/**`            | deploy-{aws,azure,gcp}.yml              |
+| `infrastructure/pulumi/**`   | deploy-{aws,azure,gcp}.yml              |
+| `services/frontend_react/**` | deploy-frontend-{aws,azure,gcp}.yml     |
+| `services/frontend_web/**`   | deploy-frontend-web-{aws,azure,gcp}.yml |
+| `static-site/**`             | deploy-landing-{aws,azure,gcp}.yml      |
 
 ---
 
