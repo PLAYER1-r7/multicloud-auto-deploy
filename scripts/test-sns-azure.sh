@@ -125,7 +125,7 @@ READ_ONLY=$_READ_ONLY_
 
 if [[ $_ENV_ == production ]]; then
   [[ $_FD_URL_EXPLICIT  == false ]] && FD_URL="${FD_URL:-https://www.azure.ashnova.jp}"
-  [[ $_API_URL_EXPLICIT == false ]] && API_URL="${API_URL:-https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net/api}"
+  [[ $_API_URL_EXPLICIT == false ]] && API_URL="${API_URL:-https://multicloud-auto-deploy-production-func-cfdne7ecbngnh0d0.japaneast-01.azurewebsites.net}"
 else
   FD_URL="${FD_URL:-https://mcadwebd45ihd.z11.web.core.windows.net}"
   # Azure Functions default routePrefix is "api", so /health is at /api/health
@@ -261,7 +261,7 @@ else
 fi
 
 run_test "API GET /posts returns 200 (unauthenticated)" \
-  GET "$API_URL/posts"
+  GET "$API_URL/api/posts"
 
 if echo "$LAST_BODY" | jq -e '.items' >/dev/null 2>&1; then
   POST_COUNT=$(echo "$LAST_BODY" | jq '.items | length')
