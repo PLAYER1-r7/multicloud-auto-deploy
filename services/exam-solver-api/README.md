@@ -2,6 +2,8 @@
 
 大学入試解答サポートサービス - OCR・AI解答の独立マイクロサービス
 
+**Status**: Ready for deployment (Workflow trigger)
+
 ## 🎯 特徴
 
 - **FastAPI** - 高速で型安全なPythonフレームワーク
