@@ -19,7 +19,16 @@ LAYER_NAME="${LAYER_NAME:-${PROJECT_NAME}-${ENVIRONMENT}-dependencies}"
 # ディレクトリ設定
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-API_DIR="$PROJECT_ROOT/services/api"
+
+# 現在のディレクトリを API ディレクトリとして使用（ワークフローから呼び出される想定）
+# ワークフローでは cd services/{service-name} してから呼び出される
+if [ -f "requirements.txt" ] || [ -f "requirements-layer.txt" ]; then
+    API_DIR="$(pwd)"
+else
+    # フォールバック: services/sns-api を使用
+    API_DIR="$PROJECT_ROOT/services/sns-api"
+fi
+
 BUILD_DIR="$API_DIR/.build-layer"
 
 echo -e "${GREEN}========================================${NC}"
