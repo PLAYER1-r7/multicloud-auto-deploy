@@ -106,6 +106,7 @@ jobs:
           echo "📦 Building SNS API package..."
           cp -r app .deployment/package/
           cp function_app.py .deployment/package/
+          cp host.json .deployment/package/
           cp requirements.txt .deployment/package/
           cp -r requirements-*.txt .deployment/package/ 2>/dev/null || true
 
