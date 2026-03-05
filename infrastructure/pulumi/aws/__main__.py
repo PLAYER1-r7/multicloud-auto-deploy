@@ -147,17 +147,21 @@ user_pool_client = aws.cognito.UserPoolClient(
     allowed_oauth_flows=["code"],
     allowed_oauth_scopes=["openid", "email", "profile"],
     allowed_oauth_flows_user_pool_client=True,
-    callback_urls=(
-        ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else [])
-        + ([f"https://{custom_domain}/sns/auth/callback"] if custom_domain else [])
-        + [
-            "http://localhost:3000/sns/auth/callback"
-        ]  # Local development + API Gateway fallback
+    callback_urls=list(
+        set(
+            ([f"https://{cf_domain}/sns/auth/callback"] if cf_domain else [])
+            + ([f"https://{custom_domain}/sns/auth/callback"] if custom_domain else [])
+            + [
+                "http://localhost:3000/sns/auth/callback"
+            ]  # Local development + API Gateway fallback
+        )
     ),
-    logout_urls=(
-        ([f"https://{cf_domain}/sns/"] if cf_domain else [])
-        + ([f"https://{custom_domain}/sns/"] if custom_domain else [])
-        + ["http://localhost:3000/"]  # Local development + API Gateway fallback
+    logout_urls=list(
+        set(
+            ([f"https://{cf_domain}/sns/"] if cf_domain else [])
+            + ([f"https://{custom_domain}/sns/"] if custom_domain else [])
+            + ["http://localhost:3000/"]  # Local development + API Gateway fallback
+        )
     ),
     access_token_validity=1,
     id_token_validity=1,

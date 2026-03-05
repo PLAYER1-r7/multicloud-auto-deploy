@@ -111,18 +111,32 @@ echo -e "${YELLOW}4. 不要なファイルの削除...${NC}"
 cd "$BUILD_DIR/python"
 
 # テストファイルとドキュメントを削除
-find . -type d -name "tests" -o -name "test" -exec rm -rf {} + 2>/dev/null || true
+find . -type d \( -name "tests" -o -name "test" \) -exec rm -rf {} + 2>/dev/null || true
 find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 find . -type f -name "*.pyc" -delete 2>/dev/null || true
 find . -type f -name "*.pyo" -delete 2>/dev/null || true
-find . -type f -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
 
-# .so ファイル以外の開発用ファイルを削除
+# .dist-info ディレクトリを削除 (metadata, RECORD, WHEEL, etc.)
+find . -type d -name "*dist-info" -exec rm -rf {} + 2>/dev/null || true
+
+# .data ディレクトリを削除
+find . -type d -name "*.data" -exec rm -rf {} + 2>/dev/null || true
+
+# 開発用ファイルを削除 (.so ファイル以外)
 find . -type f -name "*.c" -delete 2>/dev/null || true
 find . -type f -name "*.h" -delete 2>/dev/null || true
+find . -type f -name "*.so.py" -delete 2>/dev/null || true
+find . -type f -name "*.pyd" -delete 2>/dev/null || true
+
+# ドキュメントを削除
 find . -type f -name "*.txt" -delete 2>/dev/null || true
 find . -type f -name "*.md" -delete 2>/dev/null || true
 find . -type f -name "*.rst" -delete 2>/dev/null || true
+find . -type f -name "LICENSE*" -delete 2>/dev/null || true
+find . -type f -name "COPYING*" -delete 2>/dev/null || true
+
+# top_level.txt などのメタデータファイルを削除
+find . -type f \( -name "top_level.txt" -o -name "RECORD" -o -name "WHEEL" -o -name "METADATA" -o -name "entry_points.txt" \) -delete 2>/dev/null || true
 
 echo -e "${GREEN}✅ クリーンアップ完了${NC}"
 

@@ -20,32 +20,32 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "=== Workflow Approval Monitor ===" 
+echo "=== Workflow Approval Monitor ==="
 echo "Run ID: $RUN_ID"
 echo ""
 
 check_approval_status() {
   local run_id="$1"
-  
+
   # ワークフローのステータスを取得
   local status_json
   status_json=$(gh run view "$run_id" --json status,conclusion,displayTitle,url,createdAt 2>&1)
-  
+
   local status
   status=$(echo "$status_json" | jq -r '.status // empty')
-  
+
   local conclusion
   conclusion=$(echo "$status_json" | jq -r '.conclusion // empty')
-  
+
   local url
   url=$(echo "$status_json" | jq -r '.url // empty')
-  
+
   local title
   title=$(echo "$status_json" | jq -r '.displayTitle // empty')
-  
+
   echo "[$(date '+%H:%M:%S')] Workflow: $title"
   echo "  Status: $status"
-  
+
   # 承認待ち状態の検知
   if [[ "$status" == "waiting" || "$status" == "queued" ]]; then
     echo ""
@@ -83,29 +83,29 @@ check_approval_status "$RUN_ID"
 result=$?
 
 if [[ $result -eq 2 ]]; then
-  echo "=== 承認待機モード ===" 
+  echo "=== 承認待機モード ==="
   echo "承認されるまで ${MAX_WAIT} 秒間待機します..."
   echo "(Ctrl+C で中断)"
   echo ""
-  
+
   elapsed=0
   while [[ $elapsed -lt $MAX_WAIT ]]; do
     sleep "$POLL_INTERVAL"
     elapsed=$((elapsed + POLL_INTERVAL))
-    
+
     echo ""
     check_approval_status "$RUN_ID"
     result=$?
-    
+
     if [[ $result -ne 2 ]]; then
       echo ""
       echo "✓ 承認待ち状態が解消されました"
       break
     fi
-    
+
     echo "  経過時間: ${elapsed}秒 / ${MAX_WAIT}秒"
   done
-  
+
   if [[ $elapsed -ge $MAX_WAIT ]]; then
     echo ""
     echo "⚠ タイムアウト: ${MAX_WAIT}秒経過しました"

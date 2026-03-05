@@ -22,7 +22,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "=== Triggering Workflow ===" 
+echo "=== Triggering Workflow ==="
 echo "Workflow: $WORKFLOW"
 echo "Ref: $REF"
 echo "Environment: $ENVIRONMENT"
