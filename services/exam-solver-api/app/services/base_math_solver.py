@@ -7,7 +7,6 @@ from pathlib import Path
 
 import requests
 from fastapi import HTTPException
-from pypdf import PdfReader
 
 from app.config import settings
 from app.models import SolveRequest
@@ -219,6 +218,8 @@ class BaseMathSolver:
 
         # --- pypdf (フォールバック) ---
         try:
+            from pypdf import PdfReader
+
             reader = PdfReader(BytesIO(pdf_bytes))
             texts: list[str] = []
             for page in reader.pages:
