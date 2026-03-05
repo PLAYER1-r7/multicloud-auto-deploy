@@ -90,7 +90,7 @@ jobs:
           echo "🚀 Deploying ${{ env.SERVICE }} to Cloud Functions..."
           gcloud functions deploy $FUNC_NAME \
             --gen2 \
-            --runtime python3.12 \
+            --runtime python313 \
             --trigger-http \
             --allow-unauthenticated \
             --entry-point handler \
