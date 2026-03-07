@@ -1,7 +1,29 @@
 # AI Agent Guide — multicloud-auto-deploy
 
+> # 🤖 AI AGENTS: START HERE
+> 
 > **Purpose**: Single entry point for AI agents working on this repository.
-> Start here every session. All numbered documents are cross-linked from this guide.
+> 
+> ### ⚠️ BEFORE YOU DO ANYTHING ELSE ⚠️
+> 
+> 1. **READ FIRST**: [AI_AGENT_00_CRITICAL_RULES.md](AI_AGENT_00_CRITICAL_RULES.md) ⭐ **MANDATORY** ⭐
+>    - 18 critical rules learned from past production incidents
+>    - Prevents data loss, production outages, and hours of debugging
+>    - **DO NOT skip this document**
+> 
+> 2. **Then come back here** for navigation to all other documents
+> 
+> ### 📖 Reading Order
+> 
+> After reading the critical rules above, follow this sequence:
+> 
+> ```
+> Part I  (Orientation)    → Read first to understand the project
+> Part II (Technical Ref)  → Look up when working on specific areas
+> Part III (Operations)    → Check during ongoing work
+> ```
+> 
+> **Total time for Part I: ~15 minutes | Saves you: hours of confusion**
 
 ---
 

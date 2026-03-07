@@ -1,6 +1,8 @@
 # 06 — 環境ステータス
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> 
+> ⚠️ **必読前提**: [00_CRITICAL_RULES](AI_AGENT_00_CRITICAL_RULES_JA.md) を先に読んでください
 > 最終確認: 2026-03-03 Session 5 (フェーズ 2 進行中 / T6 完了 ✅ / T7-T10 準備進行中 / 次: T8 CDN最適化 開始予定)
 > 前回: 2026-03-03 Session 4 (T6 本番デプロイ実行完了 ✅ / SSL ACTIVE / CDN HTTP 200 / 監査ログ記録確認 ✅)
 

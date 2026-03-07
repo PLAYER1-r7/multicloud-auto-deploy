@@ -1,6 +1,8 @@
 # 02 — Architecture
 
 > Part II — Architecture & Design | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> 
+> ⚠️ **Prerequisites**: [00_CRITICAL_RULES](AI_AGENT_00_CRITICAL_RULES.md) → [01_CONTEXT](AI_AGENT_01_CONTEXT.md)
 
 ---
 
@@ -134,7 +136,7 @@ Azure Functions: multicloud-auto-deploy-staging-func (Flex Consumption)  ← bac
 ```
 
 **Resource Group**: `multicloud-auto-deploy-staging-rg` (japaneast)
-**WAF**: Not configured (Standard SKU; can be added with Premium SKU)
+**WAF**: Not configured (Standard SKU; Premium SKU is prohibited by policy, use standalone WAF Policy)
 
 ---
 

@@ -1,6 +1,8 @@
 # 01 — コンテキスト：概要とリポジトリレイアウト
 
 > 第I部 — オリエンテーション | 親: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> 
+> ⚠️ **必読前提**: [AI_AGENT_00_CRITICAL_RULES_JA.md](AI_AGENT_00_CRITICAL_RULES_JA.md) を先に読んでください
 
 ---
 

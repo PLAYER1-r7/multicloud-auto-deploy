@@ -52,6 +52,43 @@
 - **CI/CD**: プッシュやPRで自動的にビルド・デプロイ
 - **簡単セットアップ**: スクリプト一つで環境構築
 
+## 🤖 For AI Agents — START HERE
+
+> **⚠️ CRITICAL: Read this section FIRST before working on this repository.**
+> 
+> このリポジトリのすべてのドキュメントを読む前に、以下を必ず確認してください：
+
+### 📖 必読ドキュメント（この順序で読むこと）
+
+1. **[docs/AI_AGENT_00_CRITICAL_RULES_JA.md](docs/AI_AGENT_00_CRITICAL_RULES_JA.md)** ⭐ **最重要** ⭐
+   - 過去のインシデントから学んだ18の重要ルール
+   - データロス・本番障害・長時間デバッグを避けるために必読
+   - **このルールを読まずに作業を開始してはいけません**
+
+2. **[docs/AI_AGENT_GUIDE.md](docs/AI_AGENT_GUIDE.md)** 📚 **ガイドの入口**
+   - すべてのAIエージェント向けドキュメントへのナビゲーション
+   - 読むべき順序、各ドキュメントの目的を明示
+
+3. **[docs/AI_AGENT_01_CONTEXT_JA.md](docs/AI_AGENT_01_CONTEXT_JA.md)** 🌐 **プロジェクト概要**
+   - プロジェクトの全体像、使用技術、環境構成
+   - 5分で読めるプロジェクトのコンテキスト
+
+### 🚨 絶対に守るべき原則
+
+- ❌ **main ブランチに直接プッシュしない** → 本番環境に即座にデプロイされます
+- ❌ **大量のファイルを一度に編集しない** → ネットワークエラーで部分的破損のリスク
+- ❌ **ARM (aarch64) でビルドしたパッケージをデプロイしない** → 本番は x86_64 で実行時エラー
+- ✅ **常に docs/AI_AGENT_00_CRITICAL_RULES_JA.md を参照**
+
+### 📋 作業開始前チェックリスト
+
+- [ ] AI_AGENT_00_CRITICAL_RULES_JA.md を読んだ
+- [ ] AI_AGENT_GUIDE.md で必要なドキュメントを確認した
+- [ ] 現在のブランチが develop であることを確認した（`git branch`）
+- [ ] 変更する前に現在の状態を理解した（AI_AGENT_06_STATUS.md）
+
+---
+
 ## 📁 プロジェクト構造
 
 ```
@@ -65,6 +102,8 @@ multicloud-auto-deploy/
 │   └── frontend_reflex/  # Reflex フロントエンド（実験的）
 ├── scripts/              # デプロイ・テストスクリプト
 ├── docs/                 # ドキュメント
+│   ├── AI_AGENT_00_CRITICAL_RULES_JA.md  # ⭐ 最重要：最初に必ず読むこと
+│   ├── AI_AGENT_GUIDE.md                 # 📚 AIエージェント向けガイドの入口
 │   ├── CDN_SETUP.md                      # CDN設定ガイド
 │   ├── ENDPOINTS.md                      # エンドポイント一覧
 │   └── REFACTORING_REPORT_20260222.md    # 🆕 Infra & CI/CD refactoring report (2026-02-22)

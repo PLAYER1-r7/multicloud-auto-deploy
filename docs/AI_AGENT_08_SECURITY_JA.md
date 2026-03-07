@@ -8,22 +8,22 @@
 
 > 最終更新: 2026-02-24 (Defender for Cloud セキュアスコア分析・新規タスク追加)
 
-| Feature                   | AWS                      | Azure                          | GCP                          | Notes                                                                                   |
-| ------------------------- | ------------------------ | ------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------- |
-| HTTPS enforced            | ✅                       | ✅                             | ✅ Pulumi済 (要 pulumi up)   | GCP: HTTP→HTTPS リダイレクト用 URLMap を分離。ポート80は301 redirect のみ               |
-| WAF                       | ✅ WebACL (CloudFront)   | ❌                             | ✅ Cloud Armor               | Azure: Front Door Standard SKU では WAF Policy 未設定 (要 Premium SKU or WAF Policy)    |
-| Rate limiting             | ❌                       | ❌                             | ✅ 100req/min/IP             |                                                                                         |
-| SQLi / XSS protection     | ❌                       | ❌                             | ✅                           |                                                                                         |
-| Data encryption (at rest) | ✅ SSE-S3                | ✅ Azure SSE                   | ✅ Google-managed            |                                                                                         |
-| Versioning                | ✅                       | ✅                             | ✅                           |                                                                                         |
-| Access logs (CDN)         | ✅ CloudFront            | ✅ Front Door → Log Analytics  | ✅ Cloud CDN                 | Azure: DiagnosticSetting 追加 (2026-02-24, 要 pulumi up)                                |
-| Security headers          | ✅ CloudFront RHP        | ❌                             | ❌                           | HSTS/CSP/X-Frame/X-Content/Referrer/XSS (AWS のみ, 2026-02-23)                          |
-| Soft delete / retention   | ❌                       | ✅ 7 days                      | ❌                           |                                                                                         |
-| CORS config               | ✅ 実ドメイン (Pulumi済) | ✅ 実ドメイン (Pulumi済)       | ✅ 実ドメイン (Pulumi済)     | production `*` → 実ドメイン絞り込み完了 (2026-02-24, 要 pulumi up)                      |
-| Audit logging             | ✅ CloudTrail (Pulumi済) | ✅ Log Analytics (Pulumi済)    | ✅ IAMAuditConfig (Pulumi済) | 全項目 Pulumi コード実装済み。各クラウドで `pulumi up` により有効化される               |
-| Managed Identity          | N/A                      | ❌ 未設定 (staging/production) | N/A (Cloud Run SA)           | Azure Function App にシステム割り当てマネージドIDが未設定 (Defender 指摘 2026-02-24)    |
-| Key Vault 消去保護        | N/A                      | ❌ 未設定                      | N/A                          | `enable_purge_protection=True` を Pulumi に追加が必要 (Defender 指摘 2026-02-24)        |
-| Key Vault 診断ログ        | N/A                      | ❌ 未設定                      | N/A                          | DiagnosticSetting → Log Analytics Workspace への転送が未設定 (Defender 指摘 2026-02-24) |
+| Feature                   | AWS                      | Azure                          | GCP                          | Notes                                                                                                                  |
+| ------------------------- | ------------------------ | ------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| HTTPS enforced            | ✅                       | ✅                             | ✅ Pulumi済 (要 pulumi up)   | GCP: HTTP→HTTPS リダイレクト用 URLMap を分離。ポート80は301 redirect のみ                                              |
+| WAF                       | ✅ WebACL (CloudFront)   | ❌                             | ✅ Cloud Armor               | Azure: Front Door Standard SKU では WAF Policy 未設定 (Premium SKU はポリシーで使用禁止。standalone WAF Policy を使用) |
+| Rate limiting             | ❌                       | ❌                             | ✅ 100req/min/IP             |                                                                                                                        |
+| SQLi / XSS protection     | ❌                       | ❌                             | ✅                           |                                                                                                                        |
+| Data encryption (at rest) | ✅ SSE-S3                | ✅ Azure SSE                   | ✅ Google-managed            |                                                                                                                        |
+| Versioning                | ✅                       | ✅                             | ✅                           |                                                                                                                        |
+| Access logs (CDN)         | ✅ CloudFront            | ✅ Front Door → Log Analytics  | ✅ Cloud CDN                 | Azure: DiagnosticSetting 追加 (2026-02-24, 要 pulumi up)                                                               |
+| Security headers          | ✅ CloudFront RHP        | ❌                             | ❌                           | HSTS/CSP/X-Frame/X-Content/Referrer/XSS (AWS のみ, 2026-02-23)                                                         |
+| Soft delete / retention   | ❌                       | ✅ 7 days                      | ❌                           |                                                                                                                        |
+| CORS config               | ✅ 実ドメイン (Pulumi済) | ✅ 実ドメイン (Pulumi済)       | ✅ 実ドメイン (Pulumi済)     | production `*` → 実ドメイン絞り込み完了 (2026-02-24, 要 pulumi up)                                                     |
+| Audit logging             | ✅ CloudTrail (Pulumi済) | ✅ Log Analytics (Pulumi済)    | ✅ IAMAuditConfig (Pulumi済) | 全項目 Pulumi コード実装済み。各クラウドで `pulumi up` により有効化される                                              |
+| Managed Identity          | N/A                      | ❌ 未設定 (staging/production) | N/A (Cloud Run SA)           | Azure Function App にシステム割り当てマネージドIDが未設定 (Defender 指摘 2026-02-24)                                   |
+| Key Vault 消去保護        | N/A                      | ❌ 未設定                      | N/A                          | `enable_purge_protection=True` を Pulumi に追加が必要 (Defender 指摘 2026-02-24)                                       |
+| Key Vault 診断ログ        | N/A                      | ❌ 未設定                      | N/A                          | DiagnosticSetting → Log Analytics Workspace への転送が未設定 (Defender 指摘 2026-02-24)                                |
 
 ---
 
@@ -182,8 +182,8 @@ Token refresh:
 
 2. **Azure WAF** (high priority)
    Front Door Standard SKU では組み込み WAF が使えない。
-   対策A: Premium SKU にアップグレード (約 $35/月の差額)。
-   対策B: Standard SKU 向け独立 WAF Policy を作成して Front Door に紐付け。
+   リポジトリポリシーにより Premium SKU は使用禁止。
+   対策: Standard SKU 向け独立 WAF Policy を作成して Front Door に紐付け。
 
 3. **Add AWS WAF managed rules** (medium priority)
    WAF WebACL は production に存在するが `AWSManagedRulesCommonRuleSet` 等のルールが未チューニング。
@@ -280,15 +280,15 @@ Token refresh:
 
 > 下記はいずれも VNet 構築・有料プラン追加・大規模アーキテクチャ変更を伴うため、現時点では対応見送り推奨。
 
-| 項目                                                                           | 重大度 | 対応困難な理由                                                  |
-| ------------------------------------------------------------------------------ | ------ | --------------------------------------------------------------- |
-| Cosmos DB ファイアウォール規則                                                 | Medium | Consumption Plan は固定IP なし。特定IP での絞り込み不可         |
-| Cosmos DB AAD 唯一認証                                                         | Medium | 接続文字列→MSI+RBAC への API 全書き直しが必要                   |
-| Cosmos DB / Key Vault プライベートリンク                                       | Medium | VNet 新規構築が前提                                             |
-| Cosmos DB パブリックネットワークアクセス無効化                                 | Medium | VNet 統合なしでは API が完全停止                                |
-| Storage プライベートリンク / VNet 規則 (mcadweb/mcadfunc)                      | Medium | 静的ウェブサイト用途では不可。Front Door Premium SKU 移行が前提 |
-| Storage パブリックアクセス禁止 (mcadweb)                                       | Medium | 静的ウェブサイトホスティングには公開アクセスが必須              |
-| Microsoft Defender CSPM / App Service / Key Vault / Resource Manager / Storage | High   | 有料プラン。追加費用が発生するため要予算判断                    |
+| 項目                                                                           | 重大度 | 対応困難な理由                                                                   |
+| ------------------------------------------------------------------------------ | ------ | -------------------------------------------------------------------------------- |
+| Cosmos DB ファイアウォール規則                                                 | Medium | Consumption Plan は固定IP なし。特定IP での絞り込み不可                          |
+| Cosmos DB AAD 唯一認証                                                         | Medium | 接続文字列→MSI+RBAC への API 全書き直しが必要                                    |
+| Cosmos DB / Key Vault プライベートリンク                                       | Medium | VNet 新規構築が前提                                                              |
+| Cosmos DB パブリックネットワークアクセス無効化                                 | Medium | VNet 統合なしでは API が完全停止                                                 |
+| Storage プライベートリンク / VNet 規則 (mcadweb/mcadfunc)                      | Medium | 静的ウェブサイト用途では不可。Premium SKU は使用禁止のため、別アーキテクチャ前提 |
+| Storage パブリックアクセス禁止 (mcadweb)                                       | Medium | 静的ウェブサイトホスティングには公開アクセスが必須                               |
+| Microsoft Defender CSPM / App Service / Key Vault / Resource Manager / Storage | High   | 有料プラン。追加費用が発生するため要予算判断                                     |
 
 ---
 

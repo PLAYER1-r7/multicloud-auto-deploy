@@ -1,6 +1,8 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> 
+> ⚠️ **Prerequisites**: Read [AI_AGENT_00_CRITICAL_RULES.md](AI_AGENT_00_CRITICAL_RULES.md) first
 > Last verified: 2026-03-03 (ドキュメント統合完了 ✅ — 16個の非AI_AGENTファイル削除 / AI_AGENT_* のみで統一 / PR #47)
 > Previous: 2026-03-02 (AI Project Management ワークフロー統合完了 ✅ / ブランチ保護 baseline 確立 ✅ / PM 出力アーティファクト初期化 ✅) | 2026-02-24 (コスト削減クリーンアップ実行 ✅)
 

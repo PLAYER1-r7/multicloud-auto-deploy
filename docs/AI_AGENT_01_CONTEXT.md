@@ -1,6 +1,8 @@
 # 01 — Context: Overview & Repository Layout
 
 > Part I — Orientation | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
+> 
+> ⚠️ **Prerequisites**: Read [AI_AGENT_00_CRITICAL_RULES.md](AI_AGENT_00_CRITICAL_RULES.md) first
 
 ---
 

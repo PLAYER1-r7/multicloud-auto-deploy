@@ -1,14 +1,25 @@
 # 00 — Critical Rules: Read This First
 
-> **This document MUST be read before any other document in this repository.**  
+> # ⚠️ 🚨 STOP — DO NOT START WORKING WITHOUT READING THIS 🚨 ⚠️
+> 
+> **This document MUST be read before any other document in this repository.**
+> 
 > It contains the minimum set of rules that, if violated, will cause data loss, production outages,
 > or hours of wasted debugging. Every point here was learned from a past incident.
+> 
+> ### 🔴 Why This Matters
+> 
+> - **Real Incidents**: All 18 rules came from actual production failures
+> - **Severe Impact**: Rule violations caused production downtime, data loss, or hours of debugging
+> - **Preventable**: Following these rules prevents repeating the same mistakes
+> 
+> **Time to read: 10-15 minutes | Time saved: hours to days**
 
 ---
 
 ## After Reading This Document
 
-Once you have read all 14 rules below, continue in this order:
+Once you have read all rules below, continue in this order:
 
 ```
 1. AI_AGENT_01_CONTEXT.md   ← what the project is, live endpoints, tech stack (5 min read)
@@ -321,6 +332,28 @@ az ad app update \
     "https://your.domain.com/sns/auth/callback" \
     "https://your.domain.com/sns/"
 ```
+
+---
+
+## Rule 16 — Azure Front Door Premium SKU Is Prohibited
+
+To control infrastructure cost, this repository **must not** use Azure Front Door Premium SKU.
+
+Allowed:
+
+- `Standard_AzureFrontDoor`
+
+Prohibited:
+
+- `Premium_AzureFrontDoor`
+- Any Azure CLI / IaC change that creates or updates Front Door as Premium
+
+If a requirement appears to need Premium-only features, do not upgrade. Use one of these
+alternatives first:
+
+1. Implement an equivalent on Standard SKU (for example, explicit WAF policy association).
+2. Re-architect with another managed service that keeps monthly cost within budget.
+3. Open a cost exception issue and wait for explicit owner approval before any change.
 
 ---
 
