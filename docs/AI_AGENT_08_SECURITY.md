@@ -462,4 +462,4 @@ Cloud Logging のログエクスプローラ (`https://console.cloud.google.com/
 
 ## Next Section
 
-→ [09 — Remaining Tasks](AI_AGENT_09_TASKS.md)
+→ [09 — Backlog Tasks](../.github/docs/AI_AGENT_BACKLOG_TASKS.md)

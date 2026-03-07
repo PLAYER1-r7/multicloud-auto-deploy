@@ -1,18 +1,18 @@
 # 00 — 重要ルール：最初に必ず読むこと
 
 > # ⚠️ 🚨 STOP — このドキュメントを読まずに作業を開始してはいけません 🚨 ⚠️
-> 
+>
 > **このドキュメントはリポジトリ内の他のドキュメントを読む前に必ず読むこと。**
-> 
+>
 > データロス・本番環境障害・数時間のデバッグを招く最小限のルールセットが含まれている。
 > ここに書かれたすべての項目は過去のインシデントから学んだ教訓である。
-> 
+>
 > ### 🔴 なぜこれが重要なのか
-> 
+>
 > - **過去のインシデント**: この18のルールすべてが、実際に発生した障害から生まれた
 > - **深刻な影響**: ルール違反により本番環境がダウン、データが消失、または数時間のデバッグが発生した
 > - **予防可能**: これらのルールに従えば、同じ問題を二度と起こさない
-> 
+>
 > **所要時間: 10-15分 | 節約できる時間: 数時間～数日**
 
 ---
@@ -351,7 +351,7 @@ git push origin v1.1.0
 
 - `main` ブランチは厳格なルール下で保護されている（PR 必須、approval 必須、Code Owner review 必須）
 - `develop` ブランチは PR 必須で動作効率とセキュリティのバランスを取っている
-- 詳細は [docs/BRANCH_PROTECTION_SETUP.md](./BRANCH_PROTECTION_SETUP.md) を参照
+- 詳細は [.github/docs/BRANCH_PROTECTION_SETUP.md](../.github/docs/BRANCH_PROTECTION_SETUP.md) を参照
 
 ### GitHub Discussions
 
@@ -409,7 +409,7 @@ terraform -version
 
 ### パッケージのアップグレード
 
-Dependabot が週次で依存関係をチェックし、セキュリティアップデートが自動 PR として提案される（[docs/GITHUB_FEATURES_GUIDE.md](./GITHUB_FEATURES_GUIDE.md) 参照）。
+Dependabot が週次で依存関係をチェックし、セキュリティアップデートが自動 PR として提案される（[.github/docs/GITHUB_FEATURES_GUIDE.md](../.github/docs/GITHUB_FEATURES_GUIDE.md) 参照）。
 
 ---
 
@@ -436,16 +436,16 @@ Premium 相当の機能が必要に見える場合でも、まず以下を優先
 
 ## クイックリファレンス：何がどこにあるか
 
-| トピック                       | ファイル                                                   |
-| ------------------------------ | ---------------------------------------------------------- |
-| ライブエンドポイント URL       | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)           |
-| リポジトリディレクトリツリー   | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)           |
-| システムアーキテクチャ         | [AI_AGENT_02_ARCHITECTURE.md](AI_AGENT_02_ARCHITECTURE.md) |
-| API ルート & データモデル      | [AI_AGENT_03_API.md](AI_AGENT_03_API.md)                   |
-| Pulumi / IaC                   | [AI_AGENT_04_INFRA.md](AI_AGENT_04_INFRA.md)               |
-| CI/CD パイプライン             | [AI_AGENT_05_CICD.md](AI_AGENT_05_CICD.md)                 |
-| 現在の環境健全性               | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)             |
-| ステップバイステップランブック | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)         |
-| セキュリティ設定               | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)         |
-| 残りのタスク / バックログ      | [AI_AGENT_09_TASKS.md](AI_AGENT_09_TASKS.md)               |
-| すべて — エントリーポイント    | [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)                     |
+| トピック                       | ファイル                                                               |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| ライブエンドポイント URL       | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)                       |
+| リポジトリディレクトリツリー   | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)                       |
+| システムアーキテクチャ         | [AI_AGENT_02_ARCHITECTURE.md](AI_AGENT_02_ARCHITECTURE.md)             |
+| API ルート & データモデル      | [AI_AGENT_03_API.md](AI_AGENT_03_API.md)                               |
+| Pulumi / IaC                   | [AI_AGENT_04_INFRA.md](AI_AGENT_04_INFRA.md)                           |
+| CI/CD パイプライン             | [AI_AGENT_05_CICD.md](AI_AGENT_05_CICD.md)                             |
+| 現在の環境健全性               | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)                         |
+| ステップバイステップランブック | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)                     |
+| セキュリティ設定               | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)                     |
+| 残りのタスク / バックログ      | [AI_AGENT_BACKLOG_TASKS.md](../.github/docs/AI_AGENT_BACKLOG_TASKS.md) |
+| すべて — エントリーポイント    | [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)                                 |

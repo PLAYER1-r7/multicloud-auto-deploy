@@ -140,16 +140,15 @@ Plan to add security headers middleware to FastAPI.
 
 ### WAF (Web Application Firewall)
 
-| Cloud     | Implementation    | Status | Details                         |
-| --------- | ----------------- | ------ | ------------------------------- |
-| **AWS**   | CloudFront WebACL | ✅     | Rate limiting: 2000 req/5min/IP |
-| **Azure** | Front Door WAF    | ❌     | Requires Premium SKU upgrade    |
-| **GCP**   | Cloud Armor       | ✅     | Rate limiting: 100 req/min/IP   |
+| Cloud     | Implementation    | Status | Details                                                             |
+| --------- | ----------------- | ------ | ------------------------------------------------------------------- |
+| **AWS**   | CloudFront WebACL | ✅     | Rate limiting: 2000 req/5min/IP                                     |
+| **Azure** | Front Door WAF    | ❌     | Premium SKU is prohibited; use Standard SKU + standalone WAF Policy |
+| **GCP**   | Cloud Armor       | ✅     | Rate limiting: 100 req/min/IP                                       |
 
-**Azure Options**:
+**Azure Option (policy-compliant)**:
 
-- **Option A**: Upgrade from Standard to Premium SKU (additional cost ~$35/month)
-- **Option B**: Create and attach a standalone Azure WAF Policy
+- Create and attach a standalone Azure WAF Policy on Front Door Standard SKU
 
 ### CORS (Cross-Origin Resource Sharing)
 
@@ -421,9 +420,9 @@ cd infrastructure/pulumi/gcp   && pulumi up --stack production
 - [ ] Enable Key Vault purge protection
 - [ ] Configure Key Vault diagnostic logs → Log Analytics
 
-### Phase 4 — Azure WAF Implementation (Budget Dependent)
+### Phase 4 — Azure WAF Implementation
 
-- [ ] Migrate Front Door to Premium SKU or create standalone WAF Policy
+- [ ] Create and attach standalone WAF Policy on Front Door Standard SKU (Premium prohibited by policy)
 - [ ] Configure SQLi / XSS / Bot Protection rules
 
 ---

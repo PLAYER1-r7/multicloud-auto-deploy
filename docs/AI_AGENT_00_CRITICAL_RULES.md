@@ -1,18 +1,18 @@
 # 00 — Critical Rules: Read This First
 
 > # ⚠️ 🚨 STOP — DO NOT START WORKING WITHOUT READING THIS 🚨 ⚠️
-> 
+>
 > **This document MUST be read before any other document in this repository.**
-> 
+>
 > It contains the minimum set of rules that, if violated, will cause data loss, production outages,
 > or hours of wasted debugging. Every point here was learned from a past incident.
-> 
+>
 > ### 🔴 Why This Matters
-> 
+>
 > - **Real Incidents**: All 18 rules came from actual production failures
 > - **Severe Impact**: Rule violations caused production downtime, data loss, or hours of debugging
 > - **Preventable**: Following these rules prevents repeating the same mistakes
-> 
+>
 > **Time to read: 10-15 minutes | Time saved: hours to days**
 
 ---
@@ -359,16 +359,16 @@ alternatives first:
 
 ## Quick Reference: Where to Find What
 
-| Topic                      | File                                                       |
-| -------------------------- | ---------------------------------------------------------- |
-| Live endpoint URLs         | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)           |
-| Repository directory tree  | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)           |
-| System architecture        | [AI_AGENT_02_ARCHITECTURE.md](AI_AGENT_02_ARCHITECTURE.md) |
-| API routes & data model    | [AI_AGENT_03_API.md](AI_AGENT_03_API.md)                   |
-| Pulumi / IaC               | [AI_AGENT_04_INFRA.md](AI_AGENT_04_INFRA.md)               |
-| CI/CD pipelines            | [AI_AGENT_05_CICD.md](AI_AGENT_05_CICD.md)                 |
-| Current environment health | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)             |
-| Step-by-step runbooks      | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)         |
-| Security configuration     | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)         |
-| Remaining tasks / backlog  | [AI_AGENT_09_TASKS.md](AI_AGENT_09_TASKS.md)               |
-| Everything — entry point   | [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)                     |
+| Topic                      | File                                                                   |
+| -------------------------- | ---------------------------------------------------------------------- |
+| Live endpoint URLs         | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)                       |
+| Repository directory tree  | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)                       |
+| System architecture        | [AI_AGENT_02_ARCHITECTURE.md](AI_AGENT_02_ARCHITECTURE.md)             |
+| API routes & data model    | [AI_AGENT_03_API.md](AI_AGENT_03_API.md)                               |
+| Pulumi / IaC               | [AI_AGENT_04_INFRA.md](AI_AGENT_04_INFRA.md)                           |
+| CI/CD pipelines            | [AI_AGENT_05_CICD.md](AI_AGENT_05_CICD.md)                             |
+| Current environment health | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)                         |
+| Step-by-step runbooks      | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)                     |
+| Security configuration     | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)                     |
+| Remaining tasks / backlog  | [AI_AGENT_BACKLOG_TASKS.md](../.github/docs/AI_AGENT_BACKLOG_TASKS.md) |
+| Everything — entry point   | [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)                                 |

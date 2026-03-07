@@ -323,19 +323,19 @@ az ad app update \
 
 ## クイックリファレンス：何がどこにあるか
 
-| トピック                       | ファイル                                                   |
-| ------------------------------ | ---------------------------------------------------------- |
-| ライブエンドポイント URL       | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)           |
-| リポジトリディレクトリツリー   | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)           |
-| システムアーキテクチャ         | [AI_AGENT_02_ARCHITECTURE.md](AI_AGENT_02_ARCHITECTURE.md) |
-| API ルート & データモデル      | [AI_AGENT_03_API.md](AI_AGENT_03_API.md)                   |
-| Pulumi / IaC                   | [AI_AGENT_04_INFRA.md](AI_AGENT_04_INFRA.md)               |
-| CI/CD パイプライン             | [AI_AGENT_05_CICD.md](AI_AGENT_05_CICD.md)                 |
-| 現在の環境健全性               | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)             |
-| ステップバイステップランブック | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)         |
-| セキュリティ設定               | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)         |
-| 残りのタスク / バックログ      | [AI_AGENT_09_TASKS.md](AI_AGENT_09_TASKS.md)               |
-| すべて — エントリーポイント    | [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)                     |
+| トピック                       | ファイル                                                               |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| ライブエンドポイント URL       | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)                       |
+| リポジトリディレクトリツリー   | [AI_AGENT_01_CONTEXT.md](AI_AGENT_01_CONTEXT.md)                       |
+| システムアーキテクチャ         | [AI_AGENT_02_ARCHITECTURE.md](AI_AGENT_02_ARCHITECTURE.md)             |
+| API ルート & データモデル      | [AI_AGENT_03_API.md](AI_AGENT_03_API.md)                               |
+| Pulumi / IaC                   | [AI_AGENT_04_INFRA.md](AI_AGENT_04_INFRA.md)                           |
+| CI/CD パイプライン             | [AI_AGENT_05_CICD.md](AI_AGENT_05_CICD.md)                             |
+| 現在の環境健全性               | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)                         |
+| ステップバイステップランブック | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)                     |
+| セキュリティ設定               | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)                     |
+| 残りのタスク / バックログ      | [AI_AGENT_BACKLOG_TASKS.md](../.github/docs/AI_AGENT_BACKLOG_TASKS.md) |
+| すべて — エントリーポイント    | [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)                                 |
 
 \newpage
 
@@ -3839,7 +3839,7 @@ gcloud projects get-iam-policy ashnova --flatten="bindings[].members" --filter="
 
 ## 次セクション
 
-→ [09 — Remaining Tasks](AI_AGENT_09_TASKS.md)
+→ [09 — Backlog Tasks](../.github/docs/AI_AGENT_BACKLOG_TASKS.md)
 
 \newpage
 
@@ -5200,7 +5200,7 @@ _最終更新: 2026-02-27_
 | `scripts/test-sns-aws.sh`                         | E2E shell | AWS staging SNS アプリ                    | オプション |
 | `scripts/test-sns-azure.sh`                       | E2E shell | Azure staging SNS アプリ                  | オプション |
 | `scripts/test-sns-gcp.sh`                         | E2E shell | GCP staging SNS アプリ                    | オプション |
-| `scripts/test-sns-all.sh`                         | E2E shell | 全3クラウド順次実行 + サマリーレポート  | オプション |
+| `scripts/test-sns-all.sh`                         | E2E shell | 全3クラウド順次実行 + サマリーレポート    | オプション |
 | `scripts/test-e2e.sh`                             | Smoke     | 全3クラウド health + CRUD                 | オプション |
 | `scripts/test-endpoints.sh`                       | Health    | クラウド別 API ヘルスチェック             | 不要       |
 | `scripts/test-landing-pages.sh`                   | Health    | クラウド別静的ランディングページ          | 不要       |
@@ -5401,11 +5401,11 @@ MINIO_ENDPOINT=http://minio:9000
 
 テストは GitHub Actions 経由で push ごとに自動実行されます:
 
-| ワークフロー               | トリガー                              | 実行されるテスト                         |
-| -------------------------- | ------------------------------------- | ---------------------------------------- |
-| `deploy-aws.yml`           | `develop` / `main` への push          | デプロイ後 `./scripts/test-endpoints.sh` |
-| `deploy-azure.yml`         | `develop` / `main` への push          | デプロイ後 `./scripts/test-endpoints.sh` |
-| `deploy-gcp.yml`           | `develop` / `main` への push          | デプロイ後 `./scripts/test-endpoints.sh` |
+| ワークフロー               | トリガー                          | 実行されるテスト                         |
+| -------------------------- | --------------------------------- | ---------------------------------------- |
+| `deploy-aws.yml`           | `develop` / `main` への push      | デプロイ後 `./scripts/test-endpoints.sh` |
+| `deploy-azure.yml`         | `develop` / `main` への push      | デプロイ後 `./scripts/test-endpoints.sh` |
+| `deploy-gcp.yml`           | `develop` / `main` への push      | デプロイ後 `./scripts/test-endpoints.sh` |
 | `run-integration-tests.sh` | 手動または `test-sns-all.sh` 経由 | pytest + E2E shell                       |
 
 ---

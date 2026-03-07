@@ -18,7 +18,7 @@
 - ✅ Development 環境作成完了（承認不要、全ブランチ対応）
 - ✅ 環境変数設定完了（各環境で 7-10 個の変数）
 
-**セットアップ**: [docs/GITHUB_ENVIRONMENTS_GUIDE.md](./GITHUB_ENVIRONMENTS_GUIDE.md)
+**セットアップ**: [GITHUB_ENVIRONMENTS_GUIDE.md](./GITHUB_ENVIRONMENTS_GUIDE.md)
 
 **具体的な効果**:
 

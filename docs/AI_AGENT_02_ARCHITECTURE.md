@@ -1,7 +1,7 @@
 # 02 — Architecture
 
 > Part II — Architecture & Design | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> 
+>
 > ⚠️ **Prerequisites**: [00_CRITICAL_RULES](AI_AGENT_00_CRITICAL_RULES.md) → [01_CONTEXT](AI_AGENT_01_CONTEXT.md)
 
 ---

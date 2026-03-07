@@ -1,0 +1,36 @@
+name: Policy - Disallow Front Door Premium
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - main
+
+jobs:
+  enforce-frontdoor-sku-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Front Door Premium is not used
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Checking repository for prohibited Azure Front Door Premium SKU usage..."
+
+          if rg -n \
+            --glob '!docs/**' \
+            --glob '!archive/**' \
+            --glob '!htmlcov/**' \
+            'Premium_AzureFrontDoor|--sku-name[[:space:]]+Premium_AzureFrontDoor|Front[[:space:]]*Door[[:space:]]*Premium' \
+            .; then
+            echo ""
+            echo "ERROR: Azure Front Door Premium SKU is prohibited by repository policy."
+            echo "Use Standard_AzureFrontDoor instead."
+            exit 1
+          fi
+
+          echo "Policy check passed: no prohibited Premium SKU usage found."

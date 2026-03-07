@@ -1,9 +1,9 @@
 # 06 — Environment Status
 
 > Part III — Operations | Parent: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> 
+>
 > ⚠️ **Prerequisites**: Read [AI_AGENT_00_CRITICAL_RULES.md](AI_AGENT_00_CRITICAL_RULES.md) first
-> Last verified: 2026-03-03 (ドキュメント統合完了 ✅ — 16個の非AI_AGENTファイル削除 / AI_AGENT_* のみで統一 / PR #47)
+> Last verified: 2026-03-03 (ドキュメント統合完了 ✅ — 16個の非AI*AGENTファイル削除 / AI_AGENT*\* のみで統一 / PR #47)
 > Previous: 2026-03-02 (AI Project Management ワークフロー統合完了 ✅ / ブランチ保護 baseline 確立 ✅ / PM 出力アーティファクト初期化 ✅) | 2026-02-24 (コスト削減クリーンアップ実行 ✅)
 
 ---
@@ -12,25 +12,29 @@
 
 ### Completed Work
 
-| Task                                   | Result                                                           | Status |
-| -------------------------------------- | ---------------------------------------------------------------- | ------ |
-| 非AI_AGENTドキュメント分析             | 16個の非AI_AGENT ファイルが AI_AGENT_* に統合されていることを確認 | ✅     |
-| 重複ファイル同定                       | FIX_REPORT 7個, GUIDES 4個, REPORTS 2個, INFRASTRUCTURE 3個     | ✅     |
-| ドキュメント統合 (PR #47)              | 16ファイル削除 (6,600行以上), AI_AGENT_* で統一                 | ✅     |
-| 統合状態検証                           | main: AI_AGENT_* 36個のみ、非AI_AGENT 0個 → 完全統一             | ✅     |
+| Task                       | Result                                                             | Status |
+| -------------------------- | ------------------------------------------------------------------ | ------ |
+| 非AI_AGENTドキュメント分析 | 16個の非AI*AGENT ファイルが AI_AGENT*\* に統合されていることを確認 | ✅     |
+| 重複ファイル同定           | FIX_REPORT 7個, GUIDES 4個, REPORTS 2個, INFRASTRUCTURE 3個        | ✅     |
+| ドキュメント統合 (PR #47)  | 16ファイル削除 (6,600行以上), AI*AGENT*\* で統一                   | ✅     |
+| 統合状態検証               | main: AI*AGENT*\* 36個のみ、非AI_AGENT 0個 → 完全統一              | ✅     |
 
 ### Consolidated & Deleted Files
 
 **FIX_REPORTS (7 files)** → AI_AGENT_11_BUG_FIX_REPORTS.md:
+
 - AWS_HTTPS_FIX_REPORT.md, AWS_SNS_FIX_REPORT.md (2026-02-20), AWS_SNS_FIX_REPORT_20260222.md, AWS_PRODUCTION_SNS_FIX_REPORT.md, AZURE_SNS_FIX_REPORT.md, GCP_SNS_FIX_REPORT_20260223.md, SNS_FIX_REPORT_20260222.md
 
 **TEST/IMPLEMENTATION GUIDES (4 files)** → AI_AGENT_13_TESTING.md, AI_AGENT_07_RUNBOOKS.md:
+
 - INTEGRATION_TESTS_GUIDE.md, STAGING_TEST_GUIDE.md, IMPLEMENTATION_GUIDE.md, SOURCE_CODE_GUIDE.md
 
 **MIGRATION REPORTS (2 files)** → AI_AGENT_05_CICD.md, AI_AGENT_06_STATUS.md:
+
 - REACT_SPA_MIGRATION_REPORT.md, REFACTORING_REPORT_20260222.md
 
 **INFRASTRUCTURE GUIDES (3 files)** → AI_AGENT_10_DOMAINS.md, AI_AGENT_03_API.md:
+
 - CUSTOM_DOMAIN_SETUP.md, LAMBDA_LAYER_OPTIMIZATION.md, PDF_GENERATION_GUIDE.md
 
 ### Result Summary
@@ -45,15 +49,15 @@
 
 ### Completed Work
 
-| Task                                      | Result                                                                                        | Status |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------- | ------ |
-| PM Sync ワークフロー統合 (PR #37)         | `.github/workflows/project-management-sync.yml` を main に統合                                | ✅     |
-| PM スクリプト追加                         | `scripts/agent_pm_sync.py` で GitHub データからスナップショット/ダッシュボード生成            | ✅     |
-| ワークフロー実行検証                      | 手動トリガー 2 回実行 → 両方 `completed/success` (run IDs: 22585899773, 22585988485)          | ✅     |
-| ブランチ保護 baseline 設定                | PR 必須 / 承認 0 / CodeQL 必須 (strict) / 管理者強制 有効                                     | ✅     |
-| ゲート動作検証                            | PR #38 で `mergeStateStatus: BLOCKED` 確認 → CodeQL check が正常にブロック                   | ✅     |
-| ドキュメント baseline 作成 (PR #39, #40)  | `AI_AGENT_10_TASKS.md`, `AI_AGENT_10_TASKS_JA.md`, `AI_AGENT_GUIDE.md` 更新                  | ✅     |
-| PM 出力アーティファクト初期化 (PR #41)    | `docs/generated/project-management/snapshot.json`, `dashboard.md` を main/develop に配置      | ✅     |
+| Task                                     | Result                                                                                          | Status |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------- | ------ |
+| PM Sync ワークフロー統合 (PR #37)        | `.github/workflows/project-management-sync.yml` を main に統合                                  | ✅     |
+| PM スクリプト追加                        | `scripts/agent_pm_sync.py` で GitHub データからスナップショット/ダッシュボード生成              | ✅     |
+| ワークフロー実行検証                     | 手動トリガー 2 回実行 → 両方 `completed/success` (run IDs: 22585899773, 22585988485)            | ✅     |
+| ブランチ保護 baseline 設定               | PR 必須 / 承認 0 / CodeQL 必須 (strict) / 管理者強制 有効                                       | ✅     |
+| ゲート動作検証                           | PR #38 で `mergeStateStatus: BLOCKED` 確認 → CodeQL check が正常にブロック                      | ✅     |
+| ドキュメント baseline 作成 (PR #39, #40) | `AI_AGENT_PROJECT_MANAGEMENT.md`, `AI_AGENT_PROJECT_MANAGEMENT_JA.md`, `AI_AGENT_GUIDE.md` 更新 | ✅     |
+| PM 出力アーティファクト初期化 (PR #41)   | `docs/generated/project-management/snapshot.json`, `dashboard.md` を main/develop に配置        | ✅     |
 
 ### ワークフロー詳細
 
@@ -91,7 +95,7 @@
 }
 ```
 
-**検証手順** (documented in `AI_AGENT_10_TASKS.md`):
+**検証手順** (documented in `.github/docs/AI_AGENT_PROJECT_MANAGEMENT.md`):
 
 1. **Configure**: GitHub API で保護設定適用
 2. **Test**: テスト PR でゲート動作確認 (`mergeStateStatus: BLOCKED`)
@@ -100,13 +104,13 @@
 
 ### Pull Requests Summary
 
-| PR    | ブランチ       | タイトル                                                             | マージ日時           | コミット |
-| ----- | -------------- | -------------------------------------------------------------------- | -------------------- | -------- |
-| #37   | develop → main | feat(pm): add project management sync workflow                       | 2026-03-02T18:xx:xxZ | 5a209bc3 |
-| #38   | develop        | test: validate branch protection gate enforcement                    | (closed, not merged) | -        |
-| #39   | develop        | docs(pm): add solo branch-protection baseline and navigation         | 2026-03-02T16:57:32Z | da47a738 |
-| #40   | develop → main | docs: add PM baseline and branch protection guidance (main)          | 2026-03-02T20:19:19Z | d9b2e89b |
-| #41   | develop → main | docs: initialize PM output artifacts for main                        | 2026-03-02T20:xx:xxZ | ecb5adb0 |
+| PR  | ブランチ       | タイトル                                                     | マージ日時           | コミット |
+| --- | -------------- | ------------------------------------------------------------ | -------------------- | -------- |
+| #37 | develop → main | feat(pm): add project management sync workflow               | 2026-03-02T18:xx:xxZ | 5a209bc3 |
+| #38 | develop        | test: validate branch protection gate enforcement            | (closed, not merged) | -        |
+| #39 | develop        | docs(pm): add solo branch-protection baseline and navigation | 2026-03-02T16:57:32Z | da47a738 |
+| #40 | develop → main | docs: add PM baseline and branch protection guidance (main)  | 2026-03-02T20:19:19Z | d9b2e89b |
+| #41 | develop → main | docs: initialize PM output artifacts for main                | 2026-03-02T20:xx:xxZ | ecb5adb0 |
 
 ### Artifacts Generated
 
@@ -115,8 +119,7 @@
 - **`snapshot.json`**: GitHub Issues, PRs, milestones, labels の JSON スナップショット (11KB)
 - **`dashboard.md`**: AI PM 運用ダッシュボード (2KB)
 
-これらは日次自動更新され、変更があればリポジトリに自動コミットされます。
----
+## これらは日次自動更新され、変更があればリポジトリに自動コミットされます。
 
 ## Session 2026-03-03 (Update): T6 Production + T8 CDN Optimization
 
@@ -124,15 +127,16 @@
 
 **対象**: GCP 本番環境にマルチクラウドスタックを展開
 
-| Task                                    | Result                                                                     | Status |
-| --------------------------------------- | -------------------------------------------------------------------------- | ------ |
-| Pre-flight validation                   | 39 modified files → git add/commit → state 準備完了                        | ✅     |
-| Pulumi state drift recovery             | pulumi refresh --yes → 6s で完了 (ManagedSslCertificate/URLMap state 同期) | ✅     |
-| GCP production stack deploy             | pulumi up --yes → 1 resource created, 33 unchanged, duration 12s           | ✅     |
-| Post-deployment verification            | SSL ACTIVE, CDN HTTP 200, audit logs recording                           | ✅     |
-| Documentation update                    | STATUS document Session 4 entry, commit 記録                              | ✅     |
+| Task                         | Result                                                                     | Status |
+| ---------------------------- | -------------------------------------------------------------------------- | ------ |
+| Pre-flight validation        | 39 modified files → git add/commit → state 準備完了                        | ✅     |
+| Pulumi state drift recovery  | pulumi refresh --yes → 6s で完了 (ManagedSslCertificate/URLMap state 同期) | ✅     |
+| GCP production stack deploy  | pulumi up --yes → 1 resource created, 33 unchanged, duration 12s           | ✅     |
+| Post-deployment verification | SSL ACTIVE, CDN HTTP 200, audit logs recording                             | ✅     |
+| Documentation update         | STATUS document Session 4 entry, commit 記録                               | ✅     |
 
 **GCP Production Configuration**:
+
 - Project: `ashnova`, Region: `asia-northeast1`
 - Custom domain: `www.gcp.ashnova.jp` (SSL ✅)
 - Cloud CDN cache: CACHE_ALL_STATIC (default_ttl: 3600s, max_ttl: 86400s)
@@ -151,6 +155,7 @@
 #### Part 1: GCP Cloud CDN + FastAPI Cache Headers (✅ 完了)
 
 **GCP TTL Update** (`infrastructure/pulumi/gcp/__main__.py` Lines 306-325):
+
 ```
 Before:  default_ttl=3600s (1h), max_ttl=86400s (24h), client_ttl=3600s
 After:   default_ttl=86400s (24h), max_ttl=2592000s (30d), client_ttl=86400s (24h)
@@ -158,6 +163,7 @@ Status:  ✅ Deployed (pulumi up 22s, BackendBucket updated)
 ```
 
 **FastAPI Cache-Control Middleware** (`services/api/app/main.py` Lines 37-70):
+
 - Path-based caching rules: `/api/*` (no-cache), HTML (5min), assets/fonts (1year), images (1year), default (1day)
 - Middleware registered: `app.middleware("http")(add_cache_control_headers)`
 - Status: ✅ Implemented (code review passed, ready for cloud deployment)
@@ -167,6 +173,7 @@ Status:  ✅ Deployed (pulumi up 22s, BackendBucket updated)
 #### Part 2: AWS CloudFront Configuration (✅ 確認完了)
 
 **Current Cache Settings** (Distribution ID: `E214XONKTXJEJD`):
+
 ```
 MinTTL: 0
 DefaultTTL: 3600 (1時間)
@@ -184,6 +191,7 @@ ViewerProtocolPolicy: redirect-to-https
 #### Part 3: Azure CDN Rules (� 進行中 — Pulumi デプロイ実行中)
 
 **Azure Front Door 統合実装**:
+
 ```
 CDN配置: Blob Storage → Front Door Standard → App client
 キャッシュ戦略: Origin Cache-Control ヘッダー尊重
@@ -191,12 +199,14 @@ CDN配置: Blob Storage → Front Door Standard → App client
 ```
 
 **Pulumi 状態**:
+
 - Preview: ✅ 成功 (9 リソース作成, 3 更新)
 - Up: 🟡 実行中（デプロイプロセス進行中）
 - Expected completion: 3-5 minutes
 - Resources deploying: Profile, EndPoint, OriginGroup, Origin, RuleSet, Route, Diagnostics
 
 **Implementation Method**:
+
 - Origin キャッシュ制御: FastAPI Cache-Control ヘッダー (Part 1)
 - Azure Front Door: Header 尊重モード (Delivery Rules キャッシュ直接設定は Standard SKU では非対応)
 - Monitoring: Application Insights + Log Analytics workspace で CDN メトリクス追跡
@@ -206,6 +216,7 @@ CDN配置: Blob Storage → Front Door Standard → App client
 ---
 
 **Commits**:
+
 - `803ede4c`: T8 Part 1 (GCP + FastAPI)
 - `897fbf6c`: T8 Part 3 (Azure Pulumi infrastructure)
 
@@ -223,12 +234,14 @@ CDN配置: Blob Storage → Front Door Standard → App client
 ### Documentation & Tooling
 
 **New Files Created**:
+
 - `docs/T8_CDN_CACHE_IMPLEMENTATION.md` (Implementation summary + checklist)
 - (Previous) `scripts/analyze-coldstart.sh` (T7 baseline measurement)
 - (Previous) `scripts/audit-cdn-simple.sh` (CDN configuration audit)
+
 ### Documentation Updates
 
-**`AI_AGENT_10_TASKS.md`** (new):
+**`AI_AGENT_PROJECT_MANAGEMENT.md`** (new):
 
 - AI-driven PM 戦略 (single source of truth, cadence-driven execution, risk-first prioritization)
 - ツール一覧 (GitHub Issues/PRs, gh CLI, agent_pm_sync.py)
@@ -239,7 +252,7 @@ CDN配置: Blob Storage → Front Door Standard → App client
 
 - Quick decision tree に新規エントリ追加:
   - Q: What should I work on next? → Consult GitHub Issues + AI PM dashboard (10_TASKS)
-  - Q: Configure branch protection / merge gates → AI_AGENT_10_TASKS.md
+  - Q: Configure branch protection / merge gates → .github/docs/AI_AGENT_PROJECT_MANAGEMENT.md
 
 ### Operational Readiness
 

@@ -1,7 +1,7 @@
 # 多元クラウド本番環境 デプロイメント - 進捗レポート
 
-**日付**: 2026-03-05  
-**完成度**: 96% (23/24 テスト成功)  
+**日付**: 2026-03-05
+**完成度**: 96% (23/24 テスト成功)
 **状態**: ほぼ運用可能
 
 ---
@@ -9,6 +9,7 @@
 ## 📊 クラウド別ステータス
 
 ### 🟢 GCP - 完全対応 (100%)
+
 ```
 ✅ Cloud Run / Cloud CDN  — 正常稼働
 ✅ health エンドポイント  — HTTP 200
@@ -18,6 +19,7 @@
 ```
 
 ### 🟡 Azure - ほぼ対応 (91%)
+
 ```
 ✅ Front Door CDN        — HTTP 200
 ✅ API Function App      — 正常稼働
@@ -28,6 +30,7 @@
 ```
 
 ### 🟡 AWS - ほぼ対応 (71%)
+
 ```
 ✅ API Gateway          — 正常
 ✅ Exam Solver Lambda   — deployed
@@ -68,16 +71,19 @@
 ### 1. AWS /posts エンドポイント 500 エラー
 
 **詳細**:
+
 ```bash
 curl https://qkzypr32af.execute-api.ap-northeast-1.amazonaws.com/posts
 # → HTTP 500 Internal Server Error
 ```
 
 **原因**:
+
 - Lambda 関数に必要な環境変数が不足
 - 必要な変数: `POSTS_TABLE_NAME`, `IMAGES_BUCKET_NAME`, `COGNITO_USER_POOL_ID` 等
 
 **修正方法** (いずれか):
+
 ```bash
 # 方法1: GitHub Actions デプロイワークフローを実行
 gh workflow run "Deploy SNS API to AWS" --ref develop
@@ -92,16 +98,19 @@ pulumi up --stack production --yes
 ### 2. Azure SPA URL Rewrite 404
 
 **詳細**:
+
 ```
 AFD GET /sns/login → HTTP 404 (期待値: 200 with /sns/index.html)
 ```
 
 **原因**:
+
 - Azure Front Door の URL Rewrite Rule Set が設定されていない
 - `/sns/*` → `/sns/index.html` のルールが必要
 
 **修正方法**:
 Azure Portal または CLI で以下を設定:
+
 ```bash
 # Azure Front Door ルール セット作成
 az afd rule-set create \
@@ -114,12 +123,12 @@ az afd rule-set create \
 
 ## 📈 整体的な統計
 
-| メトリクス | 値 |
-|----------|-----|
-| テスト成功 | 23/25 (92%) |
-| エンドポイント稼働 | 5/6 (83%) |
-| インフラ完成 | 95% |
-| ドキュメント | 100% |
+| メトリクス         | 値          |
+| ------------------ | ----------- |
+| テスト成功         | 23/25 (92%) |
+| エンドポイント稼働 | 5/6 (83%)   |
+| インフラ完成       | 95%         |
+| ドキュメント       | 100%        |
 
 ---
 
@@ -137,6 +146,7 @@ az afd rule-set create \
 ### 短期 (1-2時間)
 
 1. **統合テスト再実行**
+
    ```bash
    bash scripts/test-sns-all.sh --env production
    ```
@@ -161,17 +171,17 @@ az afd rule-set create \
 
 ---
 
-##  🚀 Production Readiness
+## 🚀 Production Readiness
 
-| 観点 | 完成度 | 状態 |
-|------|--------|------|
-| インフラ構成 | 100% | ✅ |
-| デプロイ自動化 | 100% | ✅ |
-| 監視・アラート | 100% | ✅ |
-| API機能 | 85% | ⚠️ (AWS /posts の修正待ち) |
-| ドキュメント | 100% | ✅ |
-| セキュリティ | 95% | ⚠️ |
-| **総合** | **96%** | **ほぼ運用可能** |
+| 観点           | 完成度  | 状態                       |
+| -------------- | ------- | -------------------------- |
+| インフラ構成   | 100%    | ✅                         |
+| デプロイ自動化 | 100%    | ✅                         |
+| 監視・アラート | 100%    | ✅                         |
+| API機能        | 85%     | ⚠️ (AWS /posts の修正待ち) |
+| ドキュメント   | 100%    | ✅                         |
+| セキュリティ   | 95%     | ⚠️                         |
+| **総合**       | **96%** | **ほぼ運用可能**           |
 
 ---
 
@@ -184,5 +194,5 @@ az afd rule-set create \
 
 ---
 
-**作成者**: AI Assistant (GitHub Copilot)  
-**最終更新**: 2026-03-05 13:30 UTC  
+**作成者**: AI Assistant (GitHub Copilot)
+**最終更新**: 2026-03-05 13:30 UTC

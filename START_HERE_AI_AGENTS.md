@@ -1,6 +1,6 @@
 # 🤖 START HERE — AI Agents Required Reading
 
-> **⚠️ CRITICAL**: This is the **mandatory first document** for all AI agents working on this project.  
+> **⚠️ CRITICAL**: This is the **mandatory first document** for all AI agents working on this project.
 > Reading time: 10-15 minutes to save hours/days of debugging and prevent production incidents.
 
 ---
@@ -8,6 +8,7 @@
 ## Why This Matters
 
 This project manages **production infrastructure across AWS, Azure, and GCP**. Skipping critical rules has caused:
+
 - ❌ Production outages
 - ❌ Cost overruns (Premium SKU violations)
 - ❌ Security incidents
@@ -17,12 +18,30 @@ This project manages **production infrastructure across AWS, Azure, and GCP**. S
 
 ---
 
+## 🧭 Documentation Boundary (Read Before Starting)
+
+This repository separates knowledge by purpose to reduce misreads:
+
+- `docs/` = product implementation knowledge
+  - Answers: "How do we build, run, and maintain the product?"
+- `.github/` = repository operation knowledge
+  - Answers: "How do we manage work and collaboration on GitHub?"
+
+Start from the right entry point:
+
+- Product tasks (implementation, architecture, API, infra): [docs/00_START_HERE.md](docs/00_START_HERE.md)
+- Repository operation tasks (Issue/PR, Projects, automation workflow): [.github/00_START_HERE.md](.github/00_START_HERE.md)
+
+---
+
 ## 📚 Required Reading Order
 
 ### 1️⃣ **CRITICAL RULES** (Read First — 5 min)
+
 **📄 [docs/AI_AGENT_00_CRITICAL_RULES_JA.md](docs/AI_AGENT_00_CRITICAL_RULES_JA.md)**
 
 🚨 **STOP**: This contains **non-negotiable rules** including:
+
 - Premium SKU prohibition (Rule 18)
 - Environment isolation (Rule 3)
 - Deployment safety checks (Rule 1, 5)
@@ -33,9 +52,11 @@ This project manages **production infrastructure across AWS, Azure, and GCP**. S
 ---
 
 ### 2️⃣ **Project Context** (5 min)
+
 **📄 [docs/AI_AGENT_01_CONTEXT_JA.md](docs/AI_AGENT_01_CONTEXT_JA.md)**
 
 Understand:
+
 - Project purpose and scope
 - Technology stack
 - Development workflow
@@ -46,9 +67,11 @@ Understand:
 ---
 
 ### 3️⃣ **Architecture Overview** (10 min)
+
 **📄 [docs/AI_AGENT_02_ARCHITECTURE_JA.md](docs/AI_AGENT_02_ARCHITECTURE_JA.md)**
 
 Learn:
+
 - Multi-cloud architecture patterns
 - Service dependencies
 - Infrastructure components
@@ -59,9 +82,11 @@ Learn:
 ---
 
 ### 4️⃣ **Current Status** (5 min)
+
 **📄 [docs/AI_AGENT_06_STATUS_JA.md](docs/AI_AGENT_06_STATUS_JA.md)**
 
 Check:
+
 - What's deployed vs in-progress
 - Known issues and blockers
 - Recent changes
@@ -102,13 +127,13 @@ Before starting any work, confirm:
 
 ## 🆘 Quick Reference
 
-| Situation | Action |
-|-----------|--------|
-| Unsure about a rule | Re-read [CRITICAL_RULES](docs/AI_AGENT_00_CRITICAL_RULES_JA.md) |
-| Need architectural context | Check [ARCHITECTURE](docs/AI_AGENT_02_ARCHITECTURE_JA.md) |
-| Deployment issues | Consult [RUNBOOKS](docs/AI_AGENT_07_RUNBOOKS_JA.md) |
-| Security question | Review [SECURITY](docs/AI_AGENT_08_SECURITY_JA.md) |
-| Testing guidance | See [TESTING](docs/AI_AGENT_13_TESTING_JA.md) |
+| Situation                  | Action                                                          |
+| -------------------------- | --------------------------------------------------------------- |
+| Unsure about a rule        | Re-read [CRITICAL_RULES](docs/AI_AGENT_00_CRITICAL_RULES_JA.md) |
+| Need architectural context | Check [ARCHITECTURE](docs/AI_AGENT_02_ARCHITECTURE_JA.md)       |
+| Deployment issues          | Consult [RUNBOOKS](docs/AI_AGENT_07_RUNBOOKS_JA.md)             |
+| Security question          | Review [SECURITY](docs/AI_AGENT_08_SECURITY_JA.md)              |
+| Testing guidance           | See [TESTING](docs/AI_AGENT_13_TESTING_JA.md)                   |
 
 ---
 
@@ -120,5 +145,5 @@ This document is optimized for AI agent onboarding and contains the same critica
 
 ---
 
-**Last Updated**: 2026-03-07  
+**Last Updated**: 2026-03-07
 **Version**: 1.0.90.277

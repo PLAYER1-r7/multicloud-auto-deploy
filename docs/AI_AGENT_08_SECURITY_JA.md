@@ -738,4 +738,4 @@ gcloud projects get-iam-policy ashnova --flatten="bindings[].members" --filter="
 
 ## 次セクション
 
-→ [09 — Remaining Tasks](AI_AGENT_09_TASKS.md)
+→ [09 — Backlog Tasks](../.github/docs/AI_AGENT_BACKLOG_TASKS.md)

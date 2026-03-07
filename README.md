@@ -55,7 +55,7 @@
 ## 🤖 For AI Agents — START HERE
 
 > **⚠️ CRITICAL: Read this section FIRST before working on this repository.**
-> 
+>
 > このリポジトリのすべてのドキュメントを読む前に、以下を必ず確認してください：
 
 ### 📖 必読ドキュメント（この順序で読むこと）
@@ -222,17 +222,43 @@ git push origin main
 
 ## 📚 ドキュメント
 
+### 📂 ドキュメント構成方針
+
+本プロジェクトのドキュメントは目的別に2つの領域に分離しています：
+
+- **`docs/`** — 製品実装のための仕様書
+  - アーキテクチャ、API/CLI仕様、セットアップ、実装制約、チェックリスト
+  - 問いに答える: 「この製品をどう実装・実行・保守するか」
+  - 入口: [docs/00_START_HERE.md](docs/00_START_HERE.md)
+
+- **`.github/`** — リポジトリ運用の手順書
+  - Issue/PR運用、Projects管理、自動化スクリプト運用、エージェント作業手順
+  - 問いに答える: 「GitHub上でどう作業管理・協業するか」
+  - 入口: [.github/00_START_HERE.md](.github/00_START_HERE.md)
+
 ### 必読ガイド
 
+**製品実装**
+
 - 📖 [セットアップガイド](docs/SETUP.md) - 初期セットアップ手順
-- 🚀 [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定- 🏗️ [サービス分離アーキテクチャ](SERVICES_SEPARATION.md) - SNS API vs Exam Solver API - **新規** 🆕- � [Gitワークフローガイド](docs/AI_AGENT_14_GIT_WORKFLOW_JA.md) - ブランチ戦略・コミット規約・PR運用 🆕
-- �🏗️ [技術スタック戦略](docs/TECH_STRATEGY_2026.md) - 言語選択・IaC戦略・実装ロードマップ 🆕
+- 🚀 [CI/CD設定](docs/CICD_SETUP.md) - GitHub Actions自動デプロイ設定
+- 🏗️ [サービス分離アーキテクチャ](SERVICES_SEPARATION.md) - SNS API vs Exam Solver API 🆕
+- 🌳 [Gitワークフローガイド](docs/AI_AGENT_14_GIT_WORKFLOW_JA.md) - ブランチ戦略・コミット規約・PR運用 🆕
+- 🎯 [技術スタック戦略](docs/TECH_STRATEGY_2026.md) - 言語選択・IaC戦略・実装ロードマップ 🆕
 - ✅ [CI/CDテスト結果](docs/CICD_TEST_RESULTS.md) - パイプライン検証レポート
 - 🔧 [トラブルシューティング](docs/TROUBLESHOOTING.md) - よくある問題と解決策
 - 🌐 [エンドポイント一覧](docs/ENDPOINTS.md) - 全環境のエンドポイント情報
 - 🌍 [CDNセットアップガイド](docs/CDN_SETUP.md) - CloudFront/Front Door/Cloud CDN設定
 - ⚡ [関数サイズ最適化](docs/FUNCTION_SIZE_OPTIMIZATION.md) - デプロイパッケージサイズ削減（AWS 97%削減！）
 - 📝 [クイックリファレンス](docs/QUICK_REFERENCE.md) - よく使うコマンド集
+
+**リポジトリ運用**
+
+- 📋 [プロジェクト管理・運用](.github/docs/AI_AGENT_PROJECT_MANAGEMENT_JA.md) - AI エージェント向けプロジェクト運用戦略
+- 📊 [バックログ・タスク管理](.github/docs/AI_AGENT_BACKLOG_TASKS.md) - 優先度付きタスク一覧
+- 🔔 [監視・アラート設定](.github/docs/MONITORING_SETUP_GUIDE.md) - CloudWatch/Monitor/Logging 設定
+- 🔒 [GitHub 機能統合ガイド](.github/docs/GITHUB_FEATURES_GUIDE.md) - Issue/PR/Milestones/Releases
+- 🌿 [Branch Protection 設定](.github/docs/BRANCH_PROTECTION_SETUP.md) - main/develop 保護ルール
 
 ### プロバイダー別デプロイ
 

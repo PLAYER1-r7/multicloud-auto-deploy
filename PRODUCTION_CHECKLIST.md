@@ -9,21 +9,25 @@
 現在、すべてのオリジンを許可する設定（`"*"`）になっています。本番環境では必ず実際のドメインに変更してください。
 
 #### AWS
+
 ```bash
 cd infrastructure/pulumi/aws
 ```
 
 [Pulumi.staging.yaml](infrastructure/pulumi/aws/Pulumi.staging.yaml) を編集：
+
 ```yaml
 multicloud-auto-deploy:allowedOrigins: "https://yourdomain.com,https://www.yourdomain.com"
 ```
 
 #### GCP
+
 ```bash
 cd infrastructure/pulumi/gcp
 ```
 
 [Pulumi.staging.yaml](infrastructure/pulumi/gcp/Pulumi.staging.yaml) を編集：
+
 ```yaml
 multicloud-auto-deploy:allowedOrigins: "https://yourdomain.com,https://www.yourdomain.com"
 ```
@@ -41,6 +45,7 @@ multicloud-auto-deploy:allowedOrigins: "https://yourdomain.com,https://www.yourd
 - ✅ **Azure**: Key Vault (`multicloud-auto-deploy-staging-kv`)
 
 **確認コマンド**:
+
 ```bash
 # AWS
 aws secretsmanager describe-secret --secret-id multicloud-auto-deploy/staging/app-config
@@ -61,8 +66,9 @@ az keyvault secret list --vault-name multicloud-auto-deploy-staging-kv
 - ⚠️ **Azure**: WAFなし（Standard SKU、コスト重視）
 
 **Azureで追加保護が必要な場合**:
+
 - Application Gateway + WAF ($200-250/月)
-- またはFront Door Premium ($330/月) へアップグレード
+- または Front Door Standard SKU に standalone WAF Policy を関連付け
 
 ---
 
@@ -75,6 +81,7 @@ az keyvault secret list --vault-name multicloud-auto-deploy-staging-kv
 **📕 [カスタムドメイン設定ガイド](CUSTOM_DOMAIN_SETUP.md)**
 
 このガイドでは以下の内容を説明しています：
+
 - **AWS CloudFront**: ACM証明書の作成、CloudFront alias設定、DNS CNAME設定
 - **Azure Front Door**: カスタムドメイン追加、DNS検証、HTTPSの有効化
 - **GCP Cloud CDN**: Managed SSL証明書の更新、DNS A レコード設定
@@ -84,7 +91,7 @@ az keyvault secret list --vault-name multicloud-auto-deploy-staging-kv
 ```bash
 # 現在のエンドポイントを確認
 cd infrastructure/pulumi/aws && pulumi stack output cloudfront_domain
-cd infrastructure/pulumi/azure && pulumi stack output frontdoor_hostname  
+cd infrastructure/pulumi/azure && pulumi stack output frontdoor_hostname
 cd infrastructure/pulumi/gcp && pulumi stack output cdn_ip_address
 ```
 
@@ -114,6 +121,7 @@ pulumi up
 **実装状況**: 全クラウドで監視とアラート設定が完了しました。
 
 #### AWS (9リソース)
+
 - SNS Topic: メール通知設定
 - CloudWatch Alarms:
   - Lambda関数エラー監視
@@ -124,6 +132,7 @@ pulumi up
 **アラート先**: `sat0sh1kawada@spa.nifty.com`
 
 #### Azure (5リソース)
+
 - Action Group: メール通知設定
 - Metric Alerts:
   - Function App エラー監視
@@ -133,6 +142,7 @@ pulumi up
 **アラート先**: `sat0sh1kawada@spa.nifty.com`
 
 #### GCP (7リソース)
+
 - Notification Channel: メール通知設定
 - Alert Policies:
   - Cloud Function エラー監視
@@ -142,6 +152,7 @@ pulumi up
 **アラート先**: `sat0sh1kawada@spa.nifty.com`
 
 **確認方法**:
+
 ```bash
 # 各クラウドの監視リソースを確認
 cd infrastructure/pulumi/aws && pulumi stack output | grep alarm
@@ -156,8 +167,9 @@ cd infrastructure/pulumi/gcp && pulumi stack output | grep alert
 ### 6. 認証システムの実装（推奨）
 
 現在、認証は実装されていません。本番環境では推奨：
+
 - [ ] AWS Cognito
-- [ ] GCP Firebase Authentication  
+- [ ] GCP Firebase Authentication
 - [ ] Azure AD B2C
 
 ---
@@ -167,12 +179,14 @@ cd infrastructure/pulumi/gcp && pulumi stack output | grep alert
 ### 7. 予算アラートの設定
 
 現在の月次推定コスト:
+
 - AWS: $10-20/月
 - GCP: $15-25/月
 - Azure: $35-50/月
 - **合計**: $60-95/月
 
 **予算アラート設定**:
+
 ```bash
 # AWS
 aws budgets create-budget --account-id YOUR_ACCOUNT_ID \
@@ -207,6 +221,7 @@ curl https://[Function-App-URL]/api/HttpTrigger
 ```
 
 Frontendの確認:
+
 - AWS: CloudFront URL
 - GCP: Load Balancer URL
 - Azure: Front Door URL
@@ -246,6 +261,7 @@ Frontendの確認:
 すべてのチェック項目を確認後、以下のコマンドで本番デプロイを実行：
 
 ### AWS
+
 ```bash
 cd infrastructure/pulumi/aws
 pulumi stack select production  # 本番スタック作成・選択
@@ -253,6 +269,7 @@ pulumi up  # 変更内容を確認してデプロイ
 ```
 
 ### GCP
+
 ```bash
 cd infrastructure/pulumi/gcp
 pulumi stack select production
@@ -260,6 +277,7 @@ pulumi up
 ```
 
 ### Azure
+
 ```bash
 cd infrastructure/pulumi/azure
 pulumi stack select production
@@ -267,6 +285,7 @@ pulumi up
 ```
 
 または GitHub Actions経由:
+
 ```bash
 gh workflow run "Deploy to AWS" -f environment=production
 gh workflow run "Deploy to GCP" -f environment=production
@@ -278,6 +297,7 @@ gh workflow run "Deploy to Azure" -f environment=production
 ## 📞 サポート
 
 問題が発生した場合:
+
 1. [SECURITY_ENHANCED.md](docs/SECURITY_ENHANCED.md) - セキュリティ設定詳細
 2. [AZURE_DEPLOYMENT_FIX.md](docs/AZURE_DEPLOYMENT_FIX.md) - Azureデプロイトラブルシューティング
 3. [ARCHITECTURE.md](docs/ARCHITECTURE.md) - アーキテクチャ全体図

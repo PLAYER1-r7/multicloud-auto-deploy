@@ -1,7 +1,7 @@
 # 02 — アーキテクチャ
 
 > 第II部 — アーキテクチャ・設計 | 親: [AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)
-> 
+>
 > ⚠️ **必読前提**: [00_CRITICAL_RULES](AI_AGENT_00_CRITICAL_RULES_JA.md) → [01_CONTEXT](AI_AGENT_01_CONTEXT_JA.md)
 
 ---

@@ -215,7 +215,7 @@ curl -s -H "Authorization: token $(gh auth token)" \
 
 ### 詳細ガイド
 
-詳しい設定について、および手動での Web UI 設定方法は [docs/BRANCH_PROTECTION_SETUP.md](./BRANCH_PROTECTION_SETUP.md) を参照してください。
+詳しい設定について、および手動での Web UI 設定方法は [BRANCH_PROTECTION_SETUP.md](./BRANCH_PROTECTION_SETUP.md) を参照してください。
 
 ---
 

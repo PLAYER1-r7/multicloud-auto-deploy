@@ -1,28 +1,27 @@
 # AI Agent Guide — multicloud-auto-deploy
 
 > # 🤖 AI AGENTS: START HERE
-> 
+>
 > **Purpose**: Single entry point for AI agents working on this repository.
-> 
+>
 > ### ⚠️ BEFORE YOU DO ANYTHING ELSE ⚠️
-> 
+>
 > 1. **READ FIRST**: [AI_AGENT_00_CRITICAL_RULES.md](AI_AGENT_00_CRITICAL_RULES.md) ⭐ **MANDATORY** ⭐
 >    - 18 critical rules learned from past production incidents
 >    - Prevents data loss, production outages, and hours of debugging
 >    - **DO NOT skip this document**
-> 
 > 2. **Then come back here** for navigation to all other documents
-> 
+>
 > ### 📖 Reading Order
-> 
+>
 > After reading the critical rules above, follow this sequence:
-> 
+>
 > ```
 > Part I  (Orientation)    → Read first to understand the project
 > Part II (Technical Ref)  → Look up when working on specific areas
 > Part III (Operations)    → Check during ongoing work
 > ```
-> 
+>
 > **Total time for Part I: ~15 minutes | Saves you: hours of confusion**
 
 ---
@@ -63,27 +62,27 @@
 
 > Check these during ongoing work, debugging, and task planning.
 
-| No. | Document                                                         | Contents                                                                     |
-| --- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 06  | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)                   | Current health of all 3 cloud environments                                   |
-| 07  | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)               | Step-by-step: deploy, rollback, check logs                                   |
-| 08  | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)               | Auth config per cloud, known security gaps                                   |
-| 09  | [AI_AGENT_09_GITHUB_INTEGRATION.md](AI_AGENT_09_GITHUB_INTEGRATION_JA.md) | GitHub Issues/PRs workflow, branch protection, AI Agent operations           |
-| 10  | [AI_AGENT_10_TASKS.md](AI_AGENT_10_TASKS.md)                     | AI-driven backlog strategy, cadence, tools, generated PM dashboard           |
-| 11  | [AI_AGENT_11_DOMAINS.md](AI_AGENT_11_DOMAINS.md)                 | Custom domain setup, DNS records, SSL certs                                  |
-| 12  | [AI_AGENT_12_BUG_FIX_REPORTS.md](AI_AGENT_12_BUG_FIX_REPORTS.md) | Consolidated bug & fix reports (all clouds, 2026-02-20 →)                    |
-| 13  | [AI_AGENT_13_OCR_MATH.md](AI_AGENT_13_OCR_MATH.md)               | `/v1/solve` OCR+math solving service — Azure DI, GCP Vision, Gemini, scoring |
-| 14  | [AI_AGENT_14_TESTING.md](AI_AGENT_14_TESTING.md)                 | Test scripts, pytest suite, auth token acquisition, CI/CD integration        |
-| 15  | [AI_AGENT_15_WORKSPACE_CLEANUP.md](AI_AGENT_15_WORKSPACE_CLEANUP.md) | Build artifacts, cache, temporary files cleanup procedures                   |
+| No. | Document                                                                         | Contents                                                                     |
+| --- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 06  | [AI_AGENT_06_STATUS.md](AI_AGENT_06_STATUS.md)                                   | Current health of all 3 cloud environments                                   |
+| 07  | [AI_AGENT_07_RUNBOOKS.md](AI_AGENT_07_RUNBOOKS.md)                               | Step-by-step: deploy, rollback, check logs                                   |
+| 08  | [AI_AGENT_08_SECURITY.md](AI_AGENT_08_SECURITY.md)                               | Auth config per cloud, known security gaps                                   |
+| 09  | [GITHUB_FEATURES_GUIDE.md](../.github/docs/GITHUB_FEATURES_GUIDE.md)             | GitHub Issues/PRs/Milestones/Releases workflow 🆕                            |
+| 10  | [AI_AGENT_PROJECT_MANAGEMENT.md](../.github/docs/AI_AGENT_PROJECT_MANAGEMENT.md) | AI-driven backlog strategy, cadence, tools, generated PM dashboard 🆕        |
+| 11  | [AI_AGENT_11_DOMAINS.md](AI_AGENT_11_DOMAINS.md)                                 | Custom domain setup, DNS records, SSL certs                                  |
+| 12  | [AI_AGENT_12_BUG_FIX_REPORTS.md](AI_AGENT_12_BUG_FIX_REPORTS.md)                 | Consolidated bug & fix reports (all clouds, 2026-02-20 →)                    |
+| 13  | [AI_AGENT_13_OCR_MATH.md](AI_AGENT_13_OCR_MATH.md)                               | `/v1/solve` OCR+math solving service — Azure DI, GCP Vision, Gemini, scoring |
+| 14  | [AI_AGENT_14_TESTING.md](AI_AGENT_14_TESTING.md)                                 | Test scripts, pytest suite, auth token acquisition, CI/CD integration        |
+| 15  | [AI_AGENT_15_WORKSPACE_CLEANUP.md](AI_AGENT_15_WORKSPACE_CLEANUP.md)             | Build artifacts, cache, temporary files cleanup procedures                   |
 
 ---
 
 ## Archive
 
-| Document                                                                                 | Contents                             |
-| ---------------------------------------------------------------------------------------- | ------------------------------------ |
-| [archive/AI_AGENT_11_WORKSPACE_MIGRATION.md](archive/AI_AGENT_11_WORKSPACE_MIGRATION.md) | 2026-02-21 repository cleanup record |
-| [archive/legacy-services/README.md](archive/legacy-services/README.md) | Deprecated services backup (frontend_web, frontend_reflex, etc.) |
+| Document                                                                                 | Contents                                                         |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [archive/AI_AGENT_11_WORKSPACE_MIGRATION.md](archive/AI_AGENT_11_WORKSPACE_MIGRATION.md) | 2026-02-21 repository cleanup record                             |
+| [archive/legacy-services/README.md](archive/legacy-services/README.md)                   | Deprecated services backup (frontend_web, frontend_reflex, etc.) |
 
 ## Consolidated Guide
 
@@ -109,7 +108,7 @@
 | §8  | 2026-02-22 | [Refactoring & Infra Fix](AI_AGENT_12_BUG_FIX_REPORTS.md#8-refactoring--infrastructure-fix-2026-02-22) — AFD SPA rewrite rule, CI/CD cleanup, Pulumi dead code, staging bugs     |
 | §9  | 2026-02-23 | [GCP SNS Fix](AI_AGENT_12_BUG_FIX_REPORTS.md#9-gcp-sns-fix-report-2026-02-23) — CORS, Firebase domain, /limits 404, COOP header, signed URLs, IndentationError                   |
 | §10 | 2026-02-27 | [OCR Formula Merge Bugs](AI_AGENT_12_BUG_FIX_REPORTS.md#10-ocr-formula-merge-bugs-2026-02-27) — display formula discarded, bytes serialization, polygon=None fallback            |
-| §11 | 2026-03-02 | [Workspace Cleanup & GitHub Integration](AI_AGENT_09_GITHUB_INTEGRATION_JA.md) — legacy services removed, AI Agent GitHub workflow documented                                  |
+| §11 | 2026-03-02 | [Workspace Cleanup](archive/AI_AGENT_11_WORKSPACE_MIGRATION.md) — legacy services removed, workspace cleanup documented                                                          |
 
 ---
 
@@ -122,7 +121,7 @@ First session in this repo:
 2. AI_AGENT_01_CONTEXT.md         ← what the project is, live endpoints, tech stack, directory tree
 3. AI_AGENT_02_ARCHITECTURE.md    ← system topology, storage paths
 4. AI_AGENT_06_STATUS.md          ← current health of all 3 cloud environments
-5. AI_AGENT_09_GITHUB_INTEGRATION.md ← GitHub Issues/PRs workflow & AI Agent operations
+5. ../.github/docs/GITHUB_FEATURES_GUIDE.md ← GitHub Issues/PRs workflow & repository operations 🆕
 ```
 
 On demand:
@@ -133,7 +132,8 @@ AI_AGENT_04_INFRA.md    ← Pulumi stacks, resource names, config keys, outputs
 AI_AGENT_05_CICD.md     ← GitHub Actions workflows, secrets, branch→env mapping
 AI_AGENT_07_RUNBOOKS.md     ← step-by-step procedures: deploy, rollback, check logs
 AI_AGENT_08_SECURITY.md     ← auth config per cloud, current security gaps
-AI_AGENT_09_GITHUB_INTEGRATION.md ← GitHub workflow, branch protection, AI operations
+../.github/docs/GITHUB_FEATURES_GUIDE.md ← GitHub workflow, branch protection, repository operations 🆕
+../.github/docs/AI_AGENT_PROJECT_MANAGEMENT.md ← AI-driven project management strategy 🆕
 ```
 
 ---
