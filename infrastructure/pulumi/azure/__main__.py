@@ -419,15 +419,15 @@ app_service_principal = azuread.ServicePrincipal(
 # Two separate Function Apps for SNS API and Exam Solver API
 # Flex Consumption Plan: Auto-scaling, pay-per-execution
 
-# App Service Plan (Flex Consumption) for both Function Apps
+# App Service Plan (Consumption) for both Function Apps
 app_service_plan = azure.web.AppServicePlan(
     "app-service-plan",
     resource_group_name=resource_group.name,
     location=location,
     kind="FunctionApp",
     sku=azure.web.SkuDescriptionArgs(
-        name="FC1",  # Flex Consumption Plan
-        tier="FlexConsumption",
+        name="Y1",  # Consumption Plan (Dynamic)
+        tier="Dynamic",
     ),
     tags=common_tags,
 )
