@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # GITHUB_TOKEN で push できるようにするため fetch-depth 0 は不要
           # ただし botコミットを正しく push するため token を使用
