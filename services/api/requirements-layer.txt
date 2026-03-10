@@ -9,7 +9,7 @@ typing_extensions==4.12.2
 
 # FastAPI Core
 fastapi==0.115.0
-pydantic==2.9.0
+pydantic==2.12.5
 pydantic-core==2.23.2
 annotated-types>=0.4.0
 pydantic-settings==2.5.2
