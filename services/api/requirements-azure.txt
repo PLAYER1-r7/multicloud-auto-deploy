@@ -2,7 +2,7 @@
 # Optimized for Azure Functions runtime
 
 # FastAPI Core
-fastapi==0.115.0
+fastapi==0.135.1
 pydantic==2.9.0
 pydantic-core==2.23.2
 annotated-types>=0.4.0
