@@ -53,4 +53,4 @@ httpx==0.28.1
 anyio[trio]==4.12.1
 
 # Linting / formatting (dev only — not needed in Lambda/Cloud Function bundles)
-ruff==0.15.1
+ruff==0.15.5

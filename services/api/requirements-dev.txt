@@ -2,7 +2,7 @@
 
 # Development
 black==24.8.0
-ruff==0.6.0
+ruff==0.15.5
 mypy==1.11.0
 ipython==8.26.0
 
