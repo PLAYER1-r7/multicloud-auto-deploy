@@ -14,7 +14,7 @@ pyjwt==2.9.0
 requests==2.32.5
 
 # GCP-specific dependencies
-google-cloud-firestore==2.19.0
+google-cloud-firestore==2.24.0
 google-cloud-storage==2.18.0
 functions-framework==3.10.1
 

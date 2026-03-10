@@ -37,7 +37,7 @@ azure-identity==1.18.0
 azure-functions==1.20.0  # Azure Functions runtime
 
 # GCP
-google-cloud-firestore==2.19.0
+google-cloud-firestore==2.24.0
 google-cloud-storage==2.18.0
 functions-framework==3.5.0  # Cloud Functions runtime
 
